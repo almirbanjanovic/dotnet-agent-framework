@@ -140,7 +140,13 @@ Run the workflow `.github/workflows/terraform-init-backend.yaml` via manual disp
 
 **Option A — Local (with remote backend):**
 
-From `infra/getting-started/terraform/`:
+From `infra/getting-started/terraform/`, first ensure the backend storage account has public network access enabled:
+
+```bash
+az storage account update --name stgettingstartedcentralu --resource-group rg-getting-started-centralus --public-network-access Enabled
+```
+
+Then run:
 
 ```bash
 terraform init -reconfigure -backend-config=backend.hcl
