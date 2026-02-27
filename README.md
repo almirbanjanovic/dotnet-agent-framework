@@ -174,7 +174,7 @@ dotnet restore
 dotnet run
 ```
 
-Configuration is read from `appsettings.Development.json` or environment variables:
+Configuration is read from `src/getting-started/appsettings.json` (shared across all samples) or environment variables:
 
 | Key                            | Description                     |
 |--------------------------------|---------------------------------|
