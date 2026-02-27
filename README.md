@@ -66,6 +66,7 @@ Set these under **Settings → Environments → `<environment>` → Variables**:
 | `STORAGE_ACCOUNT_MIN_TLS_VERSION`       | Minimum TLS version                                  | `TLS1_2`                           |
 | `STORAGE_ACCOUNT_PUBLIC_NETWORK_ACCESS` | Public network access during creation                | `Enabled`                          |
 | `TERRAFORM_STATE_CONTAINER`             | Blob container name for state files                  | `tfstate`                          |
+| `TERRAFORM_STATE_BLOB`                  | Name for state file                                  | `<environment>.tfstate`            |
 
 ## Step 1 — Create local config files
 
