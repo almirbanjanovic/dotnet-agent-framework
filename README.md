@@ -1,34 +1,40 @@
 # dotnet-agent-framework
 
-Hands-on .NET Agent Framework tutorials based on Microsoft Learn:
-https://learn.microsoft.com/en-us/agent-framework/overview/?pivots=programming-language-csharp
+.NET Agent Framework tutorials based on [Microsoft Learn](https://learn.microsoft.com/en-us/agent-framework/overview/?pivots=programming-language-csharp).
 
-## What this repo contains
+## Repository structure
 
-- `src/getting-started/01-first-agent` → first runnable C# agent sample
-- `src/getting-started/02-add-tools` → tool-enabled agents
-- `src/getting-started/03-multi-turn-conversations` → conversation state patterns
-- `src/getting-started/04-memory-and-persistence` → memory/persistence patterns
-- `src/getting-started/05-first-workflow` → workflow fundamentals
-- `src/getting-started/06-hosting-your-agent` → hosting/deployment-oriented sample
-- `infra/getting-started/bicep` → Bicep IaC baseline
-- `infra/getting-started/terraform` → Terraform IaC baseline
+```
+src/getting-started/
+  01-first-agent/                → first runnable agent
+  02-add-tools/                  → tool-enabled agents
+  03-multi-turn-conversations/   → conversation state
+  04-memory-and-persistence/     → memory patterns
+  05-first-workflow/             → workflow fundamentals
+  06-hosting-your-agent/         → hosting and deployment
+
+infra/getting-started/
+  terraform/                     → Terraform IaC
+
+.github/workflows/
+  terraform-init-backend.yaml    → backend bootstrap workflow
+```
 
 ## Prerequisites
 
-- .NET SDK 9.0+
-- Azure CLI (`az`) authenticated to your target subscription
-- Terraform 1.14.6+
+- [.NET SDK 9.0+](https://dotnet.microsoft.com/download)
+- [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) (`az login` completed)
+- [Terraform >= 1.14.6](https://developer.hashicorp.com/terraform/install)
 
-## Terraform remote state bootstrap (for local + CI/CD parity)
+## Step 1 — Bootstrap the Terraform remote backend
 
-### 1) Bootstrap backend resources (one-time)
+Run the GitHub Actions workflow `.github/workflows/terraform-init-backend.yaml` (manual dispatch) to create the backend resource group, storage account, and state container in Azure.
 
-Create backend resources in Azure (resource group, storage account, container) using your backend bootstrap script.
+This only needs to run **once per environment**.
 
-### 2) Create local backend config
+## Step 2 — Create local backend config
 
-Create a local-only `backend.hcl` in `infra/getting-started/terraform/` (do not commit):
+Create `infra/getting-started/terraform/backend.hcl` (this file is gitignored):
 
 ```hcl
 resource_group_name  = "<terraform-state-resource-group>"
@@ -37,12 +43,36 @@ container_name       = "tfstate"
 key                  = "getting-started.tfstate"
 ```
 
-Match these to your workflow environment variables in `.github/workflows/terraform-init-backend.yaml`:
-- `resource_group_name` ↔ `RESOURCE_GROUP`
-- `storage_account_name` ↔ `STORAGE_ACCOUNT`
-- `container_name` ↔ `TERRAFORM_STATE_CONTAINER`
+Use the values that match your workflow environment variables:
 
-### 3) Run real plan/apply/destroy with remote state
+| `backend.hcl` key       | Workflow variable              |
+|--------------------------|--------------------------------|
+| `resource_group_name`    | `RESOURCE_GROUP`               |
+| `storage_account_name`   | `STORAGE_ACCOUNT`              |
+| `container_name`         | `TERRAFORM_STATE_CONTAINER`    |
+
+## Step 3 — Create local Terraform variables
+
+Create `infra/getting-started/terraform/terraform.tfvars` (this file is gitignored):
+
+```hcl
+tags                = {}
+resource_group_name = "<your-resource-group>"
+
+base_name   = "getting-started"
+environment = "dev"
+location    = "centralus"
+
+cognitive_account_kind       = "OpenAI"
+oai_sku_name                 = "S0"
+oai_deployment_sku_name      = "GlobalStandard"
+oai_deployment_model_name    = "gpt-4.1"
+oai_deployment_model_version = "2025-04-14"
+```
+
+## Step 4 — Deploy infrastructure
+
+From `infra/getting-started/terraform/`:
 
 ```bash
 terraform init -reconfigure -backend-config=backend.hcl
@@ -51,59 +81,47 @@ terraform plan -var-file="terraform.tfvars"
 terraform apply -var-file="terraform.tfvars"
 ```
 
-Destroy:
+To tear down:
 
 ```bash
 terraform destroy -var-file="terraform.tfvars"
 ```
 
-If you need to migrate existing local state:
+To migrate existing local state to remote backend:
 
 ```bash
 terraform init -migrate-state -backend-config=backend.hcl
 ```
 
-## Terraform quick workflow (local validation only)
+## Step 5 — Run the first agent sample
 
-From `infra/getting-started/terraform/`:
+From `src/getting-started/01-first-agent/`:
 
 ```bash
+dotnet restore
+dotnet run
+```
+
+Configuration is read from `appsettings.Development.json` or environment variables:
+
+| Key                            | Description                     |
+|--------------------------------|---------------------------------|
+| `AZURE_OPENAI_ENDPOINT`       | Azure OpenAI resource endpoint  |
+| `AZURE_OPENAI_DEPLOYMENT_NAME`| Model deployment name           |
+
+## Local validation (no remote state)
+
+For quick syntax/config checks without a backend:
+
+```bash
+cd infra/getting-started/terraform
 terraform fmt -recursive
 terraform init -backend=false
 terraform validate
-terraform plan -refresh=false -var-file="terraform.tfvars"
 ```
-
-Use this for fast local validation without remote state.
-
-## Run the first sample
-
-After infrastructure is available:
-
-1. Go to the first sample:
-
-	```bash
-	cd src/getting-started/01-first-agent
-	```
-
-2. Provide config via one of:
-	- `appsettings.Development.json` (local file)
-	- environment variables
-
-	Required keys:
-	- `AZURE_OPENAI_ENDPOINT`
-	- `AZURE_OPENAI_DEPLOYMENT_NAME`
-
-3. Run:
-
-	```bash
-	dotnet restore
-	dotnet run
-	```
 
 ## Notes
 
-- Provider versions are pinned in `infra/getting-started/terraform/providers.tf` with `~>` constraints.
-- Local tfvars are intentionally ignored under `infra/.gitignore`.
-- Local backend files (`backend.hcl`, `*.backend.hcl`) are ignored under `infra/.gitignore`.
-- The backend bootstrap workflow disables storage public network access at the end; ensure your local network/auth setup can still access the state backend.
+- Provider versions are pinned with `~>` constraints in `infra/getting-started/terraform/providers.tf`.
+- `terraform.tfvars`, `backend.hcl`, and `*.backend.hcl` are gitignored under `infra/.gitignore`.
+- The bootstrap workflow disables storage public network access after setup; ensure your local network can reach the storage account for backend operations.
