@@ -50,35 +50,35 @@ Set these under **Settings → Environments → `<environment>` → Secrets**:
 
 | Secret                   | Description                                      |
 |--------------------------|--------------------------------------------------|
-| `TAGS`                   | Resource tags (e.g. `"environment=dev"`)          |
+| `TAGS`                   | Resource tags (e.g. `"environment=dev"`)         |
 
 ### Environment variables
 
 Set these under **Settings → Environments → `<environment>` → Variables**:
 
-| Variable                              | Description                                          | Example                          |
-|---------------------------------------|------------------------------------------------------|----------------------------------|
-| `RESOURCE_GROUP`                      | Resource group for the Terraform state backend       | `rg-tfstate-dev-centralus`       |
-| `LOCATION`                            | Azure region                                         | `centralus`                      |
-| `STORAGE_ACCOUNT`                     | Storage account name (globally unique, max 24 chars) | `sttfstatedevcentralus`          |
-| `STORAGE_ACCOUNT_SKU`                 | Storage account SKU                                  | `Standard_LRS`                   |
-| `STORAGE_ACCOUNT_ENCRYPTION_SERVICES` | Encryption services to enable                        | `blob`                           |
-| `STORAGE_ACCOUNT_MIN_TLS_VERSION`     | Minimum TLS version                                  | `TLS1_2`                         |
-| `STORAGE_ACCOUNT_PUBLIC_NETWORK_ACCESS` | Public network access during creation              | `Enabled`                        |
-| `TERRAFORM_STATE_CONTAINER`           | Blob container name for state files                  | `tfstate`                        |
+| Variable                                | Description                                          | Example                            |
+|-----------------------------------------|------------------------------------------------------|------------------------------------|
+| `RESOURCE_GROUP`                        | Resource group for the Terraform state backend       | `rg-getting-started-dev-centralus` |
+| `LOCATION`                              | Azure region                                         | `centralus`                        |
+| `STORAGE_ACCOUNT`                       | Storage account name (globally unique, max 24 chars) | `stgettingstarteddevcentr`         |
+| `STORAGE_ACCOUNT_SKU`                   | Storage account SKU                                  | `Standard_LRS`                     |
+| `STORAGE_ACCOUNT_ENCRYPTION_SERVICES`   | Encryption services to enable                        | `blob`                             |
+| `STORAGE_ACCOUNT_MIN_TLS_VERSION`       | Minimum TLS version                                  | `TLS1_2`                           |
+| `STORAGE_ACCOUNT_PUBLIC_NETWORK_ACCESS` | Public network access during creation                | `Enabled`                          |
+| `TERRAFORM_STATE_CONTAINER`             | Blob container name for state files                  | `tfstate`                          |
 
 ## Step 1 — Create local config files
 
-Create `infra/getting-started/terraform/backend.hcl` (this file is gitignored):
+Create `infra/<environment>/terraform/backend.hcl` (this file is gitignored):
 
 ```hcl
 resource_group_name  = "<terraform-state-resource-group>"
 storage_account_name = "<terraform-state-storage-account>"
 container_name       = "tfstate"
-key                  = "getting-started.tfstate"
+key                  = "<environment>.tfstate"
 ```
 
-Create `infra/getting-started/terraform/terraform.tfvars` (this file is gitignored):
+Create `infra/<environment>/terraform/terraform.tfvars` (this file is gitignored):
 
 ```hcl
 tags                = {}
