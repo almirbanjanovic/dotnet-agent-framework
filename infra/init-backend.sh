@@ -4,6 +4,35 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 #-------------------------------------------------------
+# Environment selection
+#-------------------------------------------------------
+declare -a ENV_NAMES=("getting-started")
+declare -a ENV_PATHS=("$SCRIPT_DIR/getting-started/terraform")
+
+echo ""
+echo "Select the environment to bootstrap:"
+echo ""
+for i in "${!ENV_NAMES[@]}"; do
+  echo "  [$((i + 1))] ${ENV_NAMES[$i]}"
+done
+echo ""
+
+read -rp "Enter selection (1-${#ENV_NAMES[@]}): " SELECTION
+INDEX=$((SELECTION - 1))
+
+if [[ $INDEX -lt 0 || $INDEX -ge ${#ENV_NAMES[@]} ]]; then
+  echo "ERROR: Invalid selection."
+  exit 1
+fi
+
+SELECTED_NAME="${ENV_NAMES[$INDEX]}"
+TERRAFORM_DIR="${ENV_PATHS[$INDEX]}"
+
+echo ""
+echo "Bootstrapping backend for: $SELECTED_NAME"
+echo ""
+
+#-------------------------------------------------------
 # Parse values from backend.hcl and terraform.tfvars
 #-------------------------------------------------------
 parse_hcl_value() {
@@ -11,10 +40,10 @@ parse_hcl_value() {
   grep -E "^\s*${key}\s*=" "$file" | head -1 | sed 's/.*=\s*"\(.*\)".*/\1/'
 }
 
-RESOURCE_GROUP=$(parse_hcl_value "$SCRIPT_DIR/terraform/backend.hcl" "resource_group_name")
-STORAGE_ACCOUNT=$(parse_hcl_value "$SCRIPT_DIR/terraform/backend.hcl" "storage_account_name")
-CONTAINER_NAME=$(parse_hcl_value "$SCRIPT_DIR/terraform/backend.hcl" "container_name")
-LOCATION=$(parse_hcl_value "$SCRIPT_DIR/terraform/terraform.tfvars" "location")
+RESOURCE_GROUP=$(parse_hcl_value "$TERRAFORM_DIR/backend.hcl" "resource_group_name")
+STORAGE_ACCOUNT=$(parse_hcl_value "$TERRAFORM_DIR/backend.hcl" "storage_account_name")
+CONTAINER_NAME=$(parse_hcl_value "$TERRAFORM_DIR/backend.hcl" "container_name")
+LOCATION=$(parse_hcl_value "$TERRAFORM_DIR/terraform.tfvars" "location")
 
 # Storage account defaults (match CI/CD workflow)
 STORAGE_ACCOUNT_SKU="Standard_LRS"
@@ -22,6 +51,7 @@ STORAGE_ACCOUNT_ENCRYPTION_SERVICES="blob"
 STORAGE_ACCOUNT_MIN_TLS_VERSION="TLS1_2"
 
 echo "=== Terraform Backend Bootstrap ==="
+echo "Environment:      $SELECTED_NAME"
 echo "Resource Group:   $RESOURCE_GROUP"
 echo "Storage Account:  $STORAGE_ACCOUNT"
 echo "Container:        $CONTAINER_NAME"
