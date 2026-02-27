@@ -36,7 +36,7 @@ Before running any workflows, configure the following in your GitHub repository:
 
 ### Repository secrets
 
-Set these under **Settings → Secrets and variables → Actions → Secrets**:
+Set these under **Settings → Secrets and variables → Actions → Repository Secrets**:
 
 | Secret                   | Description                                      |
 |--------------------------|--------------------------------------------------|
