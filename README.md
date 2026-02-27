@@ -25,7 +25,7 @@ src/getting-started/
 - [.NET SDK 9.0+](https://dotnet.microsoft.com/download)
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) (`az login` completed)
 - [Terraform >= 1.14.6](https://developer.hashicorp.com/terraform/install)
-- A Microsoft Entra app registration **per GitHub environment** (e.g. `dev`, `prod`) with OIDC federated credentials configured for GitHub Actions. Each federated identity should be scoped to its corresponding GitHub environment. See [configure OIDC for GitHub Actions](https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation-create-trust?pivots=identity-wif-apps-methods-azp#github-actions).
+- A single Microsoft Entra app registration with an OIDC federated credential **per GitHub environment** (e.g. `dev`, `prod`). Each federated credential should be scoped to its corresponding GitHub environment. See [configure OIDC for GitHub Actions](https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation-create-trust?pivots=identity-wif-apps-methods-azp#github-actions).
 
 ## GitHub environment setup
 
