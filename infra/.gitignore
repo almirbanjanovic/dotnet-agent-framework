@@ -12,7 +12,7 @@ override.tf.json
 terraform.rc
 
 # Keep lock file tracked (recommended)
-# !.terraform.lock.hcl
+!.terraform.lock.hcl
 
 # Terraform variables / plans
 *.tfvars
