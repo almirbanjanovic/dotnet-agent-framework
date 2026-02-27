@@ -20,42 +20,6 @@ https://learn.microsoft.com/en-us/agent-framework/overview/?pivots=programming-l
 - Azure CLI (`az`) authenticated to your target subscription
 - Terraform 1.14.6+
 
-## Run the first sample
-
-1. Go to the first sample:
-
-	```bash
-	cd src/getting-started/01-first-agent
-	```
-
-2. Provide config via one of:
-	- `appsettings.Development.json` (local file)
-	- environment variables
-
-	Required keys:
-	- `AZURE_OPENAI_ENDPOINT`
-	- `AZURE_OPENAI_DEPLOYMENT_NAME`
-
-3. Run:
-
-	```bash
-	dotnet restore
-	dotnet run
-	```
-
-## Terraform quick workflow (local)
-
-From `infra/getting-started/terraform/`:
-
-```bash
-terraform fmt -recursive
-terraform init -backend=false
-terraform validate
-terraform plan -refresh=false -var-file="terraform.tfvars"
-```
-
-Use this for fast local validation without remote state.
-
 ## Terraform remote state bootstrap (for local + CI/CD parity)
 
 ### 1) Bootstrap backend resources (one-time)
@@ -98,6 +62,44 @@ If you need to migrate existing local state:
 ```bash
 terraform init -migrate-state -backend-config=backend.hcl
 ```
+
+## Terraform quick workflow (local validation only)
+
+From `infra/getting-started/terraform/`:
+
+```bash
+terraform fmt -recursive
+terraform init -backend=false
+terraform validate
+terraform plan -refresh=false -var-file="terraform.tfvars"
+```
+
+Use this for fast local validation without remote state.
+
+## Run the first sample
+
+After infrastructure is available:
+
+1. Go to the first sample:
+
+	```bash
+	cd src/getting-started/01-first-agent
+	```
+
+2. Provide config via one of:
+	- `appsettings.Development.json` (local file)
+	- environment variables
+
+	Required keys:
+	- `AZURE_OPENAI_ENDPOINT`
+	- `AZURE_OPENAI_DEPLOYMENT_NAME`
+
+3. Run:
+
+	```bash
+	dotnet restore
+	dotnet run
+	```
 
 ## Notes
 
