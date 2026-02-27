@@ -9,17 +9,49 @@ variable "resource_group_name" {
 
 variable "base_name" {
   type        = string
-  default = "getting-started"
 }
 
 variable "environment" {
   description = "Environment (e.g., dev, prod, etc.)"
   type        = string
-  default     = "dev"
 }
 
 variable "location" {
   description = "Azure location"
   type        = string
-  default     = "centralus"
+}
+
+variable "cognitive_account_kind" {
+  description = "Cognitive account kind"
+  type        = string
+}
+
+variable "oai_name" {
+  description = "Azure OpenAI account name"
+  type        = string
+}
+
+variable "oai_sku_name" {
+  description = "Azure OpenAI account SKU name"
+  type        = string
+}
+
+variable "oai_deployment_name" {
+  description = "Azure OpenAI model deployment name"
+  type        = string
+}
+
+variable "oai_deployment_sku_name" {
+  description = "Azure OpenAI model deployment SKU name"
+  type        = string
+}
+
+variable "oai_deployment_model_name" {
+  description = "Azure OpenAI model name"
+  type        = string
+}
+
+variable "oai_deployment_model_version" {
+  description = "Azure OpenAI model version"
+  type        = string
 }
