@@ -139,6 +139,8 @@ Run the workflow `.github/workflows/terraform-init-backend.yaml` via manual disp
 
 ## Step 3 — Deploy infrastructure
 
+**Option A — Local (with remote backend):**
+
 From `infra/getting-started/terraform/`:
 
 ```bash
@@ -153,6 +155,10 @@ To tear down:
 ```bash
 terraform destroy -var-file="terraform.tfvars"
 ```
+
+**Option B — CI/CD (GitHub Actions):**
+
+Run the workflow `.github/workflows/terraform-plan-approve-apply.yaml` via manual dispatch. It will plan, wait for manual approval, then apply. Requires the GitHub environment secrets and variables described above.
 
 ## Step 4 — Run the first agent sample
 
