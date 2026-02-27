@@ -1,0 +1,110 @@
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+    secrets:
+      azureClientId:
+        required: true
+      azureTenantId:
+        required: true
+      azureSubscriptionId:
+        required: true
+
+env:
+  TF_VAR_resource_group_name: ${{ vars.RESOURCE_GROUP }}
+
+jobs: 
+  terraform-plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment}}
+
+    defaults:
+        run:
+          shell: bash
+
+    steps:
+
+    - name: Checkout Repo
+      uses: actions/checkout@v3
+
+    - name: Login to Azure using OIDC
+      uses: azure/login@v2
+      with:
+        client-id: ${{ secrets.azureClientId }}
+        tenant-id: ${{ secrets.azureTenantId }}
+        subscription-id: ${{ secrets.azureSubscriptionId }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+
+    - name: Setup TFLint
+      uses: terraform-linters/setup-tflint@v1
+    
+    - name: Terraform Format Check
+      id: fmt
+      run: terraform fmt -check
+      continue-on-error: true  
+    
+    - name: Enable public access for backend storage account
+      run: |
+        az storage account update \
+        --name ${{ vars.STORAGE_ACCOUNT }} \
+        --resource-group ${{ vars.RESOURCE_GROUP }} \
+        --public-network-access Enabled
+
+        # Wait for 10 seconds
+        echo "Enabling public network access and waiting for 10 seconds."
+        sleep 10
+
+
+    - name: Terraform Init
+      id: init
+      run: |
+        terraform -chdir=${{ vars.TERRAFORM_WORKING_DIRECTORY}} init \
+        -backend-config="resource_group_name=${{ vars.RESOURCE_GROUP }}" \
+        -backend-config="storage_account_name=${{ vars.STORAGE_ACCOUNT }}" \
+        -backend-config="container_name=${{ vars.TERRAFORM_STATE_CONTAINER }}" \
+        -backend-config="key=${{ vars.TERRAFORM_STATE_BLOB }}"
+      env:
+        ARM_CLIENT_ID: ${{ secrets.azureClientId }}
+        ARM_TENANT_ID: ${{ secrets.azureTenantId }}
+        ARM_SUBSCRIPTION_ID: ${{ secrets.azureSubscriptionId }}
+        ARM_USE_OIDC: true
+        ARM_USE_AZUREAD: true
+
+    - name: Terraform Validate
+      id: validate
+      run: terraform validate
+
+    - name: Init TFLint
+      run: tflint --init
+
+    - name: Run TFLint
+      run: tflint -f compact
+
+    - name: Terraform plan
+      id: plan
+      run: terraform -chdir=${{ vars.TERRAFORM_WORKING_DIRECTORY}} plan --out=out.tfplan
+      env:
+        ARM_CLIENT_ID: ${{ secrets.azureClientId }}
+        ARM_SUBSCRIPTION_ID: ${{ secrets.azureSubscriptionId }}
+        ARM_TENANT_ID: ${{ secrets.azureTenantId }}
+        ARM_USE_OIDC: true  
+        ARM_USE_AZUREAD: true
+
+    - name: Upload the plan
+      uses: actions/upload-artifact@v4
+      with:
+        name: tf-plan
+        path: ${{ vars.TERRAFORM_WORKING_DIRECTORY}}/out.tfplan
+
+    - name: Disable public access for backend storage account
+      if: always()
+      run: |
+        az storage account update \
+        --name ${{ vars.STORAGE_ACCOUNT }} \
+        --resource-group ${{ vars.RESOURCE_GROUP }} \
+        --public-network-access Disabled
