@@ -5,6 +5,36 @@ $ErrorActionPreference = "Stop"
 $ScriptDir = $PSScriptRoot
 
 #-------------------------------------------------------
+# Environment selection
+#-------------------------------------------------------
+$Environments = @(
+    @{ Name = "getting-started"; Path = "$ScriptDir\getting-started\terraform" }
+)
+
+Write-Host ""
+Write-Host "Select the environment to bootstrap:"
+Write-Host ""
+for ($i = 0; $i -lt $Environments.Count; $i++) {
+    Write-Host "  [$($i + 1)] $($Environments[$i].Name)"
+}
+Write-Host ""
+
+$Selection = Read-Host "Enter selection (1-$($Environments.Count))"
+$Index = [int]$Selection - 1
+
+if ($Index -lt 0 -or $Index -ge $Environments.Count) {
+    Write-Error "Invalid selection."
+    exit 1
+}
+
+$SelectedEnv  = $Environments[$Index]
+$TerraformDir = $SelectedEnv.Path
+
+Write-Host ""
+Write-Host "Bootstrapping backend for: $($SelectedEnv.Name)"
+Write-Host ""
+
+#-------------------------------------------------------
 # Parse values from backend.hcl and terraform.tfvars
 #-------------------------------------------------------
 function Get-HclValue {
@@ -14,10 +44,10 @@ function Get-HclValue {
     throw "Could not find key '$Key' in $File"
 }
 
-$ResourceGroup  = Get-HclValue -File "$ScriptDir\terraform\backend.hcl" -Key "resource_group_name"
-$StorageAccount = Get-HclValue -File "$ScriptDir\terraform\backend.hcl" -Key "storage_account_name"
-$ContainerName  = Get-HclValue -File "$ScriptDir\terraform\backend.hcl" -Key "container_name"
-$Location       = Get-HclValue -File "$ScriptDir\terraform\terraform.tfvars" -Key "location"
+$ResourceGroup  = Get-HclValue -File "$TerraformDir\backend.hcl" -Key "resource_group_name"
+$StorageAccount = Get-HclValue -File "$TerraformDir\backend.hcl" -Key "storage_account_name"
+$ContainerName  = Get-HclValue -File "$TerraformDir\backend.hcl" -Key "container_name"
+$Location       = Get-HclValue -File "$TerraformDir\terraform.tfvars" -Key "location"
 
 # Storage account defaults (match CI/CD workflow)
 $StorageAccountSku               = "Standard_LRS"
@@ -25,6 +55,7 @@ $StorageAccountEncryptionServices = "blob"
 $StorageAccountMinTlsVersion     = "TLS1_2"
 
 Write-Host "=== Terraform Backend Bootstrap ==="
+Write-Host "Environment:      $($SelectedEnv.Name)"
 Write-Host "Resource Group:   $ResourceGroup"
 Write-Host "Storage Account:  $StorageAccount"
 Write-Host "Container:        $ContainerName"
