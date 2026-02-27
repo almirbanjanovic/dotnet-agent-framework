@@ -5,11 +5,11 @@
 ## Repository structure
 
 ```
+.github/workflows/
+  terraform-init-backend.yaml    → Terraform backend bootstrap workflow
+
 infra/getting-started/
   terraform/                     → Terraform IaC
-
-.github/workflows/
-  terraform-init-backend.yaml    → backend bootstrap workflow
 
 src/getting-started/
   01-first-agent/                → first runnable agent
