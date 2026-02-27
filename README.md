@@ -66,9 +66,28 @@ Set these under **Settings → Environments → `<environment>` → Variables**:
 
 ## Step 1 — Bootstrap the Terraform remote backend
 
-Run the GitHub Actions workflow `.github/workflows/terraform-init-backend.yaml` (manual dispatch) to create the backend resource group, storage account, and state container in Azure.
+This only needs to run **once per environment**. Choose one of the two options:
 
-This only needs to run **once per environment**.
+**Option A — CI/CD (GitHub Actions):**
+
+Run the workflow `.github/workflows/terraform-init-backend.yaml` via manual dispatch.
+
+**Option B — Local script:**
+
+Ensure you are logged in (`az login`), then run from `infra/getting-started/terraform/`:
+
+```bash
+# Bash / WSL / macOS
+chmod +x init-backend.sh
+./init-backend.sh
+```
+
+```powershell
+# PowerShell
+./init-backend.ps1
+```
+
+Both scripts read `resource_group_name`, `storage_account_name`, and `container_name` from `backend.hcl` and `location` from `terraform.tfvars` — no duplicate config needed.
 
 ## Step 2 — Create local backend config
 
