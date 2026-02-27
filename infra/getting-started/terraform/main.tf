@@ -20,7 +20,7 @@ resource "azurerm_cognitive_account" "this" {
   location              = var.location
   resource_group_name   = var.resource_group_name
   kind                  = local.cognitive_account_kind
-  sku_name              = "S0"
+  sku_name              = local.oai_sku_name
   custom_subdomain_name = local.oai_name
   tags                  = var.tags
 }
