@@ -93,7 +93,6 @@ Create `infra/<environment>/terraform/terraform.tfvars` (this file is gitignored
 tags                = {}
 resource_group_name = "<your-resource-group>"
 
-base_name   = "getting-started"
 environment = "getting-started"
 location    = "centralus"
 

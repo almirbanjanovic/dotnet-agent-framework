@@ -7,10 +7,6 @@ variable "resource_group_name" {
   type        = string
 }
 
-variable "base_name" {
-  type = string
-}
-
 variable "environment" {
   description = "Environment (e.g., getting-started)"
   type        = string
