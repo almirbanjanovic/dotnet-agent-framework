@@ -26,6 +26,32 @@ infra/getting-started/
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) (`az login` completed)
 - [Terraform >= 1.14.6](https://developer.hashicorp.com/terraform/install)
 
+## GitHub environment setup
+
+Before running any workflows, configure these in your GitHub repository under **Settings → Environments → `<environment>`**:
+
+### Secrets
+
+| Secret                   | Description                                      |
+|--------------------------|--------------------------------------------------|
+| `AZURE_CLIENT_ID`        | Service principal / app registration client ID   |
+| `AZURE_TENANT_ID`        | Azure AD tenant ID                               |
+| `AZURE_SUBSCRIPTION_ID`  | Target Azure subscription ID                     |
+| `TAGS`                   | Resource tags (e.g. `"environment=dev"`)          |
+
+### Variables
+
+| Variable                              | Description                                          | Example                          |
+|---------------------------------------|------------------------------------------------------|----------------------------------|
+| `RESOURCE_GROUP`                      | Resource group for the Terraform state backend       | `rg-tfstate-dev-centralus`       |
+| `LOCATION`                            | Azure region                                         | `centralus`                      |
+| `STORAGE_ACCOUNT`                     | Storage account name (globally unique, max 24 chars) | `sttfstatedevcentralus`          |
+| `STORAGE_ACCOUNT_SKU`                 | Storage account SKU                                  | `Standard_LRS`                   |
+| `STORAGE_ACCOUNT_ENCRYPTION_SERVICES` | Encryption services to enable                        | `blob`                           |
+| `STORAGE_ACCOUNT_MIN_TLS_VERSION`     | Minimum TLS version                                  | `TLS1_2`                         |
+| `STORAGE_ACCOUNT_PUBLIC_NETWORK_ACCESS` | Public network access during creation              | `Enabled`                        |
+| `TERRAFORM_STATE_CONTAINER`           | Blob container name for state files                  | `tfstate`                        |
+
 ## Step 1 — Bootstrap the Terraform remote backend
 
 Run the GitHub Actions workflow `.github/workflows/terraform-init-backend.yaml` (manual dispatch) to create the backend resource group, storage account, and state container in Azure.
@@ -85,12 +111,6 @@ To tear down:
 
 ```bash
 terraform destroy -var-file="terraform.tfvars"
-```
-
-To migrate existing local state to remote backend:
-
-```bash
-terraform init -migrate-state -backend-config=backend.hcl
 ```
 
 ## Step 5 — Run the first agent sample
