@@ -1,0 +1,31 @@
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Keep lock file tracked (recommended)
+# !.terraform.lock.hcl
+
+# Terraform variables / plans
+*.tfvars
+*.tfvars.json
+!*.example.tfvars
+*.tfplan
+plan.out
+
+# Bicep compiled templates
+*.bicep.json
+
+# Optional local Bicep parameters
+*.local.bicepparam
+
+# Azure deployment artifacts
+.azure/
