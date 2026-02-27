@@ -8,7 +8,7 @@ variable "resource_group_name" {
 }
 
 variable "base_name" {
-  type        = string
+  type = string
 }
 
 variable "environment" {
@@ -26,18 +26,8 @@ variable "cognitive_account_kind" {
   type        = string
 }
 
-variable "oai_name" {
-  description = "Azure OpenAI account name"
-  type        = string
-}
-
 variable "oai_sku_name" {
   description = "Azure OpenAI account SKU name"
-  type        = string
-}
-
-variable "oai_deployment_name" {
-  description = "Azure OpenAI model deployment name"
   type        = string
 }
 

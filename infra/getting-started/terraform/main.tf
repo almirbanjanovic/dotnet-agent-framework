@@ -1,14 +1,23 @@
 #--------------------------------------------------------------------------------------------------------------------------------
+# General Configuration
+#--------------------------------------------------------------------------------------------------------------------------------
+locals {
+  resource_suffix     = "${var.base_name}-${var.environment}-${var.location}"
+  oai_name            = "oai-${local.resource_suffix}"
+  oai_deployment_name = "oai-deployment-${local.resource_suffix}"
+}
+
+#--------------------------------------------------------------------------------------------------------------------------------
 # Open AI
 #--------------------------------------------------------------------------------------------------------------------------------
 
 resource "azurerm_cognitive_account" "this" {
-  name                  = var.oai_name
+  name                  = local.oai_name
   location              = var.location
   resource_group_name   = var.resource_group_name
   kind                  = var.cognitive_account_kind
   sku_name              = var.oai_sku_name
-  custom_subdomain_name = var.oai_name
+  custom_subdomain_name = local.oai_name
   tags                  = var.tags
 }
 
@@ -17,7 +26,7 @@ resource "azurerm_cognitive_account" "this" {
 #--------------------------------------------------------------------------------------------------------------------------------
 
 resource "azurerm_cognitive_deployment" "this" {
-  name                 = var.oai_deployment_name
+  name                 = local.oai_deployment_name
   cognitive_account_id = azurerm_cognitive_account.this.id
 
   model {
@@ -27,6 +36,6 @@ resource "azurerm_cognitive_deployment" "this" {
   }
 
   sku {
-    name     = var.oai_deployment_sku_name
+    name = var.oai_deployment_sku_name
   }
 }
