@@ -5,6 +5,12 @@
 ## Repository structure
 
 ```
+infra/getting-started/
+  terraform/                     → Terraform IaC
+
+.github/workflows/
+  terraform-init-backend.yaml    → backend bootstrap workflow
+
 src/getting-started/
   01-first-agent/                → first runnable agent
   02-add-tools/                  → tool-enabled agents
@@ -12,12 +18,6 @@ src/getting-started/
   04-memory-and-persistence/     → memory patterns
   05-first-workflow/             → workflow fundamentals
   06-hosting-your-agent/         → hosting and deployment
-
-infra/getting-started/
-  terraform/                     → Terraform IaC
-
-.github/workflows/
-  terraform-init-backend.yaml    → backend bootstrap workflow
 ```
 
 ## Prerequisites
