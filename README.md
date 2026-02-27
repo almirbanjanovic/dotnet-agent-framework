@@ -152,7 +152,7 @@ Then run:
 terraform init -reconfigure -backend-config=backend.hcl
 terraform validate
 terraform plan -var-file="terraform.tfvars"
-terraform apply -var-file="terraform.tfvars"
+terraform apply -auto-approve -var-file="terraform.tfvars"
 ```
 
 To tear down:
