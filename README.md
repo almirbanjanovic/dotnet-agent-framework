@@ -64,32 +64,7 @@ Set these under **Settings → Environments → `<environment>` → Variables**:
 | `STORAGE_ACCOUNT_PUBLIC_NETWORK_ACCESS` | Public network access during creation              | `Enabled`                        |
 | `TERRAFORM_STATE_CONTAINER`           | Blob container name for state files                  | `tfstate`                        |
 
-## Step 1 — Bootstrap the Terraform remote backend
-
-This only needs to run **once per environment**. Choose one of the two options:
-
-**Option A — CI/CD (GitHub Actions):**
-
-Run the workflow `.github/workflows/terraform-init-backend.yaml` via manual dispatch.
-
-**Option B — Local script:**
-
-Ensure you are logged in (`az login`), then run from `infra/getting-started/terraform/`:
-
-```bash
-# Bash / WSL / macOS
-chmod +x init-backend.sh
-./init-backend.sh
-```
-
-```powershell
-# PowerShell
-./init-backend.ps1
-```
-
-Both scripts read `resource_group_name`, `storage_account_name`, and `container_name` from `backend.hcl` and `location` from `terraform.tfvars` — no duplicate config needed.
-
-## Step 2 — Create local backend config
+## Step 1 — Create local config files
 
 Create `infra/getting-started/terraform/backend.hcl` (this file is gitignored):
 
@@ -99,16 +74,6 @@ storage_account_name = "<terraform-state-storage-account>"
 container_name       = "tfstate"
 key                  = "getting-started.tfstate"
 ```
-
-Use the values that match your workflow environment variables:
-
-| `backend.hcl` key       | Workflow variable              |
-|--------------------------|--------------------------------|
-| `resource_group_name`    | `RESOURCE_GROUP`               |
-| `storage_account_name`   | `STORAGE_ACCOUNT`              |
-| `container_name`         | `TERRAFORM_STATE_CONTAINER`    |
-
-## Step 3 — Create local Terraform variables
 
 Create `infra/getting-started/terraform/terraform.tfvars` (this file is gitignored):
 
@@ -127,7 +92,40 @@ oai_deployment_model_name    = "gpt-4.1"
 oai_deployment_model_version = "2025-04-14"
 ```
 
-## Step 4 — Deploy infrastructure
+If using CI/CD, ensure the `backend.hcl` values match your workflow environment variables:
+
+| `backend.hcl` key       | Workflow variable              |
+|--------------------------|--------------------------------|
+| `resource_group_name`    | `RESOURCE_GROUP`               |
+| `storage_account_name`   | `STORAGE_ACCOUNT`              |
+| `container_name`         | `TERRAFORM_STATE_CONTAINER`    |
+
+## Step 2 — Bootstrap the Terraform remote backend
+
+This only needs to run **once per environment**. Choose one option:
+
+**Option A — Local script:**
+
+Ensure you are logged in (`az login`), then run from `infra/getting-started/terraform/`:
+
+```bash
+# Bash / WSL / macOS
+chmod +x init-backend.sh
+./init-backend.sh
+```
+
+```powershell
+# PowerShell
+./init-backend.ps1
+```
+
+Both scripts read values directly from `backend.hcl` and `terraform.tfvars` — no duplicate config needed.
+
+**Option B — CI/CD (GitHub Actions):**
+
+Run the workflow `.github/workflows/terraform-init-backend.yaml` via manual dispatch. Requires the GitHub environment secrets and variables described above.
+
+## Step 3 — Deploy infrastructure
 
 From `infra/getting-started/terraform/`:
 
@@ -144,7 +142,7 @@ To tear down:
 terraform destroy -var-file="terraform.tfvars"
 ```
 
-## Step 5 — Run the first agent sample
+## Step 4 — Run the first agent sample
 
 From `src/getting-started/01-first-agent/`:
 
