@@ -172,16 +172,18 @@ First, create `src/getting-started/appsettings.json` (this file is gitignored):
 ```json
 {
   "AZURE_OPENAI_ENDPOINT": "https://oai-getting-started-centralus.openai.azure.com/",
-  "AZURE_OPENAI_DEPLOYMENT_NAME": "oai-deployment-getting-started-centralus"
+  "AZURE_OPENAI_DEPLOYMENT_NAME": "oai-deployment-getting-started-centralus",
+  "AZURE_OPENAI_API_KEY": "<your-api-key>"
 }
 ```
 
-These values are derived from `main.tf` locals using `environment` and `location` in `terraform.tfvars`:
+These values are derived from `main.tf` locals using `environment` and `location` in `terraform.tfvars`. The API key can be found in the Azure portal under your Azure OpenAI resource's **Keys and Endpoint** section.
 
 | Key                            | Description                    | Value from Terraform                                        |
 |--------------------------------|--------------------------------|-------------------------------------------------------------|
 | `AZURE_OPENAI_ENDPOINT`       | Azure OpenAI resource endpoint | `https://oai-getting-started-centralus.openai.azure.com/`   |
 | `AZURE_OPENAI_DEPLOYMENT_NAME`| Model deployment name          | `oai-deployment-getting-started-centralus`                  |
+| `AZURE_OPENAI_API_KEY`        | API key for authentication     | Found in Azure portal                                       |
 
 Then, from `src/getting-started/01-first-agent/`:
 
