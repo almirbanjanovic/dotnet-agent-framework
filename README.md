@@ -28,7 +28,7 @@ src/getting-started/
 - [.NET SDK 9.0+](https://dotnet.microsoft.com/download)
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) (`az login` completed)
 - [Terraform >= 1.14.6](https://developer.hashicorp.com/terraform/install)
-- A single Microsoft Entra app registration with an OIDC federated credential **per GitHub environment** (e.g. `dev`, `prod`). Each federated credential should be scoped to its corresponding GitHub environment. See [configure OIDC for GitHub Actions](https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation-create-trust?pivots=identity-wif-apps-methods-azp#github-actions).
+- A single Microsoft Entra app registration with an OIDC federated credential **per GitHub environment** (e.g. `getting-started`, `prod`). Each federated credential should be scoped to its corresponding GitHub environment. See [configure OIDC for GitHub Actions](https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation-create-trust?pivots=identity-wif-apps-methods-azp#github-actions).
 
 ## GitHub environment setup
 
@@ -50,7 +50,7 @@ Set these under **Settings → Environments → `<environment>` → Secrets**:
 
 | Secret                   | Description                                      |
 |--------------------------|--------------------------------------------------|
-| `TAGS`                   | Resource tags (e.g. `"environment=dev"`)         |
+| `TAGS`                   | Resource tags (e.g. `"environment=getting-started"`) |
 
 ### Environment variables
 
@@ -58,9 +58,9 @@ Set these under **Settings → Environments → `<environment>` → Variables**:
 
 | Variable                                | Description                                          | Example                            |
 |-----------------------------------------|------------------------------------------------------|------------------------------------|
-| `RESOURCE_GROUP`                        | Resource group for the Terraform state backend       | `rg-getting-started-dev-centralus` |
+| `RESOURCE_GROUP`                        | Resource group for the Terraform state backend       | `rg-getting-started-centralus`     |
 | `LOCATION`                              | Azure region                                         | `centralus`                        |
-| `STORAGE_ACCOUNT`                       | Storage account name (globally unique, max 24 chars) | `stgettingstarteddevcentr`         |
+| `STORAGE_ACCOUNT`                       | Storage account name (globally unique, max 24 chars) | `stgettingstartedcentralu`         |
 | `STORAGE_ACCOUNT_SKU`                   | Storage account SKU                                  | `Standard_LRS`                     |
 | `STORAGE_ACCOUNT_ENCRYPTION_SERVICES`   | Encryption services to enable                        | `blob`                             |
 | `STORAGE_ACCOUNT_MIN_TLS_VERSION`       | Minimum TLS version                                  | `TLS1_2`                           |
@@ -85,7 +85,7 @@ tags                = {}
 resource_group_name = "<your-resource-group>"
 
 base_name   = "getting-started"
-environment = "dev"
+environment = "getting-started"
 location    = "centralus"
 
 cognitive_account_kind       = "OpenAI"

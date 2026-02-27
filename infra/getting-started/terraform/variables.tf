@@ -12,7 +12,7 @@ variable "base_name" {
 }
 
 variable "environment" {
-  description = "Environment (e.g., dev, prod, etc.)"
+  description = "Environment (e.g., getting-started, prod, etc.)"
   type        = string
 }
 
