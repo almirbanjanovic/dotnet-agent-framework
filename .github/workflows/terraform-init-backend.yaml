@@ -5,7 +5,10 @@ on:
       environment:
         description: 'Environment to deploy to'
         required: true
-        default: 'dev'
+        default: getting-started
+        type: choice
+        options:
+          - getting-started
 
 permissions:
   id-token: write
