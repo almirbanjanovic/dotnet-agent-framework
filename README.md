@@ -167,21 +167,30 @@ Run the workflow `.github/workflows/terraform-plan-approve-apply.yaml` via manua
 
 ## Step 4 — Run the first agent sample
 
-From `src/getting-started/01-first-agent/`:
+First, create `src/getting-started/appsettings.json` (this file is gitignored):
 
-```bash
-dotnet restore
-dotnet run
+```json
+{
+  "AZURE_OPENAI_ENDPOINT": "https://oai-getting-started-centralus.openai.azure.com/",
+  "AZURE_OPENAI_DEPLOYMENT_NAME": "oai-deployment-getting-started-centralus"
+}
 ```
 
-Configuration is read from `src/getting-started/appsettings.json` (shared across all samples) or environment variables:
+These values are derived from `main.tf` locals using `environment` and `location` in `terraform.tfvars`:
 
 | Key                            | Description                    | Value from Terraform                                        |
 |--------------------------------|--------------------------------|-------------------------------------------------------------|
 | `AZURE_OPENAI_ENDPOINT`       | Azure OpenAI resource endpoint | `https://oai-getting-started-centralus.openai.azure.com/`   |
 | `AZURE_OPENAI_DEPLOYMENT_NAME`| Model deployment name          | `oai-deployment-getting-started-centralus`                  |
 
-These values are derived from `main.tf` locals using `environment` and `location` in `terraform.tfvars`.
+Then, from `src/getting-started/01-first-agent/`:
+
+```bash
+dotnet restore
+dotnet run
+```
+
+The `appsettings.json` is shared across all getting-started samples.
 
 ## Local validation (no remote state)
 
