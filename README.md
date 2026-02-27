@@ -106,7 +106,7 @@ This only needs to run **once per environment**. Choose one option:
 
 **Option A — Local script:**
 
-Ensure you are logged in (`az login`), then run **one** of the following from `infra/getting-started/terraform/`:
+Ensure you are logged in (`az login`), then run **one** of the following from `infra/getting-started/`:
 
 ```bash
 # Bash / WSL / macOS

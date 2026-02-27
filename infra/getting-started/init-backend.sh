@@ -11,10 +11,10 @@ parse_hcl_value() {
   grep -E "^\s*${key}\s*=" "$file" | head -1 | sed 's/.*=\s*"\(.*\)".*/\1/'
 }
 
-RESOURCE_GROUP=$(parse_hcl_value "$SCRIPT_DIR/backend.hcl" "resource_group_name")
-STORAGE_ACCOUNT=$(parse_hcl_value "$SCRIPT_DIR/backend.hcl" "storage_account_name")
-CONTAINER_NAME=$(parse_hcl_value "$SCRIPT_DIR/backend.hcl" "container_name")
-LOCATION=$(parse_hcl_value "$SCRIPT_DIR/terraform.tfvars" "location")
+RESOURCE_GROUP=$(parse_hcl_value "$SCRIPT_DIR/terraform/backend.hcl" "resource_group_name")
+STORAGE_ACCOUNT=$(parse_hcl_value "$SCRIPT_DIR/terraform/backend.hcl" "storage_account_name")
+CONTAINER_NAME=$(parse_hcl_value "$SCRIPT_DIR/terraform/backend.hcl" "container_name")
+LOCATION=$(parse_hcl_value "$SCRIPT_DIR/terraform/terraform.tfvars" "location")
 
 # Storage account defaults (match CI/CD workflow)
 STORAGE_ACCOUNT_SKU="Standard_LRS"

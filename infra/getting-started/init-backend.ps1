@@ -14,10 +14,10 @@ function Get-HclValue {
     throw "Could not find key '$Key' in $File"
 }
 
-$ResourceGroup  = Get-HclValue -File "$ScriptDir\backend.hcl" -Key "resource_group_name"
-$StorageAccount = Get-HclValue -File "$ScriptDir\backend.hcl" -Key "storage_account_name"
-$ContainerName  = Get-HclValue -File "$ScriptDir\backend.hcl" -Key "container_name"
-$Location       = Get-HclValue -File "$ScriptDir\terraform.tfvars" -Key "location"
+$ResourceGroup  = Get-HclValue -File "$ScriptDir\terraform\backend.hcl" -Key "resource_group_name"
+$StorageAccount = Get-HclValue -File "$ScriptDir\terraform\backend.hcl" -Key "storage_account_name"
+$ContainerName  = Get-HclValue -File "$ScriptDir\terraform\backend.hcl" -Key "container_name"
+$Location       = Get-HclValue -File "$ScriptDir\terraform\terraform.tfvars" -Key "location"
 
 # Storage account defaults (match CI/CD workflow)
 $StorageAccountSku               = "Standard_LRS"
