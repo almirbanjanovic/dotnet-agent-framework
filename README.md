@@ -28,18 +28,29 @@ infra/getting-started/
 
 ## GitHub environment setup
 
-Before running any workflows, configure these in your GitHub repository under **Settings → Environments → `<environment>`**:
+Before running any workflows, configure the following in your GitHub repository:
 
-### Secrets
+### Repository secrets
+
+Set these under **Settings → Secrets and variables → Actions → Secrets**:
 
 | Secret                   | Description                                      |
 |--------------------------|--------------------------------------------------|
 | `AZURE_CLIENT_ID`        | Service principal / app registration client ID   |
 | `AZURE_TENANT_ID`        | Azure AD tenant ID                               |
 | `AZURE_SUBSCRIPTION_ID`  | Target Azure subscription ID                     |
+
+### Environment secrets
+
+Set these under **Settings → Environments → `<environment>` → Secrets**:
+
+| Secret                   | Description                                      |
+|--------------------------|--------------------------------------------------|
 | `TAGS`                   | Resource tags (e.g. `"environment=dev"`)          |
 
-### Variables
+### Environment variables
+
+Set these under **Settings → Environments → `<environment>` → Variables**:
 
 | Variable                              | Description                                          | Example                          |
 |---------------------------------------|------------------------------------------------------|----------------------------------|
