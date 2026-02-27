@@ -176,10 +176,12 @@ dotnet run
 
 Configuration is read from `src/getting-started/appsettings.json` (shared across all samples) or environment variables:
 
-| Key                            | Description                     |
-|--------------------------------|---------------------------------|
-| `AZURE_OPENAI_ENDPOINT`       | Azure OpenAI resource endpoint  |
-| `AZURE_OPENAI_DEPLOYMENT_NAME`| Model deployment name           |
+| Key                            | Description                    | Value from Terraform                                        |
+|--------------------------------|--------------------------------|-------------------------------------------------------------|
+| `AZURE_OPENAI_ENDPOINT`       | Azure OpenAI resource endpoint | `https://oai-getting-started-centralus.openai.azure.com/`   |
+| `AZURE_OPENAI_DEPLOYMENT_NAME`| Model deployment name          | `oai-deployment-getting-started-centralus`                  |
+
+These values are derived from `main.tf` locals using `environment` and `location` in `terraform.tfvars`.
 
 ## Local validation (no remote state)
 
