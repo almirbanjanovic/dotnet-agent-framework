@@ -29,6 +29,14 @@ src/getting-started/
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) (`az login` completed)
 - [Terraform >= 1.14.6](https://developer.hashicorp.com/terraform/install)
 - A single Microsoft Entra app registration with an OIDC federated credential **per GitHub environment** (e.g. `getting-started`). Each federated credential should be scoped to its corresponding GitHub environment. See [configure OIDC for GitHub Actions](https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation-create-trust?pivots=identity-wif-apps-methods-azp#github-actions).
+- The app registration's service principal must have **Contributor** role on the target subscription:
+
+  ```bash
+  az role assignment create \
+    --assignee <AZURE_CLIENT_ID> \
+    --role "Contributor" \
+    --scope "/subscriptions/<AZURE_SUBSCRIPTION_ID>"
+  ```
 
 ## GitHub environment setup
 
