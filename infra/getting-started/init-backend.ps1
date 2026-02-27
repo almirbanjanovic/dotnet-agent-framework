@@ -45,7 +45,7 @@ try {
 #-------------------------------------------------------
 # Create resource group
 #-------------------------------------------------------
-$rgExists = az group show --name $ResourceGroup 2>&1
+$null = az group show --name $ResourceGroup 2>&1
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Creating resource group $ResourceGroup..."
     az group create --name $ResourceGroup --location $Location
@@ -67,7 +67,7 @@ function Disable-PublicAccess {
 }
 
 try {
-    $saExists = az storage account show --resource-group $ResourceGroup --name $StorageAccount 2>&1
+    $null = az storage account show --resource-group $ResourceGroup --name $StorageAccount 2>&1
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Creating storage account $StorageAccount..."
         az storage account create `
@@ -96,7 +96,7 @@ try {
     #-------------------------------------------------------
     # Create blob container
     #-------------------------------------------------------
-    $containerExists = az storage container show --name $ContainerName --account-name $StorageAccount --auth-mode login 2>&1
+    $null = az storage container show --name $ContainerName --account-name $StorageAccount --auth-mode login 2>&1
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Creating container $ContainerName..."
         az storage container create --name $ContainerName --account-name $StorageAccount --auth-mode login
