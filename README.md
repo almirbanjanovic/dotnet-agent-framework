@@ -67,11 +67,16 @@ Create backend resources in Azure (resource group, storage account, container) u
 Create a local-only `backend.hcl` in `infra/getting-started/terraform/` (do not commit):
 
 ```hcl
-resource_group_name  = "<tfstate-rg-name>"
-storage_account_name = "<tfstate-storage-account-name>"
+resource_group_name  = "<terraform-state-resource-group>"
+storage_account_name = "<terraform-state-storage-account>"
 container_name       = "tfstate"
-key                  = "getting-started/dev.tfstate"
+key                  = "getting-started.tfstate"
 ```
+
+Match these to your workflow environment variables in `.github/workflows/terraform-init-backend.yaml`:
+- `resource_group_name` ↔ `RESOURCE_GROUP`
+- `storage_account_name` ↔ `STORAGE_ACCOUNT`
+- `container_name` ↔ `TERRAFORM_STATE_CONTAINER`
 
 ### 3) Run real plan/apply/destroy with remote state
 
@@ -98,3 +103,5 @@ terraform init -migrate-state -backend-config=backend.hcl
 
 - Provider versions are pinned in `infra/getting-started/terraform/providers.tf` with `~>` constraints.
 - Local tfvars are intentionally ignored under `infra/.gitignore`.
+- Local backend files (`backend.hcl`, `*.backend.hcl`) are ignored under `infra/.gitignore`.
+- The backend bootstrap workflow disables storage public network access at the end; ensure your local network/auth setup can still access the state backend.
