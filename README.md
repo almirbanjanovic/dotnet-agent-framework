@@ -8,8 +8,11 @@
 .github/workflows/
   terraform-init-backend.yaml    → Terraform backend bootstrap workflow
 
-infra/getting-started/
-  terraform/                     → Terraform IaC
+infra/
+  init-backend.ps1               → Bootstrap Terraform backend (PowerShell)
+  init-backend.sh                → Bootstrap Terraform backend (Bash)
+  getting-started/
+    terraform/                   → Terraform IaC for getting-started
 
 src/getting-started/
   01-first-agent/                → first runnable agent
@@ -106,7 +109,7 @@ This only needs to run **once per environment**. Choose one option:
 
 **Option A — Local script:**
 
-Ensure you are logged in (`az login`), then run **one** of the following from `infra/getting-started/`:
+Ensure you are logged in (`az login`), then run **one** of the following from `infra/`:
 
 ```bash
 # Bash / WSL / macOS
@@ -119,7 +122,7 @@ chmod +x init-backend.sh
 ./init-backend.ps1
 ```
 
-Both scripts read values directly from `backend.hcl` and `terraform.tfvars` — no duplicate config needed.
+The scripts will present a menu to select which environment to bootstrap (currently `getting-started`). They then read `backend.hcl` and `terraform.tfvars` from the selected environment's `terraform/` directory — no duplicate config needed.
 
 **Option B — CI/CD (GitHub Actions):**
 
