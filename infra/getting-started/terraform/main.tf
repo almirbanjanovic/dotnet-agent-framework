@@ -2,7 +2,7 @@
 # General Configuration
 #--------------------------------------------------------------------------------------------------------------------------------
 locals {
-  resource_suffix     = "${var.base_name}-${var.environment}-${var.location}"
+  resource_suffix     = "${var.environment}-${var.location}"
   oai_name            = "oai-${local.resource_suffix}"
   oai_deployment_name = "oai-deployment-${local.resource_suffix}"
 }
