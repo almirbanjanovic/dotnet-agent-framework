@@ -125,7 +125,7 @@ chmod +x init-backend.sh
 ./init-backend.ps1
 ```
 
-The scripts read `backend.hcl` and `terraform.tfvars` from `infra/terraform/` — no duplicate config needed.
+The scripts read `backend.hcl` and `terraform.tfvars` from `infra/terraform/`.
 
 **Option B — CI/CD (GitHub Actions):**
 

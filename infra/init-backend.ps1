@@ -2,37 +2,8 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$ScriptDir = $PSScriptRoot
-
-#-------------------------------------------------------
-# Environment selection
-#-------------------------------------------------------
-$Environments = @(
-    @{ Name = "agentic-ai"; Path = "$ScriptDir\terraform" }
-)
-
-Write-Host ""
-Write-Host "Select the environment to bootstrap:"
-Write-Host ""
-for ($i = 0; $i -lt $Environments.Count; $i++) {
-    Write-Host "  [$($i + 1)] $($Environments[$i].Name)"
-}
-Write-Host ""
-
-$Selection = Read-Host "Enter selection (1-$($Environments.Count))"
-$Index = [int]$Selection - 1
-
-if ($Index -lt 0 -or $Index -ge $Environments.Count) {
-    Write-Error "Invalid selection."
-    exit 1
-}
-
-$SelectedEnv  = $Environments[$Index]
-$TerraformDir = $SelectedEnv.Path
-
-Write-Host ""
-Write-Host "Bootstrapping backend for: $($SelectedEnv.Name)"
-Write-Host ""
+$ScriptDir    = $PSScriptRoot
+$TerraformDir = "$ScriptDir\terraform"
 
 #-------------------------------------------------------
 # Parse values from backend.hcl and terraform.tfvars
@@ -54,8 +25,8 @@ $StorageAccountSku               = "Standard_LRS"
 $StorageAccountEncryptionServices = "blob"
 $StorageAccountMinTlsVersion     = "TLS1_2"
 
+Write-Host ""
 Write-Host "=== Terraform Backend Bootstrap ==="
-Write-Host "Environment:      $($SelectedEnv.Name)"
 Write-Host "Resource Group:   $ResourceGroup"
 Write-Host "Storage Account:  $StorageAccount"
 Write-Host "Container:        $ContainerName"
