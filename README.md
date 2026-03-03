@@ -65,7 +65,7 @@ Set these under **Settings → Environments → `<environment>` → Variables**:
 | `STORAGE_ACCOUNT_MIN_TLS_VERSION`       | Minimum TLS version                                  | `TLS1_2`                           |
 | `STORAGE_ACCOUNT_PUBLIC_NETWORK_ACCESS` | Public network access during creation                | `Enabled`                          |
 | `TERRAFORM_STATE_CONTAINER`             | Blob container name for state files                  | `tfstate`                          |
-| `TERRAFORM_STATE_BLOB`                  | Name for state file                                  | `<environment>.tfstate`            |
+| `TERRAFORM_STATE_BLOB`                  | Name for state file                                  | `agentic-ai.tfstate`               |
 | `TERRAFORM_WORKING_DIRECTORY`           | Path to the Terraform files (relative to repo root)  | `infra/terraform`                  |
 
 ## Step 1 — Create local config files
@@ -73,17 +73,17 @@ Set these under **Settings → Environments → `<environment>` → Variables**:
 Create `infra/terraform/backend.hcl` (this file is gitignored):
 
 ```hcl
-resource_group_name  = "<terraform-state-resource-group>"
-storage_account_name = "<terraform-state-storage-account>"
+resource_group_name  = "rg-agentic-ai-centralus"
+storage_account_name = "stagenticaicentralus"
 container_name       = "tfstate"
-key                  = "<environment>.tfstate"
+key                  = "agentic-ai.tfstate"
 ```
 
 Create `infra/terraform/terraform.tfvars` (this file is gitignored):
 
 ```hcl
 tags                = {}
-resource_group_name = "<your-resource-group>"
+resource_group_name = "rg-agentic-ai-centralus"
 
 environment = "agentic-ai"
 location    = "centralus"
