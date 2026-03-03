@@ -94,8 +94,10 @@ location    = "centralus"
 cognitive_account_kind       = "AIServices"
 oai_sku_name                 = "S0"
 oai_deployment_sku_name      = "GlobalStandard"
+oai_deployment_model_format  = "OpenAI"
 oai_deployment_model_name    = "gpt-4.1"
 oai_deployment_model_version = "2025-04-14"
+oai_version_upgrade_option   = "NoAutoUpgrade"
 ```
 
 If using CI/CD, ensure the `backend.hcl` values match your workflow environment variables:
@@ -160,13 +162,13 @@ First, create `src/appsettings.json` (this file is gitignored):
 
 ```json
 {
-  "AZURE_OPENAI_ENDPOINT": "https://oai-agentic-ai-centralus.openai.azure.com/",
+  "AZURE_OPENAI_ENDPOINT": "<your-endpoint>",
   "AZURE_OPENAI_DEPLOYMENT_NAME": "oai-deployment-agentic-ai-centralus",
   "AZURE_OPENAI_API_KEY": "<your-api-key>"
 }
 ```
 
-These values are derived from `main.tf` locals using `environment` and `location` in `terraform.tfvars`. You can find them in the [Azure AI Foundry portal](https://ai.azure.com):
+You can find these values in the [Azure AI Foundry portal](https://ai.azure.com):
 
 1. Open your project and go to **Models + endpoints**.
 2. Select your deployment to see the **Target URI** (endpoint) and **Key** (API key).
@@ -174,11 +176,11 @@ These values are derived from `main.tf` locals using `environment` and `location
 
 > **Note:** The Azure Portal's "Keys and Endpoint" blade may show a `.cognitiveservices.azure.com` endpoint for `AIServices` resources. Use the `.openai.azure.com` endpoint shown in Azure AI Foundry — that's what the `AzureOpenAIClient` SDK expects.
 
-| Key                            | Description                    | Where to find it                                            |
-|--------------------------------|--------------------------------|-------------------------------------------------------------|
-| `AZURE_OPENAI_ENDPOINT`       | Azure OpenAI resource endpoint | Foundry → Models + endpoints → Target URI                   |
-| `AZURE_OPENAI_DEPLOYMENT_NAME`| Model deployment name          | Foundry → Models + endpoints → Name column                  |
-| `AZURE_OPENAI_API_KEY`        | API key for authentication     | Foundry → Models + endpoints → Key                          |
+| Key                            | Description                    | Where to find it                                                 |
+|--------------------------------|--------------------------------|------------------------------------------------------------------|
+| `AZURE_OPENAI_ENDPOINT`        | Azure OpenAI resource endpoint | Foundry → Overview → Azure OpenAI → Azure OpenAI endpoint        |
+| `AZURE_OPENAI_DEPLOYMENT_NAME` | Model deployment name          | Derived from `main.tf`: `oai-deployment-{environment}-{location}`|
+| `AZURE_OPENAI_API_KEY`         | API key for authentication     | Foundry → Overview → API Key                                     |
 
 Then, from `src/simple-agent/`:
 
