@@ -46,3 +46,8 @@ variable "oai_deployment_model_version" {
   description = "Azure OpenAI model version"
   type        = string
 }
+
+variable "oai_version_upgrade_option" {
+  description = "Azure OpenAI version upgrade option"
+  type        = string
+}
