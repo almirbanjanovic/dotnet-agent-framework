@@ -152,6 +152,15 @@ terraform plan -var-file="terraform.tfvars"
 terraform apply -auto-approve -var-file="terraform.tfvars"
 ```
 
+After apply, you can retrieve connection values directly from Terraform outputs:
+
+```bash
+terraform output -raw openai_endpoint
+terraform output -raw openai_api_key
+```
+
+> **Security note:** `openai_api_key` is marked sensitive in Terraform, but `terraform output -raw` still reveals it in plaintext. Avoid printing keys in shared terminals/CI logs in production.
+
 **Option B — CI/CD (GitHub Actions):**
 
 Run the workflow `.github/workflows/terraform-plan-approve-apply.yaml` via manual dispatch. It will plan, wait for manual approval, then apply. Requires the GitHub environment secrets and variables described above.
@@ -178,9 +187,9 @@ You can find these values in the [Azure AI Foundry portal](https://ai.azure.com)
 
 | Key                            | Description                    | Where to find it                                                 |
 |--------------------------------|--------------------------------|------------------------------------------------------------------|
-| `AZURE_OPENAI_ENDPOINT`        | Azure OpenAI resource endpoint | Foundry → Overview → Azure OpenAI → Azure OpenAI endpoint        |
+| `AZURE_OPENAI_ENDPOINT`        | Azure OpenAI resource endpoint | `terraform output -raw openai_endpoint` or Foundry → Overview → Azure OpenAI endpoint |
 | `AZURE_OPENAI_DEPLOYMENT_NAME` | Model deployment name          | Derived from `main.tf`: `oai-deployment-{environment}-{location}`|
-| `AZURE_OPENAI_API_KEY`         | API key for authentication     | Foundry → Overview → API Key                                     |
+| `AZURE_OPENAI_API_KEY`         | API key for authentication     | `terraform output -raw openai_api_key` or Foundry → Overview → API Key |
 
 Then, from `src/simple-agent/`:
 
