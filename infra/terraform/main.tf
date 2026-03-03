@@ -3,7 +3,7 @@
 #--------------------------------------------------------------------------------------------------------------------------------
 locals {
   resource_suffix     = "${var.environment}-${var.location}"
-  foundry_name            = "aif-${local.resource_suffix}"
+  foundry_name        = "aif-${local.resource_suffix}"
   oai_deployment_name = "oai-deployment-${local.resource_suffix}"
 }
 
@@ -17,7 +17,7 @@ resource "azurerm_cognitive_account" "this" {
   resource_group_name   = var.resource_group_name
   kind                  = var.cognitive_account_kind
   sku_name              = var.oai_sku_name
-  custom_subdomain_name = local.foundry_name
+  custom_subdomain_name = local.oai_deployment_name
   tags                  = var.tags
 }
 
