@@ -191,15 +191,6 @@ dotnet run
 
 The `appsettings.json` is shared across all samples under `src/`.
 
-## Local validation (no remote state)
-
-For quick syntax/config checks without a backend:
-
-```bash
-cd infra/terraform
-terraform fmt -recursive
-terraform init -backend=false
-terraform validate
 ```
 
 ## Notes
