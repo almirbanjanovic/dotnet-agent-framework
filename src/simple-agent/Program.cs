@@ -16,11 +16,15 @@ var endpoint = configuration["AZURE_OPENAI_ENDPOINT"] ?? throw new InvalidOperat
 var deploymentName = configuration["AZURE_OPENAI_DEPLOYMENT_NAME"] ?? throw new InvalidOperationException("AZURE_OPENAI_DEPLOYMENT_NAME is not set.");
 var apiKey = configuration["AZURE_OPENAI_API_KEY"] ?? throw new InvalidOperationException("AZURE_OPENAI_API_KEY is not set.");
 
+Console.WriteLine($"Using Azure OpenAI endpoint: {endpoint}");
+Console.WriteLine($"Deployment name: {deploymentName}");
+
 AIAgent agent = new AzureOpenAIClient(
     new Uri(endpoint),
     new ApiKeyCredential(apiKey))
     .GetChatClient(deploymentName)
-    .AsAIAgent(instructions: "You are good at telling jokes.", name: "Joker");
+    .AsAIAgent(instructions: "You are a helpful and funny assistant who tells short jokes.", name: "Joker");
 
 // Invoke the agent and output the text result.
-Console.WriteLine(await agent.RunAsync("Tell me a joke about a pirate."));
+var result = await agent.RunAsync("Tell me a joke about the cloud.");
+Console.WriteLine($"\nAgent response:\n {result}");
