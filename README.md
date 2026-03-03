@@ -13,13 +13,8 @@ infra/
   init-backend.sh                → Bootstrap Terraform backend (Bash)
   terraform/                     → Terraform IaC
 
-src/agentic-ai/
+src/
   simple-agent/                  → first runnable agent
-  02-add-tools/                  → tool-enabled agents
-  03-multi-turn-conversations/   → conversation state
-  04-memory-and-persistence/     → memory patterns
-  05-first-workflow/             → workflow fundamentals
-  06-hosting-your-agent/         → hosting and deployment
 ```
 
 ## Prerequisites
@@ -96,7 +91,7 @@ resource_group_name = "<your-resource-group>"
 environment = "agentic-ai"
 location    = "centralus"
 
-cognitive_account_kind       = "OpenAI"
+cognitive_account_kind       = "AIServices"
 oai_sku_name                 = "S0"
 oai_deployment_sku_name      = "GlobalStandard"
 oai_deployment_model_name    = "gpt-4.1"
@@ -167,7 +162,7 @@ Run the workflow `.github/workflows/terraform-plan-approve-apply.yaml` via manua
 
 ## Step 4 — Run the first agent sample
 
-First, create `src/agentic-ai/appsettings.json` (this file is gitignored):
+First, create `src/appsettings.json` (this file is gitignored):
 
 ```json
 {
@@ -177,22 +172,28 @@ First, create `src/agentic-ai/appsettings.json` (this file is gitignored):
 }
 ```
 
-These values are derived from `main.tf` locals using `environment` and `location` in `terraform.tfvars`. The API key can be found in the Azure portal under your Azure OpenAI resource's **Keys and Endpoint** section.
+These values are derived from `main.tf` locals using `environment` and `location` in `terraform.tfvars`. You can find them in the [Azure AI Foundry portal](https://ai.azure.com):
 
-| Key                            | Description                    | Value from Terraform                                        |
+1. Open your project and go to **Models + endpoints**.
+2. Select your deployment to see the **Target URI** (endpoint) and **Key** (API key).
+3. The **Deployment name** is shown in the deployments list.
+
+> **Note:** The Azure Portal's "Keys and Endpoint" blade may show a `.cognitiveservices.azure.com` endpoint for `AIServices` resources. Use the `.openai.azure.com` endpoint shown in Azure AI Foundry — that's what the `AzureOpenAIClient` SDK expects.
+
+| Key                            | Description                    | Where to find it                                            |
 |--------------------------------|--------------------------------|-------------------------------------------------------------|
-| `AZURE_OPENAI_ENDPOINT`       | Azure OpenAI resource endpoint | `https://oai-agentic-ai-centralus.openai.azure.com/`        |
-| `AZURE_OPENAI_DEPLOYMENT_NAME`| Model deployment name          | `oai-deployment-agentic-ai-centralus`                       |
-| `AZURE_OPENAI_API_KEY`        | API key for authentication     | Found in Azure portal                                       |
+| `AZURE_OPENAI_ENDPOINT`       | Azure OpenAI resource endpoint | Foundry → Models + endpoints → Target URI                   |
+| `AZURE_OPENAI_DEPLOYMENT_NAME`| Model deployment name          | Foundry → Models + endpoints → Name column                  |
+| `AZURE_OPENAI_API_KEY`        | API key for authentication     | Foundry → Models + endpoints → Key                          |
 
-Then, from `src/agentic-ai/simple-agent/`:
+Then, from `src/simple-agent/`:
 
 ```bash
 dotnet restore
 dotnet run
 ```
 
-The `appsettings.json` is shared across all agentic-ai samples.
+The `appsettings.json` is shared across all samples under `src/`.
 
 ## Local validation (no remote state)
 
