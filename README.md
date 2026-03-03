@@ -26,10 +26,7 @@ src/
 - The app registration's service principal must have **Contributor** role on the target subscription:
 
   ```bash
-  az role assignment create \
-    --assignee <AZURE_CLIENT_ID> \
-    --role "Contributor" \
-    --scope "/subscriptions/<AZURE_SUBSCRIPTION_ID>"
+  az role assignment create --assignee <AZURE_CLIENT_ID> --role "Contributor" --scope "/subscriptions/<AZURE_SUBSCRIPTION_ID>"
   ```
 
 ## GitHub environment setup
