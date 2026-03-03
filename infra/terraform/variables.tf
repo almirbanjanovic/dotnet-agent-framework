@@ -8,7 +8,7 @@ variable "resource_group_name" {
 }
 
 variable "environment" {
-  description = "Environment (e.g., getting-started)"
+  description = "Environment (e.g., agentic-ai)"
   type        = string
 }
 

@@ -11,11 +11,10 @@
 infra/
   init-backend.ps1               → Bootstrap Terraform backend (PowerShell)
   init-backend.sh                → Bootstrap Terraform backend (Bash)
-  getting-started/
-    terraform/                   → Terraform IaC for getting-started
+  terraform/                     → Terraform IaC
 
-src/getting-started/
-  01-first-agent/                → first runnable agent
+src/agentic-ai/
+  simple-agent/                  → first runnable agent
   02-add-tools/                  → tool-enabled agents
   03-multi-turn-conversations/   → conversation state
   04-memory-and-persistence/     → memory patterns
@@ -28,7 +27,7 @@ src/getting-started/
 - [.NET SDK 9.0+](https://dotnet.microsoft.com/download)
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) (`az login` completed)
 - [Terraform >= 1.14.6](https://developer.hashicorp.com/terraform/install)
-- A single Microsoft Entra app registration with an OIDC federated credential **per GitHub environment** (e.g. `getting-started`). Each federated credential should be scoped to its corresponding GitHub environment. See [configure OIDC for GitHub Actions](https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation-create-trust?pivots=identity-wif-apps-methods-azp#github-actions).
+- A single Microsoft Entra app registration with an OIDC federated credential **per GitHub environment** (e.g. `agentic-ai`). Each federated credential should be scoped to its corresponding GitHub environment. See [configure OIDC for GitHub Actions](https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation-create-trust?pivots=identity-wif-apps-methods-azp#github-actions).
 - The app registration's service principal must have **Contributor** role on the target subscription:
 
   ```bash
@@ -58,7 +57,7 @@ Set these under **Settings → Environments → `<environment>` → Secrets**:
 
 | Secret                   | Description                                      |
 |--------------------------|--------------------------------------------------|
-| `TAGS`                   | Resource tags (e.g. `"environment=getting-started"`) |
+| `TAGS`                   | Resource tags (e.g. `"environment=agentic-ai"`) |
 
 ### Environment variables
 
@@ -66,19 +65,20 @@ Set these under **Settings → Environments → `<environment>` → Variables**:
 
 | Variable                                | Description                                          | Example                            |
 |-----------------------------------------|------------------------------------------------------|------------------------------------|
-| `RESOURCE_GROUP`                        | Resource group for the Terraform state backend       | `rg-getting-started-centralus`     |
+| `RESOURCE_GROUP`                        | Resource group for the Terraform state backend       | `rg-agentic-ai-centralus`          |
 | `LOCATION`                              | Azure region                                         | `centralus`                        |
-| `STORAGE_ACCOUNT`                       | Storage account name (globally unique, max 24 chars) | `stgettingstartedcentralu`         |
+| `STORAGE_ACCOUNT`                       | Storage account name (globally unique, max 24 chars) | `stagenticaicentralus`             |
 | `STORAGE_ACCOUNT_SKU`                   | Storage account SKU                                  | `Standard_LRS`                     |
 | `STORAGE_ACCOUNT_ENCRYPTION_SERVICES`   | Encryption services to enable                        | `blob`                             |
 | `STORAGE_ACCOUNT_MIN_TLS_VERSION`       | Minimum TLS version                                  | `TLS1_2`                           |
 | `STORAGE_ACCOUNT_PUBLIC_NETWORK_ACCESS` | Public network access during creation                | `Enabled`                          |
 | `TERRAFORM_STATE_CONTAINER`             | Blob container name for state files                  | `tfstate`                          |
 | `TERRAFORM_STATE_BLOB`                  | Name for state file                                  | `<environment>.tfstate`            |
+| `TERRAFORM_WORKING_DIRECTORY`           | Path to the Terraform files (relative to repo root)  | `infra/terraform`                  |
 
 ## Step 1 — Create local config files
 
-Create `infra/<environment>/terraform/backend.hcl` (this file is gitignored):
+Create `infra/terraform/backend.hcl` (this file is gitignored):
 
 ```hcl
 resource_group_name  = "<terraform-state-resource-group>"
@@ -87,13 +87,13 @@ container_name       = "tfstate"
 key                  = "<environment>.tfstate"
 ```
 
-Create `infra/<environment>/terraform/terraform.tfvars` (this file is gitignored):
+Create `infra/terraform/terraform.tfvars` (this file is gitignored):
 
 ```hcl
 tags                = {}
 resource_group_name = "<your-resource-group>"
 
-environment = "getting-started"
+environment = "agentic-ai"
 location    = "centralus"
 
 cognitive_account_kind       = "OpenAI"
@@ -130,7 +130,7 @@ chmod +x init-backend.sh
 ./init-backend.ps1
 ```
 
-The scripts will present a menu to select which environment to bootstrap (currently `getting-started`). They then read `backend.hcl` and `terraform.tfvars` from the selected environment's `terraform/` directory — no duplicate config needed.
+The scripts read `backend.hcl` and `terraform.tfvars` from `infra/terraform/` — no duplicate config needed.
 
 **Option B — CI/CD (GitHub Actions):**
 
@@ -140,10 +140,10 @@ Run the workflow `.github/workflows/terraform-init-backend.yaml` via manual disp
 
 **Option A — Local (with remote backend):**
 
-From `infra/getting-started/terraform/`, first ensure the backend storage account has public network access enabled:
+From `infra/terraform/`, first ensure the backend storage account has public network access enabled:
 
 ```bash
-az storage account update --name stgettingstartedcentralu --resource-group rg-getting-started-centralus --public-network-access Enabled
+az storage account update --name stagenticaicentralus --resource-group rg-agentic-ai-centralus --public-network-access Enabled
 ```
 
 Then run:
@@ -167,12 +167,12 @@ Run the workflow `.github/workflows/terraform-plan-approve-apply.yaml` via manua
 
 ## Step 4 — Run the first agent sample
 
-First, create `src/getting-started/appsettings.json` (this file is gitignored):
+First, create `src/agentic-ai/appsettings.json` (this file is gitignored):
 
 ```json
 {
-  "AZURE_OPENAI_ENDPOINT": "https://oai-getting-started-centralus.openai.azure.com/",
-  "AZURE_OPENAI_DEPLOYMENT_NAME": "oai-deployment-getting-started-centralus",
+  "AZURE_OPENAI_ENDPOINT": "https://oai-agentic-ai-centralus.openai.azure.com/",
+  "AZURE_OPENAI_DEPLOYMENT_NAME": "oai-deployment-agentic-ai-centralus",
   "AZURE_OPENAI_API_KEY": "<your-api-key>"
 }
 ```
@@ -181,25 +181,25 @@ These values are derived from `main.tf` locals using `environment` and `location
 
 | Key                            | Description                    | Value from Terraform                                        |
 |--------------------------------|--------------------------------|-------------------------------------------------------------|
-| `AZURE_OPENAI_ENDPOINT`       | Azure OpenAI resource endpoint | `https://oai-getting-started-centralus.openai.azure.com/`   |
-| `AZURE_OPENAI_DEPLOYMENT_NAME`| Model deployment name          | `oai-deployment-getting-started-centralus`                  |
+| `AZURE_OPENAI_ENDPOINT`       | Azure OpenAI resource endpoint | `https://oai-agentic-ai-centralus.openai.azure.com/`        |
+| `AZURE_OPENAI_DEPLOYMENT_NAME`| Model deployment name          | `oai-deployment-agentic-ai-centralus`                       |
 | `AZURE_OPENAI_API_KEY`        | API key for authentication     | Found in Azure portal                                       |
 
-Then, from `src/getting-started/01-first-agent/`:
+Then, from `src/agentic-ai/simple-agent/`:
 
 ```bash
 dotnet restore
 dotnet run
 ```
 
-The `appsettings.json` is shared across all getting-started samples.
+The `appsettings.json` is shared across all agentic-ai samples.
 
 ## Local validation (no remote state)
 
 For quick syntax/config checks without a backend:
 
 ```bash
-cd infra/getting-started/terraform
+cd infra/terraform
 terraform fmt -recursive
 terraform init -backend=false
 terraform validate
@@ -207,6 +207,6 @@ terraform validate
 
 ## Notes
 
-- Provider versions are pinned with `~>` constraints in `infra/getting-started/terraform/providers.tf`.
+- Provider versions are pinned with `~>` constraints in `infra/terraform/providers.tf`.
 - `terraform.tfvars`, `backend.hcl`, and `*.backend.hcl` are gitignored under `infra/.gitignore`.
 - The bootstrap workflow disables storage public network access after setup; ensure your local network can reach the storage account for backend operations.

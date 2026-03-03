@@ -6,8 +6,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 #-------------------------------------------------------
 # Environment selection
 #-------------------------------------------------------
-declare -a ENV_NAMES=("getting-started")
-declare -a ENV_PATHS=("$SCRIPT_DIR/getting-started/terraform")
+declare -a ENV_NAMES=("agentic-ai")
+declare -a ENV_PATHS=("$SCRIPT_DIR/terraform")
 
 echo ""
 echo "Select the environment to bootstrap:"

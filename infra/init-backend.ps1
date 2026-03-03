@@ -8,7 +8,7 @@ $ScriptDir = $PSScriptRoot
 # Environment selection
 #-------------------------------------------------------
 $Environments = @(
-    @{ Name = "getting-started"; Path = "$ScriptDir\getting-started\terraform" }
+    @{ Name = "agentic-ai"; Path = "$ScriptDir\terraform" }
 )
 
 Write-Host ""
