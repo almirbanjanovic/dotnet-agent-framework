@@ -191,8 +191,6 @@ dotnet run
 
 The `appsettings.json` is shared across all samples under `src/`.
 
-```
-
 ## Notes
 
 - Provider versions are pinned with `~>` constraints in `infra/terraform/providers.tf`.
