@@ -15,7 +15,7 @@ resource "azurerm_cognitive_account" "this" {
   resource_group_name   = var.resource_group_name
   kind                  = var.cognitive_account_kind
   sku_name              = var.oai_sku_name
-  custom_subdomain_name = "${local.foundry_name}-${var.oai_deployment_model_name}"
+  custom_subdomain_name = "${local.foundry_name}-${replace(var.oai_deployment_model_name, ".", "-")}"
   tags                  = var.tags
 }
 
