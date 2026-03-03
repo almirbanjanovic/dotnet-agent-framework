@@ -6,5 +6,4 @@ output "openai_endpoint" {
 output "openai_api_key" {
   description = "Azure OpenAI API key"
   value       = azurerm_cognitive_account.this.primary_access_key
-  sensitive   = true
 }

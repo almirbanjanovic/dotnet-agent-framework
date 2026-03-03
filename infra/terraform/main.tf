@@ -14,6 +14,7 @@ resource "azurerm_cognitive_account" "this" {
   location              = var.location
   resource_group_name   = var.resource_group_name
   kind                  = var.cognitive_account_kind
+  local_auth_enabled    = true
   sku_name              = var.oai_sku_name
   custom_subdomain_name = "${local.foundry_name}-${replace(var.oai_deployment_model_name, ".", "-")}"
   tags                  = var.tags
