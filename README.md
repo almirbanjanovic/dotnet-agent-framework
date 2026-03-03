@@ -150,12 +150,6 @@ terraform plan -var-file="terraform.tfvars"
 terraform apply -auto-approve -var-file="terraform.tfvars"
 ```
 
-To tear down:
-
-```bash
-terraform destroy -var-file="terraform.tfvars"
-```
-
 **Option B — CI/CD (GitHub Actions):**
 
 Run the workflow `.github/workflows/terraform-plan-approve-apply.yaml` via manual dispatch. It will plan, wait for manual approval, then apply. Requires the GitHub environment secrets and variables described above.

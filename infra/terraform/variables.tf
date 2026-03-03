@@ -32,6 +32,11 @@ variable "oai_deployment_sku_name" {
   type        = string
 }
 
+variable "oai_deployment_model_format" {
+  description = "Azure OpenAI model format"
+  type        = string
+}
+
 variable "oai_deployment_model_name" {
   description = "Azure OpenAI model name"
   type        = string
