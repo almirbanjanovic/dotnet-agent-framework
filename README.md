@@ -149,15 +149,6 @@ terraform plan -var-file="terraform.tfvars"
 terraform apply -auto-approve -var-file="terraform.tfvars"
 ```
 
-After apply, you can retrieve connection values directly from Terraform outputs:
-
-```bash
-terraform output -raw openai_endpoint
-terraform output -raw openai_api_key
-```
-
-> **Security note:** `openai_api_key` is marked sensitive in Terraform, but `terraform output -raw` still reveals it in plaintext. Avoid printing keys in shared terminals/CI logs in production.
-
 **Option B — CI/CD (GitHub Actions):**
 
 Run the workflow `.github/workflows/terraform-plan-approve-apply.yaml` via manual dispatch. It will plan, wait for manual approval, then apply. Requires the GitHub environment secrets and variables described above.
