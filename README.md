@@ -149,6 +149,10 @@ terraform plan -var-file="terraform.tfvars"
 terraform apply -auto-approve -var-file="terraform.tfvars"
 ```
 
+After `terraform apply`, the API key and endpoint are shown from `infra/terraform/outputs.tf` outputs.
+
+> **Note:** This output behavior is for learning/dev convenience and should not be used for sensitive values in production.
+
 **Option B — CI/CD (GitHub Actions):**
 
 Run the workflow `.github/workflows/terraform-plan-approve-apply.yaml` via manual dispatch. It will plan, wait for manual approval, then apply. Requires the GitHub environment secrets and variables described above.
@@ -175,9 +179,9 @@ You can find these values in the [Azure AI Foundry portal](https://ai.azure.com)
 
 | Key                            | Description                    | Where to find it                                                 |
 |--------------------------------|--------------------------------|------------------------------------------------------------------|
-| `AZURE_OPENAI_ENDPOINT`        | Azure OpenAI resource endpoint | Foundry → Overview → Azure OpenAI endpoint |
+| `AZURE_OPENAI_ENDPOINT`        | Azure OpenAI resource endpoint | Shown after `terraform apply` (from `outputs.tf`) or Foundry → Overview → Azure OpenAI endpoint |
 | `AZURE_OPENAI_DEPLOYMENT_NAME` | Model deployment name          | Derived from `main.tf`: `oai-deployment-{environment}-{location}`|
-| `AZURE_OPENAI_API_KEY`         | API key for authentication     | Foundry → Overview → API Key |
+| `AZURE_OPENAI_API_KEY`         | API key for authentication     | Shown after `terraform apply` (from `outputs.tf`) or Foundry → Overview → API Key |
 
 Then, from `src/simple-agent/`:
 
