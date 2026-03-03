@@ -30,7 +30,7 @@ resource "azurerm_cognitive_deployment" "this" {
   cognitive_account_id = azurerm_cognitive_account.this.id
 
   model {
-    format  = var.cognitive_account_kind
+    format  = var.oai_deployment_model_format
     name    = var.oai_deployment_model_name
     version = var.oai_deployment_model_version
   }
