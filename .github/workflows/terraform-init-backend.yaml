@@ -5,10 +5,10 @@ on:
       environment:
         description: 'Environment to deploy to'
         required: true
-        default: getting-started
+        default: agentic-ai
         type: choice
         options:
-          - getting-started
+          - agentic-ai
 
 permissions:
   id-token: write

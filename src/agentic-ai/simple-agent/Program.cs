@@ -5,7 +5,7 @@ using Microsoft.Extensions.Configuration;
 using OpenAI.Chat;
 
 // Configuration priority (last wins):
-// 1. appsettings.json      - local dev settings (shared across all getting-started samples), not checked into source control
+// 1. appsettings.json      - local dev settings (shared across all agentic-ai samples), not checked into source control
 // 2. Environment variables  - used in AKS/Helm deployments
 var configuration = new ConfigurationBuilder()
     .AddJsonFile("appsettings.json", optional: true)
