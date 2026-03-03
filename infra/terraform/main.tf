@@ -2,9 +2,7 @@
 # General Configuration
 #--------------------------------------------------------------------------------------------------------------------------------
 locals {
-  resource_suffix     = "${var.environment}-${var.location}"
-  foundry_name        = "aif-${local.resource_suffix}"
-  oai_deployment_name = "oai-deployment-${local.resource_suffix}"
+  foundry_name        = "aif-${var.environment}-${var.location}"
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -17,7 +15,7 @@ resource "azurerm_cognitive_account" "this" {
   resource_group_name   = var.resource_group_name
   kind                  = var.cognitive_account_kind
   sku_name              = var.oai_sku_name
-  custom_subdomain_name = local.oai_deployment_name
+  custom_subdomain_name = "${local.foundry_name}-${var.oai_deployment_model_name}"
   tags                  = var.tags
 }
 
@@ -26,7 +24,7 @@ resource "azurerm_cognitive_account" "this" {
 #--------------------------------------------------------------------------------------------------------------------------------
 
 resource "azurerm_cognitive_deployment" "this" {
-  name                 = local.oai_deployment_name
+  name                 = var.oai_deployment_model_name
   cognitive_account_id = azurerm_cognitive_account.this.id
 
   model {
