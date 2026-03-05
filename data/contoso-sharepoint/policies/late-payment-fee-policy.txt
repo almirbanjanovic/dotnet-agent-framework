@@ -1,0 +1,30 @@
+Late Payment Fee Policy
+Contoso Telecom — Policy Document
+Effective Date: January 1, 2025
+Document ID: POL-003
+
+OVERVIEW
+
+A late fee is assessed if an invoice remains unpaid beyond the due date specified in the customer's billing statement.
+
+FEE CALCULATION
+
+The late fee is calculated as 1.5% of the outstanding balance per month, beginning the day after the due date. The fee is compounded monthly for continued non-payment.
+
+GRACE PERIOD
+
+There is no automatic grace period. However, customers who contact support before the due date may request a one-time extension of up to 7 days without incurring a late fee.
+
+FEE WAIVER
+
+Customers who demonstrate financial hardship or account errors can have late fees waived at management's discretion. A waiver request must be submitted within 30 days of the late fee being assessed.
+
+SERVICE IMPACT
+
+Accounts with payments more than 30 days past due risk service suspension. Accounts more than 60 days past due may be downgraded to a lower service tier until the balance is cleared. Accounts more than 90 days past due may be sent to collections.
+
+AUTOPAY INCENTIVE
+
+Customers enrolled in autopay receive a $5 monthly discount and avoid late fees entirely, provided sufficient funds are available in their payment method.
+
+For questions regarding this policy, contact Customer Support at 1-800-CONTOSO.

@@ -1,0 +1,11 @@
+id,name,category,description,monthly_fee,speed_tier,data_cap_gb,features,active
+1,Fiber Internet - Basic,internet,100 Mbps fiber internet for basic needs,49.99,100Mbps,500,"WiFi Router, 24/7 Support",true
+2,Fiber Internet - Pro,internet,500 Mbps fiber internet for power users,79.99,500Mbps,1000,"WiFi 6 Router, 24/7 Priority Support, Static IP",true
+3,Fiber Internet - Ultimate,internet,1 Gbps fiber internet - no limits,119.99,1Gbps,,-1,"WiFi 6E Router, 24/7 VIP Support, Static IP, Gaming Priority",true
+4,Mobile Plan - Essential,mobile,5GB data with unlimited calls/texts,29.99,,5,"Unlimited Calls, Unlimited Texts, 5G Access",true
+5,Mobile Plan - Premium,mobile,Unlimited data with premium features,59.99,,-1,"Unlimited Data, International Roaming, 5G Priority, Hotspot 50GB",true
+6,TV Streaming - Basic,tv,50+ channels streaming package,34.99,,,"50+ Channels, 2 Screens, 7-Day Replay",true
+7,TV Streaming - Premium,tv,150+ channels with sports and movies,64.99,,,"150+ Channels, 4 Screens, 30-Day Replay, Sports Package, Movie Channels",true
+8,Home Security - Basic,security,Basic home security monitoring,19.99,,,"24/7 Monitoring, 2 Sensors, Mobile App",true
+9,Bundle - Family Complete,bundle,Internet Pro + TV Premium + 2 Mobile lines,199.99,,,"500Mbps Internet, 150+ TV Channels, 2 Unlimited Mobile Lines, 20% Discount",true
+10,Business Internet - Enterprise,business,Dedicated fiber for business,299.99,10Gbps,,"Dedicated Line, SLA 99.99%, 24/7 Business Support, Static IP Block",true

@@ -1,0 +1,32 @@
+Payment Failure and Reinstatement Rules
+Contoso Telecom — Policy Document
+Effective Date: January 1, 2025
+Document ID: POL-005
+
+OVERVIEW
+
+This policy describes the process and rules governing automatic payment failures and subsequent service reinstatement.
+
+GRACE PERIOD
+
+If an automatic payment attempt fails (e.g., insufficient funds, expired card), the account enters a 10-day grace period before service suspension. During this period:
+- The customer receives notifications via email and SMS on days 1, 5, and 9
+- All services remain fully active
+- No late fees are assessed during the grace period
+
+SERVICE SUSPENSION
+
+If the balance remains unpaid after the 10-day grace period:
+- Service is suspended (outgoing calls/data blocked; incoming calls still received)
+- A reconnection fee of $25.00 is added to the account balance
+- The customer must pay the full outstanding balance plus the reconnection fee to restore service
+
+RECONNECTION FEE WAIVER
+
+The reconnection fee is waived for first-time payment failures within a rolling 12-month window. Subsequent failures within the same 12-month period are subject to the full reconnection fee.
+
+HARDSHIP PAYMENT PLAN
+
+Customers who cannot pay the full balance may enroll in a hardship payment plan (see Financial Hardship Payment Plan Procedure). Enrollment in a hardship plan reinstates service immediately.
+
+For questions regarding this policy, contact Customer Support at 1-800-CONTOSO.

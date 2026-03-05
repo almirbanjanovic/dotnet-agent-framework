@@ -1,0 +1,35 @@
+Billing Dispute Escalation - Next Steps
+Contoso Telecom — Policy Document
+Effective Date: January 1, 2025
+Document ID: POL-002
+
+OVERVIEW
+
+In cases where a customer disagrees with an initial invoice adjustment ruling, Contoso provides a formal escalation path to ensure fair resolution.
+
+INITIAL DISPUTE
+
+All billing disputes begin with a standard review. The customer contacts support to identify the disputed charges, and the billing team reviews the account, verifies relevant records, and determines if the charge should be partially or fully credited. If the adjustment request is approved, changes are reflected within one to two billing cycles. If the inquiry is deemed invalid, a denial with explanation is issued.
+
+ESCALATION PROCESS
+
+If the customer disagrees with the initial ruling:
+
+1. The customer may request a second review by submitting additional supporting documentation or clarifications.
+2. The escalation team reevaluates the billing records, subscriber history, and any relevant service logs.
+3. If further credit or partial refunds are deemed appropriate, adjustments are applied in a subsequent invoice cycle.
+4. If the dispute is ultimately upheld as invalid, the customer is provided a clear explanatory statement detailing the reasoning.
+
+EXTERNAL ARBITRATION
+
+Persisting disagreements after internal escalation may be referred to external arbitration, if applicable under the subscriber's contract terms. Contoso will cooperate fully with any arbitration proceedings and provide all relevant documentation.
+
+TIMELINES
+
+- Initial review: 5 business days
+- Escalation review: 10 business days
+- External arbitration referral: 15 business days after escalation denial
+
+Pro-rated fees tied to early plan changes or canceled subscriptions may factor into an invoice adjustment determination.
+
+For questions regarding this policy, contact Customer Support at 1-800-CONTOSO.

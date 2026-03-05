@@ -1,0 +1,48 @@
+Account Security Best Practices
+Contoso Telecom — Customer Guide
+Document ID: GUIDE-005
+
+PROTECTING YOUR ACCOUNT
+
+Your Contoso account contains personal information, payment details, and service configurations. Follow these best practices to keep it secure.
+
+PASSWORD REQUIREMENTS
+
+- Use a strong, unique password (at least 12 characters with uppercase, lowercase, numbers, and symbols)
+- Never reuse passwords from other websites or services
+- Update your password every 90 days
+- Never share your login credentials with anyone
+
+TWO-FACTOR AUTHENTICATION (2FA)
+
+Enable 2FA for an extra layer of security:
+1. Log in at myaccount.contoso.com
+2. Go to Account Settings > Security
+3. Click "Enable Two-Factor Authentication"
+4. Choose your verification method (SMS, email, or authenticator app)
+5. Follow the setup prompts
+
+With 2FA enabled, you'll need both your password and a verification code to log in.
+
+MONITORING YOUR ACCOUNT
+
+- Review your account activity regularly for unfamiliar changes
+- Check for unauthorized subscription modifications or address changes
+- Enable login notifications to receive alerts when your account is accessed from a new device or location
+
+WHAT TO DO IF YOU SUSPECT UNAUTHORIZED ACCESS
+
+1. Change your password immediately
+2. Review recent account activity for unauthorized changes
+3. Contact our Security Line at 1-800-CONTOSO-SEC
+4. If your account is locked, follow the Account Unlock Procedure
+
+WHAT CONTOSO WILL NEVER DO
+
+- We will NEVER ask for your password via email, phone, or text message
+- We will NEVER send you a link asking you to "verify" your account credentials
+- We will NEVER ask for your full Social Security Number
+
+If you receive any communication asking for this information, it is not from Contoso. Report it to our Security Team immediately.
+
+For security questions, contact 1-800-CONTOSO-SEC.
