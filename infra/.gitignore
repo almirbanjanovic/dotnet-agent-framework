@@ -23,11 +23,5 @@ backend.hcl
 *.tfplan
 plan.out
 
-# Bicep compiled templates
-*.bicep.json
-
-# Optional local Bicep parameters
-*.local.bicepparam
-
 # Azure deployment artifacts
 .azure/
