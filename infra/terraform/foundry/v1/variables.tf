@@ -53,6 +53,40 @@ variable "version_upgrade_option" {
   default     = "NoAutoUpgrade"
 }
 
+# -----------------------------------------------------------------------------
+# Embedding Deployment
+# -----------------------------------------------------------------------------
+
+variable "create_embedding_deployment" {
+  description = "Whether to create the embedding model deployment"
+  type        = bool
+  default     = true
+}
+
+variable "embedding_model_name" {
+  description = "Embedding model name (e.g., text-embedding-ada-002)"
+  type        = string
+  default     = "text-embedding-ada-002"
+}
+
+variable "embedding_model_version" {
+  description = "Embedding model version"
+  type        = string
+  default     = "2"
+}
+
+variable "embedding_sku_name" {
+  description = "SKU for the embedding deployment"
+  type        = string
+  default     = "Standard"
+}
+
+variable "embedding_capacity" {
+  description = "Capacity (TPM in thousands) for embedding deployment"
+  type        = number
+  default     = 10
+}
+
 variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)

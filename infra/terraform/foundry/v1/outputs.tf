@@ -20,6 +20,11 @@ output "primary_key" {
 }
 
 output "deployment_name" {
-  description = "Name of the deployed model"
+  description = "Name of the deployed chat model"
   value       = azurerm_cognitive_deployment.this.name
+}
+
+output "embedding_deployment_name" {
+  description = "Name of the deployed embedding model"
+  value       = var.create_embedding_deployment ? azurerm_cognitive_deployment.embedding[0].name : null
 }
