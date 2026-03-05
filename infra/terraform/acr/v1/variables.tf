@@ -21,7 +21,6 @@ variable "resource_group_name" {
 variable "iteration" {
   description = "Iteration counter for naming"
   type        = string
-  default     = "001"
 }
 
 variable "create_acr" {
@@ -33,7 +32,6 @@ variable "create_acr" {
 variable "sku" {
   description = "ACR SKU (Basic, Standard, Premium)"
   type        = string
-  default     = "Basic"
 
   validation {
     condition     = contains(["Basic", "Standard", "Premium"], var.sku)

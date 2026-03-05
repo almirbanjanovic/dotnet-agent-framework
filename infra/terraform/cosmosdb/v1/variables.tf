@@ -21,19 +21,16 @@ variable "resource_group_name" {
 variable "iteration" {
   description = "Iteration counter to avoid soft-delete naming collisions"
   type        = string
-  default     = "001"
 }
 
 variable "database_name" {
   description = "Name of the Cosmos DB SQL database"
   type        = string
-  default     = "contoso"
 }
 
 variable "agent_state_container_name" {
   description = "Name of the agent state store container"
   type        = string
-  default     = "workshop_agent_state_store"
 }
 
 variable "consistency_level" {

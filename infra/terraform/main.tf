@@ -1,4 +1,10 @@
 #--------------------------------------------------------------------------------------------------------------------------------
+# Data Sources
+#--------------------------------------------------------------------------------------------------------------------------------
+
+data "azurerm_client_config" "current" {}
+
+#--------------------------------------------------------------------------------------------------------------------------------
 # Foundry (AI Services + Model Deployments)
 #--------------------------------------------------------------------------------------------------------------------------------
 
@@ -32,13 +38,14 @@ module "foundry" {
 module "cosmosdb" {
   source = "./cosmosdb/v1"
 
-  project_name        = var.cosmos_project_name
-  environment         = var.environment
-  location            = var.location
-  resource_group_name = var.resource_group_name
-  iteration           = var.cosmos_iteration
-  database_name       = var.cosmos_database_name
-  tags                = var.tags
+  project_name              = var.cosmos_project_name
+  environment                = var.environment
+  location                   = var.location
+  resource_group_name        = var.resource_group_name
+  iteration                  = var.cosmos_iteration
+  database_name              = var.cosmos_database_name
+  agent_state_container_name = var.cosmos_agent_state_container_name
+  tags                       = var.tags
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -93,6 +100,8 @@ module "aks" {
   auto_scaling_enabled = var.aks_auto_scaling_enabled
   node_min_count      = var.aks_node_min_count
   node_max_count      = var.aks_node_max_count
+  os_disk_size_gb     = var.aks_os_disk_size_gb
+  log_retention_days  = var.aks_log_retention_days
 
   kubelet_identity_client_id    = module.identity.identities["kubelet"].client_id
   kubelet_identity_object_id    = module.identity.identities["kubelet"].principal_id
@@ -144,4 +153,15 @@ module "rbac_acr" {
     backend = module.identity.identities["backend"].principal_id
     kubelet = module.identity.identities["kubelet"].principal_id
   }
+}
+
+#--------------------------------------------------------------------------------------------------------------------------------
+# RBAC - AKS Control Plane (Contributor on resource group)
+#--------------------------------------------------------------------------------------------------------------------------------
+
+module "rbac_aks" {
+  source = "./rbac/aks/v1"
+
+  resource_group_name              = var.resource_group_name
+  aks_control_plane_principal_id   = module.aks.control_plane_identity_principal_id
 }

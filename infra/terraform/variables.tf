@@ -20,7 +20,6 @@ variable "location" {
 variable "iteration" {
   description = "Global iteration counter for naming"
   type        = string
-  default     = "001"
 }
 
 # ---------------------------------------------------------------
@@ -65,31 +64,26 @@ variable "oai_version_upgrade_option" {
 variable "create_embedding_deployment" {
   description = "Whether to create the embedding model deployment"
   type        = bool
-  default     = true
 }
 
 variable "embedding_model_name" {
   description = "Embedding model name"
   type        = string
-  default     = "text-embedding-ada-002"
 }
 
 variable "embedding_model_version" {
   description = "Embedding model version"
   type        = string
-  default     = "2"
 }
 
 variable "embedding_sku_name" {
   description = "SKU for the embedding deployment"
   type        = string
-  default     = "Standard"
 }
 
 variable "embedding_capacity" {
   description = "Capacity (TPM in thousands) for embedding deployment"
   type        = number
-  default     = 10
 }
 
 # ---------------------------------------------------------------
@@ -99,19 +93,21 @@ variable "embedding_capacity" {
 variable "cosmos_project_name" {
   description = "Project name used in Cosmos DB resource naming"
   type        = string
-  default     = "dotnetagent"
 }
 
 variable "cosmos_iteration" {
   description = "Iteration counter for Cosmos DB (avoids soft-delete collisions)"
   type        = string
-  default     = "001"
 }
 
 variable "cosmos_database_name" {
   description = "Cosmos DB SQL database name"
   type        = string
-  default     = "contoso"
+}
+
+variable "cosmos_agent_state_container_name" {
+  description = "Name of the Cosmos DB agent state store container"
+  type        = string
 }
 
 # ---------------------------------------------------------------
@@ -121,25 +117,21 @@ variable "cosmos_database_name" {
 variable "acr_project_name" {
   description = "Project name used in ACR naming"
   type        = string
-  default     = "dotnetagent"
 }
 
 variable "create_acr" {
   description = "Create a new ACR. Set to false to use an existing one."
   type        = bool
-  default     = true
 }
 
 variable "acr_sku" {
   description = "ACR SKU (Basic, Standard, Premium)"
   type        = string
-  default     = "Basic"
 }
 
 variable "existing_acr_name" {
   description = "Name of existing ACR (only used when create_acr = false)"
   type        = string
-  default     = ""
 }
 
 # ---------------------------------------------------------------
@@ -149,35 +141,39 @@ variable "existing_acr_name" {
 variable "aks_kubernetes_version" {
   description = "Kubernetes version. Leave null for latest."
   type        = string
-  default     = null
 }
 
 variable "aks_node_vm_size" {
   description = "VM size for AKS default node pool"
   type        = string
-  default     = "Standard_D4s_v5"
 }
 
 variable "aks_node_count" {
   description = "Initial node count"
   type        = number
-  default     = 2
 }
 
 variable "aks_auto_scaling_enabled" {
   description = "Enable cluster auto-scaler"
   type        = bool
-  default     = true
 }
 
 variable "aks_node_min_count" {
   description = "Minimum node count when auto-scaling"
   type        = number
-  default     = 1
 }
 
 variable "aks_node_max_count" {
   description = "Maximum node count when auto-scaling"
   type        = number
-  default     = 5
+}
+
+variable "aks_os_disk_size_gb" {
+  description = "OS disk size in GB for AKS nodes"
+  type        = number
+}
+
+variable "aks_log_retention_days" {
+  description = "Log Analytics workspace retention in days"
+  type        = number
 }

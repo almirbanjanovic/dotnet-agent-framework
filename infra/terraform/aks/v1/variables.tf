@@ -16,7 +16,6 @@ variable "resource_group_name" {
 variable "iteration" {
   description = "Iteration counter for naming"
   type        = string
-  default     = "001"
 }
 
 variable "kubernetes_version" {
@@ -34,13 +33,11 @@ variable "dns_prefix" {
 variable "node_vm_size" {
   description = "VM size for the default node pool"
   type        = string
-  default     = "Standard_D4s_v5"
 }
 
 variable "node_count" {
   description = "Initial node count (used when auto-scaling is disabled)"
   type        = number
-  default     = 2
 }
 
 variable "auto_scaling_enabled" {
@@ -52,19 +49,16 @@ variable "auto_scaling_enabled" {
 variable "node_min_count" {
   description = "Minimum node count when auto-scaling is enabled"
   type        = number
-  default     = 1
 }
 
 variable "node_max_count" {
   description = "Maximum node count when auto-scaling is enabled"
   type        = number
-  default     = 5
 }
 
 variable "os_disk_size_gb" {
   description = "OS disk size in GB for nodes"
   type        = number
-  default     = 64
 }
 
 # -----------------------------------------------------------------------------
@@ -109,7 +103,6 @@ variable "workload_identity_enabled" {
 variable "log_retention_days" {
   description = "Log Analytics workspace retention in days"
   type        = number
-  default     = 30
 }
 
 variable "tags" {
