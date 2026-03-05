@@ -1,0 +1,43 @@
+Troubleshooting Slow Internet - Basic Steps
+Contoso Telecom — Procedure Document
+Effective Date: January 1, 2025
+Document ID: PROC-002
+
+PURPOSE
+
+This procedure provides step-by-step guidance for diagnosing and resolving slow internet performance reported by customers.
+
+INITIAL DIAGNOSIS
+
+1. Ask the customer to run a speed test at speedtest.contoso.com and report the results.
+2. Compare the measured speed against the customer's subscribed tier:
+   - If speed is within 80% of the subscribed tier, performance is within acceptable range
+   - If speed is below 25% of the subscribed tier, there may be a service issue
+
+BASIC TROUBLESHOOTING
+
+3. Verify that the router and modem are powered on and all cables are firmly connected.
+4. Ask the customer to reboot the router:
+   a. Unplug the power cable
+   b. Wait 30 seconds
+   c. Plug the power cable back in
+   d. Wait 2–3 minutes for the router to fully restart
+5. If the customer is on WiFi, suggest:
+   a. Moving closer to the router
+   b. Switching from the 2.4GHz to the 5GHz band
+   c. Checking for interference from other devices (microwaves, baby monitors)
+
+ADVANCED DIAGNOSIS
+
+6. Check the service status dashboard for any reported outages in the customer's area.
+7. Query the ServiceIncidents table or Service Monitoring System to identify any region-wide problems.
+8. If a service incident is active, inform the customer and provide the estimated resolution time.
+
+ESCALATION
+
+9. If no service incident is found and the issue persists after basic troubleshooting:
+   a. Create a support ticket with category "technical" and priority "high"
+   b. Include the speed test results and troubleshooting steps already performed
+   c. Escalate to the Technical Support team for deeper investigation
+
+For questions regarding this procedure, contact Technical Support at ext. 5500.

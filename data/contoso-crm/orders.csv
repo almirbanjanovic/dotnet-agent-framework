@@ -1,0 +1,2 @@
+id,customer_id,product_id,order_date,amount,order_status
+1,256,4,2025-02-06,75.00,returned

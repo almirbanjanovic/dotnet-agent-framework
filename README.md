@@ -7,6 +7,11 @@
 ```
 .github/workflows/                → CI/CD (plan, apply, backend bootstrap)
 
+data/
+  README.md                       → Data architecture and seeding guide
+  contoso-crm/                    → Simulated CRM export (CSV)
+  contoso-sharepoint/             → Simulated SharePoint docs (TXT + PDF)
+
 infra/
   README.md                       → Infrastructure setup guide
   init-backend.ps1                → Bootstrap Terraform backend (PowerShell)
@@ -15,8 +20,10 @@ infra/
 
 src/
   README.md                       → Lab setup and run guide
-  appsettings.json                → Shared app settings (gitignored)
+  appsettings.json                → Shared app settings (gitignored, populated by config-sync)
+  config-sync/                    → Tool: pulls Key Vault secrets into appsettings.json
   simple-agent/                   → Lab 1: validate infrastructure setup
+  seed-data/                      → Lab 2: seed Cosmos DB with CRM + vectorized docs (RAG)
 ```
 
 ## Prerequisites
@@ -33,7 +40,7 @@ Infrastructure must be provisioned before running any labs. Follow the full setu
 
 ### 2. Configure agentic app settings
 
-After infrastructure is deployed, configure your app settings and run the labs. Follow the instructions in **[src/README.md](src/README.md)**.
+After infrastructure is deployed, sync secrets from Key Vault to your local config. Follow the instructions in **[src/README.md](src/README.md)**.
 
 ## Notes
 

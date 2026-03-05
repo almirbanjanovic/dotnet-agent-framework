@@ -1,0 +1,2 @@
+id,customer_id,subscription_id,category,subject,description,status,priority,cs_agent,opened_at,closed_at
+1,257,7,call_drop,Repeated call drops in downtown area,"Customer reports dropped calls at 10:05, 10:22, and 11:01 near 5th & Pine intersection. Signal strength appears normal on device.",open,high,Liam,2025-03-03T07:00:00Z,

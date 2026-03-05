@@ -85,3 +85,17 @@ output "kubelet_identity_client_id" {
   description = "Client ID of the kubelet identity"
   value       = module.identity.identities["kubelet"].client_id
 }
+
+# ---------------------------------------------------------------
+# Key Vault
+# ---------------------------------------------------------------
+
+output "keyvault_name" {
+  description = "Key Vault name"
+  value       = module.keyvault.name
+}
+
+output "keyvault_uri" {
+  description = "Key Vault URI (use this in appsettings.json)"
+  value       = module.keyvault.vault_uri
+}

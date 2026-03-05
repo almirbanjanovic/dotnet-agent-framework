@@ -1,0 +1,29 @@
+Data Overage Policy - Mobile Plans
+Contoso Telecom — Policy Document
+Effective Date: January 1, 2025
+Document ID: POL-001
+
+OVERVIEW
+
+When subscribers exceed the monthly data allowance on a capped plan, an overage fee is billed in 1-GB increments at the rate specified in the subscriber's service agreement.
+
+OVERAGE RATES
+
+- Mobile Plan - Essential (5GB cap): $10.00 per GB over the monthly allowance
+- Fiber Internet - Basic (500GB cap): $5.00 per GB over the monthly allowance
+- Fiber Internet - Pro (1TB cap): $5.00 per GB over the monthly allowance
+- Unlimited plans (Mobile Premium, Fiber Ultimate): No overage applies; speeds may be deprioritized after 50GB during network congestion
+
+RETROACTIVE PLAN UPGRADE
+
+Customers may switch to a higher-tier plan retroactively within 15 days of the invoice date to have overage charges re-rated. The upgrade will be pro-rated based on the remaining billing cycle. To request a retroactive upgrade, the customer should contact support or use the self-service portal at myaccount.contoso.com.
+
+EXCLUSIONS
+
+Loyalty tier discounts do not apply to overage fees. Promotional credits are applied before overage calculations. International roaming data usage is billed separately under the International Roaming policy.
+
+NOTIFICATIONS
+
+Customers receive automated alerts at 75%, 90%, and 100% of their data allowance via SMS and email. Customers who have disabled notifications are still subject to overage charges.
+
+For questions regarding this policy, contact Customer Support at 1-800-CONTOSO.

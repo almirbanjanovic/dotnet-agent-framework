@@ -1,0 +1,35 @@
+Promotion Eligibility Guidelines - Loyalty and New Subscribers
+Contoso Telecom — Policy Document
+Effective Date: January 1, 2025
+Document ID: POL-004
+
+OVERVIEW
+
+Contoso promotions reward both loyal participants and newly enrolled subscribers. This document outlines the eligibility criteria for all active and recurring promotional offers.
+
+LOYALTY-BASED PROMOTIONS
+
+Loyalty-based promotions scale with membership levels:
+- Gold members qualify for the most generous plan discounts (up to 100% off upgrades)
+- Silver members qualify for moderate discounts (up to 20% off select services)
+- Bronze members qualify for entry-level promotional offers
+
+Loyalty level is determined by account tenure and payment history. Members must maintain their loyalty level at the time of promotion redemption.
+
+NEW SUBSCRIBER OFFERS
+
+New subscriber offers typically require at least a six-month lapse since any prior Contoso subscription. New subscriber status is verified at the time of enrollment. "Win-back" promotions may have different lapse requirements and are communicated separately.
+
+GENERAL ELIGIBILITY RULES
+
+- Some promotions require a minimum contract term (typically 12 months)
+- A clean billing history (no outstanding balance) is required for most promotions
+- Availability can vary by region and product line
+- Terms may limit combining multiple offers simultaneously
+- Promotional pricing applies for the stated duration only; standard rates resume after the promotional period ends
+
+VERIFICATION
+
+Eligibility is verified automatically at enrollment. Customers who believe they qualify but are denied can contact support for manual review.
+
+For current promotions, visit contoso.com/promotions or contact Customer Support at 1-800-CONTOSO.

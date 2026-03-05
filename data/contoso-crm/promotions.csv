@@ -1,0 +1,5 @@
+id,product_id,name,description,eligibility_criteria,discount_percent,start_date,end_date,active
+1,1,New Customer - 20% Off First 3 Months,Get 20% off your first 3 months on any internet plan,new_customer = true,20,2025-01-01,2025-06-30,true
+2,9,Bundle & Save - $50/month off,Save $50/month when you bundle 3+ services,min_services >= 3,15,2025-01-15,2025-09-30,true
+3,2,Loyalty Reward - Free Upgrade,Gold/Platinum members: Free speed upgrade for 12 months,loyalty_level IN ('Gold'),100,2025-02-01,2025-12-31,true
+4,5,Refer a Friend - $100 Credit,Get $100 credit when you refer a friend who signs up,referral = true,10,2025-03-01,2026-03-01,true

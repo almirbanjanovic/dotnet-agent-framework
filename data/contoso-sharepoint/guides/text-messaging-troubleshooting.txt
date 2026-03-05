@@ -1,0 +1,46 @@
+Text Messaging Troubleshooting
+Contoso Telecom — Customer Guide
+Document ID: GUIDE-006
+
+COMMON TEXT MESSAGING ISSUES
+
+If you're experiencing problems sending or receiving SMS or MMS messages, follow these troubleshooting steps.
+
+MESSAGES NOT SENDING
+
+1. Check your signal strength — at least 2 bars are needed for reliable messaging
+2. Verify your account is active and in good standing at myaccount.contoso.com
+3. Restart your phone (power off, wait 10 seconds, power on)
+4. Check if you have sufficient balance (for prepaid plans)
+5. Try sending a message to a different number to determine if the issue is recipient-specific
+
+MESSAGES NOT BEING RECEIVED
+
+1. Restart your phone to re-register with the network
+2. Check if your message inbox is full — delete old messages to free space
+3. Verify that the sender has the correct phone number
+4. Check if you have accidentally blocked the sender's number
+5. Ensure your phone's date and time are set to automatic
+
+MMS (PICTURE/VIDEO) MESSAGES FAILING
+
+1. Ensure mobile data is enabled (MMS requires a data connection, WiFi alone is not sufficient)
+2. Check that MMS messaging is enabled in your phone's messaging settings
+3. Verify your APN settings are correct (contact support if unsure)
+4. Reduce the file size — videos over 1MB may fail to send
+
+SERVICE OUTAGES
+
+Larger outages or system maintenance windows are usually posted on the service status page at status.contoso.com. Check there before contacting support to see if there is a known issue in your area.
+
+IF ISSUES PERSIST
+
+Open a support ticket with the following information:
+- Timestamps of failed messages
+- Phone numbers involved (sender and recipient)
+- Screenshots of any error messages
+- Your device make, model, and operating system version
+
+This helps our technical team investigate more efficiently.
+
+For assistance, contact Customer Support at 1-800-CONTOSO.

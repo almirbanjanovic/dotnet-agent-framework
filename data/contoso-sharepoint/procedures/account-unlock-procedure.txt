@@ -1,0 +1,49 @@
+Account Unlock Procedure - Verification Steps
+Contoso Telecom — Procedure Document
+Effective Date: January 1, 2025
+Document ID: PROC-001
+
+PURPOSE
+
+This procedure describes how to unlock a customer account that has been locked due to multiple failed login attempts or a detected security anomaly.
+
+WHEN AN ACCOUNT IS LOCKED
+
+Accounts are automatically locked after 5 consecutive failed login attempts. A security anomaly (e.g., login from an unusual location or device) may also trigger a lock.
+
+VERIFICATION STEPS
+
+1. Confirm the customer's identity using at least two of the following:
+   a. Last 4 digits of their Social Security Number
+   b. Date of birth
+   c. Billing address on file
+   d. Last payment amount and date
+
+2. If verification succeeds, send a temporary unlock code to the customer's registered contact method (email or SMS on file).
+
+3. The customer enters the temporary code on the login page. The code expires after 15 minutes.
+
+4. Upon successful entry, the account unlocks and the customer is prompted to reset their password.
+
+FAILED VERIFICATION
+
+If the customer cannot pass identity verification:
+- Do NOT unlock the account
+- Direct the customer to visit a Contoso retail location with government-issued photo ID
+- Note the failed verification attempt in the account security log
+
+SUSPECTED FRAUD
+
+If the interaction suggests the caller may not be the account holder:
+- Do NOT unlock the account
+- Escalate immediately to the Fraud Department at ext. 7700
+- Document the interaction details in the security log
+
+POST-UNLOCK RECOMMENDATIONS
+
+After unlocking, recommend the customer:
+- Reset their password immediately
+- Enable two-factor authentication
+- Review recent account activity for unauthorized changes
+
+For questions regarding this procedure, contact the Security Team at ext. 7700.

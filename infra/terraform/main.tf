@@ -9,7 +9,7 @@ data "azurerm_client_config" "current" {}
 #--------------------------------------------------------------------------------------------------------------------------------
 
 module "foundry" {
-  source = "./foundry/v1"
+  source = "./modules/foundry/v1"
 
   environment              = var.environment
   location                 = var.location
@@ -36,7 +36,7 @@ module "foundry" {
 #--------------------------------------------------------------------------------------------------------------------------------
 
 module "cosmosdb" {
-  source = "./cosmosdb/v1"
+  source = "./modules/cosmosdb/v1"
 
   project_name              = var.cosmos_project_name
   environment                = var.environment
@@ -53,7 +53,7 @@ module "cosmosdb" {
 #--------------------------------------------------------------------------------------------------------------------------------
 
 module "identity" {
-  source = "./identity/v1"
+  source = "./modules/identity/v1"
 
   resource_group_name = var.resource_group_name
   location            = var.location
@@ -70,7 +70,7 @@ module "identity" {
 #--------------------------------------------------------------------------------------------------------------------------------
 
 module "acr" {
-  source = "./acr/v1"
+  source = "./modules/acr/v1"
 
   project_name        = var.acr_project_name
   environment         = var.environment
@@ -88,7 +88,7 @@ module "acr" {
 #--------------------------------------------------------------------------------------------------------------------------------
 
 module "aks" {
-  source = "./aks/v1"
+  source = "./modules/aks/v1"
 
   environment         = var.environment
   location            = var.location
@@ -115,7 +115,7 @@ module "aks" {
 #--------------------------------------------------------------------------------------------------------------------------------
 
 module "rbac_foundry" {
-  source = "./rbac/foundry/v1"
+  source = "./modules/rbac/foundry/v1"
 
   ai_services_account_id = module.foundry.account_id
 
@@ -129,7 +129,7 @@ module "rbac_foundry" {
 #--------------------------------------------------------------------------------------------------------------------------------
 
 module "rbac_cosmosdb" {
-  source = "./rbac/cosmosdb/v1"
+  source = "./modules/rbac/cosmosdb/v1"
 
   resource_group_name  = var.resource_group_name
   cosmosdb_account_id   = module.cosmosdb.account_id
@@ -145,7 +145,7 @@ module "rbac_cosmosdb" {
 #--------------------------------------------------------------------------------------------------------------------------------
 
 module "rbac_acr" {
-  source = "./rbac/acr/v1"
+  source = "./modules/rbac/acr/v1"
 
   acr_id = module.acr.id
 
@@ -160,8 +160,66 @@ module "rbac_acr" {
 #--------------------------------------------------------------------------------------------------------------------------------
 
 module "rbac_aks" {
-  source = "./rbac/aks/v1"
+  source = "./modules/rbac/aks/v1"
 
   resource_group_name              = var.resource_group_name
   aks_control_plane_principal_id   = module.aks.control_plane_identity_principal_id
+}
+
+#--------------------------------------------------------------------------------------------------------------------------------
+# Key Vault
+#--------------------------------------------------------------------------------------------------------------------------------
+
+module "keyvault" {
+  source = "./modules/keyvault/v1"
+
+  environment         = var.environment
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  tenant_id           = data.azurerm_client_config.current.tenant_id
+  iteration           = var.iteration
+  tags                = var.tags
+}
+
+#--------------------------------------------------------------------------------------------------------------------------------
+# RBAC - Key Vault
+#--------------------------------------------------------------------------------------------------------------------------------
+
+module "rbac_keyvault" {
+  source = "./modules/rbac/keyvault/v1"
+
+  keyvault_id = module.keyvault.id
+
+  # Secrets Officer: the deployer (Terraform SP or current user) needs to write secrets
+  officer_principal_ids = {
+    deployer = data.azurerm_client_config.current.object_id
+  }
+
+  # Secrets User: workload identities and the deployer need to read secrets
+  reader_principal_ids = {
+    deployer = data.azurerm_client_config.current.object_id
+    backend  = module.identity.identities["backend"].principal_id
+  }
+}
+
+#--------------------------------------------------------------------------------------------------------------------------------
+# Key Vault Secrets
+#--------------------------------------------------------------------------------------------------------------------------------
+
+module "keyvault_secrets" {
+  source = "./modules/keyvault-secrets/v1"
+
+  key_vault_id = module.keyvault.id
+
+  secrets = {
+    "AZURE-OPENAI-ENDPOINT"             = module.foundry.endpoint
+    "AZURE-OPENAI-API-KEY"              = module.foundry.primary_key
+    "AZURE-OPENAI-DEPLOYMENT-NAME"      = module.foundry.deployment_name
+    "AZURE-OPENAI-EMBEDDING-DEPLOYMENT" = module.foundry.embedding_deployment_name != null ? module.foundry.embedding_deployment_name : ""
+    "COSMOSDB-ENDPOINT"                 = module.cosmosdb.endpoint
+    "COSMOSDB-KEY"                      = module.cosmosdb.primary_key
+    "COSMOSDB-DATABASE"                 = module.cosmosdb.database_name
+  }
+
+  depends_on = [module.rbac_keyvault]
 }

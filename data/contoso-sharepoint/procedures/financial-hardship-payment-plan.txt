@@ -1,0 +1,41 @@
+Financial Hardship Payment Plan Procedure
+Contoso Telecom — Procedure Document
+Effective Date: January 1, 2025
+Document ID: PROC-004
+
+PURPOSE
+
+This procedure describes how subscribers who are temporarily unable to pay their balance in full may request a hardship installment plan.
+
+ELIGIBILITY
+
+To qualify for a hardship payment plan, the subscriber must:
+- Have an outstanding balance of at least $50.00
+- Provide proof of income disruption or comparable documentation (e.g., job loss letter, medical documentation, government assistance enrollment)
+- Not have an active hardship plan already in place
+- Not have defaulted on a previous hardship plan within the last 12 months
+
+APPLICATION PROCESS
+
+1. The customer contacts Customer Support and requests a hardship payment plan.
+2. The agent verifies the customer's identity and reviews the account balance.
+3. The customer provides or submits documentation of financial hardship.
+4. The documentation is reviewed by the Billing Team within 3 business days.
+
+PLAN TERMS
+
+Once approved:
+- All late fees are frozen for the duration of the plan
+- The outstanding balance is split into up to 6 equal monthly payments
+- Service is reinstated immediately (if previously suspended)
+- The customer must maintain autopay for the duration of the plan
+- Missing a hardship plan payment results in immediate plan cancellation and the full remaining balance becoming due
+
+PLAN COMPLETION
+
+Upon successful completion of all installments:
+- The account is returned to normal standing
+- Late fee history is cleared from the account
+- The customer's loyalty tier is preserved
+
+For questions regarding this procedure, contact the Billing Team at ext. 4400.

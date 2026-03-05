@@ -1,0 +1,10 @@
+id,first_name,last_name,email,phone,address,loyalty_level,account_status,created_date
+251,John,Doe,john.doe@example.com,555-0001,"123 Main St, Anytown, ST 12345",Silver,active,2024-06-15
+252,Jane,Doe,jane.doe@example.com,555-0002,"234 Elm St, Riverside, ST 23456",Gold,active,2024-03-10
+253,Mark,Doe,mark.doe@example.com,555-0003,"345 Oak St, Lakewood, ST 34567",Bronze,active,2025-01-20
+254,Alice,Doe,alice.doe@example.com,555-0004,"456 Pine St, Hillside, ST 45678",Gold,locked,2024-08-05
+255,Ron,Doe,ron.doe@example.com,555-0005,"567 Maple St, Metropolis, ST 56789",Gold,active,2023-11-12
+256,Mary,Doe,mary.doe@example.com,555-0006,"678 Birch St, Capital, ST 67890",Silver,active,2024-09-01
+257,Tom,Smith,tom.smith@example.com,555-0007,"789 Cedar St, Hilltop, ST 78901",Silver,active,2024-05-22
+258,Sara,Lee,sara.lee@example.com,555-0008,"123 Ocean Blvd, Bay City, ST 89012",Gold,active,2024-01-15
+259,Alex,Brown,alex.brown@example.com,555-0009,"321 Spruce Ln, Forest, ST 90123",Bronze,active,2025-02-01
