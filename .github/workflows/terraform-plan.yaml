@@ -13,7 +13,43 @@ on:
         required: true
 
 env:
+  TF_VAR_tags: ${{ vars.TAGS }}
   TF_VAR_resource_group_name: ${{ vars.RESOURCE_GROUP }}
+  TF_VAR_environment: ${{ vars.ENVIRONMENT }}
+  TF_VAR_location: ${{ vars.LOCATION }}
+  TF_VAR_iteration: ${{ vars.ITERATION }}
+  # Foundry
+  TF_VAR_cognitive_account_kind: ${{ vars.COGNITIVE_ACCOUNT_KIND }}
+  TF_VAR_oai_sku_name: ${{ vars.OAI_SKU_NAME }}
+  TF_VAR_oai_deployment_sku_name: ${{ vars.OAI_DEPLOYMENT_SKU_NAME }}
+  TF_VAR_oai_deployment_model_format: ${{ vars.OAI_DEPLOYMENT_MODEL_FORMAT }}
+  TF_VAR_oai_deployment_model_name: ${{ vars.OAI_DEPLOYMENT_MODEL_NAME }}
+  TF_VAR_oai_deployment_model_version: ${{ vars.OAI_DEPLOYMENT_MODEL_VERSION }}
+  TF_VAR_oai_version_upgrade_option: ${{ vars.OAI_VERSION_UPGRADE_OPTION }}
+  TF_VAR_create_embedding_deployment: ${{ vars.CREATE_EMBEDDING_DEPLOYMENT }}
+  TF_VAR_embedding_model_name: ${{ vars.EMBEDDING_MODEL_NAME }}
+  TF_VAR_embedding_model_version: ${{ vars.EMBEDDING_MODEL_VERSION }}
+  TF_VAR_embedding_sku_name: ${{ vars.EMBEDDING_SKU_NAME }}
+  TF_VAR_embedding_capacity: ${{ vars.EMBEDDING_CAPACITY }}
+  # Cosmos DB
+  TF_VAR_cosmos_project_name: ${{ vars.COSMOS_PROJECT_NAME }}
+  TF_VAR_cosmos_iteration: ${{ vars.COSMOS_ITERATION }}
+  TF_VAR_cosmos_database_name: ${{ vars.COSMOS_DATABASE_NAME }}
+  TF_VAR_cosmos_agent_state_container_name: ${{ vars.COSMOS_AGENT_STATE_CONTAINER_NAME }}
+  # ACR
+  TF_VAR_acr_project_name: ${{ vars.ACR_PROJECT_NAME }}
+  TF_VAR_create_acr: ${{ vars.CREATE_ACR }}
+  TF_VAR_acr_sku: ${{ vars.ACR_SKU }}
+  TF_VAR_existing_acr_name: ${{ vars.EXISTING_ACR_NAME }}
+  # AKS
+  TF_VAR_aks_kubernetes_version: ${{ vars.AKS_KUBERNETES_VERSION }}
+  TF_VAR_aks_node_vm_size: ${{ vars.AKS_NODE_VM_SIZE }}
+  TF_VAR_aks_node_count: ${{ vars.AKS_NODE_COUNT }}
+  TF_VAR_aks_auto_scaling_enabled: ${{ vars.AKS_AUTO_SCALING_ENABLED }}
+  TF_VAR_aks_node_min_count: ${{ vars.AKS_NODE_MIN_COUNT }}
+  TF_VAR_aks_node_max_count: ${{ vars.AKS_NODE_MAX_COUNT }}
+  TF_VAR_aks_os_disk_size_gb: ${{ vars.AKS_OS_DISK_SIZE_GB }}
+  TF_VAR_aks_log_retention_days: ${{ vars.AKS_LOG_RETENTION_DAYS }}
 
 jobs: 
   terraform-plan:

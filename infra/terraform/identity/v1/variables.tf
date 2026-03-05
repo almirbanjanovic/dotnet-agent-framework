@@ -13,7 +13,6 @@ variable "identities" {
   type = map(object({
     name = string
   }))
-  default = {}
 }
 
 variable "tags" {

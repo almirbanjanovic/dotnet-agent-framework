@@ -16,25 +16,21 @@ variable "resource_group_name" {
 variable "account_kind" {
   description = "Cognitive account kind (e.g., AIServices, OpenAI)"
   type        = string
-  default     = "AIServices"
 }
 
 variable "sku_name" {
   description = "SKU for the AI Services account"
   type        = string
-  default     = "S0"
 }
 
 variable "deployment_sku_name" {
   description = "SKU for the model deployment (e.g., GlobalStandard, Standard)"
   type        = string
-  default     = "GlobalStandard"
 }
 
 variable "deployment_model_format" {
   description = "Model format (e.g., OpenAI)"
   type        = string
-  default     = "OpenAI"
 }
 
 variable "deployment_model_name" {
@@ -50,7 +46,6 @@ variable "deployment_model_version" {
 variable "version_upgrade_option" {
   description = "Version upgrade option (e.g., NoAutoUpgrade)"
   type        = string
-  default     = "NoAutoUpgrade"
 }
 
 # -----------------------------------------------------------------------------
@@ -66,25 +61,21 @@ variable "create_embedding_deployment" {
 variable "embedding_model_name" {
   description = "Embedding model name (e.g., text-embedding-ada-002)"
   type        = string
-  default     = "text-embedding-ada-002"
 }
 
 variable "embedding_model_version" {
   description = "Embedding model version"
   type        = string
-  default     = "2"
 }
 
 variable "embedding_sku_name" {
   description = "SKU for the embedding deployment"
   type        = string
-  default     = "Standard"
 }
 
 variable "embedding_capacity" {
   description = "Capacity (TPM in thousands) for embedding deployment"
   type        = number
-  default     = 10
 }
 
 variable "tags" {
