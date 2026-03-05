@@ -5,13 +5,17 @@
 ## Repository structure
 
 ```
+.github/workflows/                → CI/CD (plan, apply, backend bootstrap)
+
 infra/
-  init-backend.ps1               → Bootstrap Terraform backend (PowerShell)
-  init-backend.sh                → Bootstrap Terraform backend (Bash)
-  terraform/                     → Terraform IaC (modular, versioned)
+  README.md                       → Infrastructure setup guide
+  init-backend.ps1                → Bootstrap Terraform backend (PowerShell)
+  init-backend.sh                 → Bootstrap Terraform backend (Bash)
+  terraform/                      → Terraform IaC (modular, versioned)
 
 src/
-  simple-agent/                  → Lab 1: first runnable agent
+  appsettings.json                → Shared app settings (gitignored)
+  simple-agent/                   → Lab 1: first runnable agent
 ```
 
 ## Prerequisites
