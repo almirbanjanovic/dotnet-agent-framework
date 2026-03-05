@@ -26,22 +26,60 @@ output "embedding_deployment_name" {
 }
 
 # ---------------------------------------------------------------
-# Cosmos DB
+# Cosmos DB — Operational
 # ---------------------------------------------------------------
 
-output "cosmosdb_endpoint" {
-  description = "Cosmos DB endpoint URL"
-  value       = module.cosmosdb.endpoint
+output "cosmosdb_operational_endpoint" {
+  description = "Cosmos DB operational account endpoint"
+  value       = module.cosmosdb_operational.endpoint
 }
 
-output "cosmosdb_account_name" {
-  description = "Cosmos DB account name"
-  value       = module.cosmosdb.account_name
+output "cosmosdb_operational_account_name" {
+  description = "Cosmos DB operational account name"
+  value       = module.cosmosdb_operational.account_name
 }
 
-output "cosmosdb_database_name" {
-  description = "Cosmos DB database name"
-  value       = module.cosmosdb.database_name
+output "cosmosdb_operational_database_name" {
+  description = "Cosmos DB operational database name"
+  value       = module.cosmosdb_operational.database_name
+}
+
+# ---------------------------------------------------------------
+# Cosmos DB — Knowledge (RAG)
+# ---------------------------------------------------------------
+
+output "cosmosdb_knowledge_endpoint" {
+  description = "Cosmos DB knowledge account endpoint"
+  value       = module.cosmosdb_knowledge.endpoint
+}
+
+output "cosmosdb_knowledge_account_name" {
+  description = "Cosmos DB knowledge account name"
+  value       = module.cosmosdb_knowledge.account_name
+}
+
+output "cosmosdb_knowledge_database_name" {
+  description = "Cosmos DB knowledge database name"
+  value       = module.cosmosdb_knowledge.database_name
+}
+
+# ---------------------------------------------------------------
+# Cosmos DB — Agents
+# ---------------------------------------------------------------
+
+output "cosmosdb_agents_endpoint" {
+  description = "Cosmos DB agents account endpoint"
+  value       = module.cosmosdb_agents.endpoint
+}
+
+output "cosmosdb_agents_account_name" {
+  description = "Cosmos DB agents account name"
+  value       = module.cosmosdb_agents.account_name
+}
+
+output "cosmosdb_agents_database_name" {
+  description = "Cosmos DB agents database name"
+  value       = module.cosmosdb_agents.database_name
 }
 
 # ---------------------------------------------------------------

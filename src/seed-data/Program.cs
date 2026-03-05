@@ -19,12 +19,21 @@ var openAiApiKey = configuration["AZURE_OPENAI_API_KEY"]
 var embeddingDeployment = configuration["AZURE_OPENAI_EMBEDDING_DEPLOYMENT"]
     ?? "text-embedding-ada-002";
 
-var cosmosEndpoint = configuration["COSMOSDB_ENDPOINT"]
-    ?? throw new InvalidOperationException("COSMOSDB_ENDPOINT is not set.");
-var cosmosKey = configuration["COSMOSDB_KEY"]
-    ?? throw new InvalidOperationException("COSMOSDB_KEY is not set.");
-var cosmosDatabaseName = configuration["COSMOSDB_DATABASE"]
-    ?? "contoso";
+// Operational account (CRM structured data)
+var operationalEndpoint = configuration["COSMOSDB_OPERATIONAL_ENDPOINT"]
+    ?? throw new InvalidOperationException("COSMOSDB_OPERATIONAL_ENDPOINT is not set.");
+var operationalKey = configuration["COSMOSDB_OPERATIONAL_KEY"]
+    ?? throw new InvalidOperationException("COSMOSDB_OPERATIONAL_KEY is not set.");
+var operationalDatabase = configuration["COSMOSDB_OPERATIONAL_DATABASE"]
+    ?? throw new InvalidOperationException("COSMOSDB_OPERATIONAL_DATABASE is not set.");
+
+// Knowledge account (RAG vector store)
+var knowledgeEndpoint = configuration["COSMOSDB_KNOWLEDGE_ENDPOINT"]
+    ?? throw new InvalidOperationException("COSMOSDB_KNOWLEDGE_ENDPOINT is not set.");
+var knowledgeKey = configuration["COSMOSDB_KNOWLEDGE_KEY"]
+    ?? throw new InvalidOperationException("COSMOSDB_KNOWLEDGE_KEY is not set.");
+var knowledgeDatabase = configuration["COSMOSDB_KNOWLEDGE_DATABASE"]
+    ?? throw new InvalidOperationException("COSMOSDB_KNOWLEDGE_DATABASE is not set.");
 
 // ---------------------------------------------------------------------------
 // Resolve data folder paths
@@ -38,12 +47,14 @@ Console.WriteLine("════════════════════�
 Console.WriteLine("  Contoso Telecom — Cosmos DB Seed Tool");
 Console.WriteLine("═══════════════════════════════════════════════════════════");
 Console.WriteLine();
-Console.WriteLine($"  OpenAI endpoint:      {openAiEndpoint}");
-Console.WriteLine($"  Embedding deployment: {embeddingDeployment}");
-Console.WriteLine($"  Cosmos DB endpoint:   {cosmosEndpoint}");
-Console.WriteLine($"  Cosmos DB database:   {cosmosDatabaseName}");
-Console.WriteLine($"  CRM data:             {crmFolder}");
-Console.WriteLine($"  SharePoint data:      {sharePointFolder}");
+Console.WriteLine($"  OpenAI endpoint:         {openAiEndpoint}");
+Console.WriteLine($"  Embedding deployment:    {embeddingDeployment}");
+Console.WriteLine($"  Operational endpoint:    {operationalEndpoint}");
+Console.WriteLine($"  Operational database:    {operationalDatabase}");
+Console.WriteLine($"  Knowledge endpoint:      {knowledgeEndpoint}");
+Console.WriteLine($"  Knowledge database:      {knowledgeDatabase}");
+Console.WriteLine($"  CRM data:                {crmFolder}");
+Console.WriteLine($"  SharePoint data:         {sharePointFolder}");
 Console.WriteLine();
 
 // ---------------------------------------------------------------------------
@@ -55,26 +66,32 @@ var openAiClient = new AzureOpenAIClient(
 
 var embeddingClient = openAiClient.GetEmbeddingClient(embeddingDeployment);
 
-var cosmosClient = new CosmosClient(cosmosEndpoint, cosmosKey, new CosmosClientOptions
+var cosmosClientOptions = new CosmosClientOptions
 {
     SerializerOptions = new CosmosSerializationOptions
     {
         PropertyNamingPolicy = CosmosPropertyNamingPolicy.CamelCase
     }
-});
+};
 
-var database = cosmosClient.GetDatabase(cosmosDatabaseName);
+var operationalClient = new CosmosClient(operationalEndpoint, operationalKey, cosmosClientOptions);
+var knowledgeClient = new CosmosClient(knowledgeEndpoint, knowledgeKey, cosmosClientOptions);
+
+var operationalDb = operationalClient.GetDatabase(operationalDatabase);
+var knowledgeDb = knowledgeClient.GetDatabase(knowledgeDatabase);
 
 // Verify connectivity
 try
 {
-    await database.ReadAsync();
-    Console.WriteLine($"  ✓ Connected to Cosmos DB database '{cosmosDatabaseName}'");
+    await operationalDb.ReadAsync();
+    Console.WriteLine($"  ✓ Connected to operational database '{operationalDatabase}'");
+    await knowledgeDb.ReadAsync();
+    Console.WriteLine($"  ✓ Connected to knowledge database '{knowledgeDatabase}'");
 }
 catch (CosmosException ex)
 {
     Console.WriteLine($"  ✗ Failed to connect to Cosmos DB: {ex.Message}");
-    Console.WriteLine("    Make sure the database exists and the endpoint/key are correct.");
+    Console.WriteLine("    Make sure the databases exist and the endpoints/keys are correct.");
     return;
 }
 
@@ -88,7 +105,7 @@ Console.WriteLine("  Phase 1: Seeding structured data (CRM → containers)");
 Console.WriteLine("───────────────────────────────────────────────────────────");
 Console.WriteLine();
 
-await CrmSeeder.SeedAsync(database, crmFolder);
+await CrmSeeder.SeedAsync(operationalDb, crmFolder);
 
 Console.WriteLine();
 
@@ -100,7 +117,7 @@ Console.WriteLine("  Phase 2: Vectorizing documents (SharePoint → RAG store)")
 Console.WriteLine("───────────────────────────────────────────────────────────");
 Console.WriteLine();
 
-await SharePointSeeder.SeedAsync(database, embeddingClient, sharePointFolder);
+await SharePointSeeder.SeedAsync(knowledgeDb, embeddingClient, sharePointFolder);
 
 Console.WriteLine();
 Console.WriteLine("═══════════════════════════════════════════════════════════");

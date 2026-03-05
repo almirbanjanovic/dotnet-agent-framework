@@ -32,20 +32,93 @@ module "foundry" {
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
-# Cosmos DB
+# Cosmos DB — Operational (CRM structured data)
 #--------------------------------------------------------------------------------------------------------------------------------
 
-module "cosmosdb" {
+module "cosmosdb_operational" {
   source = "./modules/cosmosdb/v1"
 
-  project_name              = var.cosmos_project_name
-  environment                = var.environment
-  location                   = var.location
-  resource_group_name        = var.resource_group_name
-  iteration                  = var.cosmos_iteration
-  database_name              = var.cosmos_database_name
-  agent_state_container_name = var.cosmos_agent_state_container_name
-  tags                       = var.tags
+  name_prefix         = var.cosmos_project_name
+  purpose             = "operational"
+  environment         = var.environment
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  iteration           = var.cosmos_iteration
+  database_name       = var.cosmos_operational_database_name
+  consistency_level   = "Session"
+  tags                = var.tags
+
+  containers = {
+    customers       = { name = "Customers",       partition_key_paths = ["/id"] }
+    subscriptions   = { name = "Subscriptions",    partition_key_paths = ["/customer_id"] }
+    products        = { name = "Products",         partition_key_paths = ["/category"] }
+    promotions      = { name = "Promotions",       partition_key_paths = ["/id"] }
+    invoices        = { name = "Invoices",         partition_key_paths = ["/subscription_id"] }
+    payments        = { name = "Payments",         partition_key_paths = ["/invoice_id"] }
+    orders          = { name = "Orders",           partition_key_paths = ["/customer_id"] }
+    support_tickets = { name = "SupportTickets",   partition_key_paths = ["/customer_id"] }
+    data_usage      = { name = "DataUsage",        partition_key_paths = ["/subscription_id"] }
+    service_incidents = { name = "ServiceIncidents", partition_key_paths = ["/subscription_id"] }
+    security_logs   = { name = "SecurityLogs",     partition_key_paths = ["/customer_id"] }
+  }
+}
+
+#--------------------------------------------------------------------------------------------------------------------------------
+# Cosmos DB — Knowledge (RAG vector store)
+#--------------------------------------------------------------------------------------------------------------------------------
+
+module "cosmosdb_knowledge" {
+  source = "./modules/cosmosdb/v1"
+
+  name_prefix         = var.cosmos_project_name
+  purpose             = "knowledge"
+  environment         = var.environment
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  iteration           = var.cosmos_iteration
+  database_name       = var.cosmos_knowledge_database_name
+  consistency_level   = "Eventual"
+  capabilities        = ["EnableNoSQLVectorSearch"]
+  tags                = var.tags
+
+  containers = {
+    knowledge_documents = {
+      name                = "KnowledgeDocuments"
+      partition_key_paths = ["/id"]
+      indexing_policy = {
+        indexing_mode  = "consistent"
+        included_paths = ["/*"]
+        excluded_paths = ["/content_vector/*"]
+      }
+    }
+  }
+}
+
+#--------------------------------------------------------------------------------------------------------------------------------
+# Cosmos DB — Agents (state persistence)
+#--------------------------------------------------------------------------------------------------------------------------------
+
+module "cosmosdb_agents" {
+  source = "./modules/cosmosdb/v1"
+
+  name_prefix         = var.cosmos_project_name
+  purpose             = "agents"
+  environment         = var.environment
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  iteration           = var.cosmos_iteration
+  database_name       = var.cosmos_agents_database_name
+  consistency_level   = "Eventual"
+  tags                = var.tags
+
+  containers = {
+    agent_state = {
+      name                  = var.cosmos_agent_state_container_name
+      partition_key_paths   = ["/tenant_id", "/id"]
+      partition_key_kind    = "MultiHash"
+      partition_key_version = 2
+    }
+  }
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -125,15 +198,39 @@ module "rbac_foundry" {
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
-# RBAC - Cosmos DB (Data Owner + Data Contributor)
+# RBAC - Cosmos DB (Data Owner + Data Contributor) — all 3 accounts
 #--------------------------------------------------------------------------------------------------------------------------------
 
-module "rbac_cosmosdb" {
+module "rbac_cosmosdb_operational" {
   source = "./modules/rbac/cosmosdb/v1"
 
-  resource_group_name  = var.resource_group_name
-  cosmosdb_account_id   = module.cosmosdb.account_id
-  cosmosdb_account_name = module.cosmosdb.account_name
+  resource_group_name   = var.resource_group_name
+  cosmosdb_account_id   = module.cosmosdb_operational.account_id
+  cosmosdb_account_name = module.cosmosdb_operational.account_name
+
+  principal_ids = {
+    backend = module.identity.identities["backend"].principal_id
+  }
+}
+
+module "rbac_cosmosdb_knowledge" {
+  source = "./modules/rbac/cosmosdb/v1"
+
+  resource_group_name   = var.resource_group_name
+  cosmosdb_account_id   = module.cosmosdb_knowledge.account_id
+  cosmosdb_account_name = module.cosmosdb_knowledge.account_name
+
+  principal_ids = {
+    backend = module.identity.identities["backend"].principal_id
+  }
+}
+
+module "rbac_cosmosdb_agents" {
+  source = "./modules/rbac/cosmosdb/v1"
+
+  resource_group_name   = var.resource_group_name
+  cosmosdb_account_id   = module.cosmosdb_agents.account_id
+  cosmosdb_account_name = module.cosmosdb_agents.account_name
 
   principal_ids = {
     backend = module.identity.identities["backend"].principal_id
@@ -216,9 +313,15 @@ module "keyvault_secrets" {
     "AZURE-OPENAI-API-KEY"              = module.foundry.primary_key
     "AZURE-OPENAI-DEPLOYMENT-NAME"      = module.foundry.deployment_name
     "AZURE-OPENAI-EMBEDDING-DEPLOYMENT" = module.foundry.embedding_deployment_name != null ? module.foundry.embedding_deployment_name : ""
-    "COSMOSDB-ENDPOINT"                 = module.cosmosdb.endpoint
-    "COSMOSDB-KEY"                      = module.cosmosdb.primary_key
-    "COSMOSDB-DATABASE"                 = module.cosmosdb.database_name
+    "COSMOSDB-OPERATIONAL-ENDPOINT"     = module.cosmosdb_operational.endpoint
+    "COSMOSDB-OPERATIONAL-KEY"          = module.cosmosdb_operational.primary_key
+    "COSMOSDB-OPERATIONAL-DATABASE"     = module.cosmosdb_operational.database_name
+    "COSMOSDB-KNOWLEDGE-ENDPOINT"       = module.cosmosdb_knowledge.endpoint
+    "COSMOSDB-KNOWLEDGE-KEY"            = module.cosmosdb_knowledge.primary_key
+    "COSMOSDB-KNOWLEDGE-DATABASE"       = module.cosmosdb_knowledge.database_name
+    "COSMOSDB-AGENTS-ENDPOINT"          = module.cosmosdb_agents.endpoint
+    "COSMOSDB-AGENTS-KEY"               = module.cosmosdb_agents.primary_key
+    "COSMOSDB-AGENTS-DATABASE"          = module.cosmosdb_agents.database_name
   }
 
   depends_on = [module.rbac_keyvault]
