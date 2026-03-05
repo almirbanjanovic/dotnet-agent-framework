@@ -260,10 +260,19 @@ After `terraform apply`, the following outputs are displayed:
 | `aks_oidc_issuer_url`        | OIDC issuer for workload identity    |
 | `backend_identity_client_id` | Backend workload identity client ID  |
 | `kubelet_identity_client_id` | Kubelet identity client ID           |
+| `keyvault_name`              | Key Vault name                       |
+| `keyvault_uri`               | Key Vault URI (for config-sync tool) |
 
-Use the `openai_endpoint`, `openai_deployment_name`, and `openai_api_key` values to configure `src/appsettings.json` for the labs.
+All secrets (OpenAI endpoint/key, Cosmos DB endpoint/key, deployment names) are automatically written to Key Vault by Terraform. Use the **config-sync** tool to pull them into `src/appsettings.json`:
 
-> **Note:** API key output is for learning/dev convenience. Do not use this pattern in production.
+```bash
+cd src/config-sync
+dotnet run -- $(terraform output -raw keyvault_uri)
+```
+
+See [src/README.md](../src/README.md) for details.
+
+> **Note:** API key and Cosmos DB key outputs are for learning/dev convenience. Do not expose sensitive values via Terraform outputs in production.
 
 ## Module versioning
 

@@ -117,8 +117,7 @@ The `workshop_agent_state_store` container is **not seeded** — it's populated 
 Before seeding, ensure:
 1. Infrastructure is deployed (see [infra/README.md](../infra/README.md))
 2. The Cosmos DB account, database, and all containers exist
-3. You have the Cosmos DB endpoint and key (from `terraform output`)
-4. You have the Azure OpenAI endpoint and key (for generating embeddings)
+3. You have run `config-sync` to populate `src/appsettings.json` (see [src/README.md](../src/README.md))
 
 ### How the seed tool works
 

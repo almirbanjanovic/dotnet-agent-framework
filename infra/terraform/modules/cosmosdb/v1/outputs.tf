@@ -19,18 +19,12 @@ output "primary_key" {
   sensitive   = true
 }
 
-output "connection_strings" {
-  description = "Cosmos DB connection strings"
-  value       = azurerm_cosmosdb_account.this.connection_strings
-  sensitive   = true
-}
-
 output "database_name" {
   description = "Cosmos DB SQL database name"
   value       = azurerm_cosmosdb_sql_database.this.name
 }
 
-output "agent_state_container_name" {
-  description = "Name of the agent state store container"
-  value       = azurerm_cosmosdb_sql_container.agent_state.name
+output "container_names" {
+  description = "Map of logical key => container name"
+  value       = { for k, v in azurerm_cosmosdb_sql_container.this : k => v.name }
 }

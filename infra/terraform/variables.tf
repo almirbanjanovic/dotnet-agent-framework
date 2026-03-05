@@ -91,7 +91,7 @@ variable "embedding_capacity" {
 # ---------------------------------------------------------------
 
 variable "cosmos_project_name" {
-  description = "Project name used in Cosmos DB resource naming"
+  description = "Project name prefix for all Cosmos DB accounts"
   type        = string
 }
 
@@ -100,13 +100,23 @@ variable "cosmos_iteration" {
   type        = string
 }
 
-variable "cosmos_database_name" {
-  description = "Cosmos DB SQL database name"
+variable "cosmos_operational_database_name" {
+  description = "Database name for the operational (CRM) Cosmos DB account"
+  type        = string
+}
+
+variable "cosmos_knowledge_database_name" {
+  description = "Database name for the knowledge (RAG) Cosmos DB account"
+  type        = string
+}
+
+variable "cosmos_agents_database_name" {
+  description = "Database name for the agents (state) Cosmos DB account"
   type        = string
 }
 
 variable "cosmos_agent_state_container_name" {
-  description = "Name of the Cosmos DB agent state store container"
+  description = "Name of the agent state store container"
   type        = string
 }
 

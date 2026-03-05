@@ -2,6 +2,12 @@
 
 .NET Agent Framework tutorials based on [Microsoft Learn](https://learn.microsoft.com/en-us/agent-framework/overview/?pivots=programming-language-csharp).
 
+## Architecture
+
+[**Open architecture diagram in draw.io →**](https://app.diagrams.net/#Uhttps%3A%2F%2Fraw.githubusercontent.com%2Fabanjanovic%2Fdotnet-agent-framework%2Fmain%2Fdocs%2Farchitecture.drawio)
+
+The diagram shows: Azure AI Foundry (chat + embedding models) → AKS → 3 Cosmos DB accounts (Operational, Knowledge/RAG, Agents) + ACR, Key Vault, and managed identities with RBAC.
+
 ## Repository structure
 
 ```

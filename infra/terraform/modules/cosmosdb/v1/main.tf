@@ -1,19 +1,19 @@
 # =============================================================================
 # Cosmos DB Module v1
-# Creates: Account, SQL Database, and all application containers
+# Creates: One account, one database, N containers (configurable)
+# Reusable — call once per account (operational, knowledge, agents, etc.)
 # =============================================================================
 
 locals {
-  cosmos_db_name             = lower("${var.project_name}-${var.environment}-cosmos-${var.iteration}")
-  cosmos_database_name       = var.database_name
-  agent_state_container_name = var.agent_state_container_name
+  account_name  = lower("${var.name_prefix}-cosmos-${var.purpose}-${var.iteration}")
+  database_name = var.database_name
 }
 
 # -----------------------------------------------------------------------------
 # Cosmos DB Account
 # -----------------------------------------------------------------------------
 resource "azurerm_cosmosdb_account" "this" {
-  name                = local.cosmos_db_name
+  name                = local.account_name
   location            = var.location
   resource_group_name = var.resource_group_name
   offer_type          = "Standard"
@@ -29,8 +29,11 @@ resource "azurerm_cosmosdb_account" "this" {
     zone_redundant    = false
   }
 
-  capabilities {
-    name = "EnableNoSQLVectorSearch"
+  dynamic "capabilities" {
+    for_each = var.capabilities
+    content {
+      name = capabilities.value
+    }
   }
 
   local_authentication_disabled = false
@@ -47,137 +50,43 @@ resource "azurerm_cosmosdb_account" "this" {
 # SQL Database
 # -----------------------------------------------------------------------------
 resource "azurerm_cosmosdb_sql_database" "this" {
-  name                = local.cosmos_database_name
+  name                = local.database_name
   resource_group_name = var.resource_group_name
   account_name        = azurerm_cosmosdb_account.this.name
 }
 
 # -----------------------------------------------------------------------------
-# Containers
+# Containers (dynamic from variable)
 # -----------------------------------------------------------------------------
+resource "azurerm_cosmosdb_sql_container" "this" {
+  for_each = var.containers
 
-resource "azurerm_cosmosdb_sql_container" "customers" {
-  name                = "Customers"
-  resource_group_name = var.resource_group_name
-  account_name        = azurerm_cosmosdb_account.this.name
-  database_name       = azurerm_cosmosdb_sql_database.this.name
-  partition_key_paths = ["/id"]
-
-  indexing_policy {
-    indexing_mode = "consistent"
-
-    included_path {
-      path = "/*"
-    }
-  }
-}
-
-resource "azurerm_cosmosdb_sql_container" "subscriptions" {
-  name                = "Subscriptions"
-  resource_group_name = var.resource_group_name
-  account_name        = azurerm_cosmosdb_account.this.name
-  database_name       = azurerm_cosmosdb_sql_database.this.name
-  partition_key_paths = ["/customer_id"]
-}
-
-resource "azurerm_cosmosdb_sql_container" "products" {
-  name                = "Products"
-  resource_group_name = var.resource_group_name
-  account_name        = azurerm_cosmosdb_account.this.name
-  database_name       = azurerm_cosmosdb_sql_database.this.name
-  partition_key_paths = ["/category"]
-}
-
-resource "azurerm_cosmosdb_sql_container" "promotions" {
-  name                = "Promotions"
-  resource_group_name = var.resource_group_name
-  account_name        = azurerm_cosmosdb_account.this.name
-  database_name       = azurerm_cosmosdb_sql_database.this.name
-  partition_key_paths = ["/id"]
-}
-
-resource "azurerm_cosmosdb_sql_container" "invoices" {
-  name                = "Invoices"
-  resource_group_name = var.resource_group_name
-  account_name        = azurerm_cosmosdb_account.this.name
-  database_name       = azurerm_cosmosdb_sql_database.this.name
-  partition_key_paths = ["/subscription_id"]
-}
-
-resource "azurerm_cosmosdb_sql_container" "payments" {
-  name                = "Payments"
-  resource_group_name = var.resource_group_name
-  account_name        = azurerm_cosmosdb_account.this.name
-  database_name       = azurerm_cosmosdb_sql_database.this.name
-  partition_key_paths = ["/invoice_id"]
-}
-
-resource "azurerm_cosmosdb_sql_container" "security_logs" {
-  name                = "SecurityLogs"
-  resource_group_name = var.resource_group_name
-  account_name        = azurerm_cosmosdb_account.this.name
-  database_name       = azurerm_cosmosdb_sql_database.this.name
-  partition_key_paths = ["/customer_id"]
-}
-
-resource "azurerm_cosmosdb_sql_container" "orders" {
-  name                = "Orders"
-  resource_group_name = var.resource_group_name
-  account_name        = azurerm_cosmosdb_account.this.name
-  database_name       = azurerm_cosmosdb_sql_database.this.name
-  partition_key_paths = ["/customer_id"]
-}
-
-resource "azurerm_cosmosdb_sql_container" "support_tickets" {
-  name                = "SupportTickets"
-  resource_group_name = var.resource_group_name
-  account_name        = azurerm_cosmosdb_account.this.name
-  database_name       = azurerm_cosmosdb_sql_database.this.name
-  partition_key_paths = ["/customer_id"]
-}
-
-resource "azurerm_cosmosdb_sql_container" "data_usage" {
-  name                = "DataUsage"
-  resource_group_name = var.resource_group_name
-  account_name        = azurerm_cosmosdb_account.this.name
-  database_name       = azurerm_cosmosdb_sql_database.this.name
-  partition_key_paths = ["/subscription_id"]
-}
-
-resource "azurerm_cosmosdb_sql_container" "service_incidents" {
-  name                = "ServiceIncidents"
-  resource_group_name = var.resource_group_name
-  account_name        = azurerm_cosmosdb_account.this.name
-  database_name       = azurerm_cosmosdb_sql_database.this.name
-  partition_key_paths = ["/subscription_id"]
-}
-
-resource "azurerm_cosmosdb_sql_container" "knowledge_documents" {
-  name                = "KnowledgeDocuments"
-  resource_group_name = var.resource_group_name
-  account_name        = azurerm_cosmosdb_account.this.name
-  database_name       = azurerm_cosmosdb_sql_database.this.name
-  partition_key_paths = ["/id"]
-
-  indexing_policy {
-    indexing_mode = "consistent"
-
-    included_path {
-      path = "/*"
-    }
-
-    excluded_path {
-      path = "/content_vector/*"
-    }
-  }
-}
-
-resource "azurerm_cosmosdb_sql_container" "agent_state" {
-  name                  = local.agent_state_container_name
+  name                  = each.value.name
   resource_group_name   = var.resource_group_name
   account_name          = azurerm_cosmosdb_account.this.name
   database_name         = azurerm_cosmosdb_sql_database.this.name
-  partition_key_paths   = ["/tenant_id", "/id"]
-  partition_key_kind    = "MultiHash"
-  partition_key_version = 2
+  partition_key_paths   = each.value.partition_key_paths
+  partition_key_kind    = lookup(each.value, "partition_key_kind", "Hash")
+  partition_key_version = lookup(each.value, "partition_key_version", null)
+
+  dynamic "indexing_policy" {
+    for_each = lookup(each.value, "indexing_policy", null) != null ? [each.value.indexing_policy] : []
+    content {
+      indexing_mode = indexing_policy.value.indexing_mode
+
+      dynamic "included_path" {
+        for_each = lookup(indexing_policy.value, "included_paths", ["/*"])
+        content {
+          path = included_path.value
+        }
+      }
+
+      dynamic "excluded_path" {
+        for_each = lookup(indexing_policy.value, "excluded_paths", [])
+        content {
+          path = excluded_path.value
+        }
+      }
+    }
+  }
 }

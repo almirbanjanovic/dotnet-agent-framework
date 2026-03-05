@@ -1,20 +1,25 @@
-variable "project_name" {
-  description = "Project name used in resource naming"
+variable "name_prefix" {
+  description = "Prefix for the Cosmos DB account name (e.g., project-environment)"
+  type        = string
+}
+
+variable "purpose" {
+  description = "Purpose identifier for the account (e.g., operational, knowledge, agents)"
   type        = string
 }
 
 variable "environment" {
-  description = "Deployment environment (e.g., dev, staging, prod)"
+  description = "Deployment environment"
   type        = string
 }
 
 variable "location" {
-  description = "Azure region for the Cosmos DB account"
+  description = "Azure region"
   type        = string
 }
 
 variable "resource_group_name" {
-  description = "Name of the resource group to deploy into"
+  description = "Name of the resource group"
   type        = string
 }
 
@@ -28,20 +33,35 @@ variable "database_name" {
   type        = string
 }
 
-variable "agent_state_container_name" {
-  description = "Name of the agent state store container"
-  type        = string
-}
-
 variable "consistency_level" {
   description = "Cosmos DB consistency level"
   type        = string
-  default     = "Session"
 
   validation {
     condition     = contains(["Strong", "BoundedStaleness", "Session", "ConsistentPrefix", "Eventual"], var.consistency_level)
     error_message = "Must be one of: Strong, BoundedStaleness, Session, ConsistentPrefix, Eventual."
   }
+}
+
+variable "capabilities" {
+  description = "List of Cosmos DB capabilities to enable (e.g., EnableNoSQLVectorSearch)"
+  type        = list(string)
+  default     = []
+}
+
+variable "containers" {
+  description = "Map of containers to create. Key is a logical name."
+  type = map(object({
+    name                  = string
+    partition_key_paths   = list(string)
+    partition_key_kind    = optional(string, "Hash")
+    partition_key_version = optional(number)
+    indexing_policy = optional(object({
+      indexing_mode  = string
+      included_paths = optional(list(string), ["/*"])
+      excluded_paths = optional(list(string), [])
+    }))
+  }))
 }
 
 variable "tags" {
