@@ -1,42 +1,35 @@
 #--------------------------------------------------------------------------------------------------------------------------------
-# General Configuration
-#--------------------------------------------------------------------------------------------------------------------------------
-locals {
-  foundry_name = "aif-${var.environment}-${var.location}"
-}
-
-#--------------------------------------------------------------------------------------------------------------------------------
 # Open AI
 #--------------------------------------------------------------------------------------------------------------------------------
 
-resource "azurerm_cognitive_account" "this" {
-  name                  = local.foundry_name
-  location              = var.location
-  resource_group_name   = var.resource_group_name
-  kind                  = var.cognitive_account_kind
-  local_auth_enabled    = true
-  sku_name              = var.oai_sku_name
-  custom_subdomain_name = "${local.foundry_name}-${replace(var.oai_deployment_model_name, ".", "-")}"
-  tags                  = var.tags
+module "openai" {
+  source = "./foundry/v1"
+
+  environment              = var.environment
+  location                 = var.location
+  resource_group_name      = var.resource_group_name
+  account_kind             = var.cognitive_account_kind
+  sku_name                 = var.oai_sku_name
+  deployment_sku_name      = var.oai_deployment_sku_name
+  deployment_model_format  = var.oai_deployment_model_format
+  deployment_model_name    = var.oai_deployment_model_name
+  deployment_model_version = var.oai_deployment_model_version
+  version_upgrade_option   = var.oai_version_upgrade_option
+  tags                     = var.tags
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
-# Model Deployments
+# Cosmos DB
 #--------------------------------------------------------------------------------------------------------------------------------
 
-resource "azurerm_cognitive_deployment" "this" {
-  name                 = var.oai_deployment_model_name
-  cognitive_account_id = azurerm_cognitive_account.this.id
+module "cosmosdb" {
+  source = "./cosmosdb/v1"
 
-  model {
-    format  = var.oai_deployment_model_format
-    name    = var.oai_deployment_model_name
-    version = var.oai_deployment_model_version
-  }
-
-  sku {
-    name = var.oai_deployment_sku_name
-  }
-
-  version_upgrade_option = var.oai_version_upgrade_option
+  project_name        = var.cosmos_project_name
+  environment         = var.environment
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  iteration           = var.cosmos_iteration
+  database_name       = var.cosmos_database_name
+  tags                = var.tags
 }
