@@ -66,7 +66,9 @@ infra/
 
 ### Environment variables
 
-**Backend / bootstrap variables:**
+Set all of the following under **Settings → Environments → `<environment>` → Variables** in your GitHub repository.
+
+**Backend / bootstrap:**
 
 | Variable                                | Example                      |
 |-----------------------------------------|------------------------------|
@@ -81,7 +83,7 @@ infra/
 | `TERRAFORM_STATE_BLOB`                  | `agentic-ai.tfstate`         |
 | `TERRAFORM_WORKING_DIRECTORY`           | `infra/terraform`            |
 
-**Terraform variables (mapped to `TF_VAR_` in workflows):**
+**Infrastructure configuration (mapped to `TF_VAR_` in workflows):**
 
 | Variable                          | Example                        |
 |-----------------------------------|--------------------------------|
