@@ -14,8 +14,9 @@ infra/
   terraform/                      → Terraform IaC (modular, versioned)
 
 src/
+  README.md                       → Lab setup and run guide
   appsettings.json                → Shared app settings (gitignored)
-  simple-agent/                   → Lab 1: first runnable agent
+  simple-agent/                   → Lab 1: validate infrastructure setup
 ```
 
 ## Prerequisites
@@ -30,38 +31,9 @@ src/
 
 Infrastructure must be provisioned before running any labs. Follow the full setup instructions in **[infra/README.md](infra/README.md)** — this covers backend bootstrap, Terraform configuration, and deployment.
 
-### 2. Configure app settings
+### 2. Configure agentic app settings
 
-After infrastructure is deployed, create `src/appsettings.json` (this file is gitignored):
-
-```json
-{
-  "AZURE_OPENAI_ENDPOINT": "<your-endpoint>",
-  "AZURE_OPENAI_DEPLOYMENT_NAME": "<your-deployment-name>",
-  "AZURE_OPENAI_API_KEY": "<your-api-key>"
-}
-```
-
-These values are shown in Terraform outputs after `terraform apply`, or you can find them in the [Azure AI Foundry portal](https://ai.azure.com) under **Models + endpoints**.
-
-| Key                            | Description                    | Source                                        |
-|--------------------------------|--------------------------------|-----------------------------------------------|
-| `AZURE_OPENAI_ENDPOINT`        | Azure OpenAI endpoint          | `terraform output openai_endpoint`            |
-| `AZURE_OPENAI_DEPLOYMENT_NAME` | Model deployment name          | `terraform output openai_deployment_name`     |
-| `AZURE_OPENAI_API_KEY`         | API key for authentication     | `terraform output openai_api_key`             |
-
-> **Note:** Use the `.openai.azure.com` endpoint (shown in AI Foundry), not the `.cognitiveservices.azure.com` endpoint from the Azure Portal.
-
-### 3. Run a lab
-
-From the lab directory (e.g., `src/simple-agent/`):
-
-```bash
-dotnet restore
-dotnet run
-```
-
-The `appsettings.json` is shared across all labs under `src/`.
+After infrastructure is deployed, configure your app settings and run the labs. Follow the instructions in **[src/README.md](src/README.md)**.
 
 ## Notes
 
