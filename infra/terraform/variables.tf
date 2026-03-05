@@ -51,3 +51,25 @@ variable "oai_version_upgrade_option" {
   description = "Azure OpenAI version upgrade option"
   type        = string
 }
+
+# ---------------------------------------------------------------
+# Cosmos DB
+# ---------------------------------------------------------------
+
+variable "cosmos_project_name" {
+  description = "Project name used in Cosmos DB resource naming"
+  type        = string
+  default     = "dotnetagent"
+}
+
+variable "cosmos_iteration" {
+  description = "Iteration counter for Cosmos DB (avoids soft-delete collisions)"
+  type        = string
+  default     = "001"
+}
+
+variable "cosmos_database_name" {
+  description = "Cosmos DB SQL database name"
+  type        = string
+  default     = "contoso"
+}
