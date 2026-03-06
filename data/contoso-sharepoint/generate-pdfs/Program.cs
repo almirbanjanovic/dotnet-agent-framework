@@ -33,7 +33,7 @@ foreach (var txtFile in txtFiles)
 
     var document = new PdfDocument();
     document.Info.Title = title;
-    document.Info.Author = "Contoso Telecom";
+    document.Info.Author = "Contoso Outdoors";
 
     var titleFont = new XFont("Arial", 16, XFontStyle.Bold);
     var subtitleFont = new XFont("Arial", 9, XFontStyle.Italic);
@@ -106,7 +106,7 @@ foreach (var txtFile in txtFiles)
         }
 
         // Footer
-        var footer = $"Contoso Telecom — Confidential    |    Page {pageNumber}";
+        var footer = $"Contoso Outdoors — Confidential    |    Page {pageNumber}";
         gfx.DrawString(footer, footerFont, XBrushes.Gray,
             new XRect(0, page.Height.Point - 25, pageWidth, 14), XStringFormats.TopCenter);
     }

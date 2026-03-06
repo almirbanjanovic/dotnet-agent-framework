@@ -49,17 +49,12 @@ module "cosmosdb_operational" {
   tags                = var.tags
 
   containers = {
-    customers       = { name = "Customers",       partition_key_paths = ["/id"] }
-    subscriptions   = { name = "Subscriptions",    partition_key_paths = ["/customer_id"] }
-    products        = { name = "Products",         partition_key_paths = ["/category"] }
-    promotions      = { name = "Promotions",       partition_key_paths = ["/id"] }
-    invoices        = { name = "Invoices",         partition_key_paths = ["/subscription_id"] }
-    payments        = { name = "Payments",         partition_key_paths = ["/invoice_id"] }
-    orders          = { name = "Orders",           partition_key_paths = ["/customer_id"] }
-    support_tickets = { name = "SupportTickets",   partition_key_paths = ["/customer_id"] }
-    data_usage      = { name = "DataUsage",        partition_key_paths = ["/subscription_id"] }
-    service_incidents = { name = "ServiceIncidents", partition_key_paths = ["/subscription_id"] }
-    security_logs   = { name = "SecurityLogs",     partition_key_paths = ["/customer_id"] }
+    customers       = { name = "Customers",      partition_key_paths = ["/id"] }
+    orders          = { name = "Orders",         partition_key_paths = ["/customer_id"] }
+    order_items     = { name = "OrderItems",     partition_key_paths = ["/order_id"] }
+    products        = { name = "Products",       partition_key_paths = ["/category"] }
+    promotions      = { name = "Promotions",     partition_key_paths = ["/id"] }
+    support_tickets = { name = "SupportTickets", partition_key_paths = ["/customer_id"] }
   }
 }
 

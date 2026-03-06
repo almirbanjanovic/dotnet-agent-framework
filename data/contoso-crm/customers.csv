@@ -1,10 +1,11 @@
-id,first_name,last_name,email,phone,address,loyalty_level,account_status,created_date
-251,John,Doe,john.doe@example.com,555-0001,"123 Main St, Anytown, ST 12345",Silver,active,2024-06-15
-252,Jane,Doe,jane.doe@example.com,555-0002,"234 Elm St, Riverside, ST 23456",Gold,active,2024-03-10
-253,Mark,Doe,mark.doe@example.com,555-0003,"345 Oak St, Lakewood, ST 34567",Bronze,active,2025-01-20
-254,Alice,Doe,alice.doe@example.com,555-0004,"456 Pine St, Hillside, ST 45678",Gold,locked,2024-08-05
-255,Ron,Doe,ron.doe@example.com,555-0005,"567 Maple St, Metropolis, ST 56789",Gold,active,2023-11-12
-256,Mary,Doe,mary.doe@example.com,555-0006,"678 Birch St, Capital, ST 67890",Silver,active,2024-09-01
-257,Tom,Smith,tom.smith@example.com,555-0007,"789 Cedar St, Hilltop, ST 78901",Silver,active,2024-05-22
-258,Sara,Lee,sara.lee@example.com,555-0008,"123 Ocean Blvd, Bay City, ST 89012",Gold,active,2024-01-15
-259,Alex,Brown,alex.brown@example.com,555-0009,"321 Spruce Ln, Forest, ST 90123",Bronze,active,2025-02-01
+id,first_name,last_name,email,phone,address,loyalty_tier,account_status,created_date
+101,Emma,Wilson,emma.wilson@email.com,555-0101,"742 Evergreen Trail, Portland OR 97201",Silver,active,2024-03-15
+102,James,Chen,james.chen@email.com,555-0102,"1580 Summit Ave, Denver CO 80202",Bronze,active,2024-06-22
+103,Sarah,Miller,sarah.miller@email.com,555-0103,"2901 Lakeside Dr, Seattle WA 98101",Gold,active,2023-11-08
+104,David,Park,david.park@email.com,555-0104,"455 Mountain View Rd, Boulder CO 80301",Silver,active,2024-01-12
+105,Lisa,Torres,lisa.torres@email.com,555-0105,"3322 Canyon Blvd, Moab UT 84532",Bronze,active,2025-01-05
+106,Mike,Johnson,mike.johnson@email.com,555-0106,"890 Forest Lane, Bend OR 97701",Gold,active,2023-08-20
+107,Anna,Roberts,anna.roberts@email.com,555-0107,"1200 River Walk, Asheville NC 28801",Bronze,active,2025-02-14
+108,Tom,Garcia,tom.garcia@email.com,555-0108,"567 Pine Ridge Dr, Flagstaff AZ 86001",Silver,active,2024-05-30
+109,Rachel,Kim,rachel.kim@email.com,555-0109,"4100 Coastal Hwy, San Diego CA 92101",Platinum,active,2022-07-10
+110,Carlos,Mendez,carlos.mendez@email.com,555-0110,"238 Aspen Way, Jackson WY 83001",Gold,active,2023-04-18

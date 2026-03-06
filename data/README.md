@@ -1,14 +1,14 @@
 # Data
 
-This folder contains simulated enterprise data sources for the Contoso Telecom agent framework. The data represents what you'd find in a real company's systems — a CRM and a document library.
+This folder contains simulated enterprise data sources for the Contoso Outdoors agent framework. The data represents what you'd find in a real company's systems — a product/order database, a document library, and a product image store.
 
-> **This data is used to seed Cosmos DB.** The seed tool (`src/seed-data/`) reads from these folders, vectorizes unstructured documents, and populates the database.
+> **This data is used to seed Cosmos DB and Azure Blob Storage.** The seed tool (`src/seed-data/`) reads from these folders, vectorizes unstructured documents, and populates the databases.
 
 ## What is RAG?
 
 **RAG (Retrieval-Augmented Generation)** is the pattern that connects your company's data to a large language model. Without RAG, the chat model only knows what it was trained on. With RAG, it can answer questions about *your* specific policies, customers, and data — without fine-tuning the model.
 
-The key insight: you can't search unstructured text (like a PDF policy document) with a database query. If a customer asks *"what happens if I go over my data limit?"*, a keyword search for those exact words would return nothing — because the document is titled "Data Overage Policy" and uses different phrasing.
+The key insight: you can't search unstructured text (like a PDF policy document) with a database query. If a customer asks *"what is your return policy?"*, a keyword search for those exact words would return nothing — because the document is titled "Return and Refund Policy" and uses different phrasing.
 
 **Vector embeddings solve this.** An embedding model converts text into numerical vectors that capture *meaning*, not exact words. Two texts that are semantically similar produce vectors that are close together — even if they share no words. This enables semantic search: find documents by meaning, not by keyword match.
 
@@ -22,7 +22,7 @@ The key insight: you can't search unstructured text (like a PDF policy document)
 ### The RAG flow
 
 ```
-User: "What happens if I go over my data limit?"
+User: "What is your return policy?"
                     │
                     ▼
     ┌─────────────────────────────┐
@@ -35,7 +35,7 @@ User: "What happens if I go over my data limit?"
     │  2. RETRIEVE relevant docs  │
     │  Cosmos DB vector search    │
     │  (VectorDistance)           │
-    │  → "Data Overage Policy"    │
+    │  → "Return and Refund Policy"│
     └──────────────┬──────────────┘
                    │
                    ▼
@@ -69,7 +69,7 @@ User: "What happens if I go over my data limit?"
 │  │  Operational Account │    │  Knowledge Account           │     │
 │  │  (Session consistency)│   │  (Eventual + Vector Search)  │     │
 │  │  Customers, Orders,  │    │  KnowledgeDocuments          │     │
-│  │  Invoices, etc.      │    │  (vectorized PDFs)           │     │
+│  │  Products, etc.      │    │  (vectorized PDFs)           │     │
 │  │  ← SQL queries       │    │  ← VectorDistance (RAG)      │     │
 │  └──────────────────────┘    └───────────────────────────────┘     │
 │                                                                    │
@@ -89,9 +89,9 @@ User: "What happens if I go over my data limit?"
 
 ## Data flow
 
-### Structured data (CRM → Operational Account)
+### Structured data (Store Data → Operational Account)
 
-`contoso-crm/` simulates a CRM export — customer records, subscriptions, invoices, etc. as CSV files. The seed tool parses these and upserts them into the **Operational** Cosmos DB account (Session consistency). **No vectorization is needed.** Agents query this data using tools with standard SQL queries (e.g., "find all invoices for customer 251").
+`contoso-crm/` simulates a store data export — customer records, orders, products, etc. as CSV files. The seed tool parses these and upserts them into the **Operational** Cosmos DB account (Session consistency). **No vectorization is needed.** Agents query this data using tools with standard SQL queries (e.g., "find all orders for customer 101").
 
 ### Unstructured data (SharePoint → Knowledge Account)
 
@@ -125,12 +125,12 @@ Before seeding, ensure:
 
 The seed tool (`src/seed-data/`) performs two distinct operations:
 
-**1. Load structured data (CRM → Operational account)**
+**1. Load structured data (Store Data → Operational account)**
 
 ```
-contoso-crm/customers.csv  ──parse CSV──►  Operational / "Customers" container
-contoso-crm/invoices.csv   ──parse CSV──►  Operational / "Invoices" container
-...etc for all 11 CSV files
+contoso-crm/customers.csv      ──parse CSV──►  Operational / "Customers" container
+contoso-crm/orders.csv         ──parse CSV──►  Operational / "Orders" container
+...etc for all 6 CSV files
 ```
 
 Each CSV row becomes a JSON document. The seed tool maps CSV column names to JSON properties and upserts into the corresponding container using the correct partition key.
@@ -154,11 +154,11 @@ contoso-sharepoint/**/*.pdf
         │
         └──► Upsert to Knowledge / "KnowledgeDocuments"
              {
-               "id": "data-overage-policy-chunk-1",
-               "title": "Data Overage Policy",
+               "id": "return-and-refund-policy-chunk-1",
+               "title": "Return And Refund Policy",
                "category": "policy",
-               "source_file": "policies/data-overage-policy.pdf",
-               "content": "When subscribers exceed the monthly data...",
+               "source_file": "policies/return-and-refund-policy.pdf",
+               "content": "Contoso Outdoors accepts returns within 30 calendar days...",
                "content_vector": [0.0123, -0.0456, 0.0789, ...]  // 1536 floats
              }
 ```
@@ -177,42 +177,34 @@ The seed tool reads connection settings from `src/appsettings.json` (same config
 
 ```
 data/
-├── contoso-crm/                    ← Simulated CRM export (structured)
+├── contoso-crm/                    ← Simulated store data export (structured)
 │   ├── customers.csv
-│   ├── subscriptions.csv
+│   ├── orders.csv
+│   ├── order-items.csv
 │   ├── products.csv
 │   ├── promotions.csv
-│   ├── invoices.csv
-│   ├── payments.csv
-│   ├── orders.csv
-│   ├── support-tickets.csv
-│   ├── data-usage.csv
-│   ├── service-incidents.csv
-│   └── security-logs.csv
+│   └── support-tickets.csv
 │
-└── contoso-sharepoint/             ← Simulated SharePoint document library (unstructured)
-    ├── generate-pdfs/              ← .NET tool to regenerate PDFs from .txt sources
-    ├── policies/                   ← Policy documents (.txt source + .pdf generated)
-    │   ├── data-overage-policy.txt / .pdf
-    │   ├── billing-dispute-escalation.txt / .pdf
-    │   ├── late-payment-fee-policy.txt / .pdf
-    │   ├── promotion-eligibility-guidelines.txt / .pdf
-    │   ├── payment-failure-reinstatement.txt / .pdf
-    │   ├── service-reliability-sla.txt / .pdf
-    │   └── autopay-discount-terms.txt / .pdf
-    ├── procedures/                 ← Procedure documents (.txt source + .pdf generated)
-    │   ├── account-unlock-procedure.txt / .pdf
-    │   ├── troubleshooting-slow-internet.txt / .pdf
-    │   ├── return-policy-and-process.txt / .pdf
-    │   ├── financial-hardship-payment-plan.txt / .pdf
-    │   └── dropped-call-investigation.txt / .pdf
-    └── guides/                     ← Customer guides (.txt source + .pdf generated)
-        ├── international-roaming-guide.txt / .pdf
-        ├── router-reset-guide.txt / .pdf
-        ├── understanding-your-bill.txt / .pdf
-        ├── upgrading-internet-speed.txt / .pdf
-        ├── account-security-best-practices.txt / .pdf
-        └── text-messaging-troubleshooting.txt / .pdf
+├── contoso-sharepoint/             ← Simulated SharePoint document library (unstructured)
+│   ├── generate-pdfs/              ← .NET tool to regenerate PDFs from .txt sources
+│   ├── policies/                   ← Policy documents (.txt source + .pdf generated)
+│   │   ├── return-and-refund-policy.txt / .pdf
+│   │   ├── warranty-policy.txt / .pdf
+│   │   ├── price-match-policy.txt / .pdf
+│   │   └── loyalty-program-terms.txt / .pdf
+│   ├── procedures/                 ← Procedure documents (.txt source + .pdf generated)
+│   │   ├── processing-a-return.txt / .pdf
+│   │   ├── filing-a-warranty-claim.txt / .pdf
+│   │   └── exchanging-a-product.txt / .pdf
+│   └── guides/                     ← Customer guides (.txt source + .pdf generated)
+│       ├── boot-sizing-guide.txt / .pdf
+│       ├── tent-selection-guide.txt / .pdf
+│       ├── layering-guide.txt / .pdf
+│       ├── backpack-fitting-guide.txt / .pdf
+│       └── gear-care-and-maintenance.txt / .pdf
+│
+└── contoso-images/                 ← Product images (uploaded to Azure Blob Storage)
+    └── *.jpg                       ← Product photos referenced by products.csv image_filename
 ```
 
 The `.txt` files are the editable source content. The `.pdf` files are generated from them using the `generate-pdfs` tool. To regenerate PDFs after editing a `.txt` file:
@@ -227,31 +219,25 @@ dotnet run
 | Account | Source | Container | Partition key | Vectorized |
 |---------|--------|-----------|---------------|------------|
 | Operational | `contoso-crm/customers.csv` | Customers | `/id` | No |
-| Operational | `contoso-crm/subscriptions.csv` | Subscriptions | `/customer_id` | No |
+| Operational | `contoso-crm/orders.csv` | Orders | `/customer_id` | No |
+| Operational | `contoso-crm/order-items.csv` | OrderItems | `/order_id` | No |
 | Operational | `contoso-crm/products.csv` | Products | `/category` | No |
 | Operational | `contoso-crm/promotions.csv` | Promotions | `/id` | No |
-| Operational | `contoso-crm/invoices.csv` | Invoices | `/subscription_id` | No |
-| Operational | `contoso-crm/payments.csv` | Payments | `/invoice_id` | No |
-| Operational | `contoso-crm/orders.csv` | Orders | `/customer_id` | No |
 | Operational | `contoso-crm/support-tickets.csv` | SupportTickets | `/customer_id` | No |
-| Operational | `contoso-crm/data-usage.csv` | DataUsage | `/subscription_id` | No |
-| Operational | `contoso-crm/service-incidents.csv` | ServiceIncidents | `/subscription_id` | No |
-| Operational | `contoso-crm/security-logs.csv` | SecurityLogs | `/customer_id` | No |
 | Knowledge | `contoso-sharepoint/**/*.pdf` | KnowledgeDocuments | `/id` | **Yes** |
 | Agents | (runtime) | workshop_agent_state_store | `/tenant_id`, `/id` | No |
 
 ## Scenario data
 
-The CRM data includes 9 deterministic customer scenarios designed to test specific agent capabilities:
+The store data includes 8 deterministic customer scenarios designed to test specific agent capabilities:
 
 | # | Customer | Scenario |
 |---|----------|----------|
-| 1 | John Doe | High data usage leading to overage charges on internet plan |
-| 2 | Jane Doe | Slow internet speeds with active service incident |
-| 3 | Mark Doe | Standard active mobile plan customer |
-| 4 | Alice Doe | Account locked after 8 failed login attempts |
-| 5 | Ron Doe | Active mobile customer (Gold loyalty) |
-| 6 | Mary Doe | Returned order requiring refund processing |
-| 7 | Tom Smith | Repeated call drops — open support ticket |
-| 8 | Sara Lee | Inactive subscription with failed payments |
-| 9 | Alex Brown | Mobile plan with data overage (roaming enabled) |
+| 1 | Emma Wilson (101) | Order shipped — tracking and delivery status inquiry |
+| 2 | James Chen (102) | Hiking boots don't fit — return eligibility and sizing help |
+| 3 | Sarah Miller (103) | Gold loyalty member looking for tent deals |
+| 4 | David Park (104) | Damaged jacket received — warranty claim and support ticket |
+| 5 | Lisa Torres (105) | Backpack recommendation for multi-day trip |
+| 6 | Mike Johnson (106) | Gear care advice for newly delivered tent |
+| 7 | Anna Roberts (107) | Order cancellation request (still processing) |
+| 8 | Tom Garcia (108) | Returned items — refund status inquiry |

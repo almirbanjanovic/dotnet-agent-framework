@@ -1,2 +1,6 @@
-id,customer_id,subscription_id,category,subject,description,status,priority,cs_agent,opened_at,closed_at
-1,257,7,call_drop,Repeated call drops in downtown area,"Customer reports dropped calls at 10:05, 10:22, and 11:01 near 5th & Pine intersection. Signal strength appears normal on device.",open,high,Liam,2025-03-03T07:00:00Z,
+id,customer_id,order_id,category,subject,description,status,priority,opened_at,closed_at
+ST-001,104,1004,product-issue,Damaged jacket received,"Customer received Alpine Summit Jacket with a tear in the right sleeve. Photos provided.",open,high,2026-02-26,
+ST-002,108,1008,return,Refund not yet received,"Customer returned items from order 1008 on 2026-01-25. Refund has not appeared in bank account yet. Items received at warehouse on 2026-01-28.",open,medium,2026-02-10,
+ST-003,102,1002,return,Boot size exchange request,"Customer wants to exchange TrailBlazer Hiking Boots for a larger size (US 11 to US 12).",open,medium,2026-03-03,
+ST-004,109,1009,shipping,Delivery delay inquiry,"Customer inquired about potential delay on shipped order. Carrier shows in-transit, no updates for 2 days.",open,low,2026-03-05,
+ST-005,110,1010,general,Product care question,"Customer asked about waterproofing treatment for TrailBlazer Hiking Boots. Referred to gear care guide.",closed,low,2026-02-18,2026-02-19

@@ -14,17 +14,12 @@ public static class CrmSeeder
     // Maps CSV filename (without extension) to (container name, partition key property)
     private static readonly Dictionary<string, (string Container, string PartitionKey)> ContainerMap = new()
     {
-        ["customers"]         = ("Customers",        "id"),
-        ["subscriptions"]     = ("Subscriptions",    "customer_id"),
-        ["products"]          = ("Products",         "category"),
-        ["promotions"]        = ("Promotions",       "id"),
-        ["invoices"]          = ("Invoices",         "subscription_id"),
-        ["payments"]          = ("Payments",         "invoice_id"),
-        ["orders"]            = ("Orders",           "customer_id"),
-        ["support-tickets"]   = ("SupportTickets",   "customer_id"),
-        ["data-usage"]        = ("DataUsage",        "subscription_id"),
-        ["service-incidents"] = ("ServiceIncidents", "subscription_id"),
-        ["security-logs"]     = ("SecurityLogs",     "customer_id"),
+        ["customers"]       = ("Customers",      "id"),
+        ["orders"]          = ("Orders",         "customer_id"),
+        ["order-items"]     = ("OrderItems",     "order_id"),
+        ["products"]        = ("Products",       "category"),
+        ["promotions"]      = ("Promotions",     "id"),
+        ["support-tickets"] = ("SupportTickets", "customer_id"),
     };
 
     public static async Task SeedAsync(Database database, string crmFolder)

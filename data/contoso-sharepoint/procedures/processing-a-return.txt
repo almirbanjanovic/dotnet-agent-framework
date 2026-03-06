@@ -1,0 +1,60 @@
+Processing a Return
+Contoso Outdoors — Internal Procedure
+
+This procedure outlines the step-by-step process for handling a customer return request.
+
+1. Verify Return Eligibility
+
+Before processing a return, confirm the following:
+
+a. Order Lookup
+   - Ask the customer for their order number or look up their account
+   - Identify the specific item(s) they wish to return
+   - Confirm the order delivery date
+
+b. Return Window Check
+   - Standard returns: within 30 calendar days of delivery
+   - Holiday returns (orders placed Nov 15 - Dec 31): extended through January 31 of the following year
+   - If outside the return window, inform the customer that a return is not eligible. Check if a warranty claim applies instead.
+
+c. Item Eligibility
+   - Verify the item is not in the non-returnable category (clearance, gift cards, food items, undergarments)
+   - Ask about the item's condition — must be unused, with tags, in original packaging
+   - If the item was used on the trail, it is not eligible for return (but may be eligible for a warranty claim if defective)
+
+2. Generate Return Shipping Label
+
+Once eligibility is confirmed:
+   - Create a support ticket with category "return" and appropriate priority
+   - Generate a prepaid shipping label
+   - Send the label to the customer's email address on file
+   - Provide the customer with a return reference number (the support ticket ID)
+
+3. Customer Instructions
+
+Inform the customer:
+   - Pack the item securely in its original packaging if available
+   - Attach the prepaid shipping label to the outside of the box
+   - Drop off at any carrier location
+   - Keep the drop-off receipt as proof of shipment
+
+4. Warehouse Receiving and Inspection
+
+When the returned item arrives at the warehouse:
+   - Inspect the item against the return conditions
+   - If the item passes inspection, proceed to refund processing
+   - If the item fails inspection (used, damaged by customer, missing tags), contact the customer to discuss options
+
+5. Refund Processing
+
+   - Process the refund within 5-10 business days of receiving the item
+   - Refund to the original payment method
+   - Shipping charges are not refunded unless the return is due to a Contoso error
+   - Send the customer an email confirmation with the refund amount and expected timeline
+   - Update the support ticket status to "closed"
+
+6. Escalation
+
+If the customer disputes the inspection result or the return is outside normal policy:
+   - Escalate to a supervisor for review
+   - Document the reason for escalation in the support ticket

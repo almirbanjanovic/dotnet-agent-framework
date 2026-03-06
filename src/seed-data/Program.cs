@@ -44,7 +44,7 @@ var crmFolder = Path.Combine(repoRoot, "data", "contoso-crm");
 var sharePointFolder = Path.Combine(repoRoot, "data", "contoso-sharepoint");
 
 Console.WriteLine("═══════════════════════════════════════════════════════════");
-Console.WriteLine("  Contoso Telecom — Cosmos DB Seed Tool");
+Console.WriteLine("  Contoso Outdoors — Cosmos DB Seed Tool");
 Console.WriteLine("═══════════════════════════════════════════════════════════");
 Console.WriteLine();
 Console.WriteLine($"  OpenAI endpoint:         {openAiEndpoint}");
