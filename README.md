@@ -10,7 +10,7 @@
 
 ### Overview
 
-This system is a .NET rewrite of the original Python prototype (`python-old/`). It implements a Contoso Telecom customer service platform where AI agents handle customer inquiries using structured CRM data and unstructured knowledge documents (via RAG). The architecture follows a **hybrid data access pattern** — shared REST APIs where multiple consumers exist, direct database access where only one consumer exists.
+This system implements a Contoso Outdoors customer service platform where AI agents handle customer inquiries using structured order/product data and unstructured knowledge documents (via RAG). The architecture follows a **hybrid data access pattern** — shared REST APIs where multiple consumers exist, direct database access where only one consumer exists.
 
 ```text
                      ┌──────────────────────────────────────────────────────────────────────┐
@@ -25,14 +25,14 @@ This system is a .NET rewrite of the original Python prototype (`python-old/`). 
               │       │        ┌──────┬──────┬──────┬──────┐                                │
               │       │        │      │      │      │      │                                │
               │       │        ▼      ▼      ▼      ▼      ▼                                │
-              │       │      CRM  Billing Product Security Knowledge                       │
-              │       │      MCP   MCP    MCP    MCP    (RAG) MCP                           │
-              │       │        │      │      │      │      │                                │
-              │       │        ▼      ▼      ▼      ▼      └─► Cosmos DB Knowledge (direct) │
-              │       │      CRM   Billing Product Security    + Embedding Model            │
-              ▼       │      API    API    API    API                                       │
-             BFF ─────┤──►    │      │      │      │                                        │
-              │       │       └──────┴──────┴──────┘                                        │
+              │       │      Cust&  Product Product Knowledge                              │
+              │       │      Orders  Catalog Images  (RAG) MCP                              │
+              │       │      MCP    MCP    MCP              │                                │
+              │       │        │      │      │              └─► Cosmos DB Knowledge (direct) │
+              ▼       │      Cust&  Product Product             + Embedding Model            │
+             BFF ─────┤──►  Orders  Catalog Images                                          │
+              │       │      API    API    API (Blob)                                        │
+              │       │       └──────┴──────┘                                                │
               │       │                   │                                                  │
               │       └───────────────────┼──────────────────────────────────────────────────┘
               │                           │
@@ -52,7 +52,7 @@ The system uses a **hybrid pattern** rather than forcing all traffic through RES
 
 | Data Store | UI needs it? | Agents need it? | Access pattern | Why |
 |------------|:---:|:---:|---|---|
-| **Operational** (CRM) | ✅ | ✅ | Shared domain APIs | Both UI (via BFF) and agents (via MCP → domain APIs) need the same data. Shared APIs prevent duplicating data access logic, validation, and business rules. |
+| **Operational** (orders, products) | ✅ | ✅ | Shared domain APIs | Both UI (via BFF) and agents (via MCP → domain APIs) need the same data. Shared APIs prevent duplicating data access logic, validation, and business rules. |
 | **Knowledge** (RAG vectors) | ❌ | ✅ | MCP → Cosmos DB direct | Only agents perform vector similarity search. This is a compound AI operation (embed query → `VectorDistance` search → return chunks) that no other consumer needs. Routing it through a REST API adds a pointless hop. |
 | **Knowledge** (doc metadata) | Maybe | ❌ | Domain API endpoint | If an admin UI needs to browse/manage documents (titles, categories), that's simple CRUD — add a domain API endpoint. But vector search remains agent-only. |
 | **Agents** (state) | ❌ | ✅ | Orchestrator → Cosmos DB direct | Internal conversation history and agent memory. No other consumer needs this. |
@@ -63,39 +63,37 @@ The system uses a **hybrid pattern** rather than forcing all traffic through RES
 
 #### 2. Domain-specific APIs with a BFF layer
 
-The data layer is split into **four domain-specific APIs**, each owning its Cosmos DB containers and business logic. A **[Backend for Frontend (BFF)](https://learn.microsoft.com/en-us/azure/architecture/patterns/backends-for-frontends)** sits between the Blazor UI and the domain APIs, aggregating cross-domain calls into UI-optimized responses.
+The data layer is split into **three domain-specific APIs**, each owning its Cosmos DB containers and business logic. A **[Backend for Frontend (BFF)](https://learn.microsoft.com/en-us/azure/architecture/patterns/backends-for-frontends)** sits between the Blazor UI and the domain APIs, aggregating cross-domain calls into UI-optimized responses.
 
 | Domain API | Cosmos Containers | Key Operations |
 |---|---|---|
-| **CRM API** | Customers, Subscriptions, DataUsage, SupportTickets, ServiceIncidents | Get/update customers, subscriptions, data usage, support tickets |
-| **Billing API** | Invoices, Payments | Get invoices, payments, billing summary, pay invoice |
-| **Product API** | Products, Promotions, Orders | Get products, promotions, eligibility, orders |
-| **Security API** | SecurityLogs | Get security logs, unlock account |
+| **Customer & Orders API** | Customers, Orders, OrderItems, SupportTickets | Get/update customers, orders, order items, support tickets |
+| **Product Catalog API** | Products, Promotions | Get products, promotions, eligibility checks |
+| **Product Images API** | Azure Blob Storage (product-images container) | Get product images, list images by category |
 
-All four share the **Operational** Cosmos DB account but own separate containers. Each API has its own clean architecture (Services → Repositories → Models).
+All domain APIs except Product Images share the **Operational** Cosmos DB account but own separate containers. The Product Images API reads from Azure Blob Storage. Each API has its own clean architecture (Services → Repositories → Models).
 
-**Why domain APIs instead of one monolith?** Each domain has distinct scaling, deployment, and security requirements. The Security API needs stricter [RBAC](https://learn.microsoft.com/en-us/azure/role-based-access-control/overview) than the Product API. Domain APIs can be deployed independently — a billing fix doesn't require redeploying the CRM service.
+**Why domain APIs instead of one monolith?** Each domain has distinct scaling, deployment, and security requirements. Domain APIs can be deployed independently — a product catalog fix doesn't require redeploying the customer orders service.
 
-**Why a BFF?** The Blazor UI needs cross-domain views: a customer detail page shows customer info (CRM) + subscriptions (CRM) + outstanding balance (Billing) + recent orders (Product) on one screen. The BFF aggregates these into UI-optimized endpoints. Domain APIs know about business rules. The BFF knows about UI views. Neither duplicates the other's concerns.
+**Why a BFF?** The Blazor UI needs cross-domain views: an order detail page shows customer info (Customer & Orders) + product details (Product Catalog) + product images (Product Images) on one screen. The BFF aggregates these into UI-optimized endpoints. Domain APIs know about business rules. The BFF knows about UI views. Neither duplicates the other's concerns.
 
 **MCP servers don't use the BFF.** Each MCP server calls its corresponding domain API directly — it's already scoped to a single domain. The BFF exists solely because the UI needs cross-domain aggregation.
 
-**Cross-domain MCP operations:** Some tools need data from multiple domains (e.g., `get_eligible_promotions` needs the customer's loyalty tier from CRM). The domain API handles this via API-to-API calls internally — the promotion eligibility logic belongs in the Product API, not in the MCP adapter.
+**Cross-domain MCP operations:** Some tools need data from multiple domains (e.g., `get_eligible_promotions` needs the customer's loyalty tier from Customer & Orders). The domain API handles this via API-to-API calls internally — the promotion eligibility logic belongs in the Product Catalog API, not in the MCP adapter.
 
 #### 3. MCP Servers are thin protocol adapters
 
-Each MCP Server exposes [tools](https://modelcontextprotocol.io/docs/concepts/tools) with names, descriptions, and schemas that the LLM uses for function calling. The CRM/Billing/Product/Security MCP Servers translate between MCP protocol and HTTP calls to their corresponding domain APIs. The Knowledge MCP Server translates between MCP protocol and Cosmos DB + Embedding Model calls. None of them contain business logic — that lives in the domain APIs (for shared data) or in the MCP tool handler itself (for the RAG compound operation).
+Each MCP Server exposes [tools](https://modelcontextprotocol.io/docs/concepts/tools) with names, descriptions, and schemas that the LLM uses for function calling. The Customer & Orders/Product Catalog MCP Servers translate between MCP protocol and HTTP calls to their corresponding domain APIs. The Product Images MCP Server translates between MCP protocol and Azure Blob Storage calls. The Knowledge MCP Server translates between MCP protocol and Cosmos DB + Embedding Model calls. None of them contain business logic — that lives in the domain APIs (for shared data) or in the MCP tool handler itself (for the RAG compound operation).
 
-#### 4. Five domain-specific MCP Servers
+#### 4. Four domain-specific MCP Servers
 
-Tools are grouped by domain boundary, with each MCP server calling exactly one domain API:
+Tools are grouped by domain boundary, with each MCP server calling exactly one backend:
 
 | MCP Server | Tools | Calls |
 |---|---|---|
-| **CRM** | `get_all_customers`, `get_customer_detail`, `get_subscription_detail`, `get_data_usage`, `update_subscription`, `get_support_tickets`, `create_support_ticket` | CRM API |
-| **Billing** | `get_billing_summary`, `get_invoice_payments`, `pay_invoice` | Billing API |
-| **Product** | `get_products`, `get_product_detail`, `get_promotions`, `get_eligible_promotions`, `get_customer_orders` | Product API |
-| **Security** | `get_security_logs`, `unlock_account` | Security API |
+| **Customer & Orders** | `get_all_customers`, `get_customer_detail`, `get_customer_orders`, `get_order_detail`, `get_support_tickets`, `create_support_ticket` | Customer & Orders API |
+| **Product Catalog** | `search_products`, `get_product_detail`, `get_promotions`, `get_eligible_promotions` | Product Catalog API |
+| **Product Images** | `get_product_image`, `list_product_images` | Azure Blob Storage (product-images container) |
 | **Knowledge (RAG)** | `search_knowledge_base` | Knowledge Cosmos DB direct + Embedding Model |
 
 This 1:1 alignment between MCP servers and domain APIs keeps each adapter simple and independently deployable.
@@ -118,13 +116,12 @@ Agents are not deployed as separate pods. They are instantiated inside whichever
 src/
   agents/                          ← SHARED CLASS LIBRARY (not a pod)
     AgentDefinitions.cs
-    CrmAgent                          → system prompt + CRM MCP tools
-    BillingAgent                      → system prompt + Billing MCP tools
-    ProductAgent                      → system prompt + Product MCP tools
-    SecurityAgent                     → system prompt + Security MCP tools
-    KnowledgeAgent                    → system prompt + Knowledge MCP tools
-    ReviewerAgent                     → system prompt + quality review prompt
-    ManagerAgent                      → system prompt + no tools (orchestrates only)
+    CustomerOrdersAgent               → system prompt + Customer & Orders MCP tools
+    ProductCatalogAgent                → system prompt + Product Catalog MCP tools
+    ProductImagesAgent                 → system prompt + Product Images MCP tools
+    KnowledgeAgent                     → system prompt + Knowledge MCP tools
+    ReviewerAgent                      → system prompt + quality review prompt
+    ManagerAgent                       → system prompt + no tools (orchestrates only)
 
   orchestrations/                  ← DEPLOYABLE PODS (each references shared library)
     single-agent/                  → Creates 1 agent with ALL tools, exposes HTTP endpoint
@@ -145,7 +142,7 @@ Each orchestration pod writes directly to the **Agents** Cosmos DB account for c
 
 #### 7. APIM as an optional external gateway
 
-For external access (partner integrations, multi-tenant scenarios), [Azure API Management](https://learn.microsoft.com/en-us/azure/api-management/api-management-key-concepts) sits in front of the MCP Servers — handling JWT validation, tenant routing, and rate limiting. Internal traffic within AKS bypasses APIM. See `python-old/mcp/apim_inbound_policy.xml` for the reference policy.
+For external access (partner integrations, multi-tenant scenarios), [Azure API Management](https://learn.microsoft.com/en-us/azure/api-management/api-management-key-concepts) sits in front of the MCP Servers — handling JWT validation, tenant routing, and rate limiting. Internal traffic within AKS bypasses APIM.
 
 ### Workflow orchestration patterns
 
@@ -229,7 +226,7 @@ User ↔ Manager → Specialist A
                → Specialist C
 ```
 
-- **Agents used:** ManagerAgent + CrmBillingAgent, ProductPromotionsAgent, SecurityAgent (from shared library)
+- **Agents used:** ManagerAgent + CustomerOrdersAgent, ProductCatalogAgent, ProductImagesAgent (from shared library)
 - **When to use:** Complex multi-domain queries requiring synthesis and planning
 - **LLM calls per turn:** 3–10+ (manager + specialists + replanning)
 - **Docs:** [.NET AI — Agents (Magentic)](https://learn.microsoft.com/en-us/dotnet/ai/conceptual/agents)
@@ -250,15 +247,13 @@ User ↔ Manager → Specialist A
 | Pod | Type | Connects to |
 |---|---|---|
 | **Blazor UI** | Frontend | BFF (data views), Orchestration pods (chat) |
-| **BFF** | Aggregation | CRM API, Billing API, Product API, Security API |
-| **CRM API** | Domain API | Operational Cosmos DB (Customers, Subscriptions, etc.) |
-| **Billing API** | Domain API | Operational Cosmos DB (Invoices, Payments) |
-| **Product API** | Domain API | Operational Cosmos DB (Products, Promotions, Orders) |
-| **Security API** | Domain API | Operational Cosmos DB (SecurityLogs) |
-| **MCP: CRM** | Tool server | CRM API |
-| **MCP: Billing** | Tool server | Billing API |
-| **MCP: Product** | Tool server | Product API |
-| **MCP: Security** | Tool server | Security API |
+| **BFF** | Aggregation | Customer & Orders API, Product Catalog API, Product Images API |
+| **Customer & Orders API** | Domain API | Operational Cosmos DB (Customers, Orders, OrderItems, SupportTickets) |
+| **Product Catalog API** | Domain API | Operational Cosmos DB (Products, Promotions) |
+| **Product Images API** | Domain API | Azure Blob Storage (product-images container) |
+| **MCP: Customer & Orders** | Tool server | Customer & Orders API |
+| **MCP: Product Catalog** | Tool server | Product Catalog API |
+| **MCP: Product Images** | Tool server | Product Images API |
 | **MCP: Knowledge (RAG)** | Tool server | Knowledge Cosmos DB + Embedding Model (direct) |
 | **Orch: Single Agent** | Agent pattern | All MCP servers, Azure OpenAI, Agents Cosmos DB |
 | **Orch: Reflection** | Agent pattern | All MCP servers, Azure OpenAI, Agents Cosmos DB |
@@ -274,6 +269,10 @@ CSV files in `data/contoso-crm/` are parsed by the seed tool and upserted into t
 #### Unstructured data (SharePoint → Knowledge Cosmos DB)
 
 PDF documents in `data/contoso-sharepoint/` are processed by the seed tool: text extraction → chunking → embedding via `text-embedding-ada-002` → upserted into the **Knowledge** Cosmos DB account with vector indexing (diskANN, cosine distance, 1536 dimensions). Agents search this via the Knowledge MCP Server which performs the compound operation: embed user query → `VectorDistance` search → return relevant chunks for the LLM to ground its response (RAG pattern).
+
+#### Product images (Azure Blob Storage)
+
+Product images in `data/contoso-images/` are uploaded to an Azure Blob Storage `product-images` container during seeding. Agents access these via the Product Images MCP Server, which generates SAS-signed URLs for individual product photos.
 
 See [data/README.md](data/README.md) for the complete data architecture, seeding process, and Cosmos DB container mapping.
 
@@ -320,8 +319,9 @@ See [infra/README.md](infra/README.md) for setup instructions, Terraform module 
 
 data/
   README.md                       → Data architecture and seeding guide
-  contoso-crm/                    → Simulated CRM export (CSV)
+  contoso-crm/                    → Simulated store data export (CSV)
   contoso-sharepoint/             → Simulated SharePoint docs (TXT + PDF)
+  contoso-images/                 → Product images (uploaded to Blob Storage)
 
 docs/
   architecture.drawio             → Editable architecture diagram (draw.io)
@@ -338,20 +338,18 @@ src/
   appsettings.json                → Shared app settings (gitignored, populated by config-sync)
   config-sync/                    → Tool: pulls Key Vault secrets into appsettings.json
   simple-agent/                   → Lab 1: validate infrastructure setup
-  seed-data/                      → Lab 2: seed Cosmos DB with CRM + vectorized docs (RAG)
+  seed-data/                      → Lab 2: seed Cosmos DB with store data + vectorized docs (RAG)
   agents/                         → Shared agent definitions library
   apis/
-    crm-api/                      → CRM domain API
-    billing-api/                  → Billing domain API
-    product-api/                  → Product domain API
-    security-api/                 → Security domain API
+    customer-orders-api/          → Customer & Orders domain API
+    product-catalog-api/          → Product Catalog domain API
+    product-images-api/           → Product Images domain API (Blob Storage)
     bff/                          → Backend for Frontend (UI aggregation)
     shared/                       → Shared models and interfaces
   mcp-servers/
-    mcp-crm/                      → MCP → CRM API
-    mcp-billing/                  → MCP → Billing API
-    mcp-product/                  → MCP → Product API
-    mcp-security/                 → MCP → Security API
+    mcp-customer-orders/          → MCP → Customer & Orders API
+    mcp-product-catalog/          → MCP → Product Catalog API
+    mcp-product-images/           → MCP → Product Images API (Blob Storage)
     mcp-knowledge/                → MCP → Cosmos DB Knowledge + Embedding (direct)
   orchestrations/
     single-agent/                 → Single agent orchestration
@@ -381,4 +379,3 @@ After infrastructure is deployed, sync secrets from Key Vault to your local conf
 
 - Provider versions are pinned in `infra/terraform/providers.tf`.
 - `terraform.tfvars`, `backend.hcl`, and `appsettings.json` are gitignored.
-- This project is a .NET rewrite of the Python prototype in `python-old/`. The original code serves as a reference for agent patterns, MCP tool definitions, and data architecture but is not used at runtime.

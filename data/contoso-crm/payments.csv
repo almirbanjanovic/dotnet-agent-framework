@@ -1,4 +1,0 @@
-id,invoice_id,payment_date,amount,method,status
-1,2,2025-03-06,50.00,credit_card,partial
-2,3,2025-02-06,95.50,credit_card,failed
-3,3,2025-02-07,95.50,credit_card,failed

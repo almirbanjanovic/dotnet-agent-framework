@@ -1,0 +1,54 @@
+Loyalty Program Terms
+Contoso Outdoors — Trail Rewards Program
+
+Effective Date: January 1, 2026
+
+1. Overview
+
+The Trail Rewards Program is Contoso Outdoors' loyalty program. Members earn points on every purchase and unlock tier-based benefits as they shop. Membership is free and automatic when you create a Contoso Outdoors account.
+
+2. Earning Points
+
+- Members earn 1 point per $1 spent on eligible purchases
+- Bonus point events may offer 2x or 3x points on select categories
+- Points are credited to your account within 24 hours of order delivery
+- Points are not earned on gift card purchases, shipping fees, or taxes
+- Returned items result in deduction of the associated points
+
+3. Loyalty Tiers
+
+Tier status is determined by total points earned in a rolling 12-month period:
+
+| Tier | Points Required | Benefits |
+|------|----------------|----------|
+| Bronze | 0 - 499 | Earn 1 pt/$1, access to member-only promotions, birthday discount (5%) |
+| Silver | 500 - 1,499 | All Bronze benefits + free standard shipping, early access to sales, 10% birthday discount |
+| Gold | 1,500 - 3,999 | All Silver benefits + free expedited shipping, exclusive Gold promotions, 15% birthday discount |
+| Platinum | 4,000+ | All Gold benefits + free overnight shipping, 20% birthday discount, dedicated support line, annual gear credit ($50) |
+
+4. Tier Evaluation
+
+- Tier status is evaluated on a rolling 12-month basis
+- If a member's points drop below their current tier threshold, they have a 3-month grace period before being moved to the lower tier
+- Tier upgrades take effect immediately upon reaching the qualifying threshold
+
+5. Redeeming Points
+
+- Points can be redeemed for discounts on future purchases
+- 100 points = $5 off
+- Minimum redemption: 100 points
+- Points expire 24 months after they are earned if not redeemed
+- Points cannot be transferred between accounts or converted to cash
+
+6. Promotion Eligibility
+
+Many promotions have a minimum loyalty tier requirement. When a promotion lists a minimum tier (e.g., "Silver and above"), only members at that tier or higher are eligible. The agent should check the customer's loyalty tier against the promotion's minimum tier requirement.
+
+7. Tier Hierarchy for Eligibility
+
+When checking promotion eligibility, the tier hierarchy is:
+Bronze < Silver < Gold < Platinum
+
+A customer qualifies for a promotion if their tier is equal to or higher than the promotion's minimum tier. For example:
+- A Gold member qualifies for promotions requiring Bronze, Silver, or Gold
+- A Bronze member only qualifies for promotions requiring Bronze

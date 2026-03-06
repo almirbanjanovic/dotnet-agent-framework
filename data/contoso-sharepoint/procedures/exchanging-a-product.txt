@@ -1,0 +1,59 @@
+Exchanging a Product
+Contoso Outdoors — Internal Procedure
+
+This procedure covers processing an exchange when a customer wants a different size, color, or variant of a product they have already received.
+
+1. Exchange Eligibility
+
+Exchanges follow the same eligibility rules as returns:
+   - Within 30 calendar days of delivery (or extended holiday window)
+   - Item must be unused, with tags, in original packaging
+   - Non-returnable items are also non-exchangeable
+
+2. Stock Check
+
+Before proceeding with an exchange:
+   - Look up the desired replacement item (size, color, variant)
+   - Check if the item is in stock
+   - If the item is out of stock, inform the customer and offer alternatives:
+     a. Wait for restock (provide estimated date if available)
+     b. Choose a different product
+     c. Process as a standard return for refund instead
+
+3. Processing the Exchange
+
+Option A — Ship First (preferred for in-stock items):
+   1. Place a new order for the replacement item at no charge
+   2. Generate a prepaid return label for the original item
+   3. Ship the replacement with standard shipping (or expedited for Gold/Platinum members)
+   4. The customer has 14 days to return the original item using the prepaid label
+
+Option B — Return First:
+   1. Generate a prepaid return label
+   2. Once the original item is received and passes inspection, ship the replacement
+   3. Use this option when the replacement item is different in price
+
+4. Price Differences
+
+   - If the replacement is the same price: no additional charge
+   - If the replacement is more expensive: charge the difference to the customer's original payment method
+   - If the replacement is less expensive: refund the difference to the original payment method
+
+5. Create Support Ticket
+
+   - Create a support ticket with category "return" (exchanges are tracked as returns)
+   - Note in the description that this is an exchange, not a refund
+   - Include the original order number, the item being returned, and the replacement item details
+
+6. Sizing Exchanges
+
+For footwear and clothing size exchanges:
+   - Refer the customer to the Boot Sizing Guide or Layering Guide as appropriate
+   - Ask clarifying questions about fit issues (too tight, too long, too narrow) to recommend the correct size
+   - If the customer has exchanged the same item more than once, suggest they visit a physical store for fitting (if applicable)
+
+7. Follow-Up
+
+   - Send tracking information for the replacement shipment
+   - Follow up after delivery to confirm the exchange resolved the issue
+   - Close the support ticket once confirmed

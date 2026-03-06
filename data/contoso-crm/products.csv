@@ -1,11 +1,16 @@
-id,name,category,description,monthly_fee,speed_tier,data_cap_gb,features,active
-1,Fiber Internet - Basic,internet,100 Mbps fiber internet for basic needs,49.99,100Mbps,500,"WiFi Router, 24/7 Support",true
-2,Fiber Internet - Pro,internet,500 Mbps fiber internet for power users,79.99,500Mbps,1000,"WiFi 6 Router, 24/7 Priority Support, Static IP",true
-3,Fiber Internet - Ultimate,internet,1 Gbps fiber internet - no limits,119.99,1Gbps,,-1,"WiFi 6E Router, 24/7 VIP Support, Static IP, Gaming Priority",true
-4,Mobile Plan - Essential,mobile,5GB data with unlimited calls/texts,29.99,,5,"Unlimited Calls, Unlimited Texts, 5G Access",true
-5,Mobile Plan - Premium,mobile,Unlimited data with premium features,59.99,,-1,"Unlimited Data, International Roaming, 5G Priority, Hotspot 50GB",true
-6,TV Streaming - Basic,tv,50+ channels streaming package,34.99,,,"50+ Channels, 2 Screens, 7-Day Replay",true
-7,TV Streaming - Premium,tv,150+ channels with sports and movies,64.99,,,"150+ Channels, 4 Screens, 30-Day Replay, Sports Package, Movie Channels",true
-8,Home Security - Basic,security,Basic home security monitoring,19.99,,,"24/7 Monitoring, 2 Sensors, Mobile App",true
-9,Bundle - Family Complete,bundle,Internet Pro + TV Premium + 2 Mobile lines,199.99,,,"500Mbps Internet, 150+ TV Channels, 2 Unlimited Mobile Lines, 20% Discount",true
-10,Business Internet - Enterprise,business,Dedicated fiber for business,299.99,10Gbps,,"Dedicated Line, SLA 99.99%, 24/7 Business Support, Static IP Block",true
+id,name,category,description,price,in_stock,rating,weight_kg,image_filename
+P001,TrailBlazer Hiking Boots,footwear,"Waterproof leather hiking boots with Vibram outsole. Ankle support and cushioned midsole for all-day comfort on rugged trails.",189.99,true,4.6,0.92,trailblazer-hiking-boots.jpg
+P002,Summit Approach Shoes,footwear,"Lightweight approach shoes with sticky rubber sole. Ideal for scrambling and technical approaches.",129.99,true,4.3,0.68,summit-approach-shoes.jpg
+P003,Alpine Summit Jacket,clothing,"3-layer waterproof breathable jacket with fully sealed seams. Adjustable hood, pit zips, and internal chest pocket.",279.99,true,4.7,0.45,alpine-summit-jacket.jpg
+P004,Waterproof Rain Shell,clothing,"Lightweight packable rain jacket. 2.5-layer construction with adjustable hood and elastic cuffs.",129.99,true,4.2,0.28,waterproof-rain-shell.jpg
+P005,Basecamp 4P Tent,tents,"4-person 3-season tent with full rainfly and two vestibules. Freestanding design with aluminum poles. 5-minute setup.",349.99,true,4.5,3.20,basecamp-4p-tent.jpg
+P006,Ridgeline 65L Backpack,backpacks,"65-liter backpacking pack with adjustable torso length and ventilated back panel. Includes rain cover.",249.99,true,4.4,1.80,ridgeline-65l-backpack.jpg
+P007,Ultralight 2P Tent,tents,"2-person ultralight tent weighing just 1.2kg. Silnylon fly with single pole design. Best for thru-hikers and minimalist campers.",549.99,false,4.8,1.20,ultralight-2p-tent.jpg
+P008,Summit Daypack 30L,backpacks,"Versatile 30-liter daypack with hydration sleeve and trekking pole attachments. Breathable mesh back panel.",129.99,true,4.1,0.75,summit-daypack-30l.jpg
+P009,Camp Lantern LED,accessories,"Rechargeable LED lantern with 3 brightness settings. 300 lumens, 40-hour battery life. Collapsible and waterproof.",39.99,true,4.3,0.22,camp-lantern-led.jpg
+P010,Trail Kitchen Stove Set,cooking,"Compact backpacking stove with integrated pot system. Boils 1L in 3 minutes. Includes pot, lid, and insulated cozy.",89.99,true,4.5,0.41,trail-kitchen-stove.jpg
+P011,Hydration Bladder 3L,accessories,"3-liter hydration reservoir with quick-disconnect hose and wide mouth opening for easy filling and cleaning.",34.99,true,4.0,0.18,hydration-bladder-3l.jpg
+P012,Merino Wool Base Layer Top,clothing,"Lightweight merino wool long-sleeve top. Temperature regulating and odor resistant. UPF 30 sun protection.",79.50,true,4.6,0.20,merino-base-layer-top.jpg
+P013,Merino Wool Base Layer Bottom,clothing,"Lightweight merino wool leggings. Flatlock seams prevent chafing. Ideal for hiking, skiing, and cold weather activities.",55.00,true,4.5,0.18,merino-base-layer-bottom.jpg
+P014,Trekking Poles (Pair),accessories,"Adjustable aluminum trekking poles with cork grips and carbide tips. Collapses to 65cm for packing.",49.99,true,4.2,0.48,trekking-poles.jpg
+P015,Quick-Dry Hiking Shorts,clothing,"Lightweight nylon hiking shorts with UPF 50 protection. Zippered pockets and gusseted crotch for mobility.",45.00,true,4.1,0.18,quick-dry-hiking-shorts.jpg

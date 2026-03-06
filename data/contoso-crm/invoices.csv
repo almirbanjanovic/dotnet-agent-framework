@@ -1,5 +1,0 @@
-id,subscription_id,invoice_date,due_date,amount,description
-1,1,2025-02-01,2025-02-16,60.00,Standard monthly charge - Fiber Internet Pro
-2,1,2025-03-02,2025-03-17,150.00,Monthly charge plus data overage (12GB over 10GB cap)
-3,8,2025-01-22,2025-02-06,95.50,Monthly internet fee - Fiber Internet Pro
-4,9,2025-03-02,2025-03-17,150.00,Base plan plus 12GB data overage charges

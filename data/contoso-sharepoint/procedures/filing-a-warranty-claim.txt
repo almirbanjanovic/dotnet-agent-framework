@@ -1,0 +1,72 @@
+Filing a Warranty Claim
+Contoso Outdoors — Internal Procedure
+
+This procedure outlines how to process a warranty claim for a defective product.
+
+1. Initial Assessment
+
+When a customer contacts us about a potentially defective product:
+
+a. Gather Information
+   - Order number and purchase date
+   - Product name and description of the defect
+   - Ask the customer to provide photos of the defect
+   - Ask how the item was used (to determine normal use vs. misuse)
+
+b. Determine Warranty Type
+   - Contoso Outdoors brand products: 2-year limited warranty from purchase date
+   - Third-party brand products: Refer to manufacturer warranty period
+   - If outside the warranty period, inform the customer and offer alternative options (repair services, discount on replacement)
+
+2. Photo Review
+
+Review the customer's photos to determine:
+   - Is this a manufacturing defect? (seam failure, zipper malfunction, delamination, broken hardware)
+   - Is this wear and tear? (fading, abrasion, pilling — not covered)
+   - Is this damage from misuse? (cuts, burns, improper washing — not covered)
+
+If unclear from photos, request the item be sent in for inspection.
+
+3. Create Support Ticket
+
+   - Create a support ticket with category "product-issue"
+   - Set priority to "high" for safety-related defects (e.g., tent pole failure, buckle failure on harness)
+   - Set priority to "medium" for functional defects (zipper, seam, waterproofing failure)
+   - Include photos and the customer's description in the ticket
+
+4. Claim Decision
+
+Within 3 business days of receiving the claim (or the physical item if inspection is needed):
+
+   - APPROVED: Proceed to resolution (step 5)
+   - DENIED: Contact the customer with explanation. Offer a discount on a replacement as a goodwill gesture.
+
+5. Resolution for Approved Claims
+
+Offer the customer one of the following, in this order of preference:
+
+a. Replacement
+   - Same product, same size/color if in stock
+   - If the original is out of stock or discontinued, offer a comparable replacement
+   - Ship the replacement with expedited shipping at no cost
+
+b. Store Credit
+   - Issue store credit for the original purchase price
+   - Credit does not expire
+   - Use when no suitable replacement is available
+
+c. Repair (tents and backpacks only)
+   - Offer to repair the defective item if feasible
+   - Repairs typically take 2-4 weeks
+   - Ship a prepaid label for the customer to send the item
+
+6. Return of Defective Item
+
+   - For replacements and store credit, the customer must return the defective item
+   - Generate a prepaid shipping label
+   - In some cases (low-value items under $30), waive the return requirement
+
+7. Documentation
+
+   - Update the support ticket with the resolution and outcome
+   - Close the ticket once the replacement is shipped or credit is issued
