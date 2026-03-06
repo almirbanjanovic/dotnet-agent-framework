@@ -21,15 +21,21 @@ terraform output keyvault_uri
 
 This populates `src/appsettings.json` (gitignored) with all the values your apps need:
 
-| Key                                  | Description                | Populated from Key Vault secret     |
-|--------------------------------------|----------------------------|-------------------------------------|
-| `AZURE_OPENAI_ENDPOINT`              | Azure OpenAI endpoint      | `AZURE-OPENAI-ENDPOINT`             |
-| `AZURE_OPENAI_DEPLOYMENT_NAME`       | Chat model deployment name | `AZURE-OPENAI-DEPLOYMENT-NAME`      |
-| `AZURE_OPENAI_API_KEY`               | API key for authentication | `AZURE-OPENAI-API-KEY`              |
-| `AZURE_OPENAI_EMBEDDING_DEPLOYMENT`  | Embedding model name       | `AZURE-OPENAI-EMBEDDING-DEPLOYMENT` |
-| `COSMOSDB_ENDPOINT`                  | Cosmos DB endpoint URL     | `COSMOSDB-ENDPOINT`                 |
-| `COSMOSDB_KEY`                       | Cosmos DB primary key      | `COSMOSDB-KEY`                      |
-| `COSMOSDB_DATABASE`                  | Cosmos DB database name    | `COSMOSDB-DATABASE`                 |
+| Key                                  | Description                          | Populated from Key Vault secret        |
+|--------------------------------------|--------------------------------------|----------------------------------------|
+| `AZURE_OPENAI_ENDPOINT`              | Azure OpenAI endpoint                | `AZURE-OPENAI-ENDPOINT`               |
+| `AZURE_OPENAI_DEPLOYMENT_NAME`       | Chat model deployment name           | `AZURE-OPENAI-DEPLOYMENT-NAME`        |
+| `AZURE_OPENAI_API_KEY`               | API key for authentication           | `AZURE-OPENAI-API-KEY`                |
+| `AZURE_OPENAI_EMBEDDING_DEPLOYMENT`  | Embedding model name                 | `AZURE-OPENAI-EMBEDDING-DEPLOYMENT`   |
+| `COSMOSDB_OPERATIONAL_ENDPOINT`      | Operational Cosmos DB endpoint       | `COSMOSDB-OPERATIONAL-ENDPOINT`       |
+| `COSMOSDB_OPERATIONAL_KEY`           | Operational Cosmos DB key            | `COSMOSDB-OPERATIONAL-KEY`            |
+| `COSMOSDB_OPERATIONAL_DATABASE`      | Operational database name            | `COSMOSDB-OPERATIONAL-DATABASE`       |
+| `COSMOSDB_KNOWLEDGE_ENDPOINT`        | Knowledge (RAG) Cosmos DB endpoint   | `COSMOSDB-KNOWLEDGE-ENDPOINT`         |
+| `COSMOSDB_KNOWLEDGE_KEY`             | Knowledge Cosmos DB key              | `COSMOSDB-KNOWLEDGE-KEY`              |
+| `COSMOSDB_KNOWLEDGE_DATABASE`        | Knowledge database name              | `COSMOSDB-KNOWLEDGE-DATABASE`         |
+| `COSMOSDB_AGENTS_ENDPOINT`           | Agents Cosmos DB endpoint            | `COSMOSDB-AGENTS-ENDPOINT`            |
+| `COSMOSDB_AGENTS_KEY`                | Agents Cosmos DB key                 | `COSMOSDB-AGENTS-KEY`                 |
+| `COSMOSDB_AGENTS_DATABASE`           | Agents database name                 | `COSMOSDB-AGENTS-DATABASE`            |
 
 The config-sync tool uses `DefaultAzureCredential` — make sure you're logged in with `az login`.
 
