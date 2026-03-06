@@ -111,7 +111,9 @@ Set all of the following under **Settings → Environments → `<environment>` �
 | `EMBEDDING_CAPACITY`             | `10`                           | Throughput capacity (TPM in thousands) for the embedding deployment |
 | `COSMOS_PROJECT_NAME`            | `dotnetagent`                  | Project name prefix for Cosmos DB resource naming |
 | `COSMOS_ITERATION`               | `001`                          | Iteration counter for Cosmos DB (separate from global to allow independent cycling) |
-| `COSMOS_DATABASE_NAME`           | `contoso`                      | Name of the Cosmos DB SQL database |
+| `COSMOS_OPERATIONAL_DATABASE_NAME` | `contoso`                    | Database name for the operational (CRM) Cosmos DB account |
+| `COSMOS_KNOWLEDGE_DATABASE_NAME` | `knowledge`                    | Database name for the knowledge (RAG) Cosmos DB account |
+| `COSMOS_AGENTS_DATABASE_NAME`    | `agents`                       | Database name for the agents (state) Cosmos DB account |
 | `COSMOS_AGENT_STATE_CONTAINER_NAME` | `workshop_agent_state_store` | Cosmos DB container for persisting agent state across sessions |
 | `ACR_PROJECT_NAME`               | `dotnetagent`                  | Project name prefix for ACR resource naming |
 | `CREATE_ACR`                     | `true`                         | Set to `false` to reference an existing ACR instead of creating one |
@@ -162,10 +164,12 @@ embedding_model_version     = "2"
 embedding_sku_name          = "Standard"
 embedding_capacity          = 10
 
-# Cosmos DB
-cosmos_project_name              = "dotnetagent"
-cosmos_iteration                 = "001"
-cosmos_database_name             = "contoso"
+# Cosmos DB (3 accounts: operational, knowledge, agents)
+cosmos_project_name               = "dotnetagent"
+cosmos_iteration                  = "001"
+cosmos_operational_database_name  = "contoso"
+cosmos_knowledge_database_name    = "knowledge"
+cosmos_agents_database_name       = "agents"
 cosmos_agent_state_container_name = "workshop_agent_state_store"
 
 # ACR
@@ -251,9 +255,15 @@ After `terraform apply`, the following outputs are displayed:
 | `openai_api_key`             | API key (dev/learning convenience)   |
 | `openai_deployment_name`     | Chat model deployment name           |
 | `embedding_deployment_name`  | Embedding model deployment name      |
-| `cosmosdb_endpoint`          | Cosmos DB endpoint                   |
-| `cosmosdb_account_name`      | Cosmos DB account name               |
-| `cosmosdb_database_name`     | Cosmos DB database name              |
+| `cosmosdb_operational_endpoint` | Operational Cosmos DB endpoint    |
+| `cosmosdb_operational_account_name` | Operational Cosmos DB account name |
+| `cosmosdb_operational_database_name` | Operational database name       |
+| `cosmosdb_knowledge_endpoint` | Knowledge Cosmos DB endpoint       |
+| `cosmosdb_knowledge_account_name` | Knowledge Cosmos DB account name |
+| `cosmosdb_knowledge_database_name` | Knowledge database name         |
+| `cosmosdb_agents_endpoint`   | Agents Cosmos DB endpoint            |
+| `cosmosdb_agents_account_name` | Agents Cosmos DB account name      |
+| `cosmosdb_agents_database_name` | Agents database name               |
 | `acr_name`                   | Container registry name              |
 | `acr_login_server`           | ACR login server URL                 |
 | `aks_cluster_name`           | AKS cluster name                     |

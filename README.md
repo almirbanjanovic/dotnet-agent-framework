@@ -1,12 +1,294 @@
 # dotnet-agent-framework
 
-.NET Agent Framework tutorials based on [Microsoft Learn](https://learn.microsoft.com/en-us/agent-framework/overview/?pivots=programming-language-csharp).
+.NET Agent Framework tutorials for building agentic AI systems, based on [Microsoft Agent Framework](https://learn.microsoft.com/en-us/agent-framework/overview/?pivots=programming-language-csharp).
 
 ## Architecture
 
-[**Open architecture diagram in draw.io →**](https://app.diagrams.net/#Uhttps%3A%2F%2Fraw.githubusercontent.com%2Fabanjanovic%2Fdotnet-agent-framework%2Fmain%2Fdocs%2Farchitecture.drawio)
+![Architecture Diagram](docs/architecture.png)
 
-The diagram shows: Azure AI Foundry (chat + embedding models) → AKS → 3 Cosmos DB accounts (Operational, Knowledge/RAG, Agents) + ACR, Key Vault, and managed identities with RBAC.
+*Edit the source: [docs/architecture.drawio](docs/architecture.drawio) — open in [draw.io](https://app.diagrams.net)*
+
+### Overview
+
+This system is a .NET rewrite of the original Python prototype (`python-old/`). It implements a Contoso Telecom customer service platform where AI agents handle customer inquiries using structured CRM data and unstructured knowledge documents (via RAG). The architecture follows a **hybrid data access pattern** — shared REST APIs where multiple consumers exist, direct database access where only one consumer exists.
+
+```text
+                           ┌───────────────────────────────────────────────────────────┐
+                           │  AKS Cluster                                             │
+                           │                                                           │
+ User ──►  Blazor UI  ────┤──── (chat) ──────► Orchestration Pods ◄── Agent           │
+           │               │                     │             │       Definitions     │
+           │               │                     │             │       (shared lib)    │
+           │ (tables,      │                     │             ▼                       │
+           │  dashboards,  │                     │        Azure OpenAI                 │
+           │  admin)       │                     │        (chat completions)           │
+           │               │                     ▼                                     │
+           │               │               MCP Servers                                │
+           │               │        ┌────────────┼────────────┐                       │
+           │               │        │            │            │                       │
+           │               │        ▼            ▼            ▼                       │
+           │               │   CRM/Billing   Product    Security                      │
+           │               │   MCP Server    MCP Server  MCP Server                   │
+           │               │        │            │            │                       │
+           │               │        ▼            ▼            ▼                       │
+           └───────────────┤──► Backend REST APIs ◄───────────┘                       │
+                           │        │                                                  │
+                           │        │       Knowledge (RAG)                            │
+                           │        │       MCP Server ──────► Embedding Model         │
+                           │        │            │                                     │
+                           └────────┼────────────┼─────────────────────────────────────┘
+                                    │            │
+                        ┌───────────┘            └──────────┐
+                        ▼                                   ▼
+                  Cosmos DB                           Cosmos DB
+                  Operational                         Knowledge
+                  (CRM data)                          (RAG vectors)
+
+                                    Cosmos DB
+                                    Agents
+                                    (agent state — written
+                                     directly by orchestrator)
+```
+
+### Architectural decisions
+
+#### 1. Hybrid data access — REST APIs where shared, direct where exclusive
+
+The system uses a **hybrid pattern** rather than forcing all traffic through REST APIs or allowing everything to access databases directly. The deciding principle: **use shared REST APIs when multiple consumers exist; go direct when only one consumer exists.**
+
+| Data Store | UI needs it? | Agents need it? | Access pattern | Why |
+|------------|:---:|:---:|---|---|
+| **Operational** (CRM) | ✅ | ✅ | Shared REST APIs | Both UI (tables, dashboards) and agents (MCP tools) need the same data. A shared API prevents duplicating data access logic, validation, and business rules. |
+| **Knowledge** (RAG vectors) | ❌ | ✅ | MCP → Cosmos DB direct | Only agents perform vector similarity search. This is a compound AI operation (embed query → `VectorDistance` search → return chunks) that no other consumer needs. Routing it through a REST API adds a pointless hop. |
+| **Knowledge** (doc metadata) | Maybe | ❌ | REST API endpoint | If an admin UI needs to browse/manage documents (titles, categories), that's simple CRUD — add a REST endpoint. But vector search remains agent-only. |
+| **Agents** (state) | ❌ | ✅ | Orchestrator → Cosmos DB direct | Internal conversation history and agent memory. No other consumer needs this. |
+
+**Why not "everything through REST APIs"?** The Blazor UI needs direct data access for tables, dashboards, and admin views — not everything flows through an agent. If MCP Servers also access Cosmos DB directly for CRM data, we'd duplicate repositories, validation, and business rules in two places. But forcing the Knowledge MCP Server through a REST API for an operation only agents perform is over-engineering — adding a network hop and an extra service layer with zero consumers besides the MCP Server itself.
+
+**The MCP specification is agnostic on this.** MCP tools can "[query databases, call APIs, or perform computations](https://modelcontextprotocol.io/specification/2025-03-26)" — the spec doesn't prescribe one pattern over the other. The official [MCP reference servers](https://github.com/modelcontextprotocol/servers) include both: `server-sqlite` (direct DB) and `server-github` (calls REST API).
+
+#### 2. MCP Servers are thin protocol adapters
+
+Each MCP Server exposes [tools](https://modelcontextprotocol.io/docs/concepts/tools) with names, descriptions, and schemas that the LLM uses for function calling. The CRM/Product/Security MCP Servers translate between MCP protocol and HTTP calls to the Backend REST APIs. The Knowledge MCP Server translates between MCP protocol and Cosmos DB + Embedding Model calls. None of them contain business logic — that lives in the Backend REST APIs (for shared data) or in the MCP tool handler itself (for the RAG compound operation).
+
+#### 3. Four domain-specific MCP Servers
+
+Tools are grouped by domain boundary:
+
+| MCP Server | Tools | Access pattern |
+|------------|-------|----------------|
+| **CRM & Billing** | `get_all_customers`, `get_customer_detail`, `get_subscription_detail`, `get_billing_summary`, `get_invoice_payments`, `pay_invoice`, `get_data_usage`, `update_subscription`, `get_customer_orders`, `get_support_tickets`, `create_support_ticket` | → REST APIs → Operational Cosmos DB |
+| **Product & Promotions** | `get_products`, `get_product_detail`, `get_promotions`, `get_eligible_promotions` | → REST APIs → Operational Cosmos DB |
+| **Security** | `get_security_logs`, `unlock_account` | → REST APIs → Operational Cosmos DB |
+| **Knowledge (RAG)** | `search_knowledge_base` | → Knowledge Cosmos DB direct + Embedding Model |
+
+This separation enables per-domain scaling, independent deployment, and fine-grained [RBAC](https://learn.microsoft.com/en-us/azure/role-based-access-control/overview) — the Security MCP Server can have stricter access controls than the Product MCP Server.
+
+#### 4. Agent definitions are a shared library, not separate deployments
+
+In [Microsoft Agent Framework](https://learn.microsoft.com/en-us/agent-framework/agents/), an agent is an **in-process object** — a configuration of (LLM client + system prompt + tools). Creating an agent is a few lines of code:
+
+```csharp
+AIAgent agent = new AzureOpenAIClient(...)
+    .GetChatClient("gpt-4.1")
+    .AsAIAgent(
+        instructions: "You are a CRM and billing specialist...",
+        tools: [.. crmTools]);
+```
+
+Agents are not deployed as separate pods. They are instantiated inside whichever orchestration needs them. A `CrmBillingAgent` factory method returns the same agent configuration whether it's used in a single-agent scenario, a handoff pattern, or a magentic group.
+
+```text
+src/
+  agents/                          ← SHARED CLASS LIBRARY (not a pod)
+    AgentDefinitions.cs
+    CrmBillingAgent                   → system prompt + CRM/Billing MCP tools
+    ProductPromotionsAgent            → system prompt + Product MCP tools
+    SecurityAgent                     → system prompt + Security MCP tools
+    KnowledgeAgent                    → system prompt + Knowledge MCP tools
+    ReviewerAgent                     → system prompt + quality review prompt
+    ManagerAgent                      → system prompt + no tools (orchestrates only)
+
+  orchestrations/                  ← DEPLOYABLE PODS (each references shared library)
+    single-agent/                  → Creates 1 agent with ALL tools, exposes HTTP endpoint
+    reflection/                    → Creates Primary + Reviewer in-process, exposes endpoint
+    handoff/                       → Creates intent classifier + 3 specialists, exposes endpoint
+    magentic/                      → Creates Manager + 3 specialists, exposes endpoint
+```
+
+This means:
+
+- Agent configurations are **defined once, reused across patterns** — no duplication.
+- Each orchestration pod references the shared library, instantiates the agents it needs, and composes them using the appropriate workflow pattern.
+- Adding a new pattern means adding a new orchestration pod, not redefining agents.
+
+#### 5. Agent orchestrator owns agent state
+
+Each orchestration pod writes directly to the **Agents** Cosmos DB account for conversation history and agent memory. This state is owned by the orchestration layer — it doesn't belong in the shared REST API surface because no other consumer needs it.
+
+#### 6. APIM as an optional external gateway
+
+For external access (partner integrations, multi-tenant scenarios), [Azure API Management](https://learn.microsoft.com/en-us/azure/api-management/api-management-key-concepts) sits in front of the MCP Servers — handling JWT validation, tenant routing, and rate limiting. Internal traffic within AKS bypasses APIM. See `python-old/mcp/apim_inbound_policy.xml` for the reference policy.
+
+### Workflow orchestration patterns
+
+The same agent definitions can be composed into different orchestration patterns. [Microsoft Agent Framework](https://learn.microsoft.com/en-us/agent-framework/overview/?pivots=programming-language-csharp) supports both autonomous [agents](https://learn.microsoft.com/en-us/agent-framework/agents/) (LLM-driven steps) and explicit [workflows](https://learn.microsoft.com/en-us/agent-framework/workflows/) (developer-defined execution paths). Each pattern reuses the same MCP tools and Backend REST APIs — the difference is how agents are composed and coordinated.
+
+Each orchestration pattern is deployed as a separate pod in AKS with its own HTTP endpoint. The Blazor UI routes to the appropriate endpoint based on user selection.
+
+#### Single agent
+
+One agent with access to all MCP tools handles the entire conversation.
+
+```text
+User ↔ Agent (all tools) ↔ LLM
+```
+
+- **Agents used:** 1 (all tools via all MCP servers)
+- **When to use:** Simple Q&A, single-domain tasks, prototyping
+- **LLM calls per turn:** 1
+- **Docs:** [Agent Framework — Agents](https://learn.microsoft.com/en-us/agent-framework/agents/)
+
+#### Sequential
+
+Agents process tasks one after another. The output of one agent becomes the input of the next.
+
+```text
+User → Agent A → Agent B → Agent C → Result
+```
+
+- **Agents used:** N (each with domain-specific tools)
+- **When to use:** Multi-step processing, data enrichment, review chains
+- **LLM calls per turn:** N (one per agent)
+- **Docs:** [Agent Framework — Workflows](https://learn.microsoft.com/en-us/agent-framework/workflows/)
+
+#### Reflection
+
+A primary agent generates a response, then a reviewer agent evaluates quality. If the reviewer rejects, the primary refines. Loops up to a configurable maximum.
+
+```text
+User → Primary Agent → Reviewer → [APPROVE or refine] → Response
+```
+
+- **Agents used:** Primary (domain tools) + Reviewer (no tools, quality prompt)
+- **When to use:** Quality assurance, compliance checking, high-stakes responses
+- **LLM calls per turn:** 2–4 (depends on refinement rounds)
+- **Docs:** [Agent Framework — Workflows](https://learn.microsoft.com/en-us/agent-framework/workflows/)
+
+#### Concurrent (fan-out / fan-in)
+
+Multiple agents process the same input in parallel. Results are aggregated.
+
+```text
+User → [Agent A, Agent B, Agent C] → Aggregator → Result
+```
+
+- **Agents used:** N specialist agents + 1 aggregator
+- **When to use:** Multi-perspective analysis, parallel research, consensus
+- **LLM calls per turn:** N (parallel) + 1 (aggregator)
+- **Docs:** [Agent Framework — Workflows](https://learn.microsoft.com/en-us/agent-framework/workflows/)
+
+#### Handoff
+
+An intent classifier routes the conversation to a domain specialist. Specialists communicate directly with the user. When a specialist detects an out-of-domain request, it triggers a handoff to another specialist. Classification is lazy — runs only on first message or handoff detection.
+
+```text
+User ↔ Intent Classifier → Specialist A ↔ User
+                          → Specialist B ↔ User (on handoff)
+```
+
+- **Agents used:** CrmBillingAgent, ProductPromotionsAgent, SecurityAgent (from shared library)
+- **When to use:** Multi-domain customer service, clear domain boundaries
+- **LLM calls per turn:** 1–2 (specialist + optional reclassification)
+- **Docs:** [.NET AI — Agents (Handoff)](https://learn.microsoft.com/en-us/dotnet/ai/conceptual/agents)
+
+#### Magentic (group chat with orchestrator)
+
+A manager agent coordinates specialist agents. Specialists only communicate with the manager — never directly with the user. The manager plans, delegates to specialists, synthesizes responses, and delivers the final answer.
+
+```text
+User ↔ Manager → Specialist A
+               → Specialist B → Manager → Response
+               → Specialist C
+```
+
+- **Agents used:** ManagerAgent + CrmBillingAgent, ProductPromotionsAgent, SecurityAgent (from shared library)
+- **When to use:** Complex multi-domain queries requiring synthesis and planning
+- **LLM calls per turn:** 3–10+ (manager + specialists + replanning)
+- **Docs:** [.NET AI — Agents (Magentic)](https://learn.microsoft.com/en-us/dotnet/ai/conceptual/agents)
+
+#### Choosing a pattern
+
+| Consideration | Single | Sequential | Reflection | Concurrent | Handoff | Magentic |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|
+| Complexity | Low | Medium | Medium | Medium | Medium | High |
+| Latency | Low | Medium | Medium | Low | Low | High |
+| LLM cost per turn | Low | Medium | Medium | Medium | Low | High |
+| Quality control | — | — | ✅ | — | — | ✅ |
+| Multi-domain | — | — | — | — | ✅ | ✅ |
+| Parallelism | — | — | — | ✅ | — | — |
+
+### AKS pod summary
+
+| Pod | Type | Connects to |
+|-----|------|-------------|
+| **Blazor UI** | Frontend | Orchestration pods (chat), Backend REST APIs (direct data) |
+| **Backend REST APIs** | Data layer | Operational Cosmos DB |
+| **MCP: CRM & Billing** | Tool server | Backend REST APIs |
+| **MCP: Product & Promotions** | Tool server | Backend REST APIs |
+| **MCP: Security** | Tool server | Backend REST APIs |
+| **MCP: Knowledge (RAG)** | Tool server | Knowledge Cosmos DB + Embedding Model (direct) |
+| **Orch: Single Agent** | Agent pattern | All MCP servers, Azure OpenAI, Agents Cosmos DB |
+| **Orch: Reflection** | Agent pattern | All MCP servers, Azure OpenAI, Agents Cosmos DB |
+| **Orch: Handoff** | Agent pattern | All MCP servers, Azure OpenAI, Agents Cosmos DB |
+| **Orch: Magentic** | Agent pattern | All MCP servers, Azure OpenAI, Agents Cosmos DB |
+
+### Data flow
+
+#### Structured data (CRM → Operational Cosmos DB)
+
+CSV files in `data/contoso-crm/` are parsed by the seed tool and upserted into the **Operational** Cosmos DB account. No vectorization. Agents query this data via MCP tools → Backend REST APIs → Cosmos DB SQL queries. The Blazor UI queries the same data via REST APIs for tables and dashboards.
+
+#### Unstructured data (SharePoint → Knowledge Cosmos DB)
+
+PDF documents in `data/contoso-sharepoint/` are processed by the seed tool: text extraction → chunking → embedding via `text-embedding-ada-002` → upserted into the **Knowledge** Cosmos DB account with vector indexing (diskANN, cosine distance, 1536 dimensions). Agents search this via the Knowledge MCP Server which performs the compound operation: embed user query → `VectorDistance` search → return relevant chunks for the LLM to ground its response (RAG pattern).
+
+See [data/README.md](data/README.md) for the complete data architecture, seeding process, and Cosmos DB container mapping.
+
+### Azure infrastructure
+
+All infrastructure is defined as Terraform IaC in `infra/terraform/`, deployed via GitHub Actions or locally.
+
+| Resource | Purpose |
+|----------|---------|
+| **Azure AI Foundry** | Hosts AI Services account with chat model (gpt-4.1) and embedding model (text-embedding-ada-002) |
+| **Cosmos DB** (×3 accounts) | Operational (Session consistency, CRM data), Knowledge (Eventual + vector search, RAG), Agents (Eventual, agent state) |
+| **AKS** | Hosts all application pods — UI, APIs, MCP servers, orchestrations |
+| **ACR** | Container image registry |
+| **Key Vault** | Secrets management (endpoints, keys, deployment names) |
+| **Managed Identities** | RBAC for backend and kubelet workloads |
+
+See [infra/README.md](infra/README.md) for setup instructions, Terraform module structure, and CI/CD configuration.
+
+### Technology references
+
+| Topic | Link |
+|-------|------|
+| Microsoft Agent Framework | [Overview](https://learn.microsoft.com/en-us/agent-framework/overview/?pivots=programming-language-csharp) |
+| Agent Framework — Agents | [Agent types](https://learn.microsoft.com/en-us/agent-framework/agents/) |
+| Agent Framework — Tools | [Tools overview](https://learn.microsoft.com/en-us/agent-framework/agents/tools/) |
+| Agent Framework — Function tools | [Function tools](https://learn.microsoft.com/en-us/agent-framework/agents/tools/function-tools) |
+| Agent Framework — MCP integration | [Using MCP tools with agents](https://learn.microsoft.com/en-us/agent-framework/agents/tools/local-mcp-tools) |
+| Agent Framework — Workflows | [Workflows overview](https://learn.microsoft.com/en-us/agent-framework/workflows/) |
+| .NET AI concepts — Agents | [What are agents?](https://learn.microsoft.com/en-us/dotnet/ai/conceptual/agents) |
+| Model Context Protocol — Architecture | [Architecture overview](https://modelcontextprotocol.io/docs/concepts/architecture) |
+| MCP specification | [2025-03-26](https://modelcontextprotocol.io/specification/2025-03-26) |
+| MCP — Tools | [Server tools](https://modelcontextprotocol.io/specification/2025-06-18/server/tools) |
+| MCP C# SDK | [GitHub](https://github.com/modelcontextprotocol/csharp-sdk) |
+| .NET clean architecture | [Common web app architectures](https://learn.microsoft.com/en-us/dotnet/architecture/modern-web-apps-azure/common-web-application-architectures#clean-architecture) |
+| Azure Cosmos DB vector search | [Vector search overview](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/vector-search) |
+| Azure API Management | [Overview](https://learn.microsoft.com/en-us/azure/api-management/api-management-key-concepts) |
+| Terraform AzureRM provider | [Registry](https://registry.terraform.io/providers/hashicorp/azurerm/latest) |
 
 ## Repository structure
 
@@ -17,6 +299,10 @@ data/
   README.md                       → Data architecture and seeding guide
   contoso-crm/                    → Simulated CRM export (CSV)
   contoso-sharepoint/             → Simulated SharePoint docs (TXT + PDF)
+
+docs/
+  architecture.drawio             → Editable architecture diagram (draw.io)
+  architecture.png                → Rendered architecture diagram
 
 infra/
   README.md                       → Infrastructure setup guide
@@ -52,3 +338,4 @@ After infrastructure is deployed, sync secrets from Key Vault to your local conf
 
 - Provider versions are pinned in `infra/terraform/providers.tf`.
 - `terraform.tfvars`, `backend.hcl`, and `appsettings.json` are gitignored.
+- This project is a .NET rewrite of the Python prototype in `python-old/`. The original code serves as a reference for agent patterns, MCP tool definitions, and data architecture but is not used at runtime.

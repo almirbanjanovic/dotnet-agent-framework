@@ -63,18 +63,20 @@ User: "What happens if I go over my data limit?"
               │     using retrieved docs       │
               │                               │
 ┌─────────────┼───────────────────────────────┼──────────────────────┐
-│             │        Cosmos DB              │                      │
+│             │   Cosmos DB (3 accounts)      │                      │
+│             │                               │                      │
 │  ┌──────────▼───────────┐    ┌──────────────▼────────────────┐     │
-│  │  Structured Data     │    │  KnowledgeDocuments           │     │
-│  │  (Customers, Orders, │    │  (vectorized content from     │     │
-│  │   Invoices, etc.)    │    │   SharePoint PDFs)            │     │
-│  │                      │    │                               │     │
-│  │  ← queried by tools  │    │  ← 2. Vector similarity      │     │
-│  │    (SQL queries)     │    │       search (RAG retrieval)  │     │
+│  │  Operational Account │    │  Knowledge Account           │     │
+│  │  (Session consistency)│   │  (Eventual + Vector Search)  │     │
+│  │  Customers, Orders,  │    │  KnowledgeDocuments          │     │
+│  │  Invoices, etc.      │    │  (vectorized PDFs)           │     │
+│  │  ← SQL queries       │    │  ← VectorDistance (RAG)      │     │
 │  └──────────────────────┘    └───────────────────────────────┘     │
 │                                                                    │
 │  ┌──────────────────────┐                                          │
-│  │  Agent State Store   │  ← conversation memory (runtime only)   │
+│  │  Agents Account      │  ← conversation memory (runtime only)   │
+│  │  (Eventual)          │                                          │
+│  │  Agent State Store   │                                          │
 │  └──────────────────────┘                                          │
 └────────────────────────────────────────────────────────────────────┘
               ▲                               ▲
@@ -87,28 +89,28 @@ User: "What happens if I go over my data limit?"
 
 ## Data flow
 
-### Structured data (CRM → Cosmos DB)
+### Structured data (CRM → Operational Account)
 
-`contoso-crm/` simulates a CRM export — customer records, subscriptions, invoices, etc. as CSV files. The seed tool parses these and upserts them into their respective Cosmos DB containers. **No vectorization is needed.** Agents query this data using tools with standard SQL queries (e.g., "find all invoices for customer 251").
+`contoso-crm/` simulates a CRM export — customer records, subscriptions, invoices, etc. as CSV files. The seed tool parses these and upserts them into the **Operational** Cosmos DB account (Session consistency). **No vectorization is needed.** Agents query this data using tools with standard SQL queries (e.g., "find all invoices for customer 251").
 
-### Unstructured data (SharePoint → Cosmos DB with vectors)
+### Unstructured data (SharePoint → Knowledge Account)
 
-`contoso-sharepoint/` simulates a SharePoint document library — policy documents, procedures, and guides stored as PDFs (just like in a real enterprise). The seed tool:
+`contoso-sharepoint/` simulates a SharePoint document library — policy documents, procedures, and guides stored as PDFs (just like in a real enterprise). The seed tool writes to the **Knowledge** Cosmos DB account (Eventual consistency, vector search enabled):
 
 1. **Extracts text** from each PDF using a PDF reader library (e.g., PdfPig)
 2. **Chunks the text** into segments that fit within the embedding model's token limit
 3. **Generates a vector** for each chunk by sending it through the embedding model (`text-embedding-ada-002`), producing a 1536-dimensional float array
 4. **Stores each chunk** as a document in the `KnowledgeDocuments` container with its `content_vector` field
 
-The `KnowledgeDocuments` container is configured with:
+The `KnowledgeDocuments` container is configured on the **Knowledge** account with:
 - `EnableNoSQLVectorSearch` capability on the Cosmos DB account
 - A **diskANN** vector index on the `/content_vector` path
 - `cosine` distance function, `float32` data type, 1536 dimensions
 - The `/content_vector/*` path is excluded from regular indexing (it only participates in vector queries)
 
-### Agent state (runtime only)
+### Agent state (Agents Account — runtime only)
 
-The `workshop_agent_state_store` container is **not seeded** — it's populated at runtime as agents have conversations. It persists conversation history and agent memory across sessions.
+The `workshop_agent_state_store` container lives in the **Agents** Cosmos DB account (Eventual consistency). It is **not seeded** — it's populated at runtime as agents have conversations. It persists conversation history and agent memory across sessions.
 
 ## Seeding Cosmos DB
 
@@ -123,17 +125,17 @@ Before seeding, ensure:
 
 The seed tool (`src/seed-data/`) performs two distinct operations:
 
-**1. Load structured data (CRM → containers)**
+**1. Load structured data (CRM → Operational account)**
 
 ```
-contoso-crm/customers.csv  ──parse CSV──►  Cosmos DB "Customers" container
-contoso-crm/invoices.csv   ──parse CSV──►  Cosmos DB "Invoices" container
+contoso-crm/customers.csv  ──parse CSV──►  Operational / "Customers" container
+contoso-crm/invoices.csv   ──parse CSV──►  Operational / "Invoices" container
 ...etc for all 11 CSV files
 ```
 
 Each CSV row becomes a JSON document. The seed tool maps CSV column names to JSON properties and upserts into the corresponding container using the correct partition key.
 
-**2. Vectorize and load unstructured data (SharePoint → KnowledgeDocuments)**
+**2. Vectorize and load unstructured data (SharePoint → Knowledge account)**
 
 ```
 contoso-sharepoint/**/*.pdf
@@ -150,7 +152,7 @@ contoso-sharepoint/**/*.pdf
         ├──► Call embedding model (text-embedding-ada-002)
         │    → returns 1536-dim float[] vector
         │
-        └──► Upsert to Cosmos DB "KnowledgeDocuments"
+        └──► Upsert to Knowledge / "KnowledgeDocuments"
              {
                "id": "data-overage-policy-chunk-1",
                "title": "Data Overage Policy",
@@ -222,20 +224,21 @@ dotnet run
 
 ## Cosmos DB container mapping
 
-| Source | Cosmos DB container | Partition key | Vectorized |
-|--------|-------------------|---------------|------------|
-| `contoso-crm/customers.csv` | Customers | `/id` | No |
-| `contoso-crm/subscriptions.csv` | Subscriptions | `/customer_id` | No |
-| `contoso-crm/products.csv` | Products | `/category` | No |
-| `contoso-crm/promotions.csv` | Promotions | `/id` | No |
-| `contoso-crm/invoices.csv` | Invoices | `/subscription_id` | No |
-| `contoso-crm/payments.csv` | Payments | `/invoice_id` | No |
-| `contoso-crm/orders.csv` | Orders | `/customer_id` | No |
-| `contoso-crm/support-tickets.csv` | SupportTickets | `/customer_id` | No |
-| `contoso-crm/data-usage.csv` | DataUsage | `/subscription_id` | No |
-| `contoso-crm/service-incidents.csv` | ServiceIncidents | `/subscription_id` | No |
-| `contoso-crm/security-logs.csv` | SecurityLogs | `/customer_id` | No |
-| `contoso-sharepoint/**/*.pdf` | KnowledgeDocuments | `/id` | **Yes** |
+| Account | Source | Container | Partition key | Vectorized |
+|---------|--------|-----------|---------------|------------|
+| Operational | `contoso-crm/customers.csv` | Customers | `/id` | No |
+| Operational | `contoso-crm/subscriptions.csv` | Subscriptions | `/customer_id` | No |
+| Operational | `contoso-crm/products.csv` | Products | `/category` | No |
+| Operational | `contoso-crm/promotions.csv` | Promotions | `/id` | No |
+| Operational | `contoso-crm/invoices.csv` | Invoices | `/subscription_id` | No |
+| Operational | `contoso-crm/payments.csv` | Payments | `/invoice_id` | No |
+| Operational | `contoso-crm/orders.csv` | Orders | `/customer_id` | No |
+| Operational | `contoso-crm/support-tickets.csv` | SupportTickets | `/customer_id` | No |
+| Operational | `contoso-crm/data-usage.csv` | DataUsage | `/subscription_id` | No |
+| Operational | `contoso-crm/service-incidents.csv` | ServiceIncidents | `/subscription_id` | No |
+| Operational | `contoso-crm/security-logs.csv` | SecurityLogs | `/customer_id` | No |
+| Knowledge | `contoso-sharepoint/**/*.pdf` | KnowledgeDocuments | `/id` | **Yes** |
+| Agents | (runtime) | workshop_agent_state_store | `/tenant_id`, `/id` | No |
 
 ## Scenario data
 
