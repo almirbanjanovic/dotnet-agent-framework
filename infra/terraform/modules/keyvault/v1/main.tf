@@ -4,7 +4,7 @@
 # =============================================================================
 
 locals {
-  keyvault_name = "kv-${var.environment}-${var.iteration}"
+  keyvault_name = "kv-${var.environment}"
 }
 
 resource "azurerm_key_vault" "this" {
@@ -15,7 +15,7 @@ resource "azurerm_key_vault" "this" {
   sku_name            = "standard"
 
   # Use Azure RBAC for access control (no access policies)
-  enable_rbac_authorization = true
+  rbac_authorization_enabled = true
 
   soft_delete_retention_days = var.soft_delete_retention_days
   purge_protection_enabled   = var.purge_protection_enabled

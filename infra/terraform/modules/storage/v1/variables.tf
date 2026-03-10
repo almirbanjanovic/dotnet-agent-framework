@@ -18,11 +18,6 @@ variable "location" {
   type        = string
 }
 
-variable "iteration" {
-  description = "Iteration counter for naming"
-  type        = string
-}
-
 variable "account_tier" {
   description = "Storage account tier (Standard, Premium)"
   type        = string

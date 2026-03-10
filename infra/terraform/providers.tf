@@ -30,10 +30,16 @@ terraform {
 provider "azurerm" {
   features {
     key_vault {
-      purge_soft_deleted_certificates_on_destroy = true
-      recover_soft_deleted_certificates          = true
-      purge_soft_deleted_secrets_on_destroy      = true
-      recover_soft_deleted_secrets               = true
+      purge_soft_delete_on_destroy               = true
+      recover_soft_deleted_key_vaults             = true
+      purge_soft_deleted_certificates_on_destroy  = true
+      recover_soft_deleted_certificates           = true
+      purge_soft_deleted_secrets_on_destroy       = true
+      recover_soft_deleted_secrets                = true
+    }
+
+    cognitive_account {
+      purge_soft_delete_on_destroy = true
     }
   }
 

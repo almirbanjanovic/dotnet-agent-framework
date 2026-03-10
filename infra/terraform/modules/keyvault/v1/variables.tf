@@ -18,11 +18,6 @@ variable "tenant_id" {
   type        = string
 }
 
-variable "iteration" {
-  description = "Iteration counter for naming"
-  type        = string
-}
-
 variable "soft_delete_retention_days" {
   description = "Number of days to retain soft-deleted vaults"
   type        = number

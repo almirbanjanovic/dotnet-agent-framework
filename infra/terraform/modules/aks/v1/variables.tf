@@ -13,11 +13,6 @@ variable "resource_group_name" {
   type        = string
 }
 
-variable "iteration" {
-  description = "Iteration counter for naming"
-  type        = string
-}
-
 variable "kubernetes_version" {
   description = "Kubernetes version (e.g., 1.31). Leave null for latest."
   type        = string

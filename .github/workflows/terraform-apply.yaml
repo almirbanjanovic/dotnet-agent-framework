@@ -16,8 +16,8 @@ env:
   TF_VAR_tags: ${{ vars.TAGS }}
   TF_VAR_resource_group_name: ${{ vars.RESOURCE_GROUP }}
   TF_VAR_environment: ${{ vars.ENVIRONMENT }}
+  TF_VAR_base_name: ${{ vars.BASE_NAME }}
   TF_VAR_location: ${{ vars.LOCATION }}
-  TF_VAR_iteration: ${{ vars.ITERATION }}
   # Foundry
   TF_VAR_cognitive_account_kind: ${{ vars.COGNITIVE_ACCOUNT_KIND }}
   TF_VAR_oai_sku_name: ${{ vars.OAI_SKU_NAME }}
@@ -33,9 +33,13 @@ env:
   TF_VAR_embedding_capacity: ${{ vars.EMBEDDING_CAPACITY }}
   # Cosmos DB
   TF_VAR_cosmos_project_name: ${{ vars.COSMOS_PROJECT_NAME }}
-  TF_VAR_cosmos_iteration: ${{ vars.COSMOS_ITERATION }}
-  TF_VAR_cosmos_database_name: ${{ vars.COSMOS_DATABASE_NAME }}
+  TF_VAR_cosmos_operational_database_name: ${{ vars.COSMOS_OPERATIONAL_DATABASE_NAME }}
+  TF_VAR_cosmos_knowledge_database_name: ${{ vars.COSMOS_KNOWLEDGE_DATABASE_NAME }}
+  TF_VAR_cosmos_agents_database_name: ${{ vars.COSMOS_AGENTS_DATABASE_NAME }}
   TF_VAR_cosmos_agent_state_container_name: ${{ vars.COSMOS_AGENT_STATE_CONTAINER_NAME }}
+  # Storage
+  TF_VAR_storage_project_name: ${{ vars.STORAGE_PROJECT_NAME }}
+  TF_VAR_storage_images_container_name: ${{ vars.STORAGE_IMAGES_CONTAINER_NAME }}
   # ACR
   TF_VAR_acr_project_name: ${{ vars.ACR_PROJECT_NAME }}
   TF_VAR_create_acr: ${{ vars.CREATE_ACR }}

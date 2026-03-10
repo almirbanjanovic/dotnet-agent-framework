@@ -5,7 +5,7 @@
 
 locals {
   # Storage account names: 3-24 chars, lowercase alphanumeric only
-  storage_account_name = replace("st${var.project_name}${var.purpose}${var.iteration}", "-", "")
+  storage_account_name = replace("st${var.project_name}${var.purpose}", "-", "")
 }
 
 # -----------------------------------------------------------------------------

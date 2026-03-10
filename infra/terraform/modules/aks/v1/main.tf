@@ -4,8 +4,8 @@
 # =============================================================================
 
 locals {
-  cluster_name   = "aks-${var.environment}-${var.location}-${var.iteration}"
-  workspace_name = "log-aks-${var.environment}-${var.iteration}"
+  cluster_name   = "aks-${var.environment}-${var.location}"
+  workspace_name = "log-aks-${var.environment}"
 }
 
 # -----------------------------------------------------------------------------
@@ -24,7 +24,7 @@ resource "azurerm_log_analytics_workspace" "this" {
 # User-Assigned Identity for AKS control plane
 # -----------------------------------------------------------------------------
 resource "azurerm_user_assigned_identity" "aks" {
-  name                = "uami-aks-${var.environment}-${var.iteration}"
+  name                = "uami-aks-${var.environment}"
   resource_group_name = var.resource_group_name
   location            = var.location
   tags                = var.tags

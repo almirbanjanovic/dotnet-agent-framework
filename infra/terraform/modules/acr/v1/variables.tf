@@ -18,11 +18,6 @@ variable "resource_group_name" {
   type        = string
 }
 
-variable "iteration" {
-  description = "Iteration counter for naming"
-  type        = string
-}
-
 variable "create_acr" {
   description = "Create a new ACR. Set to false to use an existing one."
   type        = bool

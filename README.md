@@ -372,8 +372,16 @@ src/
 
 ## Prerequisites
 
+### Accounts
+
+- An **Azure subscription** with Owner or Contributor permissions
+- A **GitHub account** with a repository (for CI/CD)
+
+### Tools
+
 - [.NET SDK 9.0+](https://dotnet.microsoft.com/download)
-- [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) (`az login` completed)
+- [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli)
+- [GitHub CLI](https://cli.github.com/) (for CI/CD)
 - [Terraform >= 1.14.6](https://developer.hashicorp.com/terraform/install)
 
 ## Getting started
@@ -382,6 +390,7 @@ See the lab guides in [`docs/`](docs/):
 
 | # | Lab | Description |
 |---|-----|-------------|
+| 0 | [Lab 0 — Bootstrap](docs/lab-0.md) | One-time setup: Entra app registration (CI/CD), Terraform config files, state backend |
 | 1 | [Lab 1 — Infrastructure, Validation & Data Seeding](docs/lab-1.md) | Deploy Azure infrastructure, validate with simple-agent, seed Cosmos DB with CRM and RAG data |
 
 ## Notes
