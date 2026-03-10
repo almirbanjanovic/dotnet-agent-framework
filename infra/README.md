@@ -33,6 +33,8 @@ infra/
         │   └── v1/
         ├── keyvault-secrets/  # Key Vault secret writer
         │   └── v1/
+        ├── storage/           # Azure Storage Account + blob uploads
+        │   └── v1/
         │
         └── rbac/
             ├── acr/           # AcrPull
@@ -43,7 +45,9 @@ infra/
             │   └── v1/
             ├── foundry/       # Cognitive Services OpenAI User
             │   └── v1/
-            └── keyvault/      # Key Vault Secrets Officer + User
+            ├── keyvault/      # Key Vault Secrets Officer + User
+            │   └── v1/
+            └── storage/       # Storage Blob Data Reader
                 └── v1/
 ```
 
@@ -272,6 +276,9 @@ After `terraform apply`, the following outputs are displayed:
 | `kubelet_identity_client_id` | Kubelet identity client ID           |
 | `keyvault_name`              | Key Vault name                       |
 | `keyvault_uri`               | Key Vault URI (for config-sync tool) |
+| `storage_images_account_name` | Product images storage account name |
+| `storage_images_blob_endpoint` | Product images blob endpoint       |
+| `storage_images_container_name` | Product images container name     |
 
 All secrets (OpenAI endpoint/key, Cosmos DB endpoint/key, deployment names) are automatically written to Key Vault by Terraform. Use the **config-sync** tool to pull them into `src/appsettings.json`:
 
