@@ -32,7 +32,6 @@ public static class SharePointSeeder
         var container = database.GetContainer(ContainerName);
 
         var pdfFiles = Directory.GetFiles(sharePointFolder, "*.pdf", SearchOption.AllDirectories)
-            .Where(f => !f.Contains(Path.Combine("generate-pdfs", ""), StringComparison.OrdinalIgnoreCase))
             .OrderBy(f => f)
             .ToList();
 
