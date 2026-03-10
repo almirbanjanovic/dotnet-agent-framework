@@ -186,17 +186,16 @@ data/
 │   └── support-tickets.csv
 │
 ├── contoso-sharepoint/             ← Simulated SharePoint document library (unstructured)
-│   ├── generate-pdfs/              ← .NET tool to regenerate PDFs from .txt sources
-│   ├── policies/                   ← Policy documents (.txt source + .pdf generated)
+│   ├── policies/                   ← Policy documents (.txt source + .pdf)
 │   │   ├── return-and-refund-policy.txt / .pdf
 │   │   ├── warranty-policy.txt / .pdf
 │   │   ├── price-match-policy.txt / .pdf
 │   │   └── loyalty-program-terms.txt / .pdf
-│   ├── procedures/                 ← Procedure documents (.txt source + .pdf generated)
+│   ├── procedures/                 ← Procedure documents (.txt source + .pdf)
 │   │   ├── processing-a-return.txt / .pdf
 │   │   ├── filing-a-warranty-claim.txt / .pdf
 │   │   └── exchanging-a-product.txt / .pdf
-│   └── guides/                     ← Customer guides (.txt source + .pdf generated)
+│   └── guides/                     ← Customer guides (.txt source + .pdf)
 │       ├── boot-sizing-guide.txt / .pdf
 │       ├── tent-selection-guide.txt / .pdf
 │       ├── layering-guide.txt / .pdf
@@ -207,12 +206,7 @@ data/
     └── *.png                       ← Product photos referenced by products.csv image_filename
 ```
 
-The `.txt` files are the editable source content. The `.pdf` files are generated from them using the `generate-pdfs` tool. To regenerate PDFs after editing a `.txt` file:
-
-```bash
-cd data/contoso-sharepoint/generate-pdfs
-dotnet run
-```
+The `.txt` files are the editable source content. The `.pdf` files are the versions used by the seed tool for text extraction and vectorization.
 
 ## Cosmos DB container mapping
 
