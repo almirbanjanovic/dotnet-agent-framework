@@ -121,6 +121,20 @@ variable "cosmos_agent_state_container_name" {
 }
 
 # ---------------------------------------------------------------
+# Storage (Product Images)
+# ---------------------------------------------------------------
+
+variable "storage_project_name" {
+  description = "Project name used in storage account naming"
+  type        = string
+}
+
+variable "storage_images_container_name" {
+  description = "Blob container name for product images"
+  type        = string
+}
+
+# ---------------------------------------------------------------
 # ACR
 # ---------------------------------------------------------------
 

@@ -49,6 +49,10 @@ var secretMapping = new Dictionary<string, string>
     ["COSMOSDB-AGENTS-ENDPOINT"]           = "COSMOSDB_AGENTS_ENDPOINT",
     ["COSMOSDB-AGENTS-KEY"]                = "COSMOSDB_AGENTS_KEY",
     ["COSMOSDB-AGENTS-DATABASE"]           = "COSMOSDB_AGENTS_DATABASE",
+    ["STORAGE-IMAGES-ENDPOINT"]            = "STORAGE_IMAGES_ENDPOINT",
+    ["STORAGE-IMAGES-ACCOUNT-NAME"]        = "STORAGE_IMAGES_ACCOUNT_NAME",
+    ["STORAGE-IMAGES-CONTAINER"]           = "STORAGE_IMAGES_CONTAINER",
+    ["STORAGE-IMAGES-KEY"]                 = "STORAGE_IMAGES_KEY",
 };
 
 // Connect to Key Vault

@@ -36,6 +36,10 @@ This populates `src/appsettings.json` (gitignored) with all the values your apps
 | `COSMOSDB_AGENTS_ENDPOINT`           | Agents Cosmos DB endpoint            | `COSMOSDB-AGENTS-ENDPOINT`            |
 | `COSMOSDB_AGENTS_KEY`                | Agents Cosmos DB key                 | `COSMOSDB-AGENTS-KEY`                 |
 | `COSMOSDB_AGENTS_DATABASE`           | Agents database name                 | `COSMOSDB-AGENTS-DATABASE`            |
+| `STORAGE_IMAGES_ENDPOINT`            | Product images blob endpoint         | `STORAGE-IMAGES-ENDPOINT`             |
+| `STORAGE_IMAGES_ACCOUNT_NAME`        | Product images storage account name  | `STORAGE-IMAGES-ACCOUNT-NAME`         |
+| `STORAGE_IMAGES_CONTAINER`           | Product images container name        | `STORAGE-IMAGES-CONTAINER`            |
+| `STORAGE_IMAGES_KEY`                 | Product images storage key           | `STORAGE-IMAGES-KEY`                  |
 
 The config-sync tool uses `DefaultAzureCredential` — make sure you're logged in with `az login`.
 
@@ -43,17 +47,15 @@ The config-sync tool uses `DefaultAzureCredential` — make sure you're logged i
 
 The `appsettings.json` is shared across all labs — each project references it via a relative path from `src/`.
 
-## Tools and Labs
+## Labs
 
-| # | Folder | Type | Description |
-|---|--------|------|-------------|
-| — | `config-sync/` | Tool | Pulls secrets from Key Vault into `appsettings.json` — run once after infrastructure deployment |
-| 1 | `simple-agent/` | Lab | Validate infrastructure — simple console app that calls Azure OpenAI to confirm your deployment and app settings are configured correctly |
-| 2 | `seed-data/` | Lab | Seed Cosmos DB — loads CRM data from CSVs and vectorizes SharePoint PDFs into the KnowledgeDocuments container (RAG) |
+| # | File | Description |
+|---|------|-------------|
+| 1 | [Lab 1 — Infrastructure, Validation & Data Seeding](../docs/lab-1.md) | Deploy Azure infrastructure, validate with simple-agent, seed Cosmos DB with CRM and RAG data |
 
-## Running a lab
+## Running a project
 
-From the lab directory (e.g., `src/simple-agent/`):
+From the project directory (e.g., `src/simple-agent/`):
 
 ```bash
 dotnet restore

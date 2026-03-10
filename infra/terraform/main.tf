@@ -49,11 +49,11 @@ module "cosmosdb_operational" {
   tags                = var.tags
 
   containers = {
-    customers       = { name = "Customers",      partition_key_paths = ["/id"] }
-    orders          = { name = "Orders",         partition_key_paths = ["/customer_id"] }
-    order_items     = { name = "OrderItems",     partition_key_paths = ["/order_id"] }
-    products        = { name = "Products",       partition_key_paths = ["/category"] }
-    promotions      = { name = "Promotions",     partition_key_paths = ["/id"] }
+    customers       = { name = "Customers", partition_key_paths = ["/id"] }
+    orders          = { name = "Orders", partition_key_paths = ["/customer_id"] }
+    order_items     = { name = "OrderItems", partition_key_paths = ["/order_id"] }
+    products        = { name = "Products", partition_key_paths = ["/category"] }
+    promotions      = { name = "Promotions", partition_key_paths = ["/id"] }
     support_tickets = { name = "SupportTickets", partition_key_paths = ["/customer_id"] }
   }
 }
@@ -158,24 +158,41 @@ module "acr" {
 module "aks" {
   source = "./modules/aks/v1"
 
-  environment         = var.environment
-  location            = var.location
-  resource_group_name = var.resource_group_name
-  iteration           = var.iteration
-  kubernetes_version  = var.aks_kubernetes_version
-  node_vm_size        = var.aks_node_vm_size
-  node_count          = var.aks_node_count
+  environment          = var.environment
+  location             = var.location
+  resource_group_name  = var.resource_group_name
+  iteration            = var.iteration
+  kubernetes_version   = var.aks_kubernetes_version
+  node_vm_size         = var.aks_node_vm_size
+  node_count           = var.aks_node_count
   auto_scaling_enabled = var.aks_auto_scaling_enabled
-  node_min_count      = var.aks_node_min_count
-  node_max_count      = var.aks_node_max_count
-  os_disk_size_gb     = var.aks_os_disk_size_gb
-  log_retention_days  = var.aks_log_retention_days
+  node_min_count       = var.aks_node_min_count
+  node_max_count       = var.aks_node_max_count
+  os_disk_size_gb      = var.aks_os_disk_size_gb
+  log_retention_days   = var.aks_log_retention_days
 
-  kubelet_identity_client_id    = module.identity.identities["kubelet"].client_id
-  kubelet_identity_object_id    = module.identity.identities["kubelet"].principal_id
-  kubelet_identity_resource_id  = module.identity.identities["kubelet"].id
+  kubelet_identity_client_id   = module.identity.identities["kubelet"].client_id
+  kubelet_identity_object_id   = module.identity.identities["kubelet"].principal_id
+  kubelet_identity_resource_id = module.identity.identities["kubelet"].id
 
   tags = var.tags
+}
+
+#--------------------------------------------------------------------------------------------------------------------------------
+# Azure Storage — Product Images
+#--------------------------------------------------------------------------------------------------------------------------------
+
+module "storage_images" {
+  source = "./modules/storage/v1"
+
+  project_name        = var.storage_project_name
+  purpose             = "images"
+  resource_group_name = var.resource_group_name
+  location            = var.location
+  iteration           = var.iteration
+  container_name      = var.storage_images_container_name
+  image_source_path   = "${path.module}/../../data/contoso-images"
+  tags                = var.tags
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -233,6 +250,20 @@ module "rbac_cosmosdb_agents" {
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
+# RBAC - Storage (Blob Data Reader)
+#--------------------------------------------------------------------------------------------------------------------------------
+
+module "rbac_storage" {
+  source = "./modules/rbac/storage/v1"
+
+  storage_account_id = module.storage_images.id
+
+  principal_ids = {
+    backend = module.identity.identities["backend"].principal_id
+  }
+}
+
+#--------------------------------------------------------------------------------------------------------------------------------
 # RBAC - ACR (AcrPull)
 #--------------------------------------------------------------------------------------------------------------------------------
 
@@ -254,8 +285,8 @@ module "rbac_acr" {
 module "rbac_aks" {
   source = "./modules/rbac/aks/v1"
 
-  resource_group_name              = var.resource_group_name
-  aks_control_plane_principal_id   = module.aks.control_plane_identity_principal_id
+  resource_group_name            = var.resource_group_name
+  aks_control_plane_principal_id = module.aks.control_plane_identity_principal_id
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -317,6 +348,10 @@ module "keyvault_secrets" {
     "COSMOSDB-AGENTS-ENDPOINT"          = module.cosmosdb_agents.endpoint
     "COSMOSDB-AGENTS-KEY"               = module.cosmosdb_agents.primary_key
     "COSMOSDB-AGENTS-DATABASE"          = module.cosmosdb_agents.database_name
+    "STORAGE-IMAGES-ENDPOINT"           = module.storage_images.primary_blob_endpoint
+    "STORAGE-IMAGES-ACCOUNT-NAME"       = module.storage_images.name
+    "STORAGE-IMAGES-CONTAINER"          = module.storage_images.container_name
+    "STORAGE-IMAGES-KEY"                = module.storage_images.primary_access_key
   }
 
   depends_on = [module.rbac_keyvault]

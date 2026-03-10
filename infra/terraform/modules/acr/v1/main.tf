@@ -38,7 +38,7 @@ data "azurerm_container_registry" "existing" {
 }
 
 locals {
-  acr_id           = var.create_acr ? azurerm_container_registry.this[0].id : data.azurerm_container_registry.existing[0].id
-  login_server     = var.create_acr ? azurerm_container_registry.this[0].login_server : data.azurerm_container_registry.existing[0].login_server
-  acr_name         = var.create_acr ? azurerm_container_registry.this[0].name : data.azurerm_container_registry.existing[0].name
+  acr_id       = var.create_acr ? azurerm_container_registry.this[0].id : data.azurerm_container_registry.existing[0].id
+  login_server = var.create_acr ? azurerm_container_registry.this[0].login_server : data.azurerm_container_registry.existing[0].login_server
+  acr_name     = var.create_acr ? azurerm_container_registry.this[0].name : data.azurerm_container_registry.existing[0].name
 }
