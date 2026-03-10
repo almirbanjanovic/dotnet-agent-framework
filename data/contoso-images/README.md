@@ -26,4 +26,4 @@ For the workshop, placeholder images can be generated or sourced from royalty-fr
 - `trekking-poles.png`
 - `quick-dry-hiking-shorts.png`
 
-> **Note:** The Product Images MCP Server and image seeding code are not yet implemented. This folder is prepared for future labs.
+Product images are uploaded to Azure Blob Storage automatically during `terraform apply` via the storage module. The Terraform IaC provisions a Storage Account, creates a `product-images` blob container, and uploads all `.png` files from this folder.

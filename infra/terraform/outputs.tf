@@ -83,6 +83,25 @@ output "cosmosdb_agents_database_name" {
 }
 
 # ---------------------------------------------------------------
+# Storage — Product Images
+# ---------------------------------------------------------------
+
+output "storage_images_account_name" {
+  description = "Storage account name for product images"
+  value       = module.storage_images.name
+}
+
+output "storage_images_blob_endpoint" {
+  description = "Primary blob endpoint for product images"
+  value       = module.storage_images.primary_blob_endpoint
+}
+
+output "storage_images_container_name" {
+  description = "Blob container name for product images"
+  value       = module.storage_images.container_name
+}
+
+# ---------------------------------------------------------------
 # ACR
 # ---------------------------------------------------------------
 

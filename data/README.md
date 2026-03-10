@@ -204,7 +204,7 @@ data/
 │       └── gear-care-and-maintenance.txt / .pdf
 │
 └── contoso-images/                 ← Product images (uploaded to Azure Blob Storage)
-    └── *.jpg                       ← Product photos referenced by products.csv image_filename
+    └── *.png                       ← Product photos referenced by products.csv image_filename
 ```
 
 The `.txt` files are the editable source content. The `.pdf` files are generated from them using the `generate-pdfs` tool. To regenerate PDFs after editing a `.txt` file:

@@ -284,6 +284,7 @@ All infrastructure is defined as Terraform IaC in `infra/terraform/`, deployed v
 |----------|---------|
 | **Azure AI Foundry** | Hosts AI Services account with chat model (gpt-4.1) and embedding model (text-embedding-ada-002) |
 | **Cosmos DB** (×3 accounts) | Operational (Session consistency, CRM data), Knowledge (Eventual + vector search, RAG), Agents (Eventual, agent state) |
+| **Storage Account** | Product images blob storage (`product-images` container) — images uploaded during `terraform apply` |
 | **AKS** | Hosts all application pods — UI, BFF, domain APIs, MCP servers, orchestrations |
 | **ACR** | Container image registry |
 | **Key Vault** | Secrets management (endpoints, keys, deployment names) |
@@ -337,8 +338,8 @@ src/
   README.md                       → Lab setup and run guide
   appsettings.json                → Shared app settings (gitignored, populated by config-sync)
   config-sync/                    → Tool: pulls Key Vault secrets into appsettings.json
-  simple-agent/                   → Lab 1: validate infrastructure setup
-  seed-data/                      → Lab 2: seed Cosmos DB with store data + vectorized docs (RAG)
+  simple-agent/                   → Validate infrastructure setup (Lab 1)
+  seed-data/                      → Seed Cosmos DB with store data + vectorized docs (Lab 1)
   agents/                         → Shared agent definitions library
   apis/
     customer-orders-api/          → Customer & Orders domain API
@@ -367,13 +368,11 @@ src/
 
 ## Getting started
 
-### 1. Deploy infrastructure
+See the lab guides in [`docs/`](docs/):
 
-Infrastructure must be provisioned before running any labs. Follow the full setup instructions in **[infra/README.md](infra/README.md)** — this covers backend bootstrap, Terraform configuration, and deployment.
-
-### 2. Configure agentic app settings
-
-After infrastructure is deployed, sync secrets from Key Vault to your local config. Follow the instructions in **[src/README.md](src/README.md)**.
+| # | Lab | Description |
+|---|-----|-------------|
+| 1 | [Lab 1 — Infrastructure, Validation & Data Seeding](docs/lab-1.md) | Deploy Azure infrastructure, validate with simple-agent, seed Cosmos DB with CRM and RAG data |
 
 ## Notes
 
