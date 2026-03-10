@@ -104,6 +104,10 @@ Console.WriteLine("────────────────────�
 Console.WriteLine("  Phase 1: Seeding structured data (CRM → containers)");
 Console.WriteLine("───────────────────────────────────────────────────────────");
 Console.WriteLine();
+Console.WriteLine("  Loads customer, order, and product data from CSV files");
+Console.WriteLine("  into Cosmos DB containers. Agents query this data using");
+Console.WriteLine("  standard SQL queries via MCP tools at runtime.");
+Console.WriteLine();
 
 await CrmSeeder.SeedAsync(operationalDb, crmFolder);
 
@@ -115,6 +119,12 @@ Console.WriteLine();
 Console.WriteLine("───────────────────────────────────────────────────────────");
 Console.WriteLine("  Phase 2: Vectorizing documents (SharePoint → RAG store)");
 Console.WriteLine("───────────────────────────────────────────────────────────");
+Console.WriteLine();
+Console.WriteLine("  Extracts text from PDFs, chunks it into ~500-token segments,");
+Console.WriteLine("  generates 1536-dim vector embeddings via the embedding model,");
+Console.WriteLine("  and stores each chunk + vector in KnowledgeDocuments.");
+Console.WriteLine("  This enables semantic search (RAG) at query time — agents");
+Console.WriteLine("  find relevant documents by meaning, not keyword matching.");
 Console.WriteLine();
 
 await SharePointSeeder.SeedAsync(knowledgeDb, embeddingClient, sharePointFolder);

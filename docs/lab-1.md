@@ -142,43 +142,36 @@ If you see an error, check:
 - `src/appsettings.json` has non-empty values for `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT_NAME`, and `AZURE_OPENAI_API_KEY`
 - The AI Services deployment exists in the Azure portal
 
-## Step 4 — Generate PDFs
+## Step 4 — Seed Cosmos DB
 
-The SharePoint data seeder reads PDF files, but the repo only stores editable `.txt` source files. The **generate-pdfs** tool converts them:
+### Why seed data?
 
-```bash
-cd data/contoso-sharepoint/generate-pdfs
-dotnet restore
-dotnet run
-```
+AI agents can only work with data they can access. The chat model (gpt-4.1) has no knowledge of Contoso Outdoors — it doesn't know your customers, orders, products, or policies. Seeding loads all of this data into Cosmos DB so agents can query it at runtime via MCP tools.
 
-Expected output:
+### Two types of data, two strategies
 
-```
-Found 12 text files to convert.
+**Structured data (CRM)** — Customer records, orders, products, and promotions live as JSON documents in Cosmos DB. Agents query this data using standard SQL-like queries (e.g., "find all orders for customer 101"). No AI processing is needed during seeding — the data is already in a queryable format.
 
-  ✓ guides\backpack-fitting-guide.pdf
-  ✓ guides\boot-sizing-guide.pdf
-  ✓ guides\gear-care-and-maintenance.pdf
-  ✓ guides\layering-guide.pdf
-  ✓ guides\tent-selection-guide.pdf
-  ✓ policies\loyalty-program-terms.pdf
-  ✓ policies\price-match-policy.pdf
-  ✓ policies\return-and-refund-policy.pdf
-  ✓ policies\warranty-policy.pdf
-  ✓ procedures\exchanging-a-product.pdf
-  ✓ procedures\filing-a-warranty-claim.pdf
-  ✓ procedures\processing-a-return.pdf
+**Unstructured data (SharePoint documents)** — Policy documents, procedures, and guides are free-form text. You can't run a SQL query against a paragraph of text to answer *"what is your return policy?"*. This is where **RAG (Retrieval-Augmented Generation)** and the **embedding model** come in.
 
-Done. Generated 12 PDF files.
-```
+### What the embedding model does
 
-## Step 5 — Seed Cosmos DB
+The embedding model (`text-embedding-ada-002`) converts text into **vectors** — arrays of 1,536 floating-point numbers that capture the *meaning* of the text. Two texts that are semantically similar produce vectors that are close together in vector space, even if they share no exact words.
 
-The **seed-data** tool performs two operations:
+During seeding, each document is:
+1. **Extracted** — text is pulled from the PDF
+2. **Chunked** — split into ~500-token segments (the embedding model has a token limit)
+3. **Embedded** — each chunk is sent to `text-embedding-ada-002`, which returns a 1,536-dimension float array
+4. **Stored** — the chunk text + its vector are saved to the `KnowledgeDocuments` container in Cosmos DB
+
+At query time, when a user asks *"what is your return policy?"*, the same embedding model converts the question into a vector, and Cosmos DB's `VectorDistance` function finds the chunks with the most similar vectors — semantic search by meaning, not keyword matching. These chunks are then passed to the chat model as context so it can generate a grounded, accurate answer.
+
+### Running the seed tool
+
+The **seed-data** tool performs both operations:
 
 1. **Phase 1 — CRM data** → Parses 6 CSV files from `data/contoso-crm/` and upserts them into the Operational Cosmos DB containers (Customers, Orders, OrderItems, Products, Promotions, SupportTickets)
-2. **Phase 2 — SharePoint documents (RAG)** → Reads the generated PDFs, extracts text, chunks it, generates vector embeddings via `text-embedding-ada-002`, and upserts into the Knowledge Cosmos DB `KnowledgeDocuments` container
+2. **Phase 2 — SharePoint documents (RAG)** → Reads PDFs from `data/contoso-sharepoint/`, extracts text, chunks it, generates vector embeddings via `text-embedding-ada-002`, and upserts into the Knowledge Cosmos DB `KnowledgeDocuments` container
 
 ```bash
 cd src/seed-data
@@ -198,9 +191,16 @@ Expected output:
   Operational endpoint:    https://cosmos-dotnetagent-operational-...
   Knowledge endpoint:      https://cosmos-dotnetagent-knowledge-...
 
+  ✓ Connected to operational database 'contoso-outdoors'
+  ✓ Connected to knowledge database 'knowledge'
+
 ───────────────────────────────────────────────────────────
   Phase 1: Seeding structured data (CRM → containers)
 ───────────────────────────────────────────────────────────
+
+  Loads customer, order, and product data from CSV files
+  into Cosmos DB containers. Agents query this data using
+  standard SQL queries via MCP tools at runtime.
 
   ✓ customers.csv → Customers (8 documents)
   ✓ orders.csv → Orders (...)
@@ -209,6 +209,12 @@ Expected output:
 ───────────────────────────────────────────────────────────
   Phase 2: Vectorizing documents (SharePoint → RAG store)
 ───────────────────────────────────────────────────────────
+
+  Extracts text from PDFs, chunks it into ~500-token segments,
+  generates 1536-dim vector embeddings via the embedding model,
+  and stores each chunk + vector in KnowledgeDocuments.
+  This enables semantic search (RAG) at query time — agents
+  find relevant documents by meaning, not keyword matching.
 
   ✓ policies/return-and-refund-policy.pdf: 3 chunk(s) embedded and upserted
   ✓ guides/boot-sizing-guide.pdf: 2 chunk(s) embedded and upserted
@@ -219,8 +225,6 @@ Expected output:
 ═══════════════════════════════════════════════════════════
 ```
 
-If Phase 2 shows 0 PDF files, go back to Step 4 and run `generate-pdfs` first.
-
 ## Verification checklist
 
 After completing all steps, verify:
@@ -228,7 +232,6 @@ After completing all steps, verify:
 - [ ] `terraform output` shows all endpoints, keys, and names
 - [ ] `src/appsettings.json` has 17 non-empty values
 - [ ] `simple-agent` returns a joke from Azure OpenAI
-- [ ] 12 PDFs exist in `data/contoso-sharepoint/` subdirectories
 - [ ] Cosmos DB Operational account has 6 containers with data
 - [ ] Cosmos DB Knowledge account has `KnowledgeDocuments` with vectorized chunks
 - [ ] Azure Blob Storage `product-images` container has 15 `.png` files
