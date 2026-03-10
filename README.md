@@ -140,9 +140,18 @@ This means:
 
 Each orchestration pod writes directly to the **Agents** Cosmos DB account for conversation history and agent memory. This state is owned by the orchestration layer — it doesn't belong in the shared REST API surface because no other consumer needs it.
 
-#### 7. APIM as an optional external gateway
+#### 7. API Management + AI Gateway as optional external gateways
 
-For external access (partner integrations, multi-tenant scenarios), [Azure API Management](https://learn.microsoft.com/en-us/azure/api-management/api-management-key-concepts) sits in front of the MCP Servers — handling JWT validation, tenant routing, and rate limiting. Internal traffic within AKS bypasses APIM.
+For external access (partner integrations, multi-tenant scenarios), [Azure API Management](https://learn.microsoft.com/en-us/azure/api-management/api-management-key-concepts) provides a unified gateway layer. APIM serves two distinct roles depending on the traffic type:
+
+| Traffic type | Gateway role | Sits in front of | Key capabilities |
+|---|---|---|---|
+| **Standard API traffic** | [API Management](https://learn.microsoft.com/en-us/azure/api-management/api-management-key-concepts) | Domain APIs (Customer & Orders, Product Catalog, Product Images) | JWT validation, rate limiting, request/response transformation, developer portal, subscription keys |
+| **AI / GenAI traffic** | [AI Gateway](https://learn.microsoft.com/en-us/azure/api-management/genai-gateway-capabilities) | MCP Servers, Azure OpenAI endpoints | Token usage tracking, prompt/completion logging, semantic caching, load balancing across model deployments, circuit breaking on token exhaustion |
+
+The AI Gateway is a set of [GenAI-specific policies](https://learn.microsoft.com/en-us/azure/api-management/genai-gateway-capabilities) built into APIM — not a separate product. A single APIM instance can handle both standard API management and AI Gateway capabilities using different policy configurations per API.
+
+**Internal traffic within AKS bypasses the gateway entirely.** The gateway is only needed when services are exposed externally or when you need centralized observability, rate limiting, or multi-tenant isolation.
 
 ### Workflow orchestration patterns
 
@@ -311,6 +320,7 @@ See [infra/README.md](infra/README.md) for setup instructions, Terraform module 
 | .NET clean architecture | [Common web app architectures](https://learn.microsoft.com/en-us/dotnet/architecture/modern-web-apps-azure/common-web-application-architectures#clean-architecture) |
 | Azure Cosmos DB vector search | [Vector search overview](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/vector-search) |
 | Azure API Management | [Overview](https://learn.microsoft.com/en-us/azure/api-management/api-management-key-concepts) |
+| Azure AI Gateway (APIM GenAI policies) | [GenAI Gateway capabilities](https://learn.microsoft.com/en-us/azure/api-management/genai-gateway-capabilities) |
 | Terraform AzureRM provider | [Registry](https://registry.terraform.io/providers/hashicorp/azurerm/latest) |
 
 ## Repository structure
