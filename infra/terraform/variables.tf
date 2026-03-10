@@ -8,17 +8,17 @@ variable "resource_group_name" {
 }
 
 variable "environment" {
-  description = "Environment (e.g., agentic-ai)"
+  description = "Logical environment name (e.g., dev, staging, prod)"
+  type        = string
+}
+
+variable "base_name" {
+  description = "Base name used in Azure resource naming (e.g., agentic-ai). Appears in resource group, Key Vault, AKS, etc."
   type        = string
 }
 
 variable "location" {
   description = "Azure location"
-  type        = string
-}
-
-variable "iteration" {
-  description = "Global iteration counter for naming"
   type        = string
 }
 
@@ -92,11 +92,6 @@ variable "embedding_capacity" {
 
 variable "cosmos_project_name" {
   description = "Project name prefix for all Cosmos DB accounts"
-  type        = string
-}
-
-variable "cosmos_iteration" {
-  description = "Iteration counter for Cosmos DB (avoids soft-delete collisions)"
   type        = string
 }
 

@@ -10,6 +10,8 @@ This folder contains all Terraform infrastructure-as-code and bootstrap scripts 
 infra/
 ├── init-backend.ps1           # Bootstrap Terraform backend (PowerShell)
 ├── init-backend.sh            # Bootstrap Terraform backend (Bash)
+├── init-github.ps1            # Set up Entra + GitHub for CI/CD (PowerShell)
+├── init-github.sh             # Set up Entra + GitHub for CI/CD (Bash)
 └── terraform/
     ├── main.tf                # Root module — wires all child modules
     ├── variables.tf           # Root input variables (no defaults)
@@ -99,8 +101,8 @@ Set all of the following under **Settings → Environments → `<environment>` �
 | Variable                          | Example                        | Description |
 |-----------------------------------|--------------------------------|-------------|
 | `TAGS`                            | `{}`                           | Resource tags applied to all deployed resources |
-| `ENVIRONMENT`                     | `agentic-ai`                   | Logical environment name used in resource naming |
-| `ITERATION`                       | `001`                          | Counter to avoid soft-delete naming collisions across teardown/redeploy cycles |
+| `ENVIRONMENT`                     | `dev`                          | Logical environment name (dev, staging, prod) |
+| `BASE_NAME`                       | `agentic-ai`                   | Base name used in Azure resource naming (appears in resource group, Key Vault, AKS, etc.) |
 | `COGNITIVE_ACCOUNT_KIND`          | `AIServices`                   | Azure AI Services account type (`AIServices` or `OpenAI`) |
 | `OAI_SKU_NAME`                    | `S0`                           | Pricing tier for the AI Services account |
 | `OAI_DEPLOYMENT_SKU_NAME`        | `GlobalStandard`               | SKU for the chat model deployment (affects throughput and availability) |
@@ -114,11 +116,12 @@ Set all of the following under **Settings → Environments → `<environment>` �
 | `EMBEDDING_SKU_NAME`             | `Standard`                     | SKU for the embedding deployment |
 | `EMBEDDING_CAPACITY`             | `10`                           | Throughput capacity (TPM in thousands) for the embedding deployment |
 | `COSMOS_PROJECT_NAME`            | `dotnetagent`                  | Project name prefix for Cosmos DB resource naming |
-| `COSMOS_ITERATION`               | `001`                          | Iteration counter for Cosmos DB (separate from global to allow independent cycling) |
-| `COSMOS_OPERATIONAL_DATABASE_NAME` | `contoso`                    | Database name for the operational (CRM) Cosmos DB account |
+| `COSMOS_OPERATIONAL_DATABASE_NAME` | `contoso-outdoors`             | Database name for the operational (CRM) Cosmos DB account |
 | `COSMOS_KNOWLEDGE_DATABASE_NAME` | `knowledge`                    | Database name for the knowledge (RAG) Cosmos DB account |
 | `COSMOS_AGENTS_DATABASE_NAME`    | `agents`                       | Database name for the agents (state) Cosmos DB account |
 | `COSMOS_AGENT_STATE_CONTAINER_NAME` | `workshop_agent_state_store` | Cosmos DB container for persisting agent state across sessions |
+| `STORAGE_PROJECT_NAME`           | `dotnetagent`                  | Project name used in storage account naming |
+| `STORAGE_IMAGES_CONTAINER_NAME`  | `product-images`               | Blob container name for product images |
 | `ACR_PROJECT_NAME`               | `dotnetagent`                  | Project name prefix for ACR resource naming |
 | `CREATE_ACR`                     | `true`                         | Set to `false` to reference an existing ACR instead of creating one |
 | `ACR_SKU`                        | `Premium`                      | ACR tier — Premium required for geo-replication and network rules |
@@ -149,9 +152,9 @@ Create `terraform/terraform.tfvars` (gitignored):
 tags                = {}
 resource_group_name = "rg-agentic-ai-centralus"
 
-environment = "agentic-ai"
+environment = "dev"
+base_name   = "agentic-ai"
 location    = "centralus"
-iteration   = "001"
 
 # Foundry (AI Services)
 cognitive_account_kind       = "AIServices"
@@ -170,11 +173,14 @@ embedding_capacity          = 10
 
 # Cosmos DB (3 accounts: operational, knowledge, agents)
 cosmos_project_name               = "dotnetagent"
-cosmos_iteration                  = "001"
-cosmos_operational_database_name  = "contoso"
+cosmos_operational_database_name  = "contoso-outdoors"
 cosmos_knowledge_database_name    = "knowledge"
 cosmos_agents_database_name       = "agents"
 cosmos_agent_state_container_name = "workshop_agent_state_store"
+
+# Storage (Product Images)
+storage_project_name          = "dotnetagent"
+storage_images_container_name = "product-images"
 
 # ACR
 acr_project_name  = "dotnetagent"

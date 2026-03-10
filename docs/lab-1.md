@@ -4,10 +4,8 @@ This lab stands up the full Azure environment, validates connectivity, and seeds
 
 ## Prerequisites
 
-- [.NET SDK 9.0+](https://dotnet.microsoft.com/download)
-- [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) — `az login` completed
-- [Terraform >= 1.14.6](https://developer.hashicorp.com/terraform/install)
-- An Azure subscription with permissions to create resources
+- [Lab 0 — Bootstrap](lab-0.md) completed (accounts, tools, `terraform.tfvars`, state backend)
+- `az login` authenticated to the correct subscription
 
 ## What gets deployed
 
@@ -23,34 +21,11 @@ This lab stands up the full Azure environment, validates connectivity, and seeds
 
 ## Step 1 — Deploy infrastructure
 
-Full infrastructure setup details are in [infra/README.md](../infra/README.md). The summary:
+> **Prerequisite:** Complete [Lab 0 — Bootstrap](lab-0.md) first (config files + state backend).
 
-### 1a. Create local config files
-
-Create `infra/terraform/backend.hcl` (gitignored):
-
-```hcl
-resource_group_name  = "rg-agentic-ai-centralus"
-storage_account_name = "stagenticaicentralus"
-container_name       = "tfstate"
-key                  = "agentic-ai.tfstate"
-```
-
-Create `infra/terraform/terraform.tfvars` (gitignored) — see [infra/README.md](../infra/README.md) for the full example with all variables.
-
-### 1b. Bootstrap the Terraform backend
-
-This only needs to run once per environment:
-
-```powershell
-cd infra
-./init-backend.ps1
-```
-
-### 1c. Deploy
+From `infra/terraform/`:
 
 ```bash
-cd infra/terraform
 terraform init -backend-config=backend.hcl
 terraform plan -var-file="terraform.tfvars"
 terraform apply -auto-approve -var-file="terraform.tfvars"
@@ -58,7 +33,9 @@ terraform apply -auto-approve -var-file="terraform.tfvars"
 
 This provisions all Azure resources and uploads the 15 product images to blob storage.
 
-### 1d. Verify outputs
+For CI/CD deployment via GitHub Actions, see [infra/README.md](../infra/README.md).
+
+### Verify outputs
 
 After `terraform apply`, note the Key Vault URI:
 

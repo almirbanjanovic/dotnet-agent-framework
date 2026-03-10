@@ -4,6 +4,13 @@
 
 data "azurerm_client_config" "current" {}
 
+locals {
+  # Composite name used for Azure resource naming: {base_name}-{environment}
+  # Modules append their own prefix and suffix (e.g., aif-{name_base}-{location})
+  # Result: aif-agentic-ai-dev-centralus, kv-agentic-ai-dev-001, etc.
+  name_base = "${var.base_name}-${var.environment}"
+}
+
 #--------------------------------------------------------------------------------------------------------------------------------
 # Foundry (AI Services + Model Deployments)
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -11,7 +18,7 @@ data "azurerm_client_config" "current" {}
 module "foundry" {
   source = "./modules/foundry/v1"
 
-  environment              = var.environment
+  environment              = local.name_base
   location                 = var.location
   resource_group_name      = var.resource_group_name
   account_kind             = var.cognitive_account_kind
@@ -40,10 +47,8 @@ module "cosmosdb_operational" {
 
   name_prefix         = var.cosmos_project_name
   purpose             = "operational"
-  environment         = var.environment
   location            = var.location
   resource_group_name = var.resource_group_name
-  iteration           = var.cosmos_iteration
   database_name       = var.cosmos_operational_database_name
   consistency_level   = "Session"
   tags                = var.tags
@@ -67,10 +72,8 @@ module "cosmosdb_knowledge" {
 
   name_prefix         = var.cosmos_project_name
   purpose             = "knowledge"
-  environment         = var.environment
   location            = var.location
   resource_group_name = var.resource_group_name
-  iteration           = var.cosmos_iteration
   database_name       = var.cosmos_knowledge_database_name
   consistency_level   = "Eventual"
   capabilities        = ["EnableNoSQLVectorSearch"]
@@ -98,10 +101,8 @@ module "cosmosdb_agents" {
 
   name_prefix         = var.cosmos_project_name
   purpose             = "agents"
-  environment         = var.environment
   location            = var.location
   resource_group_name = var.resource_group_name
-  iteration           = var.cosmos_iteration
   database_name       = var.cosmos_agents_database_name
   consistency_level   = "Eventual"
   tags                = var.tags
@@ -128,8 +129,8 @@ module "identity" {
   tags                = var.tags
 
   identities = {
-    backend = { name = "uami-backend-${var.environment}-${var.iteration}" }
-    kubelet = { name = "uami-kubelet-${var.environment}-${var.iteration}" }
+    backend = { name = "uami-backend-${local.name_base}" }
+    kubelet = { name = "uami-kubelet-${local.name_base}" }
   }
 }
 
@@ -141,10 +142,9 @@ module "acr" {
   source = "./modules/acr/v1"
 
   project_name        = var.acr_project_name
-  environment         = var.environment
+  environment         = local.name_base
   location            = var.location
   resource_group_name = var.resource_group_name
-  iteration           = var.iteration
   create_acr          = var.create_acr
   sku                 = var.acr_sku
   existing_acr_name   = var.existing_acr_name
@@ -158,10 +158,9 @@ module "acr" {
 module "aks" {
   source = "./modules/aks/v1"
 
-  environment          = var.environment
+  environment          = local.name_base
   location             = var.location
   resource_group_name  = var.resource_group_name
-  iteration            = var.iteration
   kubernetes_version   = var.aks_kubernetes_version
   node_vm_size         = var.aks_node_vm_size
   node_count           = var.aks_node_count
@@ -189,7 +188,6 @@ module "storage_images" {
   purpose             = "images"
   resource_group_name = var.resource_group_name
   location            = var.location
-  iteration           = var.iteration
   container_name      = var.storage_images_container_name
   image_source_path   = "${path.module}/../../data/contoso-images"
   tags                = var.tags
@@ -296,11 +294,10 @@ module "rbac_aks" {
 module "keyvault" {
   source = "./modules/keyvault/v1"
 
-  environment         = var.environment
+  environment         = local.name_base
   location            = var.location
   resource_group_name = var.resource_group_name
   tenant_id           = data.azurerm_client_config.current.tenant_id
-  iteration           = var.iteration
   tags                = var.tags
 }
 

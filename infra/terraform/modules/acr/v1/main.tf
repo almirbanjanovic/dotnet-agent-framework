@@ -4,7 +4,7 @@
 # =============================================================================
 
 locals {
-  acr_name_generated = replace("${var.project_name}${var.environment}acr${var.iteration}", "-", "")
+  acr_name_generated = replace("${var.project_name}${var.environment}acr", "-", "")
 }
 
 # -----------------------------------------------------------------------------

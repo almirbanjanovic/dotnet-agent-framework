@@ -5,10 +5,10 @@ on:
       environment:
         description: 'Select environment'
         required: true
-        default: agentic-ai
+        default: dev
         type: choice
         options:
-          - agentic-ai
+          - dev
 
 permissions:
   id-token: write
