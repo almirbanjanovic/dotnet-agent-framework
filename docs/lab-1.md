@@ -21,7 +21,7 @@ This lab stands up the full Azure environment, validates connectivity, and seeds
 
 ## Step 1 — Deploy infrastructure
 
-### Option A — Local
+### Option A — Terminal
 
 From `infra/terraform/`:
 
@@ -42,7 +42,7 @@ This provisions all Azure resources and uploads the 15 product images to blob st
 
 ### Option B — GitHub Actions
 
-> Requires [Lab 0 Step 1](lab-0.md#step-1--set-up-entra-and-github-for-cicd) (Entra + GitHub setup) to be completed first.
+> Requires [Lab 0 Step 1](lab-0.md#step-1--configure-cicd-option-b-only) to be completed first.
 
 1. Go to **Actions → Terraform Plan, Approve, Apply** in your GitHub repository
 2. Click **Run workflow**, select the `dev` environment, and confirm
