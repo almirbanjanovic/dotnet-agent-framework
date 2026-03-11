@@ -42,8 +42,6 @@ This provisions all Azure resources and uploads the 15 product images to blob st
 
 ### Option B — GitHub Actions
 
-> Requires [Lab 0 Step 1](lab-0.md#step-1--configure-cicd-option-b-only) to be completed first.
-
 1. Go to **Actions → Terraform Plan, Approve, Apply** in your GitHub repository
 2. Click **Run workflow**, select the `dev` environment, and confirm
 3. The workflow runs in three stages:
@@ -57,13 +55,13 @@ All Terraform variables are read from the GitHub environment variables that `ini
 
 After deployment, note the Key Vault URI — you'll need it for the next step.
 
-**Option A** — from `infra/terraform/`:
+**Terminal** — from `infra/terraform/`:
 
 ```bash
 terraform output keyvault_uri
 ```
 
-**Option B** — find the Key Vault URI in the Azure portal: open your Key Vault resource → **Properties** → **Vault URI**.
+**GitHub Actions** — find the Key Vault URI in the Azure portal: open your Key Vault resource → **Properties** → **Vault URI**.
 
 ## Step 2 — Configure app settings
 

@@ -1,6 +1,6 @@
 # Lab 0 — Bootstrap
 
-This lab performs the one-time setup required before any infrastructure can be deployed. Choose your deployment path — **terminal** or **GitHub Actions** — and follow the corresponding options throughout.
+This lab performs the one-time setup required before any infrastructure can be deployed. Choose your deployment path — **terminal** or **GitHub Actions** — and follow the corresponding option throughout.
 
 > **Do this once.** Everything in Lab 0 is a one-time operation. Once complete, you won't need to repeat it unless you're setting up a new subscription or repository.
 
@@ -9,57 +9,16 @@ This lab performs the one-time setup required before any infrastructure can be d
 ### Accounts
 
 - An **Azure subscription** where you have **Owner** or **Contributor + User Access Administrator** permissions
-- A **GitHub account** with a repository for this project (Option B)
+- A **GitHub account** with a repository for this project (GitHub Actions path)
 
 ### Tools
 
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) — run `az login` before starting
 - [Terraform >= 1.14.6](https://developer.hashicorp.com/terraform/install)
 - [.NET SDK 9.0+](https://dotnet.microsoft.com/download)
-- [GitHub CLI](https://cli.github.com/) — Option B only; run `gh auth login` before starting
+- [GitHub CLI](https://cli.github.com/) — GitHub Actions path; run `gh auth login` before starting
 
-## Step 1 — Configure CI/CD (Option B only)
-
-> Option A users: proceed directly to [Step 2](#step-2--bootstrap-the-terraform-remote-state-backend).
-
-The `init-github` script creates an Entra app registration with OIDC federation, sets GitHub repository secrets, and configures all environment variables for the `dev` GitHub environment. This is required before any GitHub Actions workflows can run.
-
-```powershell
-# PowerShell
-cd infra
-./init-github.ps1
-```
-
-```bash
-# Bash / WSL / macOS
-cd infra
-chmod +x init-github.sh
-./init-github.sh
-```
-
-The script auto-detects your subscription, tenant, and GitHub repo. Override with flags:
-
-```bash
-./init-github.sh --subscription "12345678-..." --repo "myorg/myrepo" --env "dev"
-```
-
-If your Entra app already exists, skip that part:
-
-```bash
-./init-github.sh --skip-entra --app-client-id "12345678-..."
-```
-
-The script is idempotent — it checks for existing resources and skips what's already created.
-
-### What the script does
-
-1. Creates an [Entra app registration](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app?tabs=certificate) + service principal
-2. Adds an [OIDC federated credential](https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation-create-trust?pivots=identity-wif-apps-methods-azp#github-actions) so GitHub Actions can authenticate without stored secrets
-3. Grants **Contributor** role on the subscription
-4. Sets 3 GitHub repository secrets (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`)
-5. Creates the `dev` GitHub environment with all infrastructure variables
-
-## Step 2 — Bootstrap the Terraform remote state backend
+## Bootstrap the Terraform remote state backend
 
 This step creates the Azure Storage resources (resource group, storage account, blob container) that Terraform uses as its remote backend. All state is stored in Azure Blob Storage — local state is never used.
 
@@ -84,7 +43,46 @@ The script auto-generates `terraform.tfvars` (with sensible defaults) and `backe
 
 ### Option B — GitHub Actions
 
-> Requires [Step 1](#step-1--configure-cicd-option-b-only) to be completed first.
+**1. Configure CI/CD**
+
+The `init-github` script creates an Entra app registration with OIDC federation, sets GitHub repository secrets, and configures all environment variables for the `dev` GitHub environment.
+
+```powershell
+# PowerShell
+cd infra
+./init-github.ps1
+```
+
+```bash
+# Bash / WSL / macOS
+cd infra
+chmod +x init-github.sh
+./init-github.sh
+```
+
+The script auto-detects your subscription, tenant, and GitHub repo. Override with flags:
+
+```bash
+./init-github.sh --subscription "12345678-..." --repo "myorg/myrepo" --env "dev"
+```
+
+If your Entra app already exists:
+
+```bash
+./init-github.sh --skip-entra --app-client-id "12345678-..."
+```
+
+The script is idempotent — it checks for existing resources and skips what's already created.
+
+What the script does:
+
+1. Creates an [Entra app registration](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app?tabs=certificate) + service principal
+2. Adds an [OIDC federated credential](https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation-create-trust?pivots=identity-wif-apps-methods-azp#github-actions) so GitHub Actions can authenticate without stored secrets
+3. Grants **Contributor** role on the subscription
+4. Sets 3 GitHub repository secrets (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`)
+5. Creates the `dev` GitHub environment with all infrastructure variables
+
+**2. Run the bootstrap workflow**
 
 1. Go to **Actions → Terraform Init Remote Backend** in your GitHub repository
 2. Click **Run workflow**, select the `dev` environment, and confirm
@@ -97,12 +95,12 @@ The script auto-generates `terraform.tfvars` (with sensible defaults) and `backe
 - [ ] Terraform remote state storage account exists in Azure (resource group + storage account + blob container)
 - [ ] `az login` is authenticated to the correct subscription
 
-**Option A:**
+**Terminal:**
 
 - [ ] `infra/terraform/terraform.tfvars` exists with your infrastructure configuration
 - [ ] `infra/terraform/backend.hcl` exists with your remote state storage account details
 
-**Option B:**
+**GitHub Actions:**
 
 - [ ] App registration exists in Entra with a federated credential for your GitHub repo and the `dev` environment
 - [ ] `gh secret list` shows `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`
