@@ -21,23 +21,41 @@ This lab stands up the full Azure environment, validates connectivity, and seeds
 
 ## Step 1 — Deploy infrastructure
 
-> **Prerequisite:** Complete [Lab 0 — Bootstrap](lab-0.md) first (config files + state backend).
+### Option A — Local
 
 From `infra/terraform/`:
 
 ```bash
-terraform init -backend-config=backend.hcl
+# Ensure the backend storage account is reachable
+az storage account update \
+  --name <your-storage-account> \
+  --resource-group <your-resource-group> \
+  --public-network-access Enabled
+
+terraform init -reconfigure -backend-config=backend.hcl
+terraform validate
 terraform plan -var-file="terraform.tfvars"
 terraform apply -auto-approve -var-file="terraform.tfvars"
 ```
 
 This provisions all Azure resources and uploads the 15 product images to blob storage.
 
-For CI/CD deployment via GitHub Actions, see [infra/README.md](../infra/README.md).
+### Option B — GitHub Actions
+
+> Requires [Lab 0 Step 1](lab-0.md#step-1--set-up-entra-and-github-for-cicd) (Entra + GitHub setup) to be completed first.
+
+1. Go to **Actions → Terraform Plan, Approve, Apply** in your GitHub repository
+2. Click **Run workflow**, select the `dev` environment, and confirm
+3. The workflow runs in three stages:
+   - **Plan** — authenticates via OIDC, runs `terraform plan`, and outputs the change set
+   - **Manual approval** — creates a GitHub issue for review; an approver must approve before proceeding
+   - **Apply** — runs `terraform apply -auto-approve` to provision all resources
+
+All Terraform variables are read from the GitHub environment variables that `init-github` configured in Lab 0.
 
 ### Verify outputs
 
-After `terraform apply`, note the Key Vault URI:
+After `terraform apply` (either option), note the Key Vault URI:
 
 ```bash
 terraform output keyvault_uri
@@ -121,34 +139,16 @@ If you see an error, check:
 
 ## Step 4 — Seed Cosmos DB
 
-### Why seed data?
+The chat model (gpt-4.1) has no knowledge of Contoso Outdoors. Seeding loads customer, order, product, and policy data into Cosmos DB so agents can query it at runtime via MCP tools.
 
-AI agents can only work with data they can access. The chat model (gpt-4.1) has no knowledge of Contoso Outdoors — it doesn't know your customers, orders, products, or policies. Seeding loads all of this data into Cosmos DB so agents can query it at runtime via MCP tools.
+The seed tool performs two operations:
 
-### Two types of data, two strategies
+1. **CRM data** — Parses CSV files from `data/contoso-crm/` and upserts them as JSON documents into the Operational Cosmos DB (standard SQL queries, no vectorization)
+2. **SharePoint documents (RAG)** — Extracts text from PDFs in `data/contoso-sharepoint/`, chunks it, generates vector embeddings via `text-embedding-ada-002`, and upserts into the Knowledge Cosmos DB for semantic search
 
-**Structured data (CRM)** — Customer records, orders, products, and promotions live as JSON documents in Cosmos DB. Agents query this data using standard SQL-like queries (e.g., "find all orders for customer 101"). No AI processing is needed during seeding — the data is already in a queryable format.
-
-**Unstructured data (SharePoint documents)** — Policy documents, procedures, and guides are free-form text. You can't run a SQL query against a paragraph of text to answer *"what is your return policy?"*. This is where **RAG (Retrieval-Augmented Generation)** and the **embedding model** come in.
-
-### What the embedding model does
-
-The embedding model (`text-embedding-ada-002`) converts text into **vectors** — arrays of 1,536 floating-point numbers that capture the *meaning* of the text. Two texts that are semantically similar produce vectors that are close together in vector space, even if they share no exact words.
-
-During seeding, each document is:
-1. **Extracted** — text is pulled from the PDF
-2. **Chunked** — split into ~500-token segments (the embedding model has a token limit)
-3. **Embedded** — each chunk is sent to `text-embedding-ada-002`, which returns a 1,536-dimension float array
-4. **Stored** — the chunk text + its vector are saved to the `KnowledgeDocuments` container in Cosmos DB
-
-At query time, when a user asks *"what is your return policy?"*, the same embedding model converts the question into a vector, and Cosmos DB's `VectorDistance` function finds the chunks with the most similar vectors — semantic search by meaning, not keyword matching. These chunks are then passed to the chat model as context so it can generate a grounded, accurate answer.
+For details on RAG, the embedding model, and the data architecture, see [data/README.md](../data/README.md).
 
 ### Running the seed tool
-
-The **seed-data** tool performs both operations:
-
-1. **Phase 1 — CRM data** → Parses 6 CSV files from `data/contoso-crm/` and upserts them into the Operational Cosmos DB containers (Customers, Orders, OrderItems, Products, Promotions, SupportTickets)
-2. **Phase 2 — SharePoint documents (RAG)** → Reads PDFs from `data/contoso-sharepoint/`, extracts text, chunks it, generates vector embeddings via `text-embedding-ada-002`, and upserts into the Knowledge Cosmos DB `KnowledgeDocuments` container
 
 ```bash
 cd src/seed-data
