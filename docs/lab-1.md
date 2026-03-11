@@ -4,7 +4,7 @@ This lab stands up the full Azure environment, validates connectivity, and seeds
 
 ## Prerequisites
 
-- [Lab 0 — Bootstrap](lab-0.md) completed (accounts, tools, `terraform.tfvars`, state backend)
+- [Lab 0 — Bootstrap](lab-0.md) completed (accounts, tools, `terraform.tfvars`, remote state backend)
 - `az login` authenticated to the correct subscription
 
 ## What gets deployed
@@ -55,13 +55,15 @@ All Terraform variables are read from the GitHub environment variables that `ini
 
 ### Verify outputs
 
-After `terraform apply` (either option), note the Key Vault URI:
+After deployment, note the Key Vault URI — you'll need it for the next step.
+
+**Option A** — from `infra/terraform/`:
 
 ```bash
 terraform output keyvault_uri
 ```
 
-You'll need this for the next step.
+**Option B** — find the Key Vault URI in the Azure portal: open your Key Vault resource → **Properties** → **Vault URI**.
 
 ## Step 2 — Configure app settings
 

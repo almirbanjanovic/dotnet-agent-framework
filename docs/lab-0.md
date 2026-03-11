@@ -1,6 +1,6 @@
 # Lab 0 — Bootstrap
 
-This lab performs the one-time setup required before any infrastructure can be deployed. You'll bootstrap the Terraform state backend and optionally configure CI/CD via GitHub Actions.
+This lab performs the one-time setup required before any infrastructure can be deployed. You'll bootstrap the Terraform remote state backend and optionally configure CI/CD via GitHub Actions.
 
 > **Do this once.** Everything in Lab 0 is a one-time operation. Once complete, you won't need to repeat it unless you're setting up a new subscription or repository.
 
@@ -59,11 +59,11 @@ The script is idempotent — it checks for existing resources and skips what's a
 4. Sets 3 GitHub repository secrets (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`)
 5. Creates the `dev` GitHub environment with all infrastructure variables
 
-## Step 2 — Bootstrap the Terraform state backend
+## Step 2 — Bootstrap the Terraform remote state backend
 
-This step auto-generates `terraform.tfvars` (with sensible defaults) and `backend.hcl`, then creates the resource group, storage account, and blob container for Terraform state.
+This step creates the Azure Storage resources (resource group, storage account, blob container) that Terraform uses as its remote backend. All state is stored in Azure Blob Storage — local state is never used.
 
-> **This only needs to run once.** Edit `terraform.tfvars` after generation if you need to customize resource names, regions, or SKUs.
+> **This only needs to run once per environment.**
 
 ### Option A — Local script
 
@@ -80,7 +80,7 @@ chmod +x init-backend.sh
 ./init-backend.sh
 ```
 
-The script auto-generates `backend.hcl` from your `terraform.tfvars` if it doesn't exist, then creates the resource group, storage account, and blob container.
+The script auto-generates `terraform.tfvars` (with sensible defaults) and `backend.hcl` if they don't exist, then creates the Azure resources. Edit `terraform.tfvars` after generation to customize resource names, regions, or SKUs.
 
 ### Option B — GitHub Actions
 
@@ -95,7 +95,7 @@ The script auto-generates `backend.hcl` from your `terraform.tfvars` if it doesn
 **All paths:**
 
 - [ ] `infra/terraform/terraform.tfvars` exists with your infrastructure configuration
-- [ ] `infra/terraform/backend.hcl` was auto-generated (or manually created) with your storage account details
+- [ ] `infra/terraform/backend.hcl` was auto-generated (or manually created) with your remote state storage account details
 - [ ] Terraform state storage account exists in Azure (resource group + storage account + blob container)
 - [ ] `az login` is authenticated to the correct subscription
 
