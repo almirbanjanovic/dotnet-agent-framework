@@ -116,10 +116,7 @@ The `workshop_agent_state_store` container lives in the **Agents** Cosmos DB acc
 
 ### Prerequisites
 
-Before seeding, ensure:
-1. Infrastructure is deployed (see [infra/README.md](../infra/README.md))
-2. The Cosmos DB account, database, and all containers exist
-3. You have run `config-sync` to populate `src/appsettings.json` (see [src/README.md](../src/README.md))
+See [Lab 1 Step 4](../docs/lab-1.md#step-4--seed-cosmos-db) for prerequisites and step-by-step seeding instructions.
 
 ### How the seed tool works
 
@@ -165,13 +162,7 @@ contoso-sharepoint/**/*.pdf
 
 ### Running the seed tool
 
-From `src/seed-data/`:
-
-```bash
-dotnet run
-```
-
-The seed tool reads connection settings from `src/appsettings.json` (same config as the agent labs).
+See [Lab 1 Step 4](../docs/lab-1.md#step-4--seed-cosmos-db) for the full command and expected output.
 
 ## Folder structure
 
