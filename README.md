@@ -1,6 +1,6 @@
 # dotnet-agent-framework
 
-.NET Agent Framework tutorials for building agentic AI systems, based on [Microsoft Agent Framework](https://learn.microsoft.com/en-us/agent-framework/overview/?pivots=programming-language-csharp).
+.NET Agent Framework tutorials for building agentic AI systems, inspired by [Microsoft Agentic AI Workshop](https://github.com/microsoft/OpenAIWorkshop).
 
 ## Architecture
 
