@@ -375,13 +375,13 @@ src/
 ### Accounts
 
 - An **Azure subscription** with Owner or Contributor permissions
-- A **GitHub account** with a repository (Option B)
+- A **GitHub account** with a repository (GitHub Actions path)
 
 ### Tools
 
 - [.NET SDK 9.0+](https://dotnet.microsoft.com/download)
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli)
-- [GitHub CLI](https://cli.github.com/) (Option B)
+- [GitHub CLI](https://cli.github.com/) (GitHub Actions path)
 - [Terraform >= 1.14.6](https://developer.hashicorp.com/terraform/install)
 
 ## Getting started
@@ -390,7 +390,7 @@ See the lab guides in [`docs/`](docs/):
 
 | # | Lab | Description |
 |---|-----|-------------|
-| 0 | [Lab 0 — Bootstrap](docs/lab-0.md) | One-time setup: CI/CD configuration (Option B), Terraform config files, remote state backend |
+| 0 | [Lab 0 — Bootstrap](docs/lab-0.md) | One-time setup: Terraform config files, remote state backend, CI/CD configuration |
 | 1 | [Lab 1 — Infrastructure, Validation & Data Seeding](docs/lab-1.md) | Deploy Azure infrastructure, validate with simple-agent, seed Cosmos DB with CRM and RAG data |
 
 ## Notes
