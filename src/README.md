@@ -16,7 +16,7 @@ The `appsettings.json` is shared across all labs — each project references it 
 
 | # | File | Description |
 |---|------|-------------|
-| 0 | [Lab 0 — Bootstrap](../docs/lab-0.md) | One-time setup: Entra app registration (CI/CD), Terraform config files, state backend |
+| 0 | [Lab 0 — Bootstrap](../docs/lab-0.md) | One-time setup: Entra app registration (CI/CD), Terraform config files, remote state backend |
 | 1 | [Lab 1 — Infrastructure, Validation & Data Seeding](../docs/lab-1.md) | Deploy Azure infrastructure, validate with simple-agent, seed Cosmos DB with CRM and RAG data |
 
 ## Running a project
