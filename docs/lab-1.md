@@ -4,7 +4,7 @@ This lab stands up the full Azure environment, validates connectivity, and seeds
 
 ## Prerequisites
 
-- [Lab 0 — Bootstrap](lab-0.md) completed (accounts, tools, `terraform.tfvars`, remote state backend)
+- [Lab 0 — Bootstrap](lab-0.md) completed (accounts, tools, remote state backend)
 - `az login` authenticated to the correct subscription
 
 ## What gets deployed
@@ -26,7 +26,7 @@ This lab stands up the full Azure environment, validates connectivity, and seeds
 From `infra/terraform/`:
 
 ```bash
-# Ensure the backend storage account is reachable
+# Re-enable public access on the state storage account (disabled after bootstrap)
 az storage account update \
   --name <your-storage-account> \
   --resource-group <your-resource-group> \
@@ -208,7 +208,7 @@ Expected output:
 
 After completing all steps, verify:
 
-- [ ] `terraform output` shows all endpoints, keys, and names
+- [ ] Infrastructure resources are visible in the Azure portal (or `terraform output` shows all endpoints)
 - [ ] `src/appsettings.json` has 17 non-empty values
 - [ ] `simple-agent` returns a joke from Azure OpenAI
 - [ ] Cosmos DB Operational account has 6 containers with data

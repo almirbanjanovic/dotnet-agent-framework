@@ -94,10 +94,13 @@ The script auto-generates `terraform.tfvars` (with sensible defaults) and `backe
 
 **All paths:**
 
-- [ ] `infra/terraform/terraform.tfvars` exists with your infrastructure configuration
-- [ ] `infra/terraform/backend.hcl` was auto-generated (or manually created) with your remote state storage account details
-- [ ] Terraform state storage account exists in Azure (resource group + storage account + blob container)
+- [ ] Terraform remote state storage account exists in Azure (resource group + storage account + blob container)
 - [ ] `az login` is authenticated to the correct subscription
+
+**Local only (Option A):**
+
+- [ ] `infra/terraform/terraform.tfvars` exists with your infrastructure configuration
+- [ ] `infra/terraform/backend.hcl` exists with your remote state storage account details
 
 **CI/CD only (Step 1):**
 
