@@ -115,5 +115,5 @@ Each module lives under a `v1/` folder. When a breaking change is needed, create
 
 - Provider versions are pinned with `~>` constraints in `providers.tf`.
 - `terraform.tfvars`, `backend.hcl`, and `*.backend.hcl` are gitignored under `infra/.gitignore`.
-- The bootstrap workflow disables storage public network access after setup; ensure your network can reach the storage account when running Terraform locally.
+- The bootstrap scripts and workflow disable storage public network access after setup; ensure your network can reach the storage account when running Terraform locally.
 - The resource group is created by the bootstrap scripts / workflow, not by Terraform. The name is passed into `main.tf` via `resource_group_name`.
