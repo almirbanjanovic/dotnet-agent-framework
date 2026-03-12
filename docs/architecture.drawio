@@ -226,7 +226,7 @@
                 <mxCell id="8" value="SQL Database&lt;br&gt;(Operational)" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/databases/SQL_Database.svg;" vertex="1" parent="41">
                     <mxGeometry x="68" y="110" width="36" height="48" as="geometry"/>
                 </mxCell>
-                <mxCell id="42" value="Event Grid" style="image;aspect=fixed;html=1;points=[];align=right;fontSize=12;image=img/lib/azure2/integration/Event_Grid_Domains.svg;labelPosition=left;verticalLabelPosition=top;verticalAlign=bottom;" vertex="1" parent="1">
+                <mxCell id="42" value="&amp;nbsp; Event Grid" style="image;aspect=fixed;html=1;points=[];align=left;fontSize=12;image=img/lib/azure2/integration/Event_Grid_Domains.svg;labelPosition=right;verticalLabelPosition=middle;verticalAlign=middle;" vertex="1" parent="1">
                     <mxGeometry x="1480" y="950" width="67" height="60" as="geometry"/>
                 </mxCell>
                 <mxCell id="43" value="Storage Account&lt;div&gt;(Images, Documents)&lt;/div&gt;" style="image;aspect=fixed;html=1;points=[];align=right;fontSize=12;image=img/lib/azure2/storage/Storage_Accounts.svg;labelPosition=left;verticalLabelPosition=top;verticalAlign=bottom;" vertex="1" parent="1">
