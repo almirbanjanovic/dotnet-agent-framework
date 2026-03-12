@@ -62,7 +62,7 @@ terraform apply -auto-approve -var-file="terraform.tfvars"
    - **Manual approval** — creates a GitHub issue for review; an approver must approve before proceeding
    - **Apply** — runs `terraform apply -auto-approve` to provision all resources
 
-All Terraform variables are read from the GitHub environment variables that `init-github` configured in Lab 0.
+All Terraform variables are read from the GitHub environment variables that `init` configured in Lab 0.
 
 ### Verify outputs
 

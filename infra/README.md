@@ -8,10 +8,8 @@ This folder contains all Terraform infrastructure-as-code and bootstrap scripts 
 
 ```
 infra/
-├── init-backend.ps1           # Bootstrap Terraform backend (PowerShell)
-├── init-backend.sh            # Bootstrap Terraform backend (Bash)
-├── init-github.ps1            # Set up Entra + GitHub for CI/CD (PowerShell)
-├── init-github.sh             # Set up Entra + GitHub for CI/CD (Bash)
+├── init.ps1                   # One-time bootstrap: backend + Entra + GitHub CI/CD (PowerShell)
+├── init.sh                    # One-time bootstrap: backend + Entra + GitHub CI/CD (Bash)
 └── terraform/
     ├── main.tf                # Root module — wires all child modules
     ├── variables.tf           # Root input variables (no defaults)
