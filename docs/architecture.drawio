@@ -1,6 +1,6 @@
 <mxfile host="65bd71144e">
     <diagram id="architecture" name="Architecture">
-        <mxGraphModel dx="5968" dy="1796" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2200" pageHeight="1600" math="0" shadow="0">
+        <mxGraphModel dx="3994" dy="855" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2200" pageHeight="1600" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -43,7 +43,7 @@
                 <mxCell id="mcp-images" value="Product&#xa;Images MCP" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" parent="aks-group" vertex="1">
                     <mxGeometry x="480" y="388.8181818181818" width="120" height="46" as="geometry"/>
                 </mxCell>
-                <mxCell id="orch-label" value="Orchestration Pods" style="text;html=1;fontSize=11;fontStyle=3;align=left;verticalAlign=middle;fillColor=none;strokeColor=none;fontColor=#666666;" parent="aks-group" vertex="1">
+                <mxCell id="orch-label" value="Agent and Workflow Orchestration" style="text;html=1;fontSize=11;fontStyle=3;align=left;verticalAlign=middle;fillColor=none;strokeColor=none;fontColor=#666666;" parent="aks-group" vertex="1">
                     <mxGeometry x="150" y="471.1827272727273" width="140" height="18.818181818181817" as="geometry"/>
                 </mxCell>
                 <mxCell id="orch-single" value="Single Agent" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" parent="aks-group" vertex="1">
@@ -124,15 +124,6 @@
                 <mxCell id="foundry-icon" value="Azure AI Foundry" style="aspect=fixed;html=1;points=[];align=left;image=img/lib/azure2/ai_machine_learning/AI_Studio.svg;verticalLabelPosition=middle;verticalAlign=middle;labelBackgroundColor=none;fontSize=12;fontStyle=1;imageBackgroundColor=none;imageBorder=none;strokeColor=none;fillColor=default;labelPosition=right;" parent="foundry-group" vertex="1">
                     <mxGeometry x="-20" y="-20" width="60" height="60" as="geometry"/>
                 </mxCell>
-                <mxCell id="acr" value="Azure Container&#xa;Registry" style="aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/containers/Container_Registries.svg;verticalLabelPosition=bottom;verticalAlign=top;labelBackgroundColor=none;fontSize=11;strokeColor=none;fillColor=none;" parent="1" vertex="1">
-                    <mxGeometry x="1480" y="310" width="48" height="48" as="geometry"/>
-                </mxCell>
-                <mxCell id="keyvault" value="Key Vault" style="aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/security/Key_Vaults.svg;verticalLabelPosition=bottom;verticalAlign=top;labelBackgroundColor=none;fontSize=11;strokeColor=none;fillColor=none;" parent="1" vertex="1">
-                    <mxGeometry x="1480" y="470" width="48" height="48" as="geometry"/>
-                </mxCell>
-                <mxCell id="identity" value="Managed&#xa;Identities" style="aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/identity/Entra_Managed_Identities.svg;verticalLabelPosition=bottom;verticalAlign=top;labelBackgroundColor=none;fontSize=11;strokeColor=none;fillColor=none;" parent="1" vertex="1">
-                    <mxGeometry x="1480" y="630" width="48" height="48" as="geometry"/>
-                </mxCell>
                 <mxCell id="data-crm" value="contoso-crm/&#xa;(CSV exports)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#999999;fontSize=11;fontStyle=2;" parent="1" vertex="1">
                     <mxGeometry x="140" y="1270" width="150" height="42" as="geometry"/>
                 </mxCell>
@@ -195,14 +186,20 @@
                         </Array>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="e-aks-acr" value="Image pull" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#666666;fontSize=9;fontColor=#666666;" parent="1" source="aks-group" target="acr" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
+                <mxCell id="e-aks-acr" value="Image pull" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#666666;fontSize=9;fontColor=#666666;" parent="1" source="aks-group" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="1480" y="334.04761904761904" as="targetPoint"/>
+                    </mxGeometry>
                 </mxCell>
-                <mxCell id="e-kv-aks" value="Secrets" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#666666;fontSize=9;fontColor=#666666;" parent="1" source="keyvault" target="aks-group" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
+                <mxCell id="e-kv-aks" value="Secrets" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#666666;fontSize=9;fontColor=#666666;" parent="1" target="aks-group" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="1480" y="494.04761904761904" as="sourcePoint"/>
+                    </mxGeometry>
                 </mxCell>
-                <mxCell id="e-id-aks" value="RBAC" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#666666;fontSize=9;fontColor=#666666;dashed=1;dashPattern=5 2;" parent="1" source="identity" target="aks-group" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
+                <mxCell id="e-id-aks" value="RBAC" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#666666;fontSize=9;fontColor=#666666;dashed=1;dashPattern=5 2;" parent="1" target="aks-group" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="1480" y="654.047619047619" as="sourcePoint"/>
+                    </mxGeometry>
                 </mxCell>
                 <mxCell id="64" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="2" target="embed-model">
                     <mxGeometry relative="1" as="geometry">
@@ -263,6 +260,15 @@
                 </mxCell>
                 <mxCell id="70" style="edgeStyle=orthogonalEdgeStyle;html=1;entryX=0;entryY=0.549;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1" source="user" target="67">
                     <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="72" value="Azure Container Registry" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/containers/Container_Registries.svg;" vertex="1" parent="1">
+                    <mxGeometry x="1490" y="307" width="68" height="61" as="geometry"/>
+                </mxCell>
+                <mxCell id="73" value="Key Vault" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/security/Key_Vaults.svg;" vertex="1" parent="1">
+                    <mxGeometry x="1490" y="460" width="68" height="68" as="geometry"/>
+                </mxCell>
+                <mxCell id="74" value="Managed Identitites" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/identity/Entra_Managed_Identities.svg;" vertex="1" parent="1">
+                    <mxGeometry x="1490" y="620" width="68" height="60.440000000000005" as="geometry"/>
                 </mxCell>
             </root>
         </mxGraphModel>
