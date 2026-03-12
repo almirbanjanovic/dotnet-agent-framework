@@ -1,11 +1,24 @@
 # =============================================================================
 # Azure Storage Account Module v1
-# Creates: Storage Account + Blob Container + uploads product images
+# Creates: Storage Account + N Blob Containers + uploads files per container
 # =============================================================================
 
 locals {
   # Storage account names: 3-24 chars, lowercase alphanumeric only
   storage_account_name = replace("st${var.project_name}${var.purpose}", "-", "")
+
+  # Flatten containers × files into a single map for blob uploads
+  blob_uploads = merge([
+    for key, container in var.containers : {
+      for file in (container.upload_source_path != "" ? fileset(container.upload_source_path, container.upload_file_pattern) : []) :
+      "${key}/${file}" => {
+        container_name = container.name
+        file_name      = file
+        source_path    = "${container.upload_source_path}/${file}"
+        content_type   = container.upload_content_type
+      }
+    }
+  ]...)
 }
 
 # -----------------------------------------------------------------------------
@@ -28,26 +41,41 @@ resource "azurerm_storage_account" "this" {
 }
 
 # -----------------------------------------------------------------------------
-# Blob Container
+# Blob Containers (one per entry in var.containers)
 # -----------------------------------------------------------------------------
 resource "azurerm_storage_container" "this" {
-  name                  = var.container_name
+  for_each = var.containers
+
+  name                  = each.value.name
   storage_account_id    = azurerm_storage_account.this.id
-  container_access_type = var.container_access_type
+  container_access_type = each.value.access_type
 }
 
 # -----------------------------------------------------------------------------
-# Upload image files
+# Upload files (flattened across all containers)
 # -----------------------------------------------------------------------------
-resource "azurerm_storage_blob" "images" {
-  for_each = var.image_source_path != "" ? fileset(var.image_source_path, "*.png") : toset([])
+resource "azurerm_storage_blob" "uploads" {
+  for_each = local.blob_uploads
 
-  name                   = each.value
+  name                   = each.value.file_name
   storage_account_name   = azurerm_storage_account.this.name
-  storage_container_name = azurerm_storage_container.this.name
+  storage_container_name = each.value.container_name
   type                   = "Block"
-  source                 = "${var.image_source_path}/${each.value}"
-  content_type           = "image/png"
+  source                 = each.value.source_path
+  content_type           = each.value.content_type
 
   depends_on = [azurerm_storage_container.this]
+}
+
+# -----------------------------------------------------------------------------
+# State migration — moved blocks for existing resources
+# -----------------------------------------------------------------------------
+moved {
+  from = azurerm_storage_container.this
+  to   = azurerm_storage_container.this["images"]
+}
+
+moved {
+  from = azurerm_storage_blob.images
+  to   = azurerm_storage_blob.uploads
 }

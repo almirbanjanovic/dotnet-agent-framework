@@ -1,28 +1,89 @@
 using System.Globalization;
-using System.Text.Json;
-using Microsoft.Azure.Cosmos;
+using Microsoft.Data.SqlClient;
 
 namespace seed_data;
 
 /// <summary>
-/// Seeds Cosmos DB containers from CSV files in the contoso-crm folder.
-/// Each CSV file maps to a Cosmos DB container. Rows are parsed into JSON
-/// documents and upserted with the correct partition key.
+/// Seeds Azure SQL Database tables from CSV files in the contoso-crm folder.
+/// Creates tables if they don't exist, then upserts rows using MERGE.
 /// </summary>
 public static class CrmSeeder
 {
-    // Maps CSV filename (without extension) to (container name, partition key property)
-    private static readonly Dictionary<string, (string Container, string PartitionKey)> ContainerMap = new()
+    // Maps CSV filename (without extension) to table name and column definitions
+    private static readonly Dictionary<string, TableDef> TableMap = new()
     {
-        ["customers"]       = ("Customers",      "id"),
-        ["orders"]          = ("Orders",         "customer_id"),
-        ["order-items"]     = ("OrderItems",     "order_id"),
-        ["products"]        = ("Products",       "category"),
-        ["promotions"]      = ("Promotions",     "id"),
-        ["support-tickets"] = ("SupportTickets", "customer_id"),
+        ["customers"] = new("Customers", "id", new[]
+        {
+            ("id", "VARCHAR(10)", true),
+            ("first_name", "VARCHAR(50)", false),
+            ("last_name", "VARCHAR(50)", false),
+            ("email", "VARCHAR(100)", false),
+            ("phone", "VARCHAR(20)", false),
+            ("address", "VARCHAR(200)", false),
+            ("loyalty_tier", "VARCHAR(20)", false),
+            ("account_status", "VARCHAR(20)", false),
+            ("created_date", "DATE", false),
+        }),
+        ["orders"] = new("Orders", "id", new[]
+        {
+            ("id", "INT", true),
+            ("customer_id", "VARCHAR(10)", false),
+            ("order_date", "DATE", false),
+            ("status", "VARCHAR(20)", false),
+            ("total_amount", "DECIMAL(10,2)", false),
+            ("shipping_address", "VARCHAR(200)", false),
+            ("tracking_number", "VARCHAR(50)", false),
+            ("estimated_delivery", "DATE", false),
+        }),
+        ["order-items"] = new("OrderItems", "id", new[]
+        {
+            ("id", "INT", true),
+            ("order_id", "INT", false),
+            ("product_id", "VARCHAR(10)", false),
+            ("product_name", "VARCHAR(100)", false),
+            ("quantity", "INT", false),
+            ("unit_price", "DECIMAL(10,2)", false),
+        }),
+        ["products"] = new("Products", "id", new[]
+        {
+            ("id", "VARCHAR(10)", true),
+            ("name", "VARCHAR(100)", false),
+            ("category", "VARCHAR(50)", false),
+            ("description", "VARCHAR(500)", false),
+            ("price", "DECIMAL(10,2)", false),
+            ("in_stock", "BIT", false),
+            ("rating", "DECIMAL(3,1)", false),
+            ("weight_kg", "DECIMAL(5,2)", false),
+            ("image_filename", "VARCHAR(100)", false),
+        }),
+        ["promotions"] = new("Promotions", "id", new[]
+        {
+            ("id", "VARCHAR(20)", true),
+            ("name", "VARCHAR(100)", false),
+            ("description", "VARCHAR(500)", false),
+            ("discount_percent", "INT", false),
+            ("eligible_categories", "VARCHAR(200)", false),
+            ("min_loyalty_tier", "VARCHAR(20)", false),
+            ("start_date", "DATE", false),
+            ("end_date", "DATE", false),
+            ("active", "BIT", false),
+        }),
+        ["support-tickets"] = new("SupportTickets", "id", new[]
+        {
+            ("id", "VARCHAR(20)", true),
+            ("customer_id", "VARCHAR(10)", false),
+            ("order_id", "INT", false),
+            ("category", "VARCHAR(30)", false),
+            ("subject", "VARCHAR(200)", false),
+            ("description", "VARCHAR(1000)", false),
+            ("status", "VARCHAR(20)", false),
+            ("priority", "VARCHAR(20)", false),
+            ("opened_at", "DATE", false),
+            ("closed_at", "DATE", false),
+        }),
     };
 
-    public static async Task SeedAsync(Database database, string crmFolder)
+    public static async Task SeedAsync(string connectionString, string crmFolder)
     {
         if (!Directory.Exists(crmFolder))
         {
@@ -33,43 +94,118 @@ public static class CrmSeeder
         var csvFiles = Directory.GetFiles(crmFolder, "*.csv");
         Console.WriteLine($"  Found {csvFiles.Length} CSV files in {Path.GetFileName(crmFolder)}/\n");
 
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync();
+
+        // Create tables in dependency order (parents before children)
+        var tableOrder = new[] { "customers", "products", "promotions", "orders", "order-items", "support-tickets" };
+
+        foreach (var fileName in tableOrder)
+        {
+            if (TableMap.TryGetValue(fileName, out var tableDef))
+            {
+                await CreateTableIfNotExistsAsync(connection, tableDef);
+            }
+        }
+
+        // Seed data
         foreach (var csvFile in csvFiles)
         {
             var fileName = Path.GetFileNameWithoutExtension(csvFile);
 
-            if (!ContainerMap.TryGetValue(fileName, out var mapping))
+            if (!TableMap.TryGetValue(fileName, out var tableDef))
             {
-                Console.WriteLine($"  ⚠ Skipping {fileName}.csv — no container mapping defined");
+                Console.WriteLine($"  ⚠ Skipping {fileName}.csv — no table mapping defined");
                 continue;
             }
 
-            var container = database.GetContainer(mapping.Container);
-            var documents = ParseCsv(csvFile);
-
+            var rows = ParseCsv(csvFile);
             int count = 0;
-            foreach (var doc in documents)
+
+            foreach (var row in rows)
             {
-                // Extract partition key value
-                if (!doc.TryGetValue(mapping.PartitionKey, out var pkValue))
-                {
-                    Console.WriteLine($"  ⚠ Row missing partition key '{mapping.PartitionKey}' in {fileName}.csv, skipping");
-                    continue;
-                }
-
-                var json = JsonSerializer.Serialize(doc);
-                using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json));
-
-                await container.UpsertItemStreamAsync(stream, new PartitionKey(pkValue?.ToString() ?? ""));
+                await UpsertRowAsync(connection, tableDef, row);
                 count++;
             }
 
-            Console.WriteLine($"  ✓ {mapping.Container}: {count} documents upserted");
+            Console.WriteLine($"  ✓ {tableDef.TableName}: {count} rows upserted");
         }
+
+        // Verify all tables have data
+        Console.WriteLine();
+        Console.WriteLine("  Verifying seeded data...\n");
+
+        bool allPassed = true;
+        foreach (var tableDef in TableMap.Values)
+        {
+            await using var cmd = new SqlCommand($"SELECT COUNT(*) FROM {tableDef.TableName}", connection);
+            var rowCount = (int)(await cmd.ExecuteScalarAsync())!;
+
+            if (rowCount > 0)
+            {
+                Console.WriteLine($"  ✓ {tableDef.TableName}: {rowCount} rows");
+            }
+            else
+            {
+                Console.WriteLine($"  ✗ {tableDef.TableName}: 0 rows — VERIFICATION FAILED");
+                allPassed = false;
+            }
+        }
+
+        if (!allPassed)
+        {
+            throw new InvalidOperationException("Data verification failed — one or more tables have 0 rows.");
+        }
+
+        Console.WriteLine("\n  ✓ All tables verified successfully");
     }
 
-    private static List<Dictionary<string, object?>> ParseCsv(string filePath)
+    private static async Task CreateTableIfNotExistsAsync(SqlConnection connection, TableDef tableDef)
     {
-        var results = new List<Dictionary<string, object?>>();
+        var columns = string.Join(",\n    ",
+            tableDef.Columns.Select(c =>
+                $"{c.Name} {c.SqlType}{(c.IsPrimaryKey ? " PRIMARY KEY" : "")}"));
+
+        var sql = $"""
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = '{tableDef.TableName}')
+            CREATE TABLE {tableDef.TableName} (
+                {columns}
+            )
+            """;
+
+        await using var cmd = new SqlCommand(sql, connection);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    private static async Task UpsertRowAsync(SqlConnection connection, TableDef tableDef, Dictionary<string, string?> row)
+    {
+        var columns = tableDef.Columns.Select(c => c.Name).ToList();
+        var paramNames = columns.Select(c => $"@{c}").ToList();
+        var updateSet = columns.Where(c => c != tableDef.PrimaryKey)
+            .Select(c => $"T.{c} = S.{c}").ToList();
+
+        var sql = $"""
+            MERGE {tableDef.TableName} AS T
+            USING (SELECT {string.Join(", ", paramNames.Select((p, i) => $"{p} AS {columns[i]}"))}) AS S
+            ON T.{tableDef.PrimaryKey} = S.{tableDef.PrimaryKey}
+            WHEN MATCHED THEN UPDATE SET {string.Join(", ", updateSet)}
+            WHEN NOT MATCHED THEN INSERT ({string.Join(", ", columns)}) VALUES ({string.Join(", ", paramNames)});
+            """;
+
+        await using var cmd = new SqlCommand(sql, connection);
+
+        foreach (var col in tableDef.Columns)
+        {
+            var value = row.TryGetValue(col.Name, out var v) ? v : null;
+            cmd.Parameters.AddWithValue($"@{col.Name}", ConvertValue(value, col.SqlType) ?? DBNull.Value);
+        }
+
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    private static List<Dictionary<string, string?>> ParseCsv(string filePath)
+    {
+        var results = new List<Dictionary<string, string?>>();
         var lines = File.ReadAllLines(filePath);
 
         if (lines.Length < 2) return results;
@@ -82,11 +218,11 @@ public static class CrmSeeder
             if (string.IsNullOrEmpty(line)) continue;
 
             var values = ParseCsvLine(line);
-            var doc = new Dictionary<string, object?>();
+            var doc = new Dictionary<string, string?>();
 
             for (int j = 0; j < headers.Length && j < values.Length; j++)
             {
-                doc[headers[j]] = ConvertValue(values[j]);
+                doc[headers[j]] = string.IsNullOrEmpty(values[j]) ? null : values[j];
             }
 
             results.Add(doc);
@@ -124,23 +260,20 @@ public static class CrmSeeder
         return fields.ToArray();
     }
 
-    private static object? ConvertValue(string value)
+    private static object? ConvertValue(string? value, string sqlType)
     {
         if (string.IsNullOrEmpty(value)) return null;
 
-        // Boolean
-        if (value.Equals("true", StringComparison.OrdinalIgnoreCase)) return true;
-        if (value.Equals("false", StringComparison.OrdinalIgnoreCase)) return false;
-
-        // Integer
-        if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var intVal))
-            return intVal;
-
-        // Decimal/double
-        if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var dblVal))
-            return dblVal;
-
-        // String (default)
-        return value;
+        return sqlType.ToUpperInvariant() switch
+        {
+            "BIT" => value.Equals("true", StringComparison.OrdinalIgnoreCase),
+            "INT" => int.Parse(value, CultureInfo.InvariantCulture),
+            var t when t.StartsWith("DECIMAL") =>
+                decimal.Parse(value, NumberStyles.Float, CultureInfo.InvariantCulture),
+            "DATE" => DateTime.Parse(value, CultureInfo.InvariantCulture),
+            _ => value,
+        };
     }
+
+    private record TableDef(string TableName, string PrimaryKey, (string Name, string SqlType, bool IsPrimaryKey)[] Columns);
 }

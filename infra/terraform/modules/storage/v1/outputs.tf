@@ -19,7 +19,7 @@ output "primary_access_key" {
   sensitive   = true
 }
 
-output "container_name" {
-  description = "Blob container name"
-  value       = azurerm_storage_container.this.name
+output "container_names" {
+  description = "Map of logical key => blob container name"
+  value       = { for k, v in azurerm_storage_container.this : k => v.name }
 }

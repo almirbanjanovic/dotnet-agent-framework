@@ -17,7 +17,7 @@ Customer service agents handle requests ranging from simple product lookups to m
 | **Product Catalog** | Full product inventory with descriptions, pricing, and availability | Product details, categories, stock status, ratings, images |
 | **Promotions Engine** | Active sales, discounts, and loyalty-tier-specific deals | Discount percentages, eligible categories, loyalty tier requirements |
 | **Support Tickets** | Customer support cases tied to orders | Ticket status, priority, category (shipping/product-issue/return/general) |
-| **Knowledge Base** | Guides, policies, and procedures as searchable documents | Sizing guides, care instructions, return policies, warranty info (vector-searchable via RAG) |
+| **Knowledge Base** | Guides, policies, and procedures as searchable documents | Sizing guides, care instructions, return policies, warranty info (vector-searchable via Azure AI Search) |
 | **Product Image Store** | Product photos stored in Azure Blob Storage | High-quality product images accessible via MCP tools |
 
 ## 3. Customer Scenarios
@@ -187,20 +187,20 @@ Semantic search over guides, policies, and procedures (RAG pattern).
 
 ## 5. Data Model
 
-### Structured Data (CSV → Cosmos DB Operational Account)
+### Structured Data (CSV \u2192 Azure SQL Database)
 
-| Entity | Fields | Partition Key |
-|--------|--------|---------------|
-| **Customers** | `id`, `first_name`, `last_name`, `email`, `phone`, `address`, `loyalty_tier`, `account_status`, `created_date` | `/id` |
-| **Orders** | `id`, `customer_id`, `order_date`, `status`, `total_amount`, `shipping_address`, `tracking_number`, `estimated_delivery` | `/customer_id` |
-| **OrderItems** | `id`, `order_id`, `product_id`, `product_name`, `quantity`, `unit_price` | `/order_id` |
-| **Products** | `id`, `name`, `category`, `description`, `price`, `in_stock`, `rating`, `weight_kg`, `image_filename` | `/category` |
-| **Promotions** | `id`, `name`, `description`, `discount_percent`, `eligible_categories`, `min_loyalty_tier`, `start_date`, `end_date`, `active` | `/id` |
-| **SupportTickets** | `id`, `customer_id`, `order_id`, `category`, `subject`, `description`, `status`, `priority`, `opened_at`, `closed_at` | `/customer_id` |
+| Entity | Fields | Primary Key |
+|--------|--------|-------------|
+| **Customers** | `id`, `first_name`, `last_name`, `email`, `phone`, `address`, `loyalty_tier`, `account_status`, `created_date` | `id` |
+| **Orders** | `id`, `customer_id`, `order_date`, `status`, `total_amount`, `shipping_address`, `tracking_number`, `estimated_delivery` | `id` (FK: `customer_id` \u2192 Customers) |
+| **OrderItems** | `id`, `order_id`, `product_id`, `product_name`, `quantity`, `unit_price` | `id` (FK: `order_id` \u2192 Orders) |
+| **Products** | `id`, `name`, `category`, `description`, `price`, `in_stock`, `rating`, `weight_kg`, `image_filename` | `id` |
+| **Promotions** | `id`, `name`, `description`, `discount_percent`, `eligible_categories`, `min_loyalty_tier`, `start_date`, `end_date`, `active` | `id` |
+| **SupportTickets** | `id`, `customer_id`, `order_id`, `category`, `subject`, `description`, `status`, `priority`, `opened_at`, `closed_at` | `id` (FK: `customer_id` \u2192 Customers, `order_id` \u2192 Orders) |
 
-### Unstructured Data (PDFs → Cosmos DB Knowledge Account via RAG)
+### Unstructured Data (PDFs → Azure AI Search via integrated vectorization)
 
-Policy documents, guides, and procedures are vectorized and stored in the `KnowledgeDocuments` container for semantic search.
+Policy documents, guides, and procedures are uploaded to Azure Blob Storage and automatically vectorized by the AI Search indexer (text extraction → chunking → embedding). Stored in the `knowledge-documents` search index for semantic search.
 
 ### Product Images (Azure Blob Storage)
 

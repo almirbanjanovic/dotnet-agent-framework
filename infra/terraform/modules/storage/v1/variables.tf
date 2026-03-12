@@ -36,21 +36,15 @@ variable "allow_public_access" {
   default     = false
 }
 
-variable "container_name" {
-  description = "Name of the blob container"
-  type        = string
-}
-
-variable "container_access_type" {
-  description = "Access type for the container (private, blob, container)"
-  type        = string
-  default     = "private"
-}
-
-variable "image_source_path" {
-  description = "Local path to the folder containing image files to upload. Set to empty string to skip uploads."
-  type        = string
-  default     = ""
+variable "containers" {
+  description = "Map of containers to create. Each entry creates a blob container and optionally uploads files."
+  type = map(object({
+    name                = string
+    access_type         = optional(string, "private")
+    upload_source_path  = optional(string, "")
+    upload_file_pattern = optional(string, "*.png")
+    upload_content_type = optional(string, "image/png")
+  }))
 }
 
 variable "tags" {

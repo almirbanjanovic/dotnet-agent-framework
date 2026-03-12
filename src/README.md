@@ -17,7 +17,7 @@ The `appsettings.json` is shared across all labs — each project references it 
 | # | File | Description |
 |---|------|-------------|
 | 0 | [Lab 0 — Bootstrap](../docs/lab-0.md) | One-time setup: Terraform config files, remote state backend, CI/CD configuration |
-| 1 | [Lab 1 — Infrastructure, Validation & Data Seeding](../docs/lab-1.md) | Deploy Azure infrastructure, validate with simple-agent, seed Cosmos DB with CRM and RAG data |
+| 1 | [Lab 1 — Infrastructure, Validation & Data Seeding](../docs/lab-1.md) | Deploy Azure infrastructure, validate with simple-agent, seed Azure SQL with CRM data |
 
 ## Running a project
 
