@@ -94,17 +94,37 @@ function Get-HclValue {
     throw "Could not find key '$Key' in $File"
 }
 
-# ── Verify prerequisites ────────────────────────────────────────────────────
+# ── Verify & install prerequisites ──────────────────────────────────────────
 Write-Banner
-Write-Step "Checking prerequisites"
+Write-Step "Checking & installing prerequisites"
 
-foreach ($cmd in @("az", "gh", "terraform", "dotnet")) {
-    if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) {
-        throw "$cmd is not installed. See the prerequisites in docs/lab-0.md."
-    }
+$prerequisites = @{
+    "az"        = @{ Name = "Azure CLI";   WinGet = "Microsoft.AzureCLI" }
+    "gh"        = @{ Name = "GitHub CLI";  WinGet = "GitHub.cli" }
+    "terraform" = @{ Name = "Terraform";   WinGet = "Hashicorp.Terraform" }
+    "dotnet"    = @{ Name = ".NET SDK";    WinGet = "Microsoft.DotNet.SDK.9" }
 }
 
-Write-Done "az, gh, terraform, dotnet available"
+foreach ($cmd in $prerequisites.Keys) {
+    if (Get-Command $cmd -ErrorAction SilentlyContinue) {
+        Write-Done "$($prerequisites[$cmd].Name) ($cmd)"
+    } else {
+        $pkg = $prerequisites[$cmd]
+        Write-Host "    Installing $($pkg.Name)..." -ForegroundColor Yellow
+        if (Get-Command winget -ErrorAction SilentlyContinue) {
+            winget install --id $pkg.WinGet --accept-source-agreements --accept-package-agreements | Out-Null
+            # Refresh PATH for current session
+            $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+            if (Get-Command $cmd -ErrorAction SilentlyContinue) {
+                Write-Done "$($pkg.Name) installed"
+            } else {
+                throw "Failed to install $($pkg.Name). Install manually and re-run."
+            }
+        } else {
+            throw "$($pkg.Name) is not installed and winget is not available. Install manually: see docs/lab-0.md"
+        }
+    }
+}
 
 # ── Authenticate ───────────────────────────────────────────────────────────────
 Write-Step "Authenticating"

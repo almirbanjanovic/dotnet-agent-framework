@@ -36,23 +36,100 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TERRAFORM_DIR="$SCRIPT_DIR/terraform"
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
-step()  { echo -e "\n\033[36m==> $1\033[0m"; }
-done_() { echo -e "    \033[32m✓ $1\033[0m"; }
-skip_() { echo -e "    \033[33m⊘ $1\033[0m"; }
+C='\033[36m' G='\033[32m' D='\033[90m' W='\033[0m' # cyan, green, dim, reset
+
+banner() {
+    echo -e ""
+    echo -e "  ${C}╔═══════════════════════════════════════════════════════╗${W}"
+    echo -e "  ${C}║                                                       ║${W}"
+    echo -e "  ${C}║   .NET Agent Framework — Lab 0 Bootstrap              ║${W}"
+    echo -e "  ${C}║                                                       ║${W}"
+    echo -e "  ${C}║   This script sets up everything you need:            ║${W}"
+    echo -e "  ${C}║     1. Config files (terraform.tfvars, backend.hcl)   ║${W}"
+    echo -e "  ${C}║     2. Azure backend (RG, storage, container)         ║${W}"
+    echo -e "  ${C}║     3. Entra app + OIDC federation                    ║${W}"
+    echo -e "  ${C}║     4. GitHub secrets + environment variables         ║${W}"
+    echo -e "  ${C}║     5. Lock down state storage                        ║${W}"
+    echo -e "  ${C}║                                                       ║${W}"
+    echo -e "  ${C}╚═══════════════════════════════════════════════════════╝${W}"
+    echo -e ""
+}
+
+phase() {
+    echo -e ""
+    echo -e "  ${D}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${W}"
+    echo -e "  ${C}Phase $1 — $2${W}"
+    echo -e "  ${D}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${W}"
+}
+
+step()  { echo -e "  → $1"; }
+done_() { echo -e "    ${G}✓ $1${W}"; }
+skip_() { echo -e "    ${D}· $1${W}"; }
 
 parse_hcl_value() {
     local file="$1" key="$2"
     grep -E "^\s*${key}\s*=" "$file" | head -1 | sed 's/.*=\s*"\(.*\)".*/\1/'
 }
 
-# ── Verify prerequisites ────────────────────────────────────────────────────
-step "Checking prerequisites"
+# ── Verify & install prerequisites ──────────────────────────────────────────
+banner
+step "Checking & installing prerequisites"
 
-for cmd in az gh terraform dotnet; do
-    command -v "$cmd" >/dev/null 2>&1 || { echo "$cmd is not installed. See docs/lab-0.md."; exit 1; }
-done
+install_if_missing() {
+    local cmd="$1" name="$2"
+    if command -v "$cmd" >/dev/null 2>&1; then
+        done_ "$name ($cmd)"
+        return
+    fi
 
-done_ "az, gh, terraform, dotnet available"
+    echo -e "    \033[33mInstalling $name...\033[0m"
+
+    if [[ "$(uname)" == "Darwin" ]]; then
+        # macOS — use Homebrew
+        if ! command -v brew >/dev/null 2>&1; then
+            echo "Homebrew not found. Install from https://brew.sh then re-run."; exit 1
+        fi
+        case "$cmd" in
+            az)        brew install azure-cli ;;
+            gh)        brew install gh ;;
+            terraform) brew install hashicorp/tap/terraform ;;
+            dotnet)    brew install --cask dotnet-sdk ;;
+        esac
+    elif command -v apt-get >/dev/null 2>&1; then
+        # Debian/Ubuntu
+        case "$cmd" in
+            az)
+                curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash ;;
+            gh)
+                (type -p wget >/dev/null || sudo apt-get install wget -y)
+                sudo mkdir -p -m 755 /etc/apt/keyrings
+                wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null
+                echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+                sudo apt-get update && sudo apt-get install gh -y ;;
+            terraform)
+                wget -qO- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+                echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+                sudo apt-get update && sudo apt-get install terraform -y ;;
+            dotnet)
+                wget https://dot.net/v1/dotnet-install.sh -O /tmp/dotnet-install.sh
+                chmod +x /tmp/dotnet-install.sh && /tmp/dotnet-install.sh --channel 9.0
+                export PATH="$PATH:$HOME/.dotnet" ;;
+        esac
+    else
+        echo "$name is not installed and no supported package manager found. Install manually."; exit 1
+    fi
+
+    if command -v "$cmd" >/dev/null 2>&1; then
+        done_ "$name installed"
+    else
+        echo "Failed to install $name. Install manually and re-run."; exit 1
+    fi
+}
+
+install_if_missing az        "Azure CLI"
+install_if_missing gh        "GitHub CLI"
+install_if_missing terraform "Terraform"
+install_if_missing dotnet    ".NET SDK"
 
 # ── Authenticate ───────────────────────────────────────────────────────────────
 step "Authenticating"
@@ -69,11 +146,10 @@ fi
 gh_user=$(gh api user --jq .login 2>/dev/null || echo "unknown")
 done_ "GitHub: $gh_user"
 
-# ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 1 — Generate config files
 # ═══════════════════════════════════════════════════════════════════════════════
 
-step "Generating configuration files"
+phase 1 "Generate configuration files"
 
 TFVARS_FILE="$TERRAFORM_DIR/terraform.tfvars"
 
@@ -180,11 +256,10 @@ fi
 STORAGE_ACCOUNT=$(parse_hcl_value "$BACKEND_HCL" "storage_account_name")
 CONTAINER_NAME=$(parse_hcl_value "$BACKEND_HCL" "container_name")
 
-# ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 2 — Create Azure backend resources
 # ═══════════════════════════════════════════════════════════════════════════════
 
-step "Creating Terraform backend resources"
+phase 2 "Create Azure backend resources"
 
 echo ""
 echo "    Resource Group:   $RESOURCE_GROUP"
@@ -252,7 +327,7 @@ if [[ "$SKIP_ENTRA" == "true" ]]; then
     if [[ -z "$APP_CLIENT_ID" ]]; then echo "--skip-entra requires --app-client-id"; exit 1; fi
     skip_ "Skipping Entra setup (using existing app: $APP_CLIENT_ID)"
 else
-    step "Creating Entra app registration"
+    phase 3 "Entra app registration + OIDC"
 
     existing=$(az ad app list --display-name "$APP_NAME" --query "[0].appId" -o tsv 2>/dev/null || true)
     if [[ -n "$existing" ]]; then
@@ -297,11 +372,12 @@ else
     fi
 fi
 
-# ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 4 — GitHub secrets + environment variables
 # ═══════════════════════════════════════════════════════════════════════════════
 
-step "Setting GitHub repository secrets"
+phase 4 "GitHub secrets + environment variables"
+
+step "Setting repository secrets"
 
 gh secret set AZURE_CLIENT_ID --repo "$GITHUB_REPO" --body "$APP_CLIENT_ID"
 done_ "AZURE_CLIENT_ID"
@@ -310,7 +386,7 @@ done_ "AZURE_TENANT_ID"
 gh secret set AZURE_SUBSCRIPTION_ID --repo "$GITHUB_REPO" --body "$SUBSCRIPTION_ID"
 done_ "AZURE_SUBSCRIPTION_ID"
 
-step "Setting GitHub environment variables ($GITHUB_ENV)"
+step "Setting environment variables ($GITHUB_ENV)"
 
 # Read all values from terraform.tfvars — single source of truth
 declare -A ENV_VARS=(
@@ -372,27 +448,27 @@ done
 
 done_ "Set $count environment variables"
 
-# ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 5 — Lock down storage
 # ═══════════════════════════════════════════════════════════════════════════════
 
-step "Disabling public network access on state storage"
+phase 5 "Lock down state storage"
 
 az storage account update --name "$STORAGE_ACCOUNT" --resource-group "$RESOURCE_GROUP" --public-network-access Disabled >/dev/null
 done_ "Public access disabled on $STORAGE_ACCOUNT"
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
-echo "╔═══════════════════════════════════════════════════════════╗"
-echo "║  Bootstrap Complete                                      ║"
-echo "╠═══════════════════════════════════════════════════════════╣"
-echo "║  Resource group:   $RESOURCE_GROUP"
-echo "║  Storage account:  $STORAGE_ACCOUNT"
-echo "║  App registration: $APP_CLIENT_ID"
-echo "║  GitHub repo:      $GITHUB_REPO"
-echo "║  GitHub env:       $GITHUB_ENV"
-echo "║  Repo secrets:     3 (AZURE_CLIENT_ID, TENANT_ID, SUBSCRIPTION_ID)"
-echo "║  Env variables:    $count"
-echo "╚═══════════════════════════════════════════════════════════╝"
+echo -e "  ${G}╔═══════════════════════════════════════════════════════╗${W}"
+echo -e "  ${G}║  Bootstrap Complete!                                  ║${W}"
+echo -e "  ${G}╠═══════════════════════════════════════════════════════╣${W}"
+echo -e "  ${G}║${W}  Resource group:   $RESOURCE_GROUP"
+echo -e "  ${G}║${W}  Storage account:  $STORAGE_ACCOUNT"
+echo -e "  ${G}║${W}  App registration: $APP_CLIENT_ID"
+echo -e "  ${G}║${W}  GitHub repo:      $GITHUB_REPO"
+echo -e "  ${G}║${W}  GitHub env:       $GITHUB_ENV"
+echo -e "  ${G}║${W}  Secrets:          3 (AZURE_CLIENT_ID, TENANT_ID, SUBSCRIPTION_ID)"
+echo -e "  ${G}║${W}  Env variables:    $count"
+echo -e "  ${G}║${W}"
+echo -e "  ${G}║  Next: proceed to Lab 1 (terraform apply)             ║${W}"
+echo -e "  ${G}╚═══════════════════════════════════════════════════════╝${W}"
 echo ""
-echo "Next steps: proceed to Lab 1"
