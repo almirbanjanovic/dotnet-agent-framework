@@ -5,5 +5,5 @@ output "system_topic_id" {
 
 output "subscription_id" {
   description = "Event Grid Event Subscription resource ID"
-  value       = azurerm_eventgrid_event_subscription.blob_created.id
+  value       = azurerm_eventgrid_system_topic_event_subscription.blob_created.id
 }

@@ -26,13 +26,15 @@ resource "azurerm_eventgrid_system_topic" "this" {
 
 # -----------------------------------------------------------------------------
 # Event Subscription — BlobCreated → AI Search Indexer
+# Uses azurerm_eventgrid_system_topic_event_subscription for proper integration
 # -----------------------------------------------------------------------------
-resource "azurerm_eventgrid_event_subscription" "blob_created" {
-  name  = "blob-created-to-search"
-  scope = azurerm_eventgrid_system_topic.this.source_arm_resource_id
+resource "azurerm_eventgrid_system_topic_event_subscription" "blob_created" {
+  name                = "blob-created-to-search"
+  system_topic        = azurerm_eventgrid_system_topic.this.name
+  resource_group_name = var.resource_group_name
 
   webhook_endpoint {
-    url = "https://${var.search_service_name}.search.windows.net/indexers/${var.search_indexer_name}/search.run?api-version=2024-07-01"
+    url = "https://${var.search_service_name}.search.windows.net/indexers/${var.search_indexer_name}/run?api-version=2024-07-01"
   }
 
   included_event_types = [
@@ -49,10 +51,4 @@ resource "azurerm_eventgrid_event_subscription" "blob_created" {
       values = [".pdf"]
     }
   }
-
-  delivery_identity {
-    type = "SystemAssigned"
-  }
-
-  depends_on = [azurerm_eventgrid_system_topic.this]
 }

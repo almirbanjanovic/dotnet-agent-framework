@@ -311,8 +311,8 @@ docs/
 
 infra/
   README.md                       → Infrastructure setup guide
-  init-backend.ps1                → Bootstrap Terraform backend (PowerShell)
-  init-backend.sh                 → Bootstrap Terraform backend (Bash)
+  init.ps1                        ← One-time bootstrap: backend + Entra + GitHub CI/CD (PowerShell)
+  init.sh                         ← One-time bootstrap: backend + Entra + GitHub CI/CD (Bash)
   terraform/                      → Terraform IaC (modular, versioned)
 
 src/

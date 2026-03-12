@@ -221,7 +221,8 @@ resource "null_resource" "seed_crm" {
   }
 
   provisioner "local-exec" {
-    command = "dotnet run --project ${replace("${path.module}/../../src/seed-data", "/", "\\\\")}"
+    command     = "dotnet run --project ${path.module}/../../src/seed-data"
+    working_dir = path.module
 
     environment = {
       SQL_SERVER_FQDN    = module.sql.server_fqdn
