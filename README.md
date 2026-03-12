@@ -12,38 +12,6 @@
 
 This system implements a Contoso Outdoors customer service platform where AI agents handle customer inquiries using structured order/product data and unstructured knowledge documents (via RAG). The architecture follows a **hybrid data access pattern** — shared REST APIs where multiple consumers exist, direct database access where only one consumer exists.
 
-```text
-                     ┌──────────────────────────────────────────────────────────────────────┐
-                     │  AKS Cluster                                                        │
-                     │                                                                      │
- User ──► Blazor UI ─┤── (chat) ──────► Orchestration Pods ◄── Agent Definitions (lib)      │
-              │       │                   │             │                                    │
-              │       │                   │             ▼                                    │
-              │       │                   │        Azure OpenAI (chat completions)           │
-              │       │                   ▼                                                  │
-              │       │             MCP Servers                                              │
-              │       │        ┌──────┬──────┬──────┬──────┐                                │
-              │       │        │      │      │      │      │                                │
-              │       │        ▼      ▼      ▼      ▼      ▼                                │
-              │       │      Cust&  Product Product Knowledge                              │
-              │       │      Orders  Catalog Images  (RAG) MCP                              │
-              │       │      MCP    MCP    MCP              │                                │
-              │       │        │      │      │              └─► Azure AI Search (integrated  │
-              ▼       │      Cust&  Product Product             vectorization)               │
-             BFF ─────┤──►  Orders  Catalog Images                                          │
-              │       │      API    API    API (Blob)                                        │
-              │       │       └──────┴──────┘                                                │
-              │       │                   │                                                  │
-              │       └───────────────────┼──────────────────────────────────────────────────┘
-              │                           │
-              │                           ▼
-              │                     Azure SQL Database (CRM data)
-              │
-              │          Cosmos DB Agents (state — written directly by orchestrator)
-              │
-              └── (direct data: tables, dashboards) ──► BFF ──► Domain APIs
-```
-
 ### Architectural decisions
 
 #### 1. Hybrid data access — REST APIs where shared, direct where exclusive
@@ -65,7 +33,7 @@ The system uses a **hybrid pattern** rather than forcing all traffic through RES
 
 The data layer is split into **three domain-specific APIs**, each owning its Cosmos DB containers and business logic. A **[Backend for Frontend (BFF)](https://learn.microsoft.com/en-us/azure/architecture/patterns/backends-for-frontends)** sits between the Blazor UI and the domain APIs, aggregating cross-domain calls into UI-optimized responses.
 
-| Domain API | Cosmos Containers | Key Operations |
+| Domain API | Database Tables | Key Operations |
 |---|---|---|
 | **Customer & Orders API** | Customers, Orders, OrderItems, SupportTickets | Get/update customers, orders, order items, support tickets |
 | **Product Catalog API** | Products, Promotions | Get products, promotions, eligibility checks |
@@ -321,7 +289,7 @@ See [infra/README.md](infra/README.md) for setup instructions, Terraform module 
 | MCP C# SDK | [GitHub](https://github.com/modelcontextprotocol/csharp-sdk) |
 | Backend for Frontend (BFF) | [BFF pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/backends-for-frontends) |
 | .NET clean architecture | [Common web app architectures](https://learn.microsoft.com/en-us/dotnet/architecture/modern-web-apps-azure/common-web-application-architectures#clean-architecture) |
-| Azure Cosmos DB vector search | [Vector search overview](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/vector-search) |
+| Azure AI Search | [Overview](https://learn.microsoft.com/en-us/azure/search/search-what-is-azure-search) |
 | Azure API Management | [Overview](https://learn.microsoft.com/en-us/azure/api-management/api-management-key-concepts) |
 | Azure AI Gateway (APIM GenAI policies) | [GenAI Gateway capabilities](https://learn.microsoft.com/en-us/azure/api-management/genai-gateway-capabilities) |
 | Terraform AzureRM provider | [Registry](https://registry.terraform.io/providers/hashicorp/azurerm/latest) |
