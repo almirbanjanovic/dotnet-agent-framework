@@ -256,7 +256,7 @@
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
                 <mxCell id="67" value="Application Gateway for Containers" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/networking/Application_Gateway_Containers.svg;" vertex="1" parent="1">
-                    <mxGeometry x="-90" y="305.38" width="68" height="64.24" as="geometry"/>
+                    <mxGeometry x="-90" y="306.63" width="68" height="64.24" as="geometry"/>
                 </mxCell>
                 <mxCell id="70" style="edgeStyle=orthogonalEdgeStyle;html=1;entryX=0;entryY=0.549;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1" source="user" target="67">
                     <mxGeometry relative="1" as="geometry"/>
