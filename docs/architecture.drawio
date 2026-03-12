@@ -1,6 +1,6 @@
 <mxfile host="65bd71144e">
     <diagram id="architecture" name="Architecture">
-        <mxGraphModel dx="3770" dy="748" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2200" pageHeight="1600" math="0" shadow="0">
+        <mxGraphModel dx="2954" dy="359" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2200" pageHeight="1600" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -78,10 +78,11 @@
                 <mxCell id="mcp-knowledge" value="Knowledge (RAG)&#xa;MCP" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" parent="aks-group" vertex="1">
                     <mxGeometry x="620" y="388.8181818181818" width="150" height="46" as="geometry"/>
                 </mxCell>
-                <mxCell id="54" style="edgeStyle=orthogonalEdgeStyle;html=1;entryX=0.902;entryY=0.007;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="aks-group" source="blazor" target="3">
+                <mxCell id="54" style="edgeStyle=orthogonalEdgeStyle;html=1;entryX=0.827;entryY=-0.008;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="aks-group" source="blazor" target="3">
                     <mxGeometry relative="1" as="geometry">
                         <Array as="points">
-                            <mxPoint x="935" y="109"/>
+                            <mxPoint x="869" y="109"/>
+                            <mxPoint x="869" y="489"/>
                         </Array>
                     </mxGeometry>
                 </mxCell>
@@ -114,14 +115,14 @@
                 <mxCell id="foundry-group" value="" style="rounded=1;whiteSpace=wrap;html=1;container=1;collapsible=0;dashed=1;dashPattern=5 2;fillColor=#F5F5F5;strokeColor=#0078D4;fontSize=14;fontStyle=1;verticalAlign=top;align=left;spacingTop=8;arcSize=8;" parent="1" vertex="1">
                     <mxGeometry x="420" y="20" width="700" height="180" as="geometry"/>
                 </mxCell>
-                <mxCell id="foundry-icon" value="Azure AI Foundry" style="aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/ai_machine_learning/AI_Studio.svg;verticalLabelPosition=bottom;verticalAlign=top;labelBackgroundColor=none;fontSize=12;fontStyle=1;imageBackgroundColor=none;imageBorder=none;strokeColor=none;fillColor=none;" parent="foundry-group" vertex="1">
-                    <mxGeometry x="30" y="25" width="50" height="50" as="geometry"/>
-                </mxCell>
-                <mxCell id="chat-model" value="gpt-4.1&#xa;(Chat / Agents)" style="aspect=fixed;html=1;points=[];align=left;image=img/lib/azure2/ai_machine_learning/Azure_OpenAI.svg;verticalLabelPosition=middle;verticalAlign=middle;labelBackgroundColor=none;fontSize=11;strokeColor=none;fillColor=none;labelPosition=right;" parent="foundry-group" vertex="1">
+                <mxCell id="chat-model" value="gpt-4.1&#xa;(Chat / Agents)" style="aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/ai_machine_learning/Azure_OpenAI.svg;verticalLabelPosition=top;verticalAlign=bottom;labelBackgroundColor=none;fontSize=11;strokeColor=none;fillColor=none;labelPosition=center;" parent="foundry-group" vertex="1">
                     <mxGeometry x="180" y="60" width="48" height="48" as="geometry"/>
                 </mxCell>
-                <mxCell id="embed-model" value="text-embedding-ada-002&#xa;(RAG)" style="aspect=fixed;html=1;points=[];align=left;image=img/lib/azure2/ai_machine_learning/Azure_OpenAI.svg;verticalLabelPosition=middle;verticalAlign=middle;labelBackgroundColor=none;fontSize=11;strokeColor=none;fillColor=none;labelPosition=right;" parent="foundry-group" vertex="1">
+                <mxCell id="embed-model" value="text-embedding-ada-002&#xa;(RAG)" style="aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/ai_machine_learning/Azure_OpenAI.svg;verticalLabelPosition=top;verticalAlign=bottom;labelBackgroundColor=none;fontSize=11;strokeColor=none;fillColor=none;labelPosition=center;" parent="foundry-group" vertex="1">
                     <mxGeometry x="480" y="60" width="48" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="foundry-icon" value="Azure AI Foundry" style="aspect=fixed;html=1;points=[];align=left;image=img/lib/azure2/ai_machine_learning/AI_Studio.svg;verticalLabelPosition=middle;verticalAlign=middle;labelBackgroundColor=none;fontSize=12;fontStyle=1;imageBackgroundColor=none;imageBorder=none;strokeColor=none;fillColor=default;labelPosition=right;" parent="foundry-group" vertex="1">
+                    <mxGeometry x="-20" y="-20" width="60" height="60" as="geometry"/>
                 </mxCell>
                 <mxCell id="acr" value="Azure Container&#xa;Registry" style="aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/containers/Container_Registries.svg;verticalLabelPosition=bottom;verticalAlign=top;labelBackgroundColor=none;fontSize=11;strokeColor=none;fillColor=none;" parent="1" vertex="1">
                     <mxGeometry x="1480" y="310" width="48" height="48" as="geometry"/>
@@ -203,6 +204,14 @@
                 <mxCell id="e-id-aks" value="RBAC" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#666666;fontSize=9;fontColor=#666666;dashed=1;dashPattern=5 2;" parent="1" source="identity" target="aks-group" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
+                <mxCell id="64" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="2" target="embed-model">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1660" y="845"/>
+                            <mxPoint x="1660" y="104"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
                 <mxCell id="2" value="Azure AI Search" style="image;aspect=fixed;html=1;points=[];align=right;fontSize=12;image=img/lib/azure2/app_services/Search_Services.svg;labelPosition=left;verticalLabelPosition=top;verticalAlign=bottom;" vertex="1" parent="1">
                     <mxGeometry x="1470" y="820" width="68" height="49.120000000000005" as="geometry"/>
                 </mxCell>
@@ -235,6 +244,16 @@
                 </mxCell>
                 <mxCell id="46" style="edgeStyle=orthogonalEdgeStyle;html=1;entryX=0.51;entryY=-0.002;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1" source="10" target="43">
                     <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="65" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=0.944;exitY=-0.007;exitDx=0;exitDy=0;exitPerimeter=0;" edge="1" parent="1" source="3" target="chat-model">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="1090" y="710" as="sourcePoint"/>
+                        <Array as="points">
+                            <mxPoint x="1090" y="719"/>
+                            <mxPoint x="1090" y="280"/>
+                            <mxPoint x="624" y="280"/>
+                        </Array>
+                    </mxGeometry>
                 </mxCell>
             </root>
         </mxGraphModel>
