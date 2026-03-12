@@ -52,10 +52,22 @@ for cmd in az gh terraform dotnet; do
     command -v "$cmd" >/dev/null 2>&1 || { echo "$cmd is not installed. See docs/lab-0.md."; exit 1; }
 done
 
-az account show >/dev/null 2>&1 || { echo "Not logged in to Azure CLI. Run 'az login' first."; exit 1; }
-gh auth status >/dev/null 2>&1 || { echo "Not logged in to GitHub CLI. Run 'gh auth login' first."; exit 1; }
+done_ "az, gh, terraform, dotnet available"
 
-done_ "az, gh, terraform, dotnet authenticated and available"
+# ── Authenticate ───────────────────────────────────────────────────────────────
+step "Authenticating"
+
+echo "    Signing in to Azure CLI..."
+az login >/dev/null
+acct=$(az account show --query "{name:name, id:id}" -o tsv)
+done_ "Azure: $acct"
+
+echo "    Signing in to GitHub CLI..."
+if ! gh auth status &>/dev/null; then
+    gh auth login
+fi
+gh_user=$(gh api user --jq .login 2>/dev/null || echo "unknown")
+done_ "GitHub: $gh_user"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 1 — Generate config files
