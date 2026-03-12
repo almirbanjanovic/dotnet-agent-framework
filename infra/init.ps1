@@ -57,9 +57,34 @@ $ScriptDir    = $PSScriptRoot
 $TerraformDir = "$ScriptDir\terraform"
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
-function Write-Step  { param([string]$Message) Write-Host "`n==> $Message" -ForegroundColor Cyan }
+function Write-Banner {
+    Write-Host ""
+    Write-Host "  ╔═══════════════════════════════════════════════════════╗" -ForegroundColor DarkCyan
+    Write-Host "  ║                                                       ║" -ForegroundColor DarkCyan
+    Write-Host "  ║   .NET Agent Framework — Lab 0 Bootstrap              ║" -ForegroundColor DarkCyan
+    Write-Host "  ║                                                       ║" -ForegroundColor DarkCyan
+    Write-Host "  ║   This script sets up everything you need:            ║" -ForegroundColor DarkCyan
+    Write-Host "  ║     1. Config files (terraform.tfvars, backend.hcl)   ║" -ForegroundColor DarkCyan
+    Write-Host "  ║     2. Azure backend (RG, storage, container)         ║" -ForegroundColor DarkCyan
+    Write-Host "  ║     3. Entra app + OIDC federation                    ║" -ForegroundColor DarkCyan
+    Write-Host "  ║     4. GitHub secrets + environment variables         ║" -ForegroundColor DarkCyan
+    Write-Host "  ║     5. Lock down state storage                        ║" -ForegroundColor DarkCyan
+    Write-Host "  ║                                                       ║" -ForegroundColor DarkCyan
+    Write-Host "  ╚═══════════════════════════════════════════════════════╝" -ForegroundColor DarkCyan
+    Write-Host ""
+}
+
+function Write-Phase {
+    param([int]$Number, [string]$Title)
+    Write-Host ""
+    Write-Host "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+    Write-Host "  Phase $Number — $Title" -ForegroundColor Cyan
+    Write-Host "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+}
+
+function Write-Step  { param([string]$Message) Write-Host "  → $Message" -ForegroundColor White }
 function Write-Done  { param([string]$Message) Write-Host "    ✓ $Message" -ForegroundColor Green }
-function Write-Skip  { param([string]$Message) Write-Host "    ⊘ $Message" -ForegroundColor Yellow }
+function Write-Skip  { param([string]$Message) Write-Host "    · $Message" -ForegroundColor DarkGray }
 
 function Get-HclValue {
     param([string]$File, [string]$Key)
@@ -70,6 +95,7 @@ function Get-HclValue {
 }
 
 # ── Verify prerequisites ────────────────────────────────────────────────────
+Write-Banner
 Write-Step "Checking prerequisites"
 
 foreach ($cmd in @("az", "gh", "terraform", "dotnet")) {
@@ -100,7 +126,7 @@ Write-Done "GitHub: $ghUser"
 # PHASE 1 — Generate config files
 # ═══════════════════════════════════════════════════════════════════════════════
 
-Write-Step "Generating configuration files"
+Write-Phase -Number 1 -Title "Generate configuration files"
 
 # ── terraform.tfvars ─────────────────────────────────────────────────────────
 $TfVarsFile = "$TerraformDir\terraform.tfvars"
@@ -214,7 +240,7 @@ $ContainerName  = Get-HclValue -File $BackendHcl -Key "container_name"
 # PHASE 2 — Create Azure backend resources
 # ═══════════════════════════════════════════════════════════════════════════════
 
-Write-Step "Creating Terraform backend resources"
+Write-Phase -Number 2 -Title "Create Azure backend resources"
 
 Write-Host ""
 Write-Host "    Resource Group:   $ResourceGroup"
@@ -285,7 +311,7 @@ if ($SkipEntra) {
     if (-not $AppClientId) { throw "-SkipEntra requires -AppClientId" }
     Write-Skip "Skipping Entra setup (using existing app: $AppClientId)"
 } else {
-    Write-Step "Creating Entra app registration"
+    Write-Phase -Number 3 -Title "Entra app registration + OIDC"
 
     $existing = az ad app list --display-name "$AppName" --query "[0].appId" -o tsv 2>$null
     if ($existing) {
@@ -325,7 +351,7 @@ if ($SkipEntra) {
     }
 
     # Contributor role
-    Write-Step "Granting Contributor role on subscription"
+    Write-Step "Granting Contributor role"
     $roleExists = az role assignment list --assignee "$AppClientId" --role "Contributor" --scope "/subscriptions/$SubscriptionId" --query "[0].id" -o tsv 2>$null
     if ($roleExists) {
         Write-Skip "Contributor role already assigned"
@@ -339,7 +365,9 @@ if ($SkipEntra) {
 # PHASE 4 — GitHub secrets + environment variables
 # ═══════════════════════════════════════════════════════════════════════════════
 
-Write-Step "Setting GitHub repository secrets"
+Write-Phase -Number 4 -Title "GitHub secrets + environment variables"
+
+Write-Step "Setting repository secrets"
 
 gh secret set AZURE_CLIENT_ID --repo "$GitHubRepo" --body "$AppClientId"
 Write-Done "AZURE_CLIENT_ID"
@@ -348,7 +376,7 @@ Write-Done "AZURE_TENANT_ID"
 gh secret set AZURE_SUBSCRIPTION_ID --repo "$GitHubRepo" --body "$SubscriptionId"
 Write-Done "AZURE_SUBSCRIPTION_ID"
 
-Write-Step "Setting GitHub environment variables ($GitHubEnv)"
+Write-Step "Setting environment variables ($GitHubEnv)"
 
 # Read all values from terraform.tfvars — single source of truth
 $envVars = [ordered]@{
@@ -412,7 +440,7 @@ Write-Done "Set $($envVars.Count) environment variables"
 # PHASE 5 — Lock down storage
 # ═══════════════════════════════════════════════════════════════════════════════
 
-Write-Step "Disabling public network access on state storage"
+Write-Phase -Number 5 -Title "Lock down state storage"
 
 az storage account update --name $StorageAccount --resource-group $ResourceGroup --public-network-access Disabled | Out-Null
 Write-Done "Public access disabled on $StorageAccount"
@@ -422,16 +450,17 @@ Write-Done "Public access disabled on $StorageAccount"
 # ═══════════════════════════════════════════════════════════════════════════════
 
 Write-Host ""
-Write-Host "╔═══════════════════════════════════════════════════════════╗"
-Write-Host "║  Bootstrap Complete                                      ║"
-Write-Host "╠═══════════════════════════════════════════════════════════╣"
-Write-Host "║  Resource group:   $ResourceGroup"
-Write-Host "║  Storage account:  $StorageAccount"
-Write-Host "║  App registration: $AppClientId"
-Write-Host "║  GitHub repo:      $GitHubRepo"
-Write-Host "║  GitHub env:       $GitHubEnv"
-Write-Host "║  Repo secrets:     3 (AZURE_CLIENT_ID, TENANT_ID, SUBSCRIPTION_ID)"
-Write-Host "║  Env variables:    $($envVars.Count)"
-Write-Host "╚═══════════════════════════════════════════════════════════╝"
+Write-Host "  ╔═══════════════════════════════════════════════════════╗" -ForegroundColor Green
+Write-Host "  ║  Bootstrap Complete!                                  ║" -ForegroundColor Green
+Write-Host "  ╠═══════════════════════════════════════════════════════╣" -ForegroundColor Green
+Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Resource group:   $ResourceGroup" -NoNewLine; Write-Host "" 
+Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Storage account:  $StorageAccount"
+Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  App registration: $AppClientId"
+Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  GitHub repo:      $GitHubRepo"
+Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  GitHub env:       $GitHubEnv"
+Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Secrets:          3 (AZURE_CLIENT_ID, TENANT_ID, SUBSCRIPTION_ID)"
+Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Env variables:    $($envVars.Count)"
+Write-Host "  ║" -ForegroundColor Green
+Write-Host "  ║  Next: proceed to Lab 1 (terraform apply)             ║" -ForegroundColor Green
+Write-Host "  ╚═══════════════════════════════════════════════════════╝" -ForegroundColor Green
 Write-Host ""
-Write-Host "Next steps: proceed to Lab 1"
