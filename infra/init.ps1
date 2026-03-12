@@ -78,13 +78,23 @@ foreach ($cmd in @("az", "gh", "terraform", "dotnet")) {
     }
 }
 
-try { $null = az account show 2>&1; if ($LASTEXITCODE -ne 0) { throw } }
-catch { throw "Not logged in to Azure CLI. Run 'az login' first." }
+Write-Done "az, gh, terraform, dotnet available"
 
+# ── Authenticate ───────────────────────────────────────────────────────────────
+Write-Step "Authenticating"
+
+Write-Host "    Signing in to Azure CLI..."
+az login | Out-Null
+$acct = az account show --query "{name:name, id:id}" -o tsv
+Write-Done "Azure: $acct"
+
+Write-Host "    Signing in to GitHub CLI..."
 try { $null = gh auth status 2>&1; if ($LASTEXITCODE -ne 0) { throw } }
-catch { throw "Not logged in to GitHub CLI. Run 'gh auth login' first." }
-
-Write-Done "az, gh, terraform, dotnet authenticated and available"
+catch {
+    gh auth login
+}
+$ghUser = gh api user --jq .login 2>$null
+Write-Done "GitHub: $ghUser"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 1 — Generate config files
