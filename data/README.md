@@ -2,7 +2,7 @@
 
 This folder contains simulated enterprise data sources for the Contoso Outdoors agent framework. The data represents what you'd find in a real company's systems — a product/order database, a document library, and a product image store.
 
-> **This data is used to seed Cosmos DB and Azure Blob Storage.** The seed tool (`src/seed-data/`) reads from these folders, vectorizes unstructured documents, and populates the databases.
+> **This data is provisioned automatically during `terraform apply`.** Product images and SharePoint PDFs are uploaded to Azure Blob Storage. CRM data is seeded into Azure SQL Database via the seed tool (`src/seed-data/`). SharePoint PDFs are indexed by Azure AI Search via integrated vectorization — no manual vectorization step needed.
 
 ## What is RAG?
 
@@ -16,7 +16,7 @@ The key insight: you can't search unstructured text (like a PDF policy document)
 
 | Model | Role | Used when |
 |-------|------|-----------|
-| **Embedding model** (text-embedding-ada-002) | Converts text → 1536-dim vector | Seeding (documents) and query time (user questions) |
+| **Embedding model** (text-embedding-ada-002) | Converts text → 1536-dim vector | Indexing (via AI Search skillset) and query time (via AI Search integrated vectorization) |
 | **Chat model** (gpt-4.1) | Generates natural language answers | Query time — receives user question + retrieved documents as context |
 
 ### The RAG flow
@@ -33,8 +33,8 @@ User: "What is your return policy?"
                    ▼
     ┌─────────────────────────────┐
     │  2. RETRIEVE relevant docs  │
-    │  Cosmos DB vector search    │
-    │  (VectorDistance)           │
+    │  Azure AI Search            │
+    │  (hybrid vector + keyword)  │
     │  → "Return and Refund Policy"│
     └──────────────┬──────────────┘
                    │
@@ -59,21 +59,20 @@ User: "What is your return policy?"
 │  └──────────┬───────────┘    └──────────────┬────────────────┘     │
 └─────────────┼───────────────────────────────┼──────────────────────┘
               │                               │
-              │  3. Generate answer            │  1. Convert to vector
-              │     using retrieved docs       │
+              │  3. Generate answer            │  Called by AI Search
+              │     using retrieved docs       │  skillset (integrated)
               │                               │
 ┌─────────────┼───────────────────────────────┼──────────────────────┐
-│             │   Cosmos DB (3 accounts)      │                      │
 │             │                               │                      │
 │  ┌──────────▼───────────┐    ┌──────────────▼────────────────┐     │
-│  │  Operational Account │    │  Knowledge Account           │     │
-│  │  (Session consistency)│   │  (Eventual + Vector Search)  │     │
-│  │  Customers, Orders,  │    │  KnowledgeDocuments          │     │
-│  │  Products, etc.      │    │  (vectorized PDFs)           │     │
-│  │  ← SQL queries       │    │  ← VectorDistance (RAG)      │     │
+│  │  Azure SQL Database  │    │  Azure AI Search (Basic)      │     │
+│  │  (Serverless)        │    │  Index: knowledge-documents   │     │
+│  │  Customers, Orders,  │    │  Skillset: split + embed      │     │
+│  │  Products, etc.      │    │  Indexer: blob → index        │     │
+│  │  ← SQL queries       │    │  ← Hybrid search (RAG)       │     │
 │  └──────────────────────┘    └───────────────────────────────┘     │
 │                                                                    │
-│  ┌──────────────────────┐                                          │
+│  ┌──────────────────────┐    Cosmos DB (1 account)               │
 │  │  Agents Account      │  ← conversation memory (runtime only)   │
 │  │  (Eventual)          │                                          │
 │  │  Agent State Store   │                                          │
@@ -82,87 +81,78 @@ User: "What is your return policy?"
               ▲                               ▲
               │                               │
      ┌────────┴────────┐            ┌─────────┴──────────┐
-     │  contoso-crm/   │            │ contoso-sharepoint/ │
-     │  (CSV exports)  │            │ (PDF docs + source) │
-     └─────────────────┘            └────────────────────┘
+     │  contoso-crm/   │            │  Azure Blob Storage │
+     │  (CSV exports)  │            │  sharepoint-docs    │
+     └─────────────────┘            │  (PDFs by Terraform)│
+                                    └────────────────────┘
 ```
 
 ## Data flow
 
-### Structured data (Store Data → Operational Account)
+### Structured data (Store Data → Azure SQL Database)
 
-`contoso-crm/` simulates a store data export — customer records, orders, products, etc. as CSV files. The seed tool parses these and upserts them into the **Operational** Cosmos DB account (Session consistency). **No vectorization is needed.** Agents query this data using tools with standard SQL queries (e.g., "find all orders for customer 101").
+`contoso-crm/` simulates a store data export — customer records, orders, products, etc. as CSV files. The seed tool parses these and upserts them into **Azure SQL Database** tables with proper types, primary keys, and foreign keys. Agents query this data using tools with standard SQL queries (e.g., "find all orders for customer 101"). CRM seeding runs automatically during `terraform apply` via a `null_resource` with `local-exec`.
 
-### Unstructured data (SharePoint → Knowledge Account)
+### Unstructured data (SharePoint → Azure AI Search)
 
-`contoso-sharepoint/` simulates a SharePoint document library — policy documents, procedures, and guides stored as PDFs (just like in a real enterprise). The seed tool writes to the **Knowledge** Cosmos DB account (Eventual consistency, vector search enabled):
+`contoso-sharepoint/` simulates a SharePoint document library — policy documents, procedures, and guides stored as PDFs (just like in a real enterprise). Terraform uploads these PDFs to the `sharepoint-docs` blob container during `terraform apply`. The **Azure AI Search indexer** then processes them automatically via integrated vectorization:
 
-1. **Extracts text** from each PDF using a PDF reader library (e.g., PdfPig)
-2. **Chunks the text** into segments that fit within the embedding model's token limit
-3. **Generates a vector** for each chunk by sending it through the embedding model (`text-embedding-ada-002`), producing a 1536-dimensional float array
-4. **Stores each chunk** as a document in the `KnowledgeDocuments` container with its `content_vector` field
+1. **Extracts text** from each PDF (built-in document cracking)
+2. **Chunks the text** into ~500-token segments (Text Split skill)
+3. **Generates a vector** for each chunk via the Azure OpenAI Embedding skill (`text-embedding-ada-002`, 1536 dimensions)
+4. **Indexes each chunk** in the `knowledge-documents` search index
 
-The `KnowledgeDocuments` container is configured on the **Knowledge** account with:
-- `EnableNoSQLVectorSearch` capability on the Cosmos DB account
-- A **diskANN** vector index on the `/content_vector` path
-- `cosine` distance function, `float32` data type, 1536 dimensions
-- The `/content_vector/*` path is excluded from regular indexing (it only participates in vector queries)
+The AI Search index is configured with:
+- **HNSW** vector search algorithm
+- `cosine` distance metric, `float32` data type, 1536 dimensions
+- Hybrid search (vector + keyword) for improved relevance
+
+**Event Grid** triggers the indexer on new blob uploads for near-instant availability. The indexer also runs on a 5-minute schedule as a fallback.
 
 ### Agent state (Agents Account — runtime only)
 
 The `workshop_agent_state_store` container lives in the **Agents** Cosmos DB account (Eventual consistency). It is **not seeded** — it's populated at runtime as agents have conversations. It persists conversation history and agent memory across sessions.
 
-## Seeding Cosmos DB
+## Seeding & Indexing
 
 ### Prerequisites
 
-See [Lab 1 Step 4](../docs/lab-1.md#step-4--seed-cosmos-db) for prerequisites and step-by-step seeding instructions.
+See [Lab 1](../docs/lab-1.md) for prerequisites and step-by-step instructions.
 
-### How the seed tool works
+### How data gets loaded
 
-The seed tool (`src/seed-data/`) performs two distinct operations:
+All data loading happens automatically during `terraform apply`:
 
-**1. Load structured data (Store Data → Operational account)**
+**1. Product images → Blob Storage (Terraform)**
 
-```
-contoso-crm/customers.csv      ──parse CSV──►  Operational / "Customers" container
-contoso-crm/orders.csv         ──parse CSV──►  Operational / "Orders" container
-...etc for all 6 CSV files
-```
+Product images from `contoso-images/` are uploaded to the `product-images` blob container.
 
-Each CSV row becomes a JSON document. The seed tool maps CSV column names to JSON properties and upserts into the corresponding container using the correct partition key.
-
-**2. Vectorize and load unstructured data (SharePoint → Knowledge account)**
+**2. SharePoint PDFs → Blob Storage → AI Search (Terraform + indexer)**
 
 ```
 contoso-sharepoint/**/*.pdf
         │
         ▼
-   Extract text from PDF
+   Terraform uploads to sharepoint-docs blob container
         │
         ▼
-   Chunk into segments (~500 tokens each)
+   AI Search indexer (triggered by Event Grid or 5-min schedule):
         │
-        ▼
-   For each chunk:
-        │
-        ├──► Call embedding model (text-embedding-ada-002)
-        │    → returns 1536-dim float[] vector
-        │
-        └──► Upsert to Knowledge / "KnowledgeDocuments"
-             {
-               "id": "return-and-refund-policy-chunk-1",
-               "title": "Return And Refund Policy",
-               "category": "policy",
-               "source_file": "policies/return-and-refund-policy.pdf",
-               "content": "Contoso Outdoors accepts returns within 30 calendar days...",
-               "content_vector": [0.0123, -0.0456, 0.0789, ...]  // 1536 floats
-             }
+        ├──► Document cracking (extract text from PDF)
+        ├──► Text Split skill (chunk ~500 tokens, 200 overlap)
+        ├──► Azure OpenAI Embedding skill (ada-002 → 1536-dim vector)
+        └──► Index in knowledge-documents
 ```
 
-### Running the seed tool
+**3. CRM data → Azure SQL Database (Terraform local-exec → seed tool)**
 
-See [Lab 1 Step 4](../docs/lab-1.md#step-4--seed-cosmos-db) for the full command and expected output.
+```
+contoso-crm/customers.csv      ──parse CSV──►  Azure SQL / Customers table
+contoso-crm/orders.csv         ──parse CSV──►  Azure SQL / Orders table
+...etc for all 6 CSV files
+```
+
+Each CSV row becomes a SQL row. The seed tool creates tables with proper types, primary keys, and foreign keys, then upserts via MERGE statements. The seed runs automatically via `null_resource.seed_crm` and only re-runs when CSV data changes (tracked via file hash).
 
 ## Folder structure
 
@@ -197,20 +187,21 @@ data/
     └── *.png                       ← Product photos referenced by products.csv image_filename
 ```
 
-The `.txt` files are the editable source content. The `.pdf` files are the versions used by the seed tool for text extraction and vectorization.
+The `.txt` files are the editable source content. The `.pdf` files are uploaded to Azure Blob Storage by Terraform and indexed by the AI Search indexer.
 
-## Cosmos DB container mapping
+## Data mapping
 
-| Account | Source | Container | Partition key | Vectorized |
-|---------|--------|-----------|---------------|------------|
-| Operational | `contoso-crm/customers.csv` | Customers | `/id` | No |
-| Operational | `contoso-crm/orders.csv` | Orders | `/customer_id` | No |
-| Operational | `contoso-crm/order-items.csv` | OrderItems | `/order_id` | No |
-| Operational | `contoso-crm/products.csv` | Products | `/category` | No |
-| Operational | `contoso-crm/promotions.csv` | Promotions | `/id` | No |
-| Operational | `contoso-crm/support-tickets.csv` | SupportTickets | `/customer_id` | No |
-| Knowledge | `contoso-sharepoint/**/*.pdf` | KnowledgeDocuments | `/id` | **Yes** |
-| Agents | (runtime) | workshop_agent_state_store | `/tenant_id`, `/id` | No |
+| Source | Destination | How |
+|--------|-------------|-----|
+| `contoso-crm/customers.csv` | Azure SQL / Customers | Seed tool (local-exec) |
+| `contoso-crm/orders.csv` | Azure SQL / Orders | Seed tool (local-exec) |
+| `contoso-crm/order-items.csv` | Azure SQL / OrderItems | Seed tool (local-exec) |
+| `contoso-crm/products.csv` | Azure SQL / Products | Seed tool (local-exec) |
+| `contoso-crm/promotions.csv` | Azure SQL / Promotions | Seed tool (local-exec) |
+| `contoso-crm/support-tickets.csv` | Azure SQL / SupportTickets | Seed tool (local-exec) |
+| `contoso-sharepoint/**/*.pdf` | Azure AI Search / `knowledge-documents` index | Terraform blob upload → AI Search indexer |
+| `contoso-images/*.png` | Azure Blob Storage / `product-images` container | Terraform blob upload |
+| (runtime) | Cosmos DB Agents / workshop_agent_state_store (`/tenant_id`, `/id`) | Agent orchestrator |
 
 ## Scenario data
 

@@ -47,19 +47,28 @@ embedding_sku_name          = "Standard"
 embedding_capacity          = 10
 
 # ---------------------------------------------------------------
-# Cosmos DB (3 accounts: operational, knowledge, agents)
+# Cosmos DB (1 account: agents session state)
 # ---------------------------------------------------------------
 cosmos_project_name               = "dotnetagent"
-cosmos_operational_database_name  = "contoso-outdoors"
-cosmos_knowledge_database_name    = "knowledge"
 cosmos_agents_database_name       = "agents"
 cosmos_agent_state_container_name = "workshop_agent_state_store"
 
 # ---------------------------------------------------------------
-# Storage (Product Images)
+# Azure SQL Database (CRM operational data)
 # ---------------------------------------------------------------
-storage_project_name          = "dotnetagent"
-storage_images_container_name = "product-images"
+sql_database_name = "contoso-outdoors"
+sql_admin_login   = "sqladmin"
+
+# ---------------------------------------------------------------
+# Storage
+# ---------------------------------------------------------------
+storage_project_name = "dotnetagent"
+
+# ---------------------------------------------------------------
+# AI Search
+# ---------------------------------------------------------------
+search_sku        = "basic"
+search_index_name = "knowledge-documents"
 
 # ---------------------------------------------------------------
 # ACR

@@ -26,41 +26,17 @@ output "embedding_deployment_name" {
 }
 
 # ---------------------------------------------------------------
-# Cosmos DB — Operational
+# Azure SQL Database — Operational (CRM)
 # ---------------------------------------------------------------
 
-output "cosmosdb_operational_endpoint" {
-  description = "Cosmos DB operational account endpoint"
-  value       = module.cosmosdb_operational.endpoint
+output "sql_server_fqdn" {
+  description = "Azure SQL Server fully qualified domain name"
+  value       = module.sql.server_fqdn
 }
 
-output "cosmosdb_operational_account_name" {
-  description = "Cosmos DB operational account name"
-  value       = module.cosmosdb_operational.account_name
-}
-
-output "cosmosdb_operational_database_name" {
-  description = "Cosmos DB operational database name"
-  value       = module.cosmosdb_operational.database_name
-}
-
-# ---------------------------------------------------------------
-# Cosmos DB — Knowledge (RAG)
-# ---------------------------------------------------------------
-
-output "cosmosdb_knowledge_endpoint" {
-  description = "Cosmos DB knowledge account endpoint"
-  value       = module.cosmosdb_knowledge.endpoint
-}
-
-output "cosmosdb_knowledge_account_name" {
-  description = "Cosmos DB knowledge account name"
-  value       = module.cosmosdb_knowledge.account_name
-}
-
-output "cosmosdb_knowledge_database_name" {
-  description = "Cosmos DB knowledge database name"
-  value       = module.cosmosdb_knowledge.database_name
+output "sql_database_name" {
+  description = "Azure SQL Database name"
+  value       = module.sql.database_name
 }
 
 # ---------------------------------------------------------------
@@ -98,7 +74,26 @@ output "storage_images_blob_endpoint" {
 
 output "storage_images_container_name" {
   description = "Blob container name for product images"
-  value       = module.storage_images.container_name
+  value       = module.storage_images.container_names["images"]
+}
+
+# ---------------------------------------------------------------
+# AI Search
+# ---------------------------------------------------------------
+
+output "search_endpoint" {
+  description = "Azure AI Search endpoint URL"
+  value       = module.search.endpoint
+}
+
+output "search_name" {
+  description = "Azure AI Search service name"
+  value       = module.search.name
+}
+
+output "search_index_name" {
+  description = "Azure AI Search index name"
+  value       = module.search.index_name
 }
 
 # ---------------------------------------------------------------

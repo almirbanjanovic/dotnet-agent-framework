@@ -1,6 +1,6 @@
 <mxfile host="65bd71144e">
     <diagram id="architecture" name="Architecture">
-        <mxGraphModel dx="1605" dy="1048" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2200" pageHeight="1600" math="0" shadow="0">
+        <mxGraphModel dx="1904" dy="898" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2200" pageHeight="1600" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -20,115 +20,82 @@
                     <mxGeometry x="480" y="60" width="48" height="48" as="geometry"/>
                 </mxCell>
                 <mxCell id="aks-group" value="" style="rounded=1;whiteSpace=wrap;html=1;container=1;collapsible=0;dashed=1;dashPattern=5 2;fillColor=#FAFAFA;strokeColor=#326CE5;fontSize=14;fontStyle=1;verticalAlign=top;align=left;spacingTop=8;arcSize=6;" parent="1" vertex="1">
-                    <mxGeometry x="120" y="260" width="1200" height="660" as="geometry"/>
+                    <mxGeometry x="120" y="230" width="1200" height="690" as="geometry"/>
                 </mxCell>
-                <mxCell id="aks-icon" value="AKS Cluster" style="aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/containers/Kubernetes_Services.svg;verticalLabelPosition=bottom;verticalAlign=top;labelBackgroundColor=none;fontSize=12;fontStyle=1;strokeColor=none;fillColor=none;" parent="aks-group" vertex="1">
-                    <mxGeometry x="50" y="10" width="42" height="42" as="geometry"/>
+                <mxCell id="49" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" vertex="1" parent="aks-group">
+                    <mxGeometry x="150" y="383" width="700" height="60" as="geometry"/>
                 </mxCell>
                 <mxCell id="blazor" value="Blazor Front End UI" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;" parent="aks-group" vertex="1">
-                    <mxGeometry x="200" y="110" width="180" height="55" as="geometry"/>
+                    <mxGeometry x="40" y="80.00363636363636" width="180" height="57.5" as="geometry"/>
+                </mxCell>
+                <mxCell id="47" value="" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="aks-group" source="bff" target="10">
+                    <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
                 <mxCell id="bff" value="BFF&#xa;(UI Aggregation)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" parent="aks-group" vertex="1">
-                    <mxGeometry x="440" y="110" width="150" height="55" as="geometry"/>
+                    <mxGeometry x="300" y="160" width="150" height="57.5" as="geometry"/>
                 </mxCell>
                 <mxCell id="api-label" value="Domain APIs" style="text;html=1;fontSize=11;fontStyle=3;align=left;verticalAlign=middle;fillColor=none;strokeColor=none;fontColor=#666666;" parent="aks-group" vertex="1">
-                    <mxGeometry x="150" y="188" width="100" height="18" as="geometry"/>
+                    <mxGeometry x="150" y="267.5454545454545" width="100" height="18.818181818181817" as="geometry"/>
                 </mxCell>
                 <mxCell id="api-custorders" value="Customer &amp;&#xa;Orders API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" parent="aks-group" vertex="1">
-                    <mxGeometry x="200" y="212" width="140" height="44" as="geometry"/>
+                    <mxGeometry x="200" y="292.6363636363636" width="140" height="46" as="geometry"/>
                 </mxCell>
                 <mxCell id="api-catalog" value="Product&#xa;Catalog API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" parent="aks-group" vertex="1">
-                    <mxGeometry x="370" y="212" width="140" height="44" as="geometry"/>
+                    <mxGeometry x="370" y="292.6363636363636" width="140" height="46" as="geometry"/>
                 </mxCell>
                 <mxCell id="api-images" value="Product&#xa;Images API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" parent="aks-group" vertex="1">
-                    <mxGeometry x="540" y="212" width="140" height="44" as="geometry"/>
+                    <mxGeometry x="540" y="292.6363636363636" width="140" height="46" as="geometry"/>
                 </mxCell>
                 <mxCell id="mcp-label" value="MCP Servers" style="text;html=1;fontSize=11;fontStyle=3;align=left;verticalAlign=middle;fillColor=none;strokeColor=none;fontColor=#666666;" parent="aks-group" vertex="1">
-                    <mxGeometry x="150" y="280" width="100" height="18" as="geometry"/>
+                    <mxGeometry x="150" y="363.7272727272727" width="100" height="18.818181818181817" as="geometry"/>
                 </mxCell>
                 <mxCell id="mcp-custorders" value="Customer &amp;&#xa;Orders MCP" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" parent="aks-group" vertex="1">
-                    <mxGeometry x="200" y="304" width="120" height="44" as="geometry"/>
+                    <mxGeometry x="200" y="388.8181818181818" width="120" height="46" as="geometry"/>
                 </mxCell>
                 <mxCell id="mcp-catalog" value="Product&#xa;Catalog MCP" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" parent="aks-group" vertex="1">
-                    <mxGeometry x="340" y="304" width="120" height="44" as="geometry"/>
+                    <mxGeometry x="340" y="388.8181818181818" width="120" height="46" as="geometry"/>
                 </mxCell>
                 <mxCell id="mcp-images" value="Product&#xa;Images MCP" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" parent="aks-group" vertex="1">
-                    <mxGeometry x="480" y="304" width="120" height="44" as="geometry"/>
-                </mxCell>
-                <mxCell id="mcp-knowledge" value="Knowledge (RAG)&#xa;MCP" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d4e1f5;strokeColor=#3a7bbf;fontSize=11;" parent="aks-group" vertex="1">
-                    <mxGeometry x="620" y="304" width="150" height="44" as="geometry"/>
+                    <mxGeometry x="480" y="388.8181818181818" width="120" height="46" as="geometry"/>
                 </mxCell>
                 <mxCell id="orch-label" value="Orchestration Pods" style="text;html=1;fontSize=11;fontStyle=3;align=left;verticalAlign=middle;fillColor=none;strokeColor=none;fontColor=#666666;" parent="aks-group" vertex="1">
-                    <mxGeometry x="150" y="380" width="140" height="18" as="geometry"/>
+                    <mxGeometry x="150" y="471.1827272727273" width="140" height="18.818181818181817" as="geometry"/>
                 </mxCell>
                 <mxCell id="orch-single" value="Single Agent" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" parent="aks-group" vertex="1">
-                    <mxGeometry x="200" y="404" width="140" height="50" as="geometry"/>
+                    <mxGeometry x="200" y="505.3636363636364" width="140" height="52.27272727272727" as="geometry"/>
                 </mxCell>
                 <mxCell id="orch-reflect" value="Reflection" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" parent="aks-group" vertex="1">
-                    <mxGeometry x="360" y="404" width="140" height="50" as="geometry"/>
+                    <mxGeometry x="360" y="505.3636363636364" width="140" height="52.27272727272727" as="geometry"/>
                 </mxCell>
                 <mxCell id="orch-handoff" value="Handoff" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" parent="aks-group" vertex="1">
-                    <mxGeometry x="520" y="404" width="140" height="50" as="geometry"/>
+                    <mxGeometry x="520" y="505.3636363636364" width="140" height="52.27272727272727" as="geometry"/>
                 </mxCell>
                 <mxCell id="orch-magentic" value="Magentic" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" parent="aks-group" vertex="1">
-                    <mxGeometry x="680" y="404" width="140" height="50" as="geometry"/>
+                    <mxGeometry x="680" y="505.3636363636364" width="140" height="52.27272727272727" as="geometry"/>
                 </mxCell>
                 <mxCell id="agent-defs" value="Agent Definitions (shared class library): CustomerOrdersAgent · ProductCatalogAgent · ProductImagesAgent · KnowledgeAgent · ReviewerAgent · ManagerAgent" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;fontStyle=2;dashed=1;dashPattern=5 2;" parent="aks-group" vertex="1">
-                    <mxGeometry x="200" y="480" width="800" height="34" as="geometry"/>
+                    <mxGeometry x="200" y="584.8181818181818" width="800" height="35.54545454545455" as="geometry"/>
                 </mxCell>
                 <mxCell id="orch-label2" value="(all orchestration pods connect to all MCP servers + Azure OpenAI + Agents Cosmos DB)" style="text;html=1;fontSize=9;fontStyle=0;align=left;verticalAlign=middle;fillColor=none;strokeColor=none;fontColor=#999999;" parent="aks-group" vertex="1">
-                    <mxGeometry x="200" y="460" width="500" height="16" as="geometry"/>
+                    <mxGeometry x="200" y="563.9090909090909" width="500" height="16.727272727272727" as="geometry"/>
                 </mxCell>
-                <mxCell id="e-bff-custorders" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#6c8ebf;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" parent="aks-group" source="bff" target="api-custorders" edge="1">
-                    <mxGeometry relative="1" as="geometry">
-                        <mxPoint x="510" y="173.5" as="sourcePoint"/>
-                        <mxPoint x="265" y="220.5" as="targetPoint"/>
-                        <Array as="points">
-                            <mxPoint x="515" y="189"/>
-                            <mxPoint x="270" y="189"/>
-                        </Array>
-                    </mxGeometry>
-                </mxCell>
-                <mxCell id="e-blazor-orch" value="Chat" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#9673a6;fontSize=9;fontColor=#9673a6;entryX=0.928;entryY=0.019;entryDx=0;entryDy=0;entryPerimeter=0;exitX=0.499;exitY=0.982;exitDx=0;exitDy=0;exitPerimeter=0;" parent="aks-group" source="blazor" target="orch-single" edge="1">
-                    <mxGeometry x="-0.3587" relative="1" as="geometry">
-                        <mxPoint x="310" y="180" as="sourcePoint"/>
-                        <mxPoint x="321.65999999999997" y="397.99799999999993" as="targetPoint"/>
-                        <Array as="points">
-                            <mxPoint x="290" y="180"/>
-                            <mxPoint x="350" y="180"/>
-                            <mxPoint x="350" y="284"/>
-                            <mxPoint x="330" y="284"/>
-                        </Array>
-                        <mxPoint as="offset"/>
-                    </mxGeometry>
-                </mxCell>
-                <mxCell id="e-blazor-bff" value="Data views" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#6c8ebf;fontSize=9;fontColor=#6c8ebf;" parent="aks-group" source="blazor" target="bff" edge="1">
+                <mxCell id="51" style="edgeStyle=orthogonalEdgeStyle;html=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="aks-group" source="3" target="49">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e-bff-catalog" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#6c8ebf;" parent="aks-group" source="bff" target="api-catalog" edge="1">
+                <mxCell id="3" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#EDEDED);strokeWidth=1;" vertex="1" parent="aks-group">
+                    <mxGeometry x="150" y="490" width="870" height="145.55" as="geometry"/>
+                </mxCell>
+                <mxCell id="10" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" vertex="1" parent="aks-group">
+                    <mxGeometry x="150" y="286.3636363636364" width="580" height="62.72727272727273" as="geometry"/>
+                </mxCell>
+                <mxCell id="aks-icon" value="AKS Cluster" style="aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/containers/Kubernetes_Services.svg;verticalLabelPosition=bottom;verticalAlign=top;labelBackgroundColor=default;fontSize=12;fontStyle=1;strokeColor=none;fillColor=none;labelBorderColor=none;" parent="aks-group" vertex="1">
+                    <mxGeometry x="-10" y="-10.635454545454547" width="42" height="42" as="geometry"/>
+                </mxCell>
+                <mxCell id="50" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.486;entryY=0.985;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="aks-group" source="49" target="10">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e-bff-images" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#6c8ebf;" parent="aks-group" source="bff" target="api-images" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e-mcp-custorders-api" value="HTTP" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;fontSize=9;fontColor=#82b366;" parent="aks-group" source="mcp-custorders" target="api-custorders" edge="1">
-                    <mxGeometry x="0.5172" relative="1" as="geometry">
-                        <mxPoint as="offset"/>
-                    </mxGeometry>
-                </mxCell>
-                <mxCell id="e-mcp-catalog-api" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;" parent="aks-group" source="mcp-catalog" target="api-catalog" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e-mcp-images-api" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;" parent="aks-group" source="mcp-images" target="api-images" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e-orch-mcp" value="Tool calls" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;fontSize=9;fontColor=#82b366;" parent="aks-group" source="orch-handoff" target="mcp-custorders" edge="1">
-                    <mxGeometry relative="1" as="geometry">
-                        <Array as="points">
-                            <mxPoint x="590" y="370"/>
-                            <mxPoint x="260" y="370"/>
-                        </Array>
-                    </mxGeometry>
+                <mxCell id="mcp-knowledge" value="Knowledge (RAG)&#xa;MCP" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" parent="aks-group" vertex="1">
+                    <mxGeometry x="620" y="388.8181818181818" width="150" height="46" as="geometry"/>
                 </mxCell>
                 <mxCell id="acr" value="Azure Container&#xa;Registry" style="aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/containers/Container_Registries.svg;verticalLabelPosition=bottom;verticalAlign=top;labelBackgroundColor=none;fontSize=11;strokeColor=none;fillColor=none;" parent="1" vertex="1">
                     <mxGeometry x="1480" y="310" width="48" height="48" as="geometry"/>
@@ -139,100 +106,67 @@
                 <mxCell id="identity" value="Managed&#xa;Identities" style="aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/identity/Entra_Managed_Identities.svg;verticalLabelPosition=bottom;verticalAlign=top;labelBackgroundColor=none;fontSize=11;strokeColor=none;fillColor=none;" parent="1" vertex="1">
                     <mxGeometry x="1480" y="630" width="48" height="48" as="geometry"/>
                 </mxCell>
-                <mxCell id="cosmos-ops" value="Cosmos DB — Operational" style="aspect=fixed;html=1;points=[];align=left;image=img/lib/azure2/databases/Azure_Cosmos_DB.svg;verticalLabelPosition=middle;verticalAlign=middle;labelBackgroundColor=none;fontSize=11;strokeColor=none;fillColor=none;labelPosition=right;" parent="1" vertex="1">
-                    <mxGeometry x="220" y="1040" width="48" height="48" as="geometry"/>
-                </mxCell>
-                <mxCell id="cosmos-knowledge" value="Cosmos DB — Knowledge" style="aspect=fixed;html=1;points=[];align=left;image=img/lib/azure2/databases/Azure_Cosmos_DB.svg;verticalLabelPosition=middle;verticalAlign=middle;labelBackgroundColor=none;fontSize=11;strokeColor=none;fillColor=none;labelPosition=right;" parent="1" vertex="1">
-                    <mxGeometry x="560" y="1040" width="48" height="48" as="geometry"/>
-                </mxCell>
-                <mxCell id="cosmos-agents" value="Cosmos DB — Agents&lt;br&gt;(Session State)" style="aspect=fixed;html=1;points=[];align=left;image=img/lib/azure2/databases/Azure_Cosmos_DB.svg;verticalLabelPosition=middle;verticalAlign=middle;labelBackgroundColor=none;fontSize=11;strokeColor=none;fillColor=none;labelPosition=right;" parent="1" vertex="1">
-                    <mxGeometry x="880" y="1040" width="48" height="48" as="geometry"/>
-                </mxCell>
-                <mxCell id="blob-storage" value="Azure Blob Storage&#xa;(Product Images)" style="aspect=fixed;html=1;points=[];align=left;image=img/lib/azure2/storage/Storage_Accounts.svg;verticalLabelPosition=middle;verticalAlign=middle;labelBackgroundColor=none;fontSize=11;strokeColor=none;fillColor=none;labelPosition=right;" parent="1" vertex="1">
-                    <mxGeometry x="1160" y="1040" width="48" height="48" as="geometry"/>
-                </mxCell>
                 <mxCell id="data-crm" value="contoso-crm/&#xa;(CSV exports)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#999999;fontSize=11;fontStyle=2;" parent="1" vertex="1">
-                    <mxGeometry x="170" y="1190" width="150" height="42" as="geometry"/>
+                    <mxGeometry x="140" y="1270" width="150" height="42" as="geometry"/>
                 </mxCell>
                 <mxCell id="data-sp" value="contoso-sharepoint/&#xa;(PDF documents)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#999999;fontSize=11;fontStyle=2;" parent="1" vertex="1">
-                    <mxGeometry x="504" y="1190" width="160" height="42" as="geometry"/>
+                    <mxGeometry x="960" y="1190" width="160" height="42" as="geometry"/>
                 </mxCell>
                 <mxCell id="data-images" value="contoso-images/&#xa;(Product photos)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#999999;fontSize=11;fontStyle=2;" parent="1" vertex="1">
-                    <mxGeometry x="1109" y="1190" width="150" height="42" as="geometry"/>
+                    <mxGeometry x="1240" y="1190" width="150" height="42" as="geometry"/>
                 </mxCell>
-                <mxCell id="e-user-blazor" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" parent="1" source="user" target="blazor" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e-mcp-know-cosmos" value="Vector search&#xa;(direct)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#3a7bbf;fontSize=9;fontColor=#3a7bbf;" parent="1" source="mcp-knowledge" target="cosmos-knowledge" edge="1">
-                    <mxGeometry x="0.225" relative="1" as="geometry">
+                <mxCell id="e-mcp-know-cosmos" value="&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;AI Search&lt;br&gt;(integrated)&lt;/font&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;fontSize=9;fontColor=#3a7bbf;" parent="1" source="mcp-knowledge" target="2" edge="1">
+                    <mxGeometry x="0.4428" relative="1" as="geometry">
                         <Array as="points">
-                            <mxPoint x="1220" y="586"/>
-                            <mxPoint x="1220" y="990"/>
-                            <mxPoint x="584" y="990"/>
+                            <mxPoint x="815" y="640"/>
+                            <mxPoint x="1360" y="640"/>
+                            <mxPoint x="1360" y="780"/>
+                            <mxPoint x="1514" y="780"/>
                         </Array>
                         <mxPoint as="offset"/>
+                        <mxPoint x="584" y="1040" as="targetPoint"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="e-mcp-know-embed" value="Embed query" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#3a7bbf;fontSize=9;fontColor=#3a7bbf;" parent="1" source="mcp-knowledge" target="embed-model" edge="1">
+                <mxCell id="e-mcp-know-embed" value="" style="edgeStyle=none;html=1;strokeColor=none;" parent="1" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e-api-catalog-cosmos" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#6c8ebf;exitX=0.25;exitY=1;exitDx=0;exitDy=0;" parent="1" source="api-catalog" target="cosmos-ops" edge="1">
+                <mxCell id="e-blob-eventgrid" value="BlobCreated" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#d6604d;fontSize=9;fontColor=#d6604d;dashed=1;entryX=0.502;entryY=1.094;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1" target="42">
                     <mxGeometry relative="1" as="geometry">
-                        <Array as="points">
-                            <mxPoint x="525" y="540"/>
-                            <mxPoint x="160" y="540"/>
-                            <mxPoint x="160" y="790"/>
-                            <mxPoint x="244" y="790"/>
-                        </Array>
+                        <mxPoint x="1220" y="1060" as="sourcePoint"/>
+                        <mxPoint x="1620" y="1024.0526315789473" as="targetPoint"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="e-api-custorders-cosmos" value="SQL queries" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#6c8ebf;fontSize=9;fontColor=#6c8ebf;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" parent="1" source="api-custorders" target="cosmos-ops" edge="1">
-                    <mxGeometry x="0.5211" y="6" relative="1" as="geometry">
-                        <Array as="points">
-                            <mxPoint x="200" y="494"/>
-                            <mxPoint x="200" y="758"/>
-                            <mxPoint x="244" y="758"/>
-                        </Array>
-                        <mxPoint as="offset"/>
-                    </mxGeometry>
-                </mxCell>
-                <mxCell id="e-api-images-blob" value="Blob read" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#6c8ebf;fontSize=9;fontColor=#6c8ebf;" parent="1" source="api-images" target="blob-storage" edge="1">
+                <mxCell id="e-eventgrid-search" value="Trigger indexer" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#d6604d;fontSize=9;fontColor=#d6604d;dashed=1;exitX=0.512;exitY=0.017;exitDx=0;exitDy=0;exitPerimeter=0;" edge="1" parent="1" source="42" target="2">
                     <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="1510" y="940" as="sourcePoint"/>
+                        <mxPoint x="584" y="1040" as="targetPoint"/>
                         <Array as="points">
-                            <mxPoint x="1270" y="494"/>
-                            <mxPoint x="1270" y="1020"/>
-                            <mxPoint x="1184" y="1020"/>
+                            <mxPoint x="1510" y="951"/>
                         </Array>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="e-orch-chat" value="Chat completions" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#9673a6;fontSize=9;fontColor=#9673a6;" parent="1" source="orch-single" target="chat-model" edge="1">
-                    <mxGeometry x="0.0501" relative="1" as="geometry">
-                        <Array as="points">
-                            <mxPoint x="390" y="650"/>
-                            <mxPoint x="980" y="650"/>
-                            <mxPoint x="980" y="300"/>
-                            <mxPoint x="624" y="300"/>
-                        </Array>
-                        <mxPoint as="offset"/>
-                    </mxGeometry>
-                </mxCell>
-                <mxCell id="e-orch-state" value="State (direct)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#9673a6;fontSize=9;fontColor=#9673a6;" parent="1" source="orch-magentic" target="cosmos-agents" edge="1">
+                <mxCell id="e-seed-crm" value="&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;Seed&lt;/font&gt;&lt;div&gt;&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;(Terraform)&lt;/font&gt;&lt;/div&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#999999;fontSize=9;fontColor=#999999;dashed=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" parent="1" source="data-crm" target="7" edge="1">
                     <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="310" y="1170" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e-seed-sp" value="&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;Upload PDFs&lt;br&gt;(Terraform)&lt;/font&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#999999;fontSize=9;fontColor=#999999;dashed=1;" parent="1" source="data-sp" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="1184" y="1088" as="targetPoint"/>
                         <Array as="points">
-                            <mxPoint x="1160" y="689"/>
-                            <mxPoint x="1160" y="877"/>
-                            <mxPoint x="904" y="877"/>
+                            <mxPoint x="1050" y="1150"/>
+                            <mxPoint x="1184" y="1150"/>
                         </Array>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="e-seed-crm" value="Seed" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#999999;fontSize=9;fontColor=#999999;dashed=1;" parent="1" source="data-crm" target="cosmos-ops" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e-seed-sp" value="Seed + vectorize" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#999999;fontSize=9;fontColor=#999999;dashed=1;" parent="1" source="data-sp" target="cosmos-knowledge" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e-seed-images" value="Upload" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#999999;fontSize=9;fontColor=#999999;dashed=1;" parent="1" source="data-images" target="blob-storage" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
+                <mxCell id="e-seed-images" value="&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;Upload Images&lt;/font&gt;&lt;div&gt;&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;(Terraform)&lt;/font&gt;&lt;/div&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#999999;fontSize=9;fontColor=#999999;dashed=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;" parent="1" source="data-images" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="1184" y="1088" as="targetPoint"/>
+                        <Array as="points">
+                            <mxPoint x="1315" y="1150"/>
+                            <mxPoint x="1184" y="1150"/>
+                        </Array>
+                    </mxGeometry>
                 </mxCell>
                 <mxCell id="e-aks-acr" value="Image pull" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#666666;fontSize=9;fontColor=#666666;" parent="1" source="aks-group" target="acr" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
@@ -241,6 +175,39 @@
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
                 <mxCell id="e-id-aks" value="RBAC" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#666666;fontSize=9;fontColor=#666666;dashed=1;dashPattern=5 2;" parent="1" source="identity" target="aks-group" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="2" value="Azure AI Search" style="image;aspect=fixed;html=1;points=[];align=right;fontSize=12;image=img/lib/azure2/app_services/Search_Services.svg;labelPosition=left;verticalLabelPosition=top;verticalAlign=bottom;" vertex="1" parent="1">
+                    <mxGeometry x="1470" y="820" width="68" height="49.120000000000005" as="geometry"/>
+                </mxCell>
+                <mxCell id="4" value="Cosmos DB - Agents&lt;br&gt;(Session State)" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/databases/Azure_Cosmos_DB.svg;" vertex="1" parent="1">
+                    <mxGeometry x="672" y="1025" width="64" height="64" as="geometry"/>
+                </mxCell>
+                <mxCell id="41" value="" style="group" vertex="1" connectable="0" parent="1">
+                    <mxGeometry x="130" y="950" width="150" height="214" as="geometry"/>
+                </mxCell>
+                <mxCell id="7" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" vertex="1" parent="41">
+                    <mxGeometry x="20" y="34" width="130" height="180" as="geometry"/>
+                </mxCell>
+                <mxCell id="6" value="SQL Server" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/databases/SQL_Server.svg;" vertex="1" parent="41">
+                    <mxGeometry width="68" height="68" as="geometry"/>
+                </mxCell>
+                <mxCell id="8" value="SQL Database&lt;br&gt;(Operational)" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/databases/SQL_Database.svg;" vertex="1" parent="41">
+                    <mxGeometry x="68" y="110" width="36" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="42" value="Event Grid" style="image;aspect=fixed;html=1;points=[];align=right;fontSize=12;image=img/lib/azure2/integration/Event_Grid_Domains.svg;labelPosition=left;verticalLabelPosition=top;verticalAlign=bottom;" vertex="1" parent="1">
+                    <mxGeometry x="1480" y="950" width="67" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="43" value="Storage Account&lt;div&gt;(Images, Documents)&lt;/div&gt;" style="image;aspect=fixed;html=1;points=[];align=right;fontSize=12;image=img/lib/azure2/storage/Storage_Accounts.svg;labelPosition=left;verticalLabelPosition=top;verticalAlign=bottom;" vertex="1" parent="1">
+                    <mxGeometry x="1150" y="1031" width="65" height="52" as="geometry"/>
+                </mxCell>
+                <mxCell id="44" style="edgeStyle=orthogonalEdgeStyle;html=1;entryX=0.518;entryY=0.032;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1" source="3" target="4">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="45" style="edgeStyle=orthogonalEdgeStyle;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" edge="1" parent="1" source="10" target="7">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="46" style="edgeStyle=orthogonalEdgeStyle;html=1;entryX=0.51;entryY=-0.002;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1" source="10" target="43">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
             </root>

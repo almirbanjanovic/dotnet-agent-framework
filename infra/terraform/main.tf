@@ -39,57 +39,18 @@ module "foundry" {
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
-# Cosmos DB — Operational (CRM structured data)
+# Azure SQL Database — Operational (CRM structured data)
 #--------------------------------------------------------------------------------------------------------------------------------
 
-module "cosmosdb_operational" {
-  source = "./modules/cosmosdb/v1"
+module "sql" {
+  source = "./modules/sql/v1"
 
-  name_prefix         = var.cosmos_project_name
-  purpose             = "operational"
+  environment         = local.name_base
   location            = var.location
   resource_group_name = var.resource_group_name
-  database_name       = var.cosmos_operational_database_name
-  consistency_level   = "Session"
+  database_name       = var.sql_database_name
+  admin_login         = var.sql_admin_login
   tags                = var.tags
-
-  containers = {
-    customers       = { name = "Customers", partition_key_paths = ["/id"] }
-    orders          = { name = "Orders", partition_key_paths = ["/customer_id"] }
-    order_items     = { name = "OrderItems", partition_key_paths = ["/order_id"] }
-    products        = { name = "Products", partition_key_paths = ["/category"] }
-    promotions      = { name = "Promotions", partition_key_paths = ["/id"] }
-    support_tickets = { name = "SupportTickets", partition_key_paths = ["/customer_id"] }
-  }
-}
-
-#--------------------------------------------------------------------------------------------------------------------------------
-# Cosmos DB — Knowledge (RAG vector store)
-#--------------------------------------------------------------------------------------------------------------------------------
-
-module "cosmosdb_knowledge" {
-  source = "./modules/cosmosdb/v1"
-
-  name_prefix         = var.cosmos_project_name
-  purpose             = "knowledge"
-  location            = var.location
-  resource_group_name = var.resource_group_name
-  database_name       = var.cosmos_knowledge_database_name
-  consistency_level   = "Eventual"
-  capabilities        = ["EnableNoSQLVectorSearch"]
-  tags                = var.tags
-
-  containers = {
-    knowledge_documents = {
-      name                = "KnowledgeDocuments"
-      partition_key_paths = ["/id"]
-      indexing_policy = {
-        indexing_mode  = "consistent"
-        included_paths = ["/*"]
-        excluded_paths = ["/content_vector/*"]
-      }
-    }
-  }
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -178,7 +139,7 @@ module "aks" {
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
-# Azure Storage — Product Images
+# Azure Storage — Product Images + SharePoint Documents
 #--------------------------------------------------------------------------------------------------------------------------------
 
 module "storage_images" {
@@ -188,9 +149,89 @@ module "storage_images" {
   purpose             = "images"
   resource_group_name = var.resource_group_name
   location            = var.location
-  container_name      = var.storage_images_container_name
-  image_source_path   = "${path.module}/../../data/contoso-images"
   tags                = var.tags
+
+  containers = {
+    images = {
+      name                = "product-images"
+      upload_source_path  = "${path.module}/../../data/contoso-images"
+      upload_file_pattern = "*.png"
+      upload_content_type = "image/png"
+    }
+    sharepoint_docs = {
+      name                = "sharepoint-docs"
+      upload_source_path  = "${path.module}/../../data/contoso-sharepoint"
+      upload_file_pattern = "**/*.pdf"
+      upload_content_type = "application/pdf"
+    }
+  }
+}
+
+#--------------------------------------------------------------------------------------------------------------------------------
+# Azure AI Search — Knowledge Base (RAG vector store)
+#--------------------------------------------------------------------------------------------------------------------------------
+
+module "search" {
+  source = "./modules/search/v1"
+
+  environment         = local.name_base
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  sku                 = var.search_sku
+  index_name          = var.search_index_name
+
+  storage_account_id          = module.storage_images.id
+  container_name              = "sharepoint-docs"
+  openai_endpoint             = module.foundry.endpoint
+  openai_embedding_deployment = module.foundry.embedding_deployment_name != null ? module.foundry.embedding_deployment_name : var.embedding_model_name
+
+  tags = var.tags
+
+  depends_on = [module.storage_images, module.rbac_storage]
+}
+
+#--------------------------------------------------------------------------------------------------------------------------------
+# Event Grid — Blob upload triggers AI Search indexer
+#--------------------------------------------------------------------------------------------------------------------------------
+
+module "eventgrid" {
+  source = "./modules/eventgrid/v1"
+
+  environment         = local.name_base
+  resource_group_name = var.resource_group_name
+  location            = var.location
+  storage_account_id  = module.storage_images.id
+  container_name      = "sharepoint-docs"
+  search_service_name = module.search.name
+  search_indexer_name = module.search.indexer_name
+
+  tags = var.tags
+
+  depends_on = [module.search]
+}
+
+#--------------------------------------------------------------------------------------------------------------------------------
+# CRM Data Seeding (local-exec — runs dotnet seed-data tool)
+#--------------------------------------------------------------------------------------------------------------------------------
+
+resource "null_resource" "seed_crm" {
+  triggers = {
+    data_hash = sha256(join("", [for f in fileset("${path.module}/../../data/contoso-crm", "*.csv") :
+      filesha256("${path.module}/../../data/contoso-crm/${f}")]))
+  }
+
+  provisioner "local-exec" {
+    command = "dotnet run --project ${replace("${path.module}/../../src/seed-data", "/", "\\\\")}"
+
+    environment = {
+      SQL_SERVER_FQDN    = module.sql.server_fqdn
+      SQL_DATABASE_NAME  = module.sql.database_name
+      SQL_ADMIN_LOGIN    = module.sql.admin_login
+      SQL_ADMIN_PASSWORD = nonsensitive(module.sql.admin_password)
+    }
+  }
+
+  depends_on = [module.sql]
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -204,36 +245,13 @@ module "rbac_foundry" {
 
   principal_ids = {
     backend = module.identity.identities["backend"].principal_id
+    search  = module.search.identity_principal_id
   }
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
-# RBAC - Cosmos DB (Data Owner + Data Contributor) — all 3 accounts
+# RBAC - Cosmos DB (Data Owner + Data Contributor) — 1 account (agents)
 #--------------------------------------------------------------------------------------------------------------------------------
-
-module "rbac_cosmosdb_operational" {
-  source = "./modules/rbac/cosmosdb/v1"
-
-  resource_group_name   = var.resource_group_name
-  cosmosdb_account_id   = module.cosmosdb_operational.account_id
-  cosmosdb_account_name = module.cosmosdb_operational.account_name
-
-  principal_ids = {
-    backend = module.identity.identities["backend"].principal_id
-  }
-}
-
-module "rbac_cosmosdb_knowledge" {
-  source = "./modules/rbac/cosmosdb/v1"
-
-  resource_group_name   = var.resource_group_name
-  cosmosdb_account_id   = module.cosmosdb_knowledge.account_id
-  cosmosdb_account_name = module.cosmosdb_knowledge.account_name
-
-  principal_ids = {
-    backend = module.identity.identities["backend"].principal_id
-  }
-}
 
 module "rbac_cosmosdb_agents" {
   source = "./modules/rbac/cosmosdb/v1"
@@ -258,6 +276,7 @@ module "rbac_storage" {
 
   principal_ids = {
     backend = module.identity.identities["backend"].principal_id
+    search  = module.search.identity_principal_id
   }
 }
 
@@ -336,19 +355,20 @@ module "keyvault_secrets" {
     "AZURE-OPENAI-API-KEY"              = module.foundry.primary_key
     "AZURE-OPENAI-DEPLOYMENT-NAME"      = module.foundry.deployment_name
     "AZURE-OPENAI-EMBEDDING-DEPLOYMENT" = module.foundry.embedding_deployment_name != null ? module.foundry.embedding_deployment_name : ""
-    "COSMOSDB-OPERATIONAL-ENDPOINT"     = module.cosmosdb_operational.endpoint
-    "COSMOSDB-OPERATIONAL-KEY"          = module.cosmosdb_operational.primary_key
-    "COSMOSDB-OPERATIONAL-DATABASE"     = module.cosmosdb_operational.database_name
-    "COSMOSDB-KNOWLEDGE-ENDPOINT"       = module.cosmosdb_knowledge.endpoint
-    "COSMOSDB-KNOWLEDGE-KEY"            = module.cosmosdb_knowledge.primary_key
-    "COSMOSDB-KNOWLEDGE-DATABASE"       = module.cosmosdb_knowledge.database_name
     "COSMOSDB-AGENTS-ENDPOINT"          = module.cosmosdb_agents.endpoint
     "COSMOSDB-AGENTS-KEY"               = module.cosmosdb_agents.primary_key
     "COSMOSDB-AGENTS-DATABASE"          = module.cosmosdb_agents.database_name
+    "SQL-SERVER-FQDN"                   = module.sql.server_fqdn
+    "SQL-DATABASE-NAME"                 = module.sql.database_name
+    "SQL-ADMIN-LOGIN"                   = module.sql.admin_login
+    "SQL-ADMIN-PASSWORD"                = module.sql.admin_password
     "STORAGE-IMAGES-ENDPOINT"           = module.storage_images.primary_blob_endpoint
     "STORAGE-IMAGES-ACCOUNT-NAME"       = module.storage_images.name
-    "STORAGE-IMAGES-CONTAINER"          = module.storage_images.container_name
+    "STORAGE-IMAGES-CONTAINER"          = module.storage_images.container_names["images"]
     "STORAGE-IMAGES-KEY"                = module.storage_images.primary_access_key
+    "SEARCH-ENDPOINT"                   = module.search.endpoint
+    "SEARCH-ADMIN-KEY"                  = module.search.primary_key
+    "SEARCH-INDEX-NAME"                 = module.search.index_name
   }
 
   depends_on = [module.rbac_keyvault]

@@ -68,15 +68,14 @@ After `terraform apply`, the following outputs are displayed:
 | `openai_api_key`             | API key (dev/learning convenience)   |
 | `openai_deployment_name`     | Chat model deployment name           |
 | `embedding_deployment_name`  | Embedding model deployment name      |
-| `cosmosdb_operational_endpoint` | Operational Cosmos DB endpoint    |
-| `cosmosdb_operational_account_name` | Operational Cosmos DB account name |
-| `cosmosdb_operational_database_name` | Operational database name       |
-| `cosmosdb_knowledge_endpoint` | Knowledge Cosmos DB endpoint       |
-| `cosmosdb_knowledge_account_name` | Knowledge Cosmos DB account name |
-| `cosmosdb_knowledge_database_name` | Knowledge database name         |
+| `sql_server_fqdn`           | Azure SQL Server FQDN               |
+| `sql_database_name`          | Azure SQL Database name              |
 | `cosmosdb_agents_endpoint`   | Agents Cosmos DB endpoint            |
 | `cosmosdb_agents_account_name` | Agents Cosmos DB account name      |
 | `cosmosdb_agents_database_name` | Agents database name               |
+| `search_endpoint`            | Azure AI Search endpoint URL         |
+| `search_name`                | Azure AI Search service name         |
+| `search_index_name`          | AI Search index name                 |
 | `acr_name`                   | Container registry name              |
 | `acr_login_server`           | ACR login server URL                 |
 | `aks_cluster_name`           | AKS cluster name                     |

@@ -12,14 +12,29 @@ This lab stands up the full Azure environment, validates connectivity, and seeds
 | Resource | Purpose |
 |----------|---------|
 | **Azure AI Foundry** | AI Services account with chat model (gpt-4.1) and embedding model (text-embedding-ada-002) |
-| **Cosmos DB** (×3 accounts) | Operational (CRM data), Knowledge (RAG vector store), Agents (state persistence) |
-| **Storage Account** | Product images blob storage — images uploaded automatically during `terraform apply` |
+| **Azure SQL Database** | Operational CRM data (Serverless tier — customers, orders, products, etc.) |
+| **Cosmos DB** (×1 account) | Agents (state persistence) |
+| **Azure AI Search** | Knowledge base search — indexes PDFs via integrated vectorization (replaces Knowledge Cosmos DB) |
+| **Event Grid** | Triggers AI Search indexer on new PDF uploads to blob storage |
+| **Storage Account** | Product images + SharePoint documents blob storage — uploaded automatically during `terraform apply` |
 | **AKS** | Kubernetes cluster for future lab deployments |
 | **ACR** | Container image registry |
 | **Key Vault** | Secrets management (endpoints, keys, deployment names) |
-| **Managed Identities** | RBAC for backend and kubelet workloads |
+| **Managed Identities** | RBAC for backend, search, and kubelet workloads |
 
-## Step 1 — Deploy infrastructure
+## Step 1 — Deploy infrastructure and seed data
+
+`terraform apply` provisions all infrastructure **and** loads all data in a single step, regardless of whether you run it locally or via CI/CD:
+
+| What | How |
+|------|-----|
+| Azure SQL Database, Cosmos DB (agents), AI Search, Event Grid, Storage, AKS, ACR, Key Vault | Terraform resources |
+| Product images (`.png`) → `product-images` blob container | `azurerm_storage_blob` |
+| SharePoint PDFs (`.pdf`) → `sharepoint-docs` blob container | `azurerm_storage_blob` |
+| CRM data (CSV) → Azure SQL Database tables | `null_resource` + `local-exec` (runs `dotnet run src/seed-data`) |
+| PDF text extraction, chunking, embedding → AI Search index | AI Search indexer (triggered automatically after PDFs land in blob) |
+
+No separate seeding or indexing step is needed.
 
 ### Option A — Terminal
 
@@ -37,8 +52,6 @@ terraform validate
 terraform plan -var-file="terraform.tfvars"
 terraform apply -auto-approve -var-file="terraform.tfvars"
 ```
-
-This provisions all Azure resources and uploads the 15 product images to blob storage.
 
 ### Option B — GitHub Actions
 
@@ -79,7 +92,7 @@ For example:
 dotnet run -- https://kv-agentic-ai-001.vault.azure.net/
 ```
 
-This populates `src/appsettings.json` (gitignored) with 17 configuration values:
+This populates `src/appsettings.json` (gitignored) with configuration values:
 
 | Key | Description |
 |-----|-------------|
@@ -87,12 +100,10 @@ This populates `src/appsettings.json` (gitignored) with 17 configuration values:
 | `AZURE_OPENAI_DEPLOYMENT_NAME` | Chat model deployment name |
 | `AZURE_OPENAI_API_KEY` | API key for authentication |
 | `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` | Embedding model name |
-| `COSMOSDB_OPERATIONAL_ENDPOINT` | Operational Cosmos DB endpoint |
-| `COSMOSDB_OPERATIONAL_KEY` | Operational Cosmos DB key |
-| `COSMOSDB_OPERATIONAL_DATABASE` | Operational database name |
-| `COSMOSDB_KNOWLEDGE_ENDPOINT` | Knowledge (RAG) Cosmos DB endpoint |
-| `COSMOSDB_KNOWLEDGE_KEY` | Knowledge Cosmos DB key |
-| `COSMOSDB_KNOWLEDGE_DATABASE` | Knowledge database name |
+| `SQL_SERVER_FQDN` | Azure SQL Server FQDN |
+| `SQL_DATABASE_NAME` | SQL database name |
+| `SQL_ADMIN_LOGIN` | SQL admin username |
+| `SQL_ADMIN_PASSWORD` | SQL admin password |
 | `COSMOSDB_AGENTS_ENDPOINT` | Agents Cosmos DB endpoint |
 | `COSMOSDB_AGENTS_KEY` | Agents Cosmos DB key |
 | `COSMOSDB_AGENTS_DATABASE` | Agents database name |
@@ -100,6 +111,9 @@ This populates `src/appsettings.json` (gitignored) with 17 configuration values:
 | `STORAGE_IMAGES_ACCOUNT_NAME` | Product images storage account name |
 | `STORAGE_IMAGES_CONTAINER` | Product images container name |
 | `STORAGE_IMAGES_KEY` | Product images storage key |
+| `SEARCH_ENDPOINT` | Azure AI Search endpoint |
+| `SEARCH_ADMIN_KEY` | Azure AI Search admin key |
+| `SEARCH_INDEX_NAME` | AI Search index name |
 
 Expected output:
 
@@ -137,71 +151,6 @@ If you see an error, check:
 - `src/appsettings.json` has non-empty values for `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT_NAME`, and `AZURE_OPENAI_API_KEY`
 - The AI Services deployment exists in the Azure portal
 
-## Step 4 — Seed Cosmos DB
-
-The chat model (gpt-4.1) has no knowledge of Contoso Outdoors. Seeding loads customer, order, product, and policy data into Cosmos DB so agents can query it at runtime via MCP tools.
-
-The seed tool performs two operations:
-
-1. **CRM data** — Parses CSV files from `data/contoso-crm/` and upserts them as JSON documents into the Operational Cosmos DB (standard SQL queries, no vectorization)
-2. **SharePoint documents (RAG)** — Extracts text from PDFs in `data/contoso-sharepoint/`, chunks it, generates vector embeddings via `text-embedding-ada-002`, and upserts into the Knowledge Cosmos DB for semantic search
-
-For details on RAG, the embedding model, and the data architecture, see [data/README.md](../data/README.md).
-
-### Running the seed tool
-
-```bash
-cd src/seed-data
-dotnet restore
-dotnet run
-```
-
-Expected output:
-
-```
-═══════════════════════════════════════════════════════════
-  Contoso Outdoors — Cosmos DB Seed Tool
-═══════════════════════════════════════════════════════════
-
-  OpenAI endpoint:         https://aif-agentic-ai-centralus-gpt-4-1.openai.azure.com/
-  Embedding deployment:    text-embedding-ada-002
-  Operational endpoint:    https://cosmos-dotnetagent-operational-...
-  Knowledge endpoint:      https://cosmos-dotnetagent-knowledge-...
-
-  ✓ Connected to operational database 'contoso-outdoors'
-  ✓ Connected to knowledge database 'knowledge'
-
-───────────────────────────────────────────────────────────
-  Phase 1: Seeding structured data (CRM → containers)
-───────────────────────────────────────────────────────────
-
-  Loads customer, order, and product data from CSV files
-  into Cosmos DB containers. Agents query this data using
-  standard SQL queries via MCP tools at runtime.
-
-  ✓ customers.csv → Customers (8 documents)
-  ✓ orders.csv → Orders (...)
-  ...
-
-───────────────────────────────────────────────────────────
-  Phase 2: Vectorizing documents (SharePoint → RAG store)
-───────────────────────────────────────────────────────────
-
-  Extracts text from PDFs, chunks it into ~500-token segments,
-  generates 1536-dim vector embeddings via the embedding model,
-  and stores each chunk + vector in KnowledgeDocuments.
-  This enables semantic search (RAG) at query time — agents
-  find relevant documents by meaning, not keyword matching.
-
-  ✓ policies/return-and-refund-policy.pdf: 3 chunk(s) embedded and upserted
-  ✓ guides/boot-sizing-guide.pdf: 2 chunk(s) embedded and upserted
-  ...
-
-═══════════════════════════════════════════════════════════
-  Seeding complete!
-═══════════════════════════════════════════════════════════
-```
-
 ## Verification checklist
 
 After completing all steps, verify:
@@ -209,9 +158,10 @@ After completing all steps, verify:
 - [ ] Infrastructure resources are visible in the Azure portal (or `terraform output` shows all endpoints)
 - [ ] `src/appsettings.json` has 17 non-empty values
 - [ ] `simple-agent` returns a joke from Azure OpenAI
-- [ ] Cosmos DB Operational account has 6 containers with data
-- [ ] Cosmos DB Knowledge account has `KnowledgeDocuments` with vectorized chunks
+- [ ] Azure SQL Database has 6 tables with data (Customers, Orders, etc.)
+- [ ] Azure AI Search index has vectorized document chunks (check indexer status in Azure portal)
 - [ ] Azure Blob Storage `product-images` container has 15 `.png` files
+- [ ] Azure Blob Storage `sharepoint-docs` container has 12 `.pdf` files
 
 ## What's next
 

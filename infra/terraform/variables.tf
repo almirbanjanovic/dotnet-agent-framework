@@ -87,21 +87,11 @@ variable "embedding_capacity" {
 }
 
 # ---------------------------------------------------------------
-# Cosmos DB
+# Cosmos DB (agents session state)
 # ---------------------------------------------------------------
 
 variable "cosmos_project_name" {
-  description = "Project name prefix for all Cosmos DB accounts"
-  type        = string
-}
-
-variable "cosmos_operational_database_name" {
-  description = "Database name for the operational (CRM) Cosmos DB account"
-  type        = string
-}
-
-variable "cosmos_knowledge_database_name" {
-  description = "Database name for the knowledge (RAG) Cosmos DB account"
+  description = "Project name prefix for Cosmos DB accounts"
   type        = string
 }
 
@@ -116,7 +106,23 @@ variable "cosmos_agent_state_container_name" {
 }
 
 # ---------------------------------------------------------------
-# Storage (Product Images)
+# Azure SQL Database (CRM operational data)
+# ---------------------------------------------------------------
+
+variable "sql_database_name" {
+  description = "Name of the Azure SQL database for CRM data"
+  type        = string
+  default     = "contoso-outdoors"
+}
+
+variable "sql_admin_login" {
+  description = "SQL Server administrator login name"
+  type        = string
+  default     = "sqladmin"
+}
+
+# ---------------------------------------------------------------
+# Storage
 # ---------------------------------------------------------------
 
 variable "storage_project_name" {
@@ -124,9 +130,20 @@ variable "storage_project_name" {
   type        = string
 }
 
-variable "storage_images_container_name" {
-  description = "Blob container name for product images"
+# ---------------------------------------------------------------
+# AI Search
+# ---------------------------------------------------------------
+
+variable "search_sku" {
+  description = "Azure AI Search SKU (free, basic, standard)"
   type        = string
+  default     = "basic"
+}
+
+variable "search_index_name" {
+  description = "Name of the AI Search index for knowledge documents"
+  type        = string
+  default     = "knowledge-documents"
 }
 
 # ---------------------------------------------------------------

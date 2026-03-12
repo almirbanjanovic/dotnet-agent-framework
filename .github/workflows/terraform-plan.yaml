@@ -33,13 +33,16 @@ env:
   TF_VAR_embedding_capacity: ${{ vars.EMBEDDING_CAPACITY }}
   # Cosmos DB
   TF_VAR_cosmos_project_name: ${{ vars.COSMOS_PROJECT_NAME }}
-  TF_VAR_cosmos_operational_database_name: ${{ vars.COSMOS_OPERATIONAL_DATABASE_NAME }}
-  TF_VAR_cosmos_knowledge_database_name: ${{ vars.COSMOS_KNOWLEDGE_DATABASE_NAME }}
   TF_VAR_cosmos_agents_database_name: ${{ vars.COSMOS_AGENTS_DATABASE_NAME }}
   TF_VAR_cosmos_agent_state_container_name: ${{ vars.COSMOS_AGENT_STATE_CONTAINER_NAME }}
+  # Azure SQL Database
+  TF_VAR_sql_database_name: ${{ vars.SQL_DATABASE_NAME }}
+  TF_VAR_sql_admin_login: ${{ vars.SQL_ADMIN_LOGIN }}
   # Storage
   TF_VAR_storage_project_name: ${{ vars.STORAGE_PROJECT_NAME }}
-  TF_VAR_storage_images_container_name: ${{ vars.STORAGE_IMAGES_CONTAINER_NAME }}
+  # AI Search
+  TF_VAR_search_sku: ${{ vars.SEARCH_SKU }}
+  TF_VAR_search_index_name: ${{ vars.SEARCH_INDEX_NAME }}
   # ACR
   TF_VAR_acr_project_name: ${{ vars.ACR_PROJECT_NAME }}
   TF_VAR_create_acr: ${{ vars.CREATE_ACR }}

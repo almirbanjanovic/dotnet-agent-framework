@@ -28,8 +28,8 @@ This system implements a Contoso Outdoors customer service platform where AI age
               │       │      Cust&  Product Product Knowledge                              │
               │       │      Orders  Catalog Images  (RAG) MCP                              │
               │       │      MCP    MCP    MCP              │                                │
-              │       │        │      │      │              └─► Cosmos DB Knowledge (direct) │
-              ▼       │      Cust&  Product Product             + Embedding Model            │
+              │       │        │      │      │              └─► Azure AI Search (integrated  │
+              ▼       │      Cust&  Product Product             vectorization)               │
              BFF ─────┤──►  Orders  Catalog Images                                          │
               │       │      API    API    API (Blob)                                        │
               │       │       └──────┴──────┘                                                │
@@ -37,7 +37,7 @@ This system implements a Contoso Outdoors customer service platform where AI age
               │       └───────────────────┼──────────────────────────────────────────────────┘
               │                           │
               │                           ▼
-              │                     Cosmos DB Operational (CRM data)
+              │                     Azure SQL Database (CRM data)
               │
               │          Cosmos DB Agents (state — written directly by orchestrator)
               │
@@ -53,11 +53,11 @@ The system uses a **hybrid pattern** rather than forcing all traffic through RES
 | Data Store | UI needs it? | Agents need it? | Access pattern | Why |
 |------------|:---:|:---:|---|---|
 | **Operational** (orders, products) | ✅ | ✅ | Shared domain APIs | Both UI (via BFF) and agents (via MCP → domain APIs) need the same data. Shared APIs prevent duplicating data access logic, validation, and business rules. |
-| **Knowledge** (RAG vectors) | ❌ | ✅ | MCP → Cosmos DB direct | Only agents perform vector similarity search. This is a compound AI operation (embed query → `VectorDistance` search → return chunks) that no other consumer needs. Routing it through a REST API adds a pointless hop. |
+| **Knowledge** (RAG vectors) | ❌ | ✅ | MCP → Azure AI Search | Only agents perform semantic search. AI Search handles vectorization via integrated skillsets. The Knowledge MCP Server calls the AI Search SDK — no need for a REST API wrapper. |
 | **Knowledge** (doc metadata) | Maybe | ❌ | Domain API endpoint | If an admin UI needs to browse/manage documents (titles, categories), that's simple CRUD — add a domain API endpoint. But vector search remains agent-only. |
 | **Agents** (state) | ❌ | ✅ | Orchestrator → Cosmos DB direct | Internal conversation history and agent memory. No other consumer needs this. |
 
-**Why not "everything through REST APIs"?** The Blazor UI needs direct data access for tables, dashboards, and admin views — not everything flows through an agent. If MCP Servers also access Cosmos DB directly for CRM data, we'd duplicate repositories, validation, and business rules in two places. But forcing the Knowledge MCP Server through a REST API for an operation only agents perform is over-engineering — adding a network hop and an extra service layer with zero consumers besides the MCP Server itself.
+**Why not "everything through REST APIs"?** The Blazor UI needs direct data access for tables, dashboards, and admin views — not everything flows through an agent. If MCP Servers also access the database directly for CRM data, we'd duplicate repositories, validation, and business rules in two places. But forcing the Knowledge MCP Server through a REST API for an operation only agents perform is over-engineering — adding a network hop and an extra service layer with zero consumers besides the MCP Server itself.
 
 **The MCP specification is agnostic on this.** MCP tools can "[query databases, call APIs, or perform computations](https://modelcontextprotocol.io/specification/2025-03-26)" — the spec doesn't prescribe one pattern over the other. The official [MCP reference servers](https://github.com/modelcontextprotocol/servers) include both: `server-sqlite` (direct DB) and `server-github` (calls REST API).
 
@@ -71,7 +71,7 @@ The data layer is split into **three domain-specific APIs**, each owning its Cos
 | **Product Catalog API** | Products, Promotions | Get products, promotions, eligibility checks |
 | **Product Images API** | Azure Blob Storage (product-images container) | Get product images, list images by category |
 
-All domain APIs except Product Images share the **Operational** Cosmos DB account but own separate containers. The Product Images API reads from Azure Blob Storage. Each API has its own clean architecture (Services → Repositories → Models).
+All domain APIs except Product Images share **Azure SQL Database** but own separate tables. The Product Images API reads from Azure Blob Storage. Each API has its own clean architecture (Services → Repositories → Models).
 
 **Why domain APIs instead of one monolith?** Each domain has distinct scaling, deployment, and security requirements. Domain APIs can be deployed independently — a product catalog fix doesn't require redeploying the customer orders service.
 
@@ -83,7 +83,7 @@ All domain APIs except Product Images share the **Operational** Cosmos DB accoun
 
 #### 3. MCP Servers are thin protocol adapters
 
-Each MCP Server exposes [tools](https://modelcontextprotocol.io/docs/concepts/tools) with names, descriptions, and schemas that the LLM uses for function calling. The Customer & Orders/Product Catalog MCP Servers translate between MCP protocol and HTTP calls to their corresponding domain APIs. The Product Images MCP Server translates between MCP protocol and Azure Blob Storage calls. The Knowledge MCP Server translates between MCP protocol and Cosmos DB + Embedding Model calls. None of them contain business logic — that lives in the domain APIs (for shared data) or in the MCP tool handler itself (for the RAG compound operation).
+Each MCP Server exposes [tools](https://modelcontextprotocol.io/docs/concepts/tools) with names, descriptions, and schemas that the LLM uses for function calling. The Customer & Orders/Product Catalog MCP Servers translate between MCP protocol and HTTP calls to their corresponding domain APIs. The Product Images MCP Server translates between MCP protocol and Azure Blob Storage calls. The Knowledge MCP Server translates between MCP protocol and Azure AI Search calls. None of them contain business logic — that lives in the domain APIs (for shared data) or in the MCP tool handler itself (for the RAG search operation).
 
 #### 4. Four domain-specific MCP Servers
 
@@ -94,7 +94,7 @@ Tools are grouped by domain boundary, with each MCP server calling exactly one b
 | **Customer & Orders** | `get_all_customers`, `get_customer_detail`, `get_customer_orders`, `get_order_detail`, `get_support_tickets`, `create_support_ticket` | Customer & Orders API |
 | **Product Catalog** | `search_products`, `get_product_detail`, `get_promotions`, `get_eligible_promotions` | Product Catalog API |
 | **Product Images** | `get_product_image`, `list_product_images` | Azure Blob Storage (product-images container) |
-| **Knowledge (RAG)** | `search_knowledge_base` | Knowledge Cosmos DB direct + Embedding Model |
+| **Knowledge (RAG)** | `search_knowledge_base` | Azure AI Search + Embedding Model (integrated vectorization) |
 
 This 1:1 alignment between MCP servers and domain APIs keeps each adapter simple and independently deployable.
 
@@ -257,13 +257,13 @@ User ↔ Manager → Specialist A
 |---|---|---|
 | **Blazor UI** | Frontend | BFF (data views), Orchestration pods (chat) |
 | **BFF** | Aggregation | Customer & Orders API, Product Catalog API, Product Images API |
-| **Customer & Orders API** | Domain API | Operational Cosmos DB (Customers, Orders, OrderItems, SupportTickets) |
-| **Product Catalog API** | Domain API | Operational Cosmos DB (Products, Promotions) |
+| **Customer & Orders API** | Domain API | Azure SQL Database (Customers, Orders, OrderItems, SupportTickets) |
+| **Product Catalog API** | Domain API | Azure SQL Database (Products, Promotions) |
 | **Product Images API** | Domain API | Azure Blob Storage (product-images container) |
 | **MCP: Customer & Orders** | Tool server | Customer & Orders API |
 | **MCP: Product Catalog** | Tool server | Product Catalog API |
 | **MCP: Product Images** | Tool server | Product Images API |
-| **MCP: Knowledge (RAG)** | Tool server | Knowledge Cosmos DB + Embedding Model (direct) |
+| **MCP: Knowledge (RAG)** | Tool server | Azure AI Search (integrated vectorization) |
 | **Orch: Single Agent** | Agent pattern | All MCP servers, Azure OpenAI, Agents Cosmos DB |
 | **Orch: Reflection** | Agent pattern | All MCP servers, Azure OpenAI, Agents Cosmos DB |
 | **Orch: Handoff** | Agent pattern | All MCP servers, Azure OpenAI, Agents Cosmos DB |
@@ -271,19 +271,19 @@ User ↔ Manager → Specialist A
 
 ### Data flow
 
-#### Structured data (CRM → Operational Cosmos DB)
+#### Structured data (CRM → Azure SQL Database)
 
-CSV files in `data/contoso-crm/` are parsed by the seed tool and upserted into the **Operational** Cosmos DB account. No vectorization. Agents query this data via MCP tools → domain APIs → Cosmos DB SQL queries. The Blazor UI queries the same data via BFF → domain APIs for tables and dashboards.
+CSV files in `data/contoso-crm/` are parsed by the seed tool and upserted into **Azure SQL Database** tables with proper relational modeling (joins, foreign keys). Agents query this data via MCP tools → domain APIs → SQL queries. The Blazor UI queries the same data via BFF → domain APIs for tables and dashboards.
 
-#### Unstructured data (SharePoint → Knowledge Cosmos DB)
+#### Unstructured data (SharePoint → Azure AI Search)
 
-PDF documents in `data/contoso-sharepoint/` are processed by the seed tool: text extraction → chunking → embedding via `text-embedding-ada-002` → upserted into the **Knowledge** Cosmos DB account with vector indexing (diskANN, cosine distance, 1536 dimensions). Agents search this via the Knowledge MCP Server which performs the compound operation: embed user query → `VectorDistance` search → return relevant chunks for the LLM to ground its response (RAG pattern).
+PDF documents in `data/contoso-sharepoint/` are uploaded to Azure Blob Storage (`sharepoint-docs` container) by Terraform during `terraform apply`. The AI Search indexer automatically processes them via integrated vectorization: text extraction → chunking (∼500 tokens) → embedding via `text-embedding-ada-002` → indexed for semantic search. Event Grid triggers the indexer on new blob uploads for near-instant availability. Agents search via the Knowledge MCP Server which calls the Azure AI Search SDK.
 
 #### Product images (Azure Blob Storage)
 
 Product images in `data/contoso-images/` are uploaded to an Azure Blob Storage `product-images` container during seeding. Agents access these via the Product Images MCP Server, which generates SAS-signed URLs for individual product photos.
 
-See [data/README.md](data/README.md) for the complete data architecture, seeding process, and Cosmos DB container mapping.
+See [data/README.md](data/README.md) for the complete data architecture, seeding process, and database schema.
 
 ### Azure infrastructure
 
@@ -292,8 +292,11 @@ All infrastructure is defined as Terraform IaC in `infra/terraform/`, deployed v
 | Resource | Purpose |
 |----------|---------|
 | **Azure AI Foundry** | Hosts AI Services account with chat model (gpt-4.1) and embedding model (text-embedding-ada-002) |
-| **Cosmos DB** (×3 accounts) | Operational (Session consistency, CRM data), Knowledge (Eventual + vector search, RAG), Agents (Eventual, agent state) |
-| **Storage Account** | Product images blob storage (`product-images` container) — images uploaded during `terraform apply` |
+| **Azure SQL Database** | Operational CRM data (Serverless tier — customers, orders, products) with relational modeling |
+| **Cosmos DB** (×1 account) | Agents (Eventual, agent session state) |
+| **Azure AI Search** | Knowledge base search — indexes SharePoint PDFs via integrated vectorization (Basic tier) |
+| **Event Grid** | Triggers AI Search indexer on new PDF blob uploads for near-instant indexing |
+| **Storage Account** | Product images + SharePoint documents blob storage — uploaded during `terraform apply` |
 | **AKS** | Hosts all application pods — UI, BFF, domain APIs, MCP servers, orchestrations |
 | **ACR** | Container image registry |
 | **Key Vault** | Secrets management (endpoints, keys, deployment names) |
@@ -349,7 +352,7 @@ src/
   appsettings.json                → Shared app settings (gitignored, populated by config-sync)
   config-sync/                    → Tool: pulls Key Vault secrets into appsettings.json
   simple-agent/                   → Validate infrastructure setup (Lab 1)
-  seed-data/                      → Seed Cosmos DB with store data + vectorized docs (Lab 1)
+  seed-data/                      ← Seed Azure SQL with CRM data (Lab 1 — runs via terraform apply)
   agents/                         → Shared agent definitions library
   apis/
     customer-orders-api/          → Customer & Orders domain API
@@ -361,7 +364,7 @@ src/
     mcp-customer-orders/          → MCP → Customer & Orders API
     mcp-product-catalog/          → MCP → Product Catalog API
     mcp-product-images/           → MCP → Product Images API (Blob Storage)
-    mcp-knowledge/                → MCP → Cosmos DB Knowledge + Embedding (direct)
+    mcp-knowledge/                → MCP → Azure AI Search (integrated vectorization)
   orchestrations/
     single-agent/                 → Single agent orchestration
     reflection/                   → Reflection orchestration
@@ -391,7 +394,7 @@ See the lab guides in [`docs/`](docs/):
 | # | Lab | Description |
 |---|-----|-------------|
 | 0 | [Lab 0 — Bootstrap](docs/lab-0.md) | One-time setup: Terraform config files, remote state backend, CI/CD configuration |
-| 1 | [Lab 1 — Infrastructure, Validation & Data Seeding](docs/lab-1.md) | Deploy Azure infrastructure, validate with simple-agent, seed Cosmos DB with CRM and RAG data |
+| 1 | [Lab 1 — Infrastructure, Validation & Data Seeding](docs/lab-1.md) | Deploy Azure infrastructure, validate with simple-agent, seed Azure SQL with CRM data |
 
 ## Notes
 
