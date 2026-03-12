@@ -27,6 +27,8 @@ infra/
         │   └── v1/
         ├── cosmosdb/          # Cosmos DB account, database, containers
         │   └── v1/
+        ├── eventgrid/         # Event Grid system topic + blob subscription
+        │   └── v1/
         ├── foundry/           # AI Services account + chat & embedding models
         │   └── v1/
         ├── identity/          # User-assigned managed identities
@@ -34,6 +36,10 @@ infra/
         ├── keyvault/          # Azure Key Vault
         │   └── v1/
         ├── keyvault-secrets/  # Key Vault secret writer
+        │   └── v1/
+        ├── search/            # Azure AI Search + index, skillset, indexer (AzAPI)
+        │   └── v1/
+        ├── sql/               # Azure SQL Server + Database (Serverless)
         │   └── v1/
         ├── storage/           # Azure Storage Account + blob uploads
         │   └── v1/

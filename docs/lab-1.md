@@ -14,7 +14,7 @@ This lab stands up the full Azure environment, validates connectivity, and seeds
 | **Azure AI Foundry** | AI Services account with chat model (gpt-4.1) and embedding model (text-embedding-ada-002) |
 | **Azure SQL Database** | Operational CRM data (Serverless tier — customers, orders, products, etc.) |
 | **Cosmos DB** (×1 account) | Agents (state persistence) |
-| **Azure AI Search** | Knowledge base search — indexes PDFs via integrated vectorization (replaces Knowledge Cosmos DB) |
+| **Azure AI Search** | Knowledge base search — indexes PDFs via integrated vectorization |
 | **Event Grid** | Triggers AI Search indexer on new PDF uploads to blob storage |
 | **Storage Account** | Product images + SharePoint documents blob storage — uploaded automatically during `terraform apply` |
 | **AKS** | Kubernetes cluster for future lab deployments |
