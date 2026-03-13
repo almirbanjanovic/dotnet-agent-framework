@@ -38,20 +38,28 @@ No separate seeding or indexing step is needed.
 
 ### Option A — Terminal
 
-From `infra/terraform/`:
+From the `infra/` directory:
+
+```powershell
+# PowerShell
+./deploy.ps1
+```
 
 ```bash
-# Re-enable public access on the state storage account (disabled after bootstrap)
-az storage account update \
-  --name <your-storage-account> \
-  --resource-group <your-resource-group> \
-  --public-network-access Enabled
-
-terraform init -reconfigure -backend-config=backend.hcl
-terraform validate
-terraform plan -var-file="terraform.tfvars"
-terraform apply -auto-approve -var-file="terraform.tfvars"
+# Bash / WSL / macOS
+chmod +x deploy.sh
+./deploy.sh
 ```
+
+The script performs 5 phases with a confirmation gate between each:
+
+| Phase | What it does |
+|:-----:|-------------|
+| **1** | Re-enables public access on the state storage account (disabled after bootstrap) |
+| **2** | `terraform init` with remote backend |
+| **3** | `terraform validate` to check configuration syntax |
+| **4** | `terraform plan` to preview all changes |
+| **5** | `terraform apply` to provision resources and seed data |
 
 ### Option B — GitHub Actions
 
@@ -64,56 +72,15 @@ terraform apply -auto-approve -var-file="terraform.tfvars"
 
 All Terraform variables are read from the GitHub environment variables that `init` configured in Lab 0.
 
-### Verify outputs
-
-After deployment, note the Key Vault URI — you'll need it for the next step.
-
-**Terminal** — from `infra/terraform/`:
-
-```bash
-terraform output keyvault_uri
-```
-
-**GitHub Actions** — find the Key Vault URI in the Azure portal: open your Key Vault resource → **Properties** → **Vault URI**.
-
 ## Step 2 — Configure app settings
 
-The **config-sync** tool pulls secrets from Key Vault into `src/appsettings.json` so all projects can use them locally.
+The **config-sync** tool pulls secrets from Key Vault into `src/appsettings.json` so all projects can use them locally. The Key Vault URI is shown in the deploy script's final summary.
 
 ```bash
 cd src/config-sync
 dotnet restore
 dotnet run -- <your-keyvault-uri>
 ```
-
-For example:
-
-```bash
-dotnet run -- https://kv-agentic-ai-001.vault.azure.net/
-```
-
-This populates `src/appsettings.json` (gitignored) with configuration values:
-
-| Key | Description |
-|-----|-------------|
-| `AZURE_OPENAI_ENDPOINT` | Azure OpenAI endpoint |
-| `AZURE_OPENAI_DEPLOYMENT_NAME` | Chat model deployment name |
-| `AZURE_OPENAI_API_KEY` | API key for authentication |
-| `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` | Embedding model name |
-| `SQL_SERVER_FQDN` | Azure SQL Server FQDN |
-| `SQL_DATABASE_NAME` | SQL database name |
-| `SQL_ADMIN_LOGIN` | SQL admin username |
-| `SQL_ADMIN_PASSWORD` | SQL admin password |
-| `COSMOSDB_AGENTS_ENDPOINT` | Agents Cosmos DB endpoint |
-| `COSMOSDB_AGENTS_KEY` | Agents Cosmos DB key |
-| `COSMOSDB_AGENTS_DATABASE` | Agents database name |
-| `STORAGE_IMAGES_ENDPOINT` | Product images blob endpoint |
-| `STORAGE_IMAGES_ACCOUNT_NAME` | Product images storage account name |
-| `STORAGE_IMAGES_CONTAINER` | Product images container name |
-| `STORAGE_IMAGES_KEY` | Product images storage key |
-| `SEARCH_ENDPOINT` | Azure AI Search endpoint |
-| `SEARCH_ADMIN_KEY` | Azure AI Search admin key |
-| `SEARCH_INDEX_NAME` | AI Search index name |
 
 Expected output:
 
