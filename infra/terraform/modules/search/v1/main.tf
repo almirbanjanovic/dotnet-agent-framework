@@ -4,7 +4,7 @@
 # =============================================================================
 
 locals {
-  search_service_name = "srch-${var.environment}"
+  search_service_name = "srch-${var.base_name}-${var.environment}-${var.location}"
 }
 
 # -----------------------------------------------------------------------------
@@ -297,3 +297,4 @@ resource "azapi_resource" "search_indexer" {
     azapi_resource.search_skillset,
   ]
 }
+

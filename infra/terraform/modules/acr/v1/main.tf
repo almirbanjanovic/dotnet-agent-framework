@@ -4,7 +4,7 @@
 # =============================================================================
 
 locals {
-  acr_name_generated = replace("${var.project_name}${var.environment}acr", "-", "")
+  acr_name_generated = replace("acr${var.base_name}${var.environment}${var.location}", "-", "")
 }
 
 # -----------------------------------------------------------------------------
@@ -42,3 +42,4 @@ locals {
   login_server = var.create_acr ? azurerm_container_registry.this[0].login_server : data.azurerm_container_registry.existing[0].login_server
   acr_name     = var.create_acr ? azurerm_container_registry.this[0].name : data.azurerm_container_registry.existing[0].name
 }
+

@@ -1,3 +1,8 @@
+
+variable "base_name" {
+  description = "Project base name for resource naming"
+  type        = string
+}
 variable "environment" {
   description = "Deployment environment"
   type        = string
@@ -105,3 +110,4 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+

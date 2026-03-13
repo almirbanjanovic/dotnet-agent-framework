@@ -5,7 +5,7 @@
 
 locals {
   # Storage account names: 3-24 chars, lowercase alphanumeric only
-  storage_account_name = replace("st${var.project_name}${var.purpose}", "-", "")
+  storage_account_name = substr(replace("st${var.base_name}${var.environment}${var.location}", "-", ""), 0, 24)
 
   # Flatten containers × files into a single map for blob uploads
   blob_uploads = merge([
@@ -79,3 +79,4 @@ moved {
   from = azurerm_storage_blob.images
   to   = azurerm_storage_blob.uploads
 }
+

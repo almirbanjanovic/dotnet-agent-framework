@@ -5,9 +5,8 @@
 data "azurerm_client_config" "current" {}
 
 locals {
-  # Composite name used for Azure resource naming: {base_name}-{environment}
-  # Modules append their own prefix and suffix (e.g., aif-{name_base}-{location})
-  # Result: aif-agentic-ai-dev-centralus, kv-agentic-ai-dev-001, etc.
+  # Each module composes: {prefix}-{base_name}-{environment}-{location}
+  # These two values are passed separately to every module.
   name_base = "${var.base_name}-${var.environment}"
 }
 
@@ -18,7 +17,8 @@ locals {
 module "foundry" {
   source = "./modules/foundry/v1"
 
-  environment              = local.name_base
+  base_name            = var.base_name
+  environment         = var.environment
   location                 = var.location
   resource_group_name      = var.resource_group_name
   account_kind             = var.cognitive_account_kind
@@ -45,7 +45,8 @@ module "foundry" {
 module "sql" {
   source = "./modules/sql/v1"
 
-  environment         = local.name_base
+  base_name            = var.base_name
+  environment         = var.environment
   location            = var.location
   resource_group_name = var.resource_group_name
   database_name       = var.sql_database_name
@@ -60,7 +61,7 @@ module "sql" {
 module "cosmosdb_agents" {
   source = "./modules/cosmosdb/v1"
 
-  name_prefix         = var.cosmos_project_name
+  name_prefix         = "${var.base_name}-${var.environment}"
   purpose             = "agents"
   location            = var.location
   resource_group_name = var.resource_group_name
@@ -90,8 +91,8 @@ module "identity" {
   tags                = var.tags
 
   identities = {
-    backend = { name = "uami-backend-${local.name_base}" }
-    kubelet = { name = "uami-kubelet-${local.name_base}" }
+    backend = { name = "id-backend-${var.base_name}-${var.environment}-${var.location}" }
+    kubelet = { name = "id-kubelet-${var.base_name}-${var.environment}-${var.location}" }
   }
 }
 
@@ -102,8 +103,8 @@ module "identity" {
 module "acr" {
   source = "./modules/acr/v1"
 
-  project_name        = var.acr_project_name
-  environment         = local.name_base
+  base_name            = var.base_name
+  environment         = var.environment
   location            = var.location
   resource_group_name = var.resource_group_name
   create_acr          = var.create_acr
@@ -119,7 +120,8 @@ module "acr" {
 module "aks" {
   source = "./modules/aks/v1"
 
-  environment          = local.name_base
+  base_name            = var.base_name
+  environment         = var.environment
   location             = var.location
   resource_group_name  = var.resource_group_name
   kubernetes_version   = var.aks_kubernetes_version
@@ -145,8 +147,8 @@ module "aks" {
 module "storage_images" {
   source = "./modules/storage/v1"
 
-  project_name        = var.storage_project_name
-  purpose             = "images"
+  base_name            = var.base_name
+  environment         = var.environment
   resource_group_name = var.resource_group_name
   location            = var.location
   tags                = var.tags
@@ -174,7 +176,8 @@ module "storage_images" {
 module "search" {
   source = "./modules/search/v1"
 
-  environment         = local.name_base
+  base_name            = var.base_name
+  environment         = var.environment
   location            = var.location
   resource_group_name = var.resource_group_name
   sku                 = var.search_sku
@@ -197,7 +200,8 @@ module "search" {
 module "eventgrid" {
   source = "./modules/eventgrid/v1"
 
-  environment         = local.name_base
+  base_name            = var.base_name
+  environment         = var.environment
   resource_group_name = var.resource_group_name
   location            = var.location
   storage_account_id  = module.storage_images.id
@@ -314,7 +318,8 @@ module "rbac_aks" {
 module "keyvault" {
   source = "./modules/keyvault/v1"
 
-  environment         = local.name_base
+  base_name            = var.base_name
+  environment         = var.environment
   location            = var.location
   resource_group_name = var.resource_group_name
   tenant_id           = data.azurerm_client_config.current.tenant_id
