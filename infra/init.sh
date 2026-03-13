@@ -63,6 +63,22 @@ step()  { echo -e "  → $1"; }
 done_() { echo -e "    ${G}✓ $1${W}"; }
 skip_() { echo -e "    ${D}· $1${W}"; }
 
+phase_summary() {
+    local num="$1"; shift
+    echo ""
+    echo -e "    ${G}┌ Phase $num complete ─────────────────────────────────┐${W}"
+    while [[ $# -gt 0 ]]; do
+        echo -e "    ${G}│${W}  $1: $2"
+        shift 2
+    done
+    echo -e "    ${G}└─────────────────────────────────────────────────────┘${W}"
+    read -p "    Continue to next phase? (Y/n) " response
+    if [[ "$response" == "n" || "$response" == "N" ]]; then
+        echo -e "    ${Y}Stopped by user.${W}"
+        exit 0
+    fi
+}
+
 # ── Derived names ────────────────────────────────────────────────────────────
 RESOURCE_GROUP="rg-${BASE_NAME}-${GITHUB_ENV}-${LOCATION}"
 STORAGE_ACCOUNT="st$(echo "$RESOURCE_GROUP" | sed 's/^rg-//' | tr -cd 'a-z0-9')"
@@ -193,18 +209,14 @@ if [[ -z "$GITHUB_REPO" ]]; then echo "No GitHub repository configured."; exit 1
 REPO_NAME="${GITHUB_REPO##*/}"
 done_ "GitHub: $GITHUB_REPO"
 
-# ── Show configuration ───────────────────────────────────────────────────────
-echo ""
-echo -e "    ${D}┌──────────────────────────────────────────────────┐${W}"
-echo -e "    ${D}│  Configuration                                   │${W}"
-echo -e "    ${D}├──────────────────────────────────────────────────┤${W}"
-echo -e "    ${D}│  Subscription:   $SUB_NAME${W}"
-echo -e "    ${D}│  Location:       $LOCATION${W}"
-echo -e "    ${D}│  Base name:      $BASE_NAME${W}"
-echo -e "    ${D}│  Environment:    $GITHUB_ENV${W}"
-echo -e "    ${D}│  Resource group: $RESOURCE_GROUP${W}"
-echo -e "    ${D}│  GitHub repo:    $GITHUB_REPO${W}"
-echo -e "    ${D}└──────────────────────────────────────────────────┘${W}"
+phase_summary 1 \
+    "Subscription"   "$SUB_NAME ($SUBSCRIPTION_ID)" \
+    "Tenant"         "$TENANT_ID" \
+    "GitHub repo"    "$GITHUB_REPO" \
+    "Location"       "$LOCATION" \
+    "Base name"      "$BASE_NAME" \
+    "Environment"    "$GITHUB_ENV" \
+    "Resource group" "$RESOURCE_GROUP"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 2 — Entra app registration + OIDC + RBAC
@@ -237,7 +249,7 @@ else
     fi
 
     step "Adding OIDC federated credential"
-    CRED_NAME="github-actions-${GITHUB_ENV}"
+    CRED_NAME="${REPO_NAME}-${GITHUB_ENV}"
     existing_cred=$(az ad app federated-credential list --id "$APP_CLIENT_ID" --query "[?name=='$CRED_NAME'].name" -o tsv 2>/dev/null || true)
     if [[ -n "$existing_cred" ]]; then
         skip_ "Federated credential '$CRED_NAME' already exists"
@@ -260,6 +272,12 @@ else
         az role assignment create --assignee "$APP_CLIENT_ID" --role "Contributor" --scope "/subscriptions/$SUBSCRIPTION_ID" >/dev/null
         done_ "Contributor granted on $SUBSCRIPTION_ID"
     fi
+
+    phase_summary 2 \
+        "App registration" "$APP_NAME ($APP_CLIENT_ID)" \
+        "OIDC subject"     "repo:${GITHUB_REPO}:environment:${GITHUB_ENV}" \
+        "Credential name"  "$CRED_NAME" \
+        "RBAC"             "Contributor on subscription"
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -333,6 +351,11 @@ for key in "${!ENV_VARS[@]}"; do
 done
 done_ "Set $count environment variables in '$GITHUB_ENV'"
 
+phase_summary 3 \
+    "Secrets"       "AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID" \
+    "Environment"   "$GITHUB_ENV" \
+    "Env variables" "$count"
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 4 — Azure backend resources
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -375,6 +398,12 @@ fi
 step "Locking down state storage"
 az storage account update --name "$STORAGE_ACCOUNT" --resource-group "$RESOURCE_GROUP" --public-network-access Disabled >/dev/null
 done_ "Public access disabled"
+
+phase_summary 4 \
+    "Resource group"  "$RESOURCE_GROUP" \
+    "Storage account" "$STORAGE_ACCOUNT" \
+    "Container"       "$CONTAINER_NAME" \
+    "Public access"   "Disabled"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 5 — Generate config files
