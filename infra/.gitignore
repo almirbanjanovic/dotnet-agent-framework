@@ -21,6 +21,7 @@ terraform.rc
 backend.hcl
 *.backend.hcl
 *.tfplan
+tfplan
 plan.out
 
 # Azure deployment artifacts
