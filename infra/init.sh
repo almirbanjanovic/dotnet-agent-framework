@@ -152,8 +152,8 @@ install_if_missing dotnet    ".NET SDK"
 phase 1 "Authenticate"
 
 # ── Azure ────────────────────────────────────────────────────────────────────
-step "Signing in to Azure"
-az login >/dev/null
+step "Signing in to Azure (device code)"
+az login --use-device-code >/dev/null
 
 if [[ -z "$SUBSCRIPTION_ID" ]]; then
     echo ""
