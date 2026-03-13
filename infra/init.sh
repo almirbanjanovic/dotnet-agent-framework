@@ -179,10 +179,15 @@ done_ "Azure: $SUB_NAME ($SUBSCRIPTION_ID)"
 
 # ── GitHub ───────────────────────────────────────────────────────────────────
 step "Signing in to GitHub"
-echo ""
-echo -e "    ${D}Logging in via browser (HTTPS). A browser window will open.${W}"
-echo ""
-gh auth login --hostname github.com --git-protocol https --web
+
+if gh auth status &>/dev/null; then
+    skip_ "Already logged in to GitHub"
+else
+    echo -e "    ${D}Run this in a separate terminal if the browser flow hangs:${W}"
+    echo -e "    ${D}  gh auth login --hostname github.com --git-protocol https --web${W}"
+    echo ""
+    gh auth login --hostname github.com --git-protocol https --web
+fi
 
 GITHUB_REPO=$(gh repo view --json nameWithOwner -q ".nameWithOwner" 2>/dev/null || true)
 
