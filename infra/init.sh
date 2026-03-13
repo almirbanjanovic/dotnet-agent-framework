@@ -35,6 +35,14 @@ TERRAFORM_DIR="$SCRIPT_DIR/terraform"
 # ── Helpers ──────────────────────────────────────────────────────────────────
 C='\033[36m' G='\033[32m' D='\033[90m' Y='\033[33m' W='\033[0m'
 
+# Wrap az CLI to strip Windows \r\n from stdout (WSL may call Windows az.cmd)
+az() {
+    local out rc
+    out=$(command az "$@") && rc=$? || rc=$?
+    [[ -n "$out" ]] && printf '%s\n' "$out" | tr -d '\r'
+    return $rc
+}
+
 banner() {
     echo -e ""
     echo -e "  ${C}╔═══════════════════════════════════════════════════════╗${W}"
@@ -211,10 +219,16 @@ step "Signing in to GitHub"
 if gh auth status &>/dev/null; then
     skip_ "Already logged in to GitHub"
 else
-    echo -e "    ${D}Run this in a separate terminal if the browser flow hangs:${W}"
-    echo -e "    ${D}  gh auth login --hostname github.com --git-protocol https --web${W}"
-    echo ""
-    gh auth login --hostname github.com --git-protocol https --web
+    if grep -qi microsoft /proc/version 2>/dev/null; then
+        echo -e "    ${D}WSL detected — using device code flow (no browser auto-open).${W}"
+        echo -e "    ${D}You'll get a code to enter at https://github.com/login/device${W}"
+        echo ""
+        gh auth login --hostname github.com --git-protocol https
+    else
+        echo -e "    ${D}A browser tab will open for authentication.${W}"
+        echo ""
+        gh auth login --hostname github.com --git-protocol https --web
+    fi
 fi
 
 GITHUB_REPO=$(gh repo view --json nameWithOwner -q ".nameWithOwner" 2>/dev/null || true)
