@@ -190,7 +190,7 @@ module "search" {
 
   tags = var.tags
 
-  depends_on = [module.storage_images, module.rbac_storage]
+  depends_on = [module.storage_images]
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
