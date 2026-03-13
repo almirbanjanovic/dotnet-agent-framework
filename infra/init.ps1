@@ -144,8 +144,8 @@ foreach ($cmd in $prerequisites.Keys) {
 Write-Phase -Number 1 -Title "Authenticate"
 
 # ── Azure ────────────────────────────────────────────────────────────────────
-Write-Step "Signing in to Azure (device code)"
-az login --use-device-code | Out-Null
+Write-Step "Signing in to Azure"
+az login | Out-Null
 
 if (-not $SubscriptionId) {
     Write-Host ""
@@ -242,12 +242,11 @@ if ($SkipEntra) {
         $AppClientId = $existing
         Write-Skip "App '$AppName' already exists: $AppClientId"
     } else {
-        $AppClientId = az ad app create --display-name "$AppName" --query appId -o tsv
+        $AppClientId = az ad app create --display-name "$AppName" --query appId -o tsv 2>$null
         if (-not $AppClientId) {
             Write-Host ""
-            Write-Host "    App registration failed. Your token may have expired." -ForegroundColor Red
-            Write-Host "    Re-authenticating..." -ForegroundColor Yellow
-            az login --use-device-code | Out-Null
+            Write-Host "    App registration failed — re-authenticating..." -ForegroundColor Yellow
+            az login | Out-Null
             $AppClientId = az ad app create --display-name "$AppName" --query appId -o tsv
         }
         if (-not $AppClientId) {
