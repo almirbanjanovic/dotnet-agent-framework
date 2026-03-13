@@ -2,7 +2,7 @@
 
 This lab performs the one-time setup required before any infrastructure can be deployed. A single script handles everything: Azure backend resources, Entra app registration, and GitHub CI/CD configuration.
 
-> **Do this once.** Everything in Lab 0 is a one-time operation. Once complete, you won't need to repeat it unless you're setting up a new subscription or repository.
+> **Do this once.** Everything in Lab 0 is a one-time operation. Once complete, you won't need to repeat it unless you're setting up a new subscription, repository or environment. The scripts below are **idempotent**.
 
 ## Prerequisites
 
