@@ -465,7 +465,7 @@ use_azuread_auth     = true
 "@
 Write-Done "backend.hcl"
 
-Set-Content -Path "$TerraformDir\terraform.tfvars" -Encoding UTF8 -Value @"
+Set-Content -Path "$TerraformDir\$GitHubEnv.tfvars" -Encoding UTF8 -Value @"
 tags                = {}
 resource_group_name = "$ResourceGroup"
 environment         = "$GitHubEnv"
@@ -513,7 +513,7 @@ aks_node_max_count       = 5
 aks_os_disk_size_gb      = 64
 aks_log_retention_days   = 30
 "@
-Write-Done "terraform.tfvars"
+Write-Done "$GitHubEnv.tfvars"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 

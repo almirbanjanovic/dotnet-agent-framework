@@ -489,7 +489,7 @@ use_azuread_auth     = true
 EOF
 done_ "backend.hcl"
 
-cat > "$TERRAFORM_DIR/terraform.tfvars" <<EOF
+cat > "$TERRAFORM_DIR/${GITHUB_ENV}.tfvars" <<EOF
 tags                = {}
 resource_group_name = "$RESOURCE_GROUP"
 environment         = "$GITHUB_ENV"
@@ -537,7 +537,7 @@ aks_node_max_count       = 5
 aks_os_disk_size_gb      = 64
 aks_log_retention_days   = 30
 EOF
-done_ "terraform.tfvars"
+done_ "${GITHUB_ENV}.tfvars"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 

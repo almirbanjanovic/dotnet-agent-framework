@@ -4,7 +4,8 @@
 # =============================================================================
 
 locals {
-  keyvault_name = "kv-${var.base_name}-${var.environment}-${var.location}"
+  keyvault_name_raw = "kv-${var.base_name}-${var.environment}-${var.location}"
+  keyvault_name     = substr(local.keyvault_name_raw, 0, min(24, length(local.keyvault_name_raw)))
 }
 
 resource "azurerm_key_vault" "this" {

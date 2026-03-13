@@ -36,6 +36,7 @@ banner() {
     echo -e "  ${C}║     3. terraform validate                             ║${W}"
     echo -e "  ${C}║     4. terraform plan                                 ║${W}"
     echo -e "  ${C}║     5. terraform apply                                ║${W}"
+    echo -e "  ${C}║     6. Seed CRM data                                  ║${W}"
     echo -e "  ${C}║                                                       ║${W}"
     echo -e "  ${C}╚═══════════════════════════════════════════════════════╝${W}"
     echo -e ""
@@ -75,16 +76,48 @@ read_hcl_value() {
     grep -E "^\s*${key}\s*=" "$file" | head -1 | sed 's/.*=\s*"\([^"]*\)".*/\1/'
 }
 
-# ── Read config ──────────────────────────────────────────────────────────────
+# ── Select environment ───────────────────────────────────────────────────────────
 
-TFVARS_FILE="$TERRAFORM_DIR/terraform.tfvars"
+mapfile -t tfvars_files < <(find "$TERRAFORM_DIR" -maxdepth 1 -name '*.tfvars' ! -name 'example.tfvars' -printf '%f\n' | sort)
+
+if [[ ${#tfvars_files[@]} -eq 0 ]]; then
+    echo "No .tfvars files found — run init.sh first."; exit 1
+fi
+
+banner
+
+if [[ ${#tfvars_files[@]} -eq 1 ]]; then
+    ENVIRONMENT="${tfvars_files[0]%.tfvars}"
+    echo -e "    Found environment: ${C}${ENVIRONMENT}${W}"
+else
+    echo -e "    ${D}Available environments:${W}"
+    echo ""
+    for (( i=0; i<${#tfvars_files[@]}; i++ )); do
+        env_name="${tfvars_files[$i]%.tfvars}"
+        echo -e "      ${C}$((i+1)). ${env_name}${W}"
+    done
+    echo ""
+    read -p "    Select environment [1-${#tfvars_files[@]}]: " pick
+    if [[ "$pick" =~ ^[0-9]+$ ]]; then
+        idx=$((pick - 1))
+        if (( idx >= 0 && idx < ${#tfvars_files[@]} )); then
+            ENVIRONMENT="${tfvars_files[$idx]%.tfvars}"
+        else
+            echo "Invalid selection: $pick"; exit 1
+        fi
+    else
+        echo "Invalid selection: $pick"; exit 1
+    fi
+fi
+
+# ── Read config ──────────────────────────────────────────────────────────────────
+
+TFVARS_FILE="$TERRAFORM_DIR/${ENVIRONMENT}.tfvars"
 BACKEND_FILE="$TERRAFORM_DIR/backend.hcl"
 
-[[ -f "$TFVARS_FILE" ]]  || { echo "terraform.tfvars not found — run init.sh first."; exit 1; }
 [[ -f "$BACKEND_FILE" ]] || { echo "backend.hcl not found — run init.sh first."; exit 1; }
 
 RESOURCE_GROUP=$(read_hcl_value "$TFVARS_FILE" "resource_group_name")
-ENVIRONMENT=$(read_hcl_value "$TFVARS_FILE" "environment")
 LOCATION=$(read_hcl_value "$TFVARS_FILE" "location")
 STORAGE_ACCOUNT=$(read_hcl_value "$BACKEND_FILE" "storage_account_name")
 
@@ -164,12 +197,12 @@ phase 4 "terraform plan"
 step "Planning infrastructure changes"
 
 pushd "$TERRAFORM_DIR" >/dev/null
-terraform plan -var-file="terraform.tfvars" -out="tfplan"
+terraform plan -var-file="${ENVIRONMENT}.tfvars" -out="tfplan"
 done_ "Plan saved to tfplan"
 popd >/dev/null
 
 phase_summary 4 \
-    "Phase 5 — terraform apply (provision all resources + seed data)" \
+    "Phase 5 — terraform apply (provision all resources)" \
     "Plan file" "tfplan" \
     "Status"    "Ready to apply"
 
@@ -185,15 +218,49 @@ echo ""
 
 pushd "$TERRAFORM_DIR" >/dev/null
 terraform apply "tfplan"
-done_ "All resources deployed and data seeded"
+done_ "All resources deployed"
 popd >/dev/null
 
 # ── Clean up ─────────────────────────────────────────────────────────────────
 rm -f "$TERRAFORM_DIR/tfplan"
 
-pushd "$TERRAFORM_DIR" >/dev/null
-KEYVAULT_URI=$(terraform output -raw keyvault_uri 2>/dev/null || true)
+phase_summary 5 \
+    "Phase 6 — Seed CRM data into Azure SQL Database" \
+    "Status" "Applied successfully"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 6 — Seed CRM data
+# ═══════════════════════════════════════════════════════════════════════════════
+
+phase 6 "Seed CRM data"
+
+step "Discovering Key Vault in $RESOURCE_GROUP"
+KV_NAME=$(az keyvault list --resource-group "$RESOURCE_GROUP" --query "[0].name" -o tsv)
+if [[ -z "$KV_NAME" ]]; then echo "No Key Vault found in $RESOURCE_GROUP"; exit 1; fi
+done_ "Key Vault: $KV_NAME"
+
+step "Reading SQL credentials from Key Vault"
+SQL_FQDN=$(az keyvault secret show --vault-name "$KV_NAME" --name "SQL-SERVER-FQDN" --query value -o tsv)
+SQL_DB=$(az keyvault secret show --vault-name "$KV_NAME" --name "SQL-DATABASE-NAME" --query value -o tsv)
+SQL_LOGIN=$(az keyvault secret show --vault-name "$KV_NAME" --name "SQL-ADMIN-LOGIN" --query value -o tsv)
+SQL_PASS=$(az keyvault secret show --vault-name "$KV_NAME" --name "SQL-ADMIN-PASSWORD" --query value -o tsv)
+done_ "SQL Server: $SQL_FQDN / $SQL_DB"
+
+step "Running seed-data tool"
+
+SEED_DATA_DIR="$(dirname "$SCRIPT_DIR")/src/seed-data"
+pushd "$SEED_DATA_DIR" >/dev/null
+export SQL_SERVER_FQDN="$SQL_FQDN"
+export SQL_DATABASE_NAME="$SQL_DB"
+export SQL_ADMIN_LOGIN="$SQL_LOGIN"
+export SQL_ADMIN_PASSWORD="$SQL_PASS"
+dotnet run
+done_ "CRM data seeded"
+unset SQL_SERVER_FQDN SQL_DATABASE_NAME SQL_ADMIN_LOGIN SQL_ADMIN_PASSWORD
 popd >/dev/null
+
+# ── Read Key Vault URI ───────────────────────────────────────────────────────
+KEYVAULT_URI=$(az keyvault show --name "$KV_NAME" --query properties.vaultUri -o tsv 2>/dev/null || true)
 
 # ── Final summary ────────────────────────────────────────────────────────────
 echo ""

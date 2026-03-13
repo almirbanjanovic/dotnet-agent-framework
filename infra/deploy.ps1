@@ -34,6 +34,7 @@ function Write-Banner {
     Write-Host "  ║     3. terraform validate                             ║" -ForegroundColor DarkCyan
     Write-Host "  ║     4. terraform plan                                 ║" -ForegroundColor DarkCyan
     Write-Host "  ║     5. terraform apply                                ║" -ForegroundColor DarkCyan
+    Write-Host "  ║     6. Seed CRM data                                  ║" -ForegroundColor DarkCyan
     Write-Host "  ║                                                       ║" -ForegroundColor DarkCyan
     Write-Host "  ╚═══════════════════════════════════════════════════════╝" -ForegroundColor DarkCyan
     Write-Host ""
@@ -77,16 +78,47 @@ function Read-HclValue {
     return $null
 }
 
-# ── Read config ──────────────────────────────────────────────────────────────
+# ── Select environment ───────────────────────────────────────────────────────────
 
-$TfVarsFile  = "$TerraformDir\terraform.tfvars"
+$TfVarsFiles = @(Get-ChildItem -Path $TerraformDir -Filter "*.tfvars" | Where-Object { $_.Name -ne 'example.tfvars' })
+
+if ($TfVarsFiles.Count -eq 0) {
+    throw "No .tfvars files found in $TerraformDir — run init.ps1 first."
+}
+
+Write-Banner
+
+if ($TfVarsFiles.Count -eq 1) {
+    $Environment = $TfVarsFiles[0].BaseName
+    Write-Host "    Found environment: " -NoNewLine; Write-Host "$Environment" -ForegroundColor Cyan
+} else {
+    Write-Host "    Available environments:" -ForegroundColor DarkGray
+    Write-Host ""
+    for ($i = 0; $i -lt $TfVarsFiles.Count; $i++) {
+        Write-Host "      $($i + 1). $($TfVarsFiles[$i].BaseName)" -ForegroundColor Cyan
+    }
+    Write-Host ""
+    $pick = Read-Host "    Select environment [1-$($TfVarsFiles.Count)]"
+    if ($pick -match '^\d+$') {
+        $idx = [int]$pick - 1
+        if ($idx -ge 0 -and $idx -lt $TfVarsFiles.Count) {
+            $Environment = $TfVarsFiles[$idx].BaseName
+        } else {
+            throw "Invalid selection: $pick"
+        }
+    } else {
+        throw "Invalid selection: $pick"
+    }
+}
+
+# ── Read config ──────────────────────────────────────────────────────────────────
+
+$TfVarsFile  = "$TerraformDir\$Environment.tfvars"
 $BackendFile = "$TerraformDir\backend.hcl"
 
-if (-not (Test-Path $TfVarsFile))  { throw "terraform.tfvars not found — run init.ps1 first." }
 if (-not (Test-Path $BackendFile)) { throw "backend.hcl not found — run init.ps1 first." }
 
 $ResourceGroup  = Read-HclValue -FilePath $TfVarsFile -Key "resource_group_name"
-$Environment    = Read-HclValue -FilePath $TfVarsFile -Key "environment"
 $Location       = Read-HclValue -FilePath $TfVarsFile -Key "location"
 $StorageAccount = Read-HclValue -FilePath $BackendFile -Key "storage_account_name"
 
@@ -94,8 +126,7 @@ if (-not $ResourceGroup -or -not $StorageAccount -or -not $Environment) {
     throw "Could not read required values from config files. Re-run init.ps1."
 }
 
-Write-Banner
-
+Write-Host ""
 Write-Host "    Environment:     " -NoNewLine; Write-Host "$Environment" -ForegroundColor Cyan
 Write-Host "    Resource group:  " -NoNewLine; Write-Host "$ResourceGroup" -ForegroundColor Cyan
 Write-Host "    Storage account: " -NoNewLine; Write-Host "$StorageAccount" -ForegroundColor Cyan
@@ -132,7 +163,7 @@ Write-Step "Initializing Terraform with backend config"
 
 Push-Location $TerraformDir
 try {
-    terraform --% init -upgrade -reconfigure -backend-config=backend.hcl
+    cmd /c "terraform init -upgrade -reconfigure -backend-config=backend.hcl"
     if ($LASTEXITCODE -ne 0) { throw "terraform init failed" }
     Write-Done "Terraform initialized"
 } finally {
@@ -175,14 +206,14 @@ Write-Step "Planning infrastructure changes"
 
 Push-Location $TerraformDir
 try {
-    terraform --% plan -var-file="terraform.tfvars" -out="tfplan"
+    cmd /c "terraform plan -var-file=$Environment.tfvars -out=tfplan"
     if ($LASTEXITCODE -ne 0) { throw "terraform plan failed" }
     Write-Done "Plan saved to tfplan"
 } finally {
     Pop-Location
 }
 
-Write-PhaseSummary -Number 4 -NextPhase "Phase 5 — terraform apply (provision all resources + seed data)" -Items ([ordered]@{
+Write-PhaseSummary -Number 4 -NextPhase "Phase 5 — terraform apply (provision all resources)" -Items ([ordered]@{
     "Plan file" = "tfplan"
     "Status"    = "Ready to apply"
 })
@@ -201,7 +232,7 @@ Push-Location $TerraformDir
 try {
     terraform apply "tfplan"
     if ($LASTEXITCODE -ne 0) { throw "terraform apply failed" }
-    Write-Done "All resources deployed and data seeded"
+    Write-Done "All resources deployed"
 } finally {
     Pop-Location
 }
@@ -211,12 +242,47 @@ if (Test-Path "$TerraformDir\tfplan") {
     Remove-Item "$TerraformDir\tfplan" -Force
 }
 
-Push-Location $TerraformDir
+Write-PhaseSummary -Number 5 -NextPhase "Phase 6 — Seed CRM data into Azure SQL Database" -Items ([ordered]@{
+    "Status" = "Applied successfully"
+})
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 6 — Seed CRM data
+# ═══════════════════════════════════════════════════════════════════════════════
+
+Write-Phase -Number 6 -Title "Seed CRM data"
+
+Write-Step "Discovering Key Vault in $ResourceGroup"
+$KvName = az keyvault list --resource-group $ResourceGroup --query "[0].name" -o tsv
+if (-not $KvName) { throw "No Key Vault found in $ResourceGroup" }
+Write-Done "Key Vault: $KvName"
+
+Write-Step "Reading SQL credentials from Key Vault"
+$SqlFqdn  = az keyvault secret show --vault-name $KvName --name "SQL-SERVER-FQDN" --query value -o tsv
+$SqlDb    = az keyvault secret show --vault-name $KvName --name "SQL-DATABASE-NAME" --query value -o tsv
+$SqlLogin = az keyvault secret show --vault-name $KvName --name "SQL-ADMIN-LOGIN" --query value -o tsv
+$SqlPass  = az keyvault secret show --vault-name $KvName --name "SQL-ADMIN-PASSWORD" --query value -o tsv
+Write-Done "SQL Server: $SqlFqdn / $SqlDb"
+
+Write-Step "Running seed-data tool"
+
+$SeedDataDir = Join-Path (Split-Path $ScriptDir) "src" "seed-data"
+Push-Location $SeedDataDir
 try {
-    $KeyVaultUri = terraform output -raw keyvault_uri 2>$null
+    $env:SQL_SERVER_FQDN    = $SqlFqdn
+    $env:SQL_DATABASE_NAME  = $SqlDb
+    $env:SQL_ADMIN_LOGIN    = $SqlLogin
+    $env:SQL_ADMIN_PASSWORD = $SqlPass
+    dotnet run
+    if ($LASTEXITCODE -ne 0) { throw "seed-data failed" }
+    Write-Done "CRM data seeded"
 } finally {
+    Remove-Item Env:\SQL_SERVER_FQDN, Env:\SQL_DATABASE_NAME, Env:\SQL_ADMIN_LOGIN, Env:\SQL_ADMIN_PASSWORD -ErrorAction SilentlyContinue
     Pop-Location
 }
+
+# ── Read Key Vault URI ────────────────────────────────────────────────────────
+$KeyVaultUri = (az keyvault show --name $KvName --query properties.vaultUri -o tsv 2>$null)
 
 # ── Final summary ────────────────────────────────────────────────────────────
 Write-Host ""
