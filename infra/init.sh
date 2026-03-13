@@ -466,6 +466,32 @@ if [[ -n "$APP_CLIENT_ID" ]]; then
     fi
 fi
 
+# ── RBAC: Storage Blob Data Contributor on state storage (for Entra auth) ───
+storage_scope="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Storage/storageAccounts/$STORAGE_ACCOUNT"
+current_user_id=$(az ad signed-in-user show --query id -o tsv 2>/dev/null || true)
+
+if [[ -n "$current_user_id" ]]; then
+    step "Granting Storage Blob Data Contributor to current user"
+    blob_role_user=$(az role assignment list --assignee "$current_user_id" --role "Storage Blob Data Contributor" --scope "$storage_scope" --query "[0].id" -o tsv 2>/dev/null || true)
+    if [[ -n "$blob_role_user" ]]; then
+        skip_ "Already assigned to current user"
+    else
+        az role assignment create --assignee "$current_user_id" --role "Storage Blob Data Contributor" --scope "$storage_scope" >/dev/null
+        done_ "Storage Blob Data Contributor granted to current user"
+    fi
+fi
+
+if [[ -n "$APP_CLIENT_ID" ]]; then
+    step "Granting Storage Blob Data Contributor to service principal"
+    blob_role_sp=$(az role assignment list --assignee "$APP_CLIENT_ID" --role "Storage Blob Data Contributor" --scope "$storage_scope" --query "[0].id" -o tsv 2>/dev/null || true)
+    if [[ -n "$blob_role_sp" ]]; then
+        skip_ "Already assigned to service principal"
+    else
+        az role assignment create --assignee "$APP_CLIENT_ID" --role "Storage Blob Data Contributor" --scope "$storage_scope" >/dev/null
+        done_ "Storage Blob Data Contributor granted to service principal"
+    fi
+fi
+
 phase_summary 4 \
     "Phase 5 — Generate terraform.tfvars and backend.hcl configuration files" \
     "Resource group"  "$RESOURCE_GROUP" \
@@ -485,6 +511,7 @@ resource_group_name  = "$RESOURCE_GROUP"
 storage_account_name = "$STORAGE_ACCOUNT"
 container_name       = "$CONTAINER_NAME"
 key                  = "$GITHUB_ENV.tfstate"
+use_azuread_auth     = true
 EOF
 done_ "backend.hcl"
 

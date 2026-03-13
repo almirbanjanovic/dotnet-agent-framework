@@ -132,7 +132,7 @@ Write-Step "Initializing Terraform with backend config"
 
 Push-Location $TerraformDir
 try {
-    terraform init -reconfigure -backend-config=backend.hcl
+    terraform --% init -reconfigure -backend-config=backend.hcl
     if ($LASTEXITCODE -ne 0) { throw "terraform init failed" }
     Write-Done "Terraform initialized"
 } finally {
@@ -175,7 +175,7 @@ Write-Step "Planning infrastructure changes"
 
 Push-Location $TerraformDir
 try {
-    terraform plan -var-file="terraform.tfvars" -out="tfplan"
+    terraform --% plan -var-file="terraform.tfvars" -out="tfplan"
     if ($LASTEXITCODE -ne 0) { throw "terraform plan failed" }
     Write-Done "Plan saved to tfplan"
 } finally {
