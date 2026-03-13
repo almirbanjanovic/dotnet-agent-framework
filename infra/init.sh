@@ -360,19 +360,16 @@ declare -A ENV_VARS=(
     [EMBEDDING_MODEL_VERSION]="2"
     [EMBEDDING_SKU_NAME]="Standard"
     [EMBEDDING_CAPACITY]="10"
-    [COSMOS_PROJECT_NAME]="$BASE_NAME"
     [COSMOS_AGENTS_DATABASE_NAME]="agents"
     [COSMOS_AGENT_STATE_CONTAINER_NAME]="workshop_agent_state_store"
     [SQL_DATABASE_NAME]="contoso-outdoors"
     [SQL_ADMIN_LOGIN]="sqladmin"
-    [STORAGE_PROJECT_NAME]="$BASE_NAME"
     [SEARCH_SKU]="basic"
     [SEARCH_INDEX_NAME]="knowledge-documents"
-    [ACR_PROJECT_NAME]="$BASE_NAME"
     [CREATE_ACR]="true"
     [ACR_SKU]="Premium"
-    [EXISTING_ACR_NAME]=""
-    [AKS_KUBERNETES_VERSION]=""
+    [EXISTING_ACR_NAME]="$(echo "acr${BASE_NAME}${GITHUB_ENV}${LOCATION}" | tr -d '-')"
+    [AKS_KUBERNETES_VERSION]="1.34"
     [AKS_NODE_VM_SIZE]="Standard_D4s_v5"
     [AKS_NODE_COUNT]="2"
     [AKS_AUTO_SCALING_ENABLED]="true"
@@ -495,7 +492,6 @@ embedding_sku_name           = "Standard"
 embedding_capacity           = 10
 
 # Cosmos DB (1 account: agents session state)
-cosmos_project_name               = "$BASE_NAME"
 cosmos_agents_database_name       = "agents"
 cosmos_agent_state_container_name = "workshop_agent_state_store"
 
@@ -503,21 +499,17 @@ cosmos_agent_state_container_name = "workshop_agent_state_store"
 sql_database_name = "contoso-outdoors"
 sql_admin_login   = "sqladmin"
 
-# Storage
-storage_project_name = "$BASE_NAME"
-
 # AI Search
 search_sku        = "basic"
 search_index_name = "knowledge-documents"
 
 # ACR
-acr_project_name  = "$BASE_NAME"
 create_acr        = true
 acr_sku           = "Premium"
-existing_acr_name = ""
+existing_acr_name = "$(echo "acr${BASE_NAME}${GITHUB_ENV}${LOCATION}" | tr -d '-')"
 
 # AKS
-aks_kubernetes_version   = null
+aks_kubernetes_version   = "1.34"
 aks_node_vm_size         = "Standard_D4s_v5"
 aks_node_count           = 2
 aks_auto_scaling_enabled = true

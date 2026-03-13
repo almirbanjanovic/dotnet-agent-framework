@@ -4,7 +4,7 @@
 # =============================================================================
 
 locals {
-  account_name = "aif-${var.environment}-${var.location}"
+  account_name = "aif-${var.base_name}-${var.environment}-${var.location}"
   subdomain    = lower("${local.account_name}-${replace(var.deployment_model_name, ".", "-")}")
 }
 
@@ -65,3 +65,4 @@ resource "azurerm_cognitive_deployment" "embedding" {
 
   depends_on = [azurerm_cognitive_deployment.this]
 }
+

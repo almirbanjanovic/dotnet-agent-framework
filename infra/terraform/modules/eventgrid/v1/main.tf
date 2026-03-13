@@ -4,7 +4,7 @@
 # =============================================================================
 
 locals {
-  system_topic_name = "evgt-${var.environment}"
+  system_topic_name = "evgt-${var.base_name}-${var.environment}-${var.location}"
 }
 
 # -----------------------------------------------------------------------------
@@ -52,3 +52,4 @@ resource "azurerm_eventgrid_system_topic_event_subscription" "blob_created" {
     }
   }
 }
+

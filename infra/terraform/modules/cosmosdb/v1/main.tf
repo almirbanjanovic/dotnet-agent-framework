@@ -5,7 +5,7 @@
 # =============================================================================
 
 locals {
-  account_name  = lower("${var.name_prefix}-cosmos-${var.purpose}")
+  account_name  = lower("cosmos-${var.name_prefix}-${var.location}")
   database_name = var.database_name
 }
 

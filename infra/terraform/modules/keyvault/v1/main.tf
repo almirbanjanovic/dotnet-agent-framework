@@ -4,7 +4,7 @@
 # =============================================================================
 
 locals {
-  keyvault_name = "kv-${var.environment}"
+  keyvault_name = "kv-${var.base_name}-${var.environment}-${var.location}"
 }
 
 resource "azurerm_key_vault" "this" {
@@ -28,3 +28,4 @@ resource "azurerm_key_vault" "this" {
     ignore_changes = [tags]
   }
 }
+

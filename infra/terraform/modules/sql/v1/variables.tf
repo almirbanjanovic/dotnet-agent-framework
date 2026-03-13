@@ -1,3 +1,8 @@
+
+variable "base_name" {
+  description = "Project base name for resource naming"
+  type        = string
+}
 variable "environment" {
   description = "Environment name used in resource naming (e.g., agentic-ai-dev)"
   type        = string
@@ -30,3 +35,4 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+

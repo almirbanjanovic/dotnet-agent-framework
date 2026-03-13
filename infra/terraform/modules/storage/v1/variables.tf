@@ -1,10 +1,10 @@
-variable "project_name" {
-  description = "Project name used in storage account naming"
+
+variable "base_name" {
+  description = "Project base name for resource naming"
   type        = string
 }
-
-variable "purpose" {
-  description = "Purpose suffix for the storage account (e.g., images)"
+variable "environment" {
+  description = "Environment name used in resource naming (e.g., dotnetagent-dev)"
   type        = string
 }
 
@@ -52,3 +52,4 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+

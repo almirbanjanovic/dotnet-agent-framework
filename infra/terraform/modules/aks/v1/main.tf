@@ -4,8 +4,8 @@
 # =============================================================================
 
 locals {
-  cluster_name   = "aks-${var.environment}-${var.location}"
-  workspace_name = "log-aks-${var.environment}"
+  cluster_name   = "aks-${var.base_name}-${var.environment}-${var.location}"
+  workspace_name = "log-${var.base_name}-${var.environment}-${var.location}"
 }
 
 # -----------------------------------------------------------------------------
@@ -81,3 +81,4 @@ resource "azurerm_kubernetes_cluster" "this" {
     ignore_changes = [tags]
   }
 }
+

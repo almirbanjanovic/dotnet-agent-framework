@@ -4,7 +4,7 @@
 # =============================================================================
 
 locals {
-  server_name = "sql-${var.environment}"
+  server_name = "sql-${var.base_name}-${var.environment}-${var.location}"
 }
 
 # -----------------------------------------------------------------------------
@@ -70,3 +70,4 @@ resource "azurerm_mssql_firewall_rule" "allow_azure" {
   start_ip_address = "0.0.0.0"
   end_ip_address   = "0.0.0.0"
 }
+

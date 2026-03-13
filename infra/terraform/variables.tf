@@ -90,11 +90,6 @@ variable "embedding_capacity" {
 # Cosmos DB (agents session state)
 # ---------------------------------------------------------------
 
-variable "cosmos_project_name" {
-  description = "Project name prefix for Cosmos DB accounts"
-  type        = string
-}
-
 variable "cosmos_agents_database_name" {
   description = "Database name for the agents (state) Cosmos DB account"
   type        = string
@@ -122,15 +117,6 @@ variable "sql_admin_login" {
 }
 
 # ---------------------------------------------------------------
-# Storage
-# ---------------------------------------------------------------
-
-variable "storage_project_name" {
-  description = "Project name used in storage account naming"
-  type        = string
-}
-
-# ---------------------------------------------------------------
 # AI Search
 # ---------------------------------------------------------------
 
@@ -149,11 +135,6 @@ variable "search_index_name" {
 # ---------------------------------------------------------------
 # ACR
 # ---------------------------------------------------------------
-
-variable "acr_project_name" {
-  description = "Project name used in ACR naming"
-  type        = string
-}
 
 variable "create_acr" {
   description = "Create a new ACR. Set to false to use an existing one."
