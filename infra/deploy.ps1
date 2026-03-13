@@ -132,7 +132,7 @@ Write-Step "Initializing Terraform with backend config"
 
 Push-Location $TerraformDir
 try {
-    terraform --% init -reconfigure -backend-config=backend.hcl
+    terraform --% init -upgrade -reconfigure -backend-config=backend.hcl
     if ($LASTEXITCODE -ne 0) { throw "terraform init failed" }
     Write-Done "Terraform initialized"
 } finally {

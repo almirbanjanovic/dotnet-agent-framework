@@ -129,7 +129,7 @@ phase 2 "terraform init"
 step "Initializing Terraform with backend config"
 
 pushd "$TERRAFORM_DIR" >/dev/null
-terraform init -reconfigure -backend-config=backend.hcl
+terraform init -upgrade -reconfigure -backend-config=backend.hcl
 done_ "Terraform initialized"
 popd >/dev/null
 
