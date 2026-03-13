@@ -64,7 +64,7 @@ done_() { echo -e "    ${G}✓ $1${W}"; }
 skip_() { echo -e "    ${D}· $1${W}"; }
 
 phase_summary() {
-    local num="$1"; shift
+    local num="$1"; local next_desc="$2"; shift 2
     echo ""
     echo -e "    ${G}┌ Phase $num complete ─────────────────────────────────┐${W}"
     while [[ $# -gt 0 ]]; do
@@ -72,7 +72,10 @@ phase_summary() {
         shift 2
     done
     echo -e "    ${G}└─────────────────────────────────────────────────────┘${W}"
-    read -p "    Continue to next phase? (Y/n) " response
+    if [[ -n "$next_desc" ]]; then
+        echo -e "    ${D}Next:${W} ${C}${next_desc}${W}"
+    fi
+    read -p "    Continue? (Y/n) " response
     if [[ "$response" == "n" || "$response" == "N" ]]; then
         echo -e "    ${Y}Stopped by user.${W}"
         exit 0
@@ -249,6 +252,7 @@ STORAGE_ACCOUNT="st$(echo "$RESOURCE_GROUP" | sed 's/^rg-//' | tr -cd 'a-z0-9')"
 STORAGE_ACCOUNT="${STORAGE_ACCOUNT:0:24}"
 
 phase_summary 1 \
+    "Phase 2 — Create Entra app registration, service principal, and OIDC federated credential" \
     "Subscription"   "$SUB_NAME ($SUBSCRIPTION_ID)" \
     "Tenant"         "$TENANT_ID" \
     "GitHub repo"    "$GITHUB_REPO" \
@@ -307,6 +311,7 @@ else
     fi
 
     phase_summary 2 \
+        "Phase 3 — Create GitHub environment, set repository secrets and environment variables" \
         "App registration" "$APP_NAME ($APP_CLIENT_ID)" \
         "OIDC subject"     "repo:${GITHUB_REPO}:environment:${GITHUB_ENV}" \
         "Credential name"  "$CRED_NAME" \
@@ -389,6 +394,7 @@ done
 done_ "Set $count environment variables in '$GITHUB_ENV'"
 
 phase_summary 3 \
+    "Phase 4 — Create Azure resource group, storage account, blob container, and assign RBAC" \
     "Secrets"       "AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID" \
     "Environment"   "$GITHUB_ENV" \
     "Env variables" "$count"
@@ -450,6 +456,7 @@ if [[ -n "$APP_CLIENT_ID" ]]; then
 fi
 
 phase_summary 4 \
+    "Phase 5 — Generate terraform.tfvars and backend.hcl configuration files" \
     "Resource group"  "$RESOURCE_GROUP" \
     "Storage account" "$STORAGE_ACCOUNT" \
     "Container"       "$CONTAINER_NAME" \
