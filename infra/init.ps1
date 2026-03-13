@@ -172,10 +172,16 @@ Write-Done "Azure: $SubName ($SubscriptionId)"
 
 # ── GitHub ───────────────────────────────────────────────────────────────────
 Write-Step "Signing in to GitHub"
-Write-Host ""
-Write-Host "    Logging in via browser (HTTPS). A browser window will open." -ForegroundColor DarkGray
-Write-Host ""
-gh auth login --hostname github.com --git-protocol https --web
+
+$ghStatus = gh auth status 2>&1
+if ($ghStatus -match "Logged in") {
+    Write-Skip "Already logged in to GitHub"
+} else {
+    Write-Host "    Run this command in a separate terminal if the browser flow hangs:" -ForegroundColor DarkGray
+    Write-Host "      gh auth login --hostname github.com --git-protocol https --web" -ForegroundColor DarkGray
+    Write-Host ""
+    gh auth login --hostname github.com --git-protocol https --web
+}
 
 $GitHubRepo = gh repo view --json nameWithOwner -q ".nameWithOwner" 2>$null
 
