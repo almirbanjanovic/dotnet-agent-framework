@@ -4,30 +4,14 @@ set -euo pipefail
 # ═══════════════════════════════════════════════════════════════════════════════
 # .NET Agent Framework — Lab 0 Bootstrap
 #
-# Usage:
-#   ./init.sh
-#   ./init.sh --location centralus --base-name myproject
-#   ./init.sh --skip-entra --app-client-id "12345678-..."
+# Usage:  ./init.sh
 # ═══════════════════════════════════════════════════════════════════════════════
 
 SUBSCRIPTION_ID=""
 GITHUB_ENV="dev"
 LOCATION="eastus2"
 BASE_NAME="dotnetagent"
-SKIP_ENTRA=false
 APP_CLIENT_ID=""
-
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --subscription)    SUBSCRIPTION_ID="$2"; shift 2 ;;
-        --env)             GITHUB_ENV="$2"; shift 2 ;;
-        --location)        LOCATION="$2"; shift 2 ;;
-        --base-name)       BASE_NAME="$2"; shift 2 ;;
-        --skip-entra)      SKIP_ENTRA=true; shift ;;
-        --app-client-id)   APP_CLIENT_ID="$2"; shift 2 ;;
-        *)                 echo "Unknown option: $1"; exit 1 ;;
-    esac
-done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TERRAFORM_DIR="$SCRIPT_DIR/terraform"
@@ -297,58 +281,53 @@ phase_summary 1 \
 # PHASE 2 — Entra app registration + OIDC + RBAC
 # ═══════════════════════════════════════════════════════════════════════════════
 
-if [[ "$SKIP_ENTRA" == "true" ]]; then
-    if [[ -z "$APP_CLIENT_ID" ]]; then echo "--skip-entra requires --app-client-id"; exit 1; fi
-    skip_ "Skipping Entra setup (using existing app: $APP_CLIENT_ID)"
+phase 2 "Entra app registration + OIDC + RBAC"
+
+APP_NAME="github-actions-${REPO_NAME}"
+
+step "Creating app registration"
+existing=$(az ad app list --display-name "$APP_NAME" --query "[0].appId" -o tsv 2>/dev/null || true)
+if [[ -n "$existing" ]]; then
+    APP_CLIENT_ID="$existing"
+    skip_ "App '$APP_NAME' already exists: $APP_CLIENT_ID"
 else
-    phase 2 "Entra app registration + OIDC + RBAC"
-
-    APP_NAME="github-actions-${REPO_NAME}"
-
-    step "Creating app registration"
-    existing=$(az ad app list --display-name "$APP_NAME" --query "[0].appId" -o tsv 2>/dev/null || true)
-    if [[ -n "$existing" ]]; then
-        APP_CLIENT_ID="$existing"
-        skip_ "App '$APP_NAME' already exists: $APP_CLIENT_ID"
-    else
-        APP_CLIENT_ID=$(az ad app create --display-name "$APP_NAME" --query appId -o tsv)
-        if [[ -z "$APP_CLIENT_ID" ]]; then
-            echo "Failed to create app registration. Check your permissions."; exit 1
-        fi
-        done_ "Created app: $APP_CLIENT_ID"
+    APP_CLIENT_ID=$(az ad app create --display-name "$APP_NAME" --query appId -o tsv)
+    if [[ -z "$APP_CLIENT_ID" ]]; then
+        echo "Failed to create app registration. Check your permissions."; exit 1
     fi
-
-    sp_exists=$(az ad sp show --id "$APP_CLIENT_ID" --query id -o tsv 2>/dev/null || true)
-    if [[ -n "$sp_exists" ]]; then
-        skip_ "Service principal already exists"
-    else
-        az ad sp create --id "$APP_CLIENT_ID" >/dev/null
-        done_ "Created service principal"
-    fi
-
-    step "Adding OIDC federated credential"
-    CRED_NAME="${REPO_NAME}-${GITHUB_ENV}"
-    existing_cred=$(az ad app federated-credential list --id "$APP_CLIENT_ID" --query "[?name=='$CRED_NAME'].name" -o tsv 2>/dev/null || true)
-    if [[ -n "$existing_cred" ]]; then
-        skip_ "Federated credential '$CRED_NAME' already exists"
-    else
-        az ad app federated-credential create --id "$APP_CLIENT_ID" --parameters '{
-            "name": "'"$CRED_NAME"'",
-            "issuer": "https://token.actions.githubusercontent.com",
-            "subject": "repo:'"$GITHUB_REPO"':environment:'"$GITHUB_ENV"'",
-            "audiences": ["api://AzureADTokenExchange"],
-            "description": "GitHub Actions OIDC for '"$REPO_NAME"' ('"$GITHUB_ENV"')"
-        }' >/dev/null
-        done_ "Federated credential for repo:${GITHUB_REPO}:environment:${GITHUB_ENV}"
-    fi
-
-    phase_summary 2 \
-        "Phase 3 — Create GitHub environment, set repository secrets and environment variables" \
-        "App registration" "$APP_NAME ($APP_CLIENT_ID)" \
-        "OIDC subject"     "repo:${GITHUB_REPO}:environment:${GITHUB_ENV}" \
-        "Credential name"  "$CRED_NAME" \
-        "RBAC"             "Contributor on $RESOURCE_GROUP (granted in Phase 4)"
+    done_ "Created app: $APP_CLIENT_ID"
 fi
+
+sp_exists=$(az ad sp show --id "$APP_CLIENT_ID" --query id -o tsv 2>/dev/null || true)
+if [[ -n "$sp_exists" ]]; then
+    skip_ "Service principal already exists"
+else
+    az ad sp create --id "$APP_CLIENT_ID" >/dev/null
+    done_ "Created service principal"
+fi
+
+step "Adding OIDC federated credential"
+CRED_NAME="${REPO_NAME}-${GITHUB_ENV}"
+existing_cred=$(az ad app federated-credential list --id "$APP_CLIENT_ID" --query "[?name=='$CRED_NAME'].name" -o tsv 2>/dev/null || true)
+if [[ -n "$existing_cred" ]]; then
+    skip_ "Federated credential '$CRED_NAME' already exists"
+else
+    az ad app federated-credential create --id "$APP_CLIENT_ID" --parameters '{
+        "name": "'"$CRED_NAME"'",
+        "issuer": "https://token.actions.githubusercontent.com",
+        "subject": "repo:'"$GITHUB_REPO"':environment:'"$GITHUB_ENV"'",
+        "audiences": ["api://AzureADTokenExchange"],
+        "description": "GitHub Actions OIDC for '"$REPO_NAME"' ('"$GITHUB_ENV"')"
+    }' >/dev/null
+    done_ "Federated credential for repo:${GITHUB_REPO}:environment:${GITHUB_ENV}"
+fi
+
+phase_summary 2 \
+    "Phase 3 — Create GitHub environment, set repository secrets and environment variables" \
+    "App registration" "$APP_NAME ($APP_CLIENT_ID)" \
+    "OIDC subject"     "repo:${GITHUB_REPO}:environment:${GITHUB_ENV}" \
+    "Credential name"  "$CRED_NAME" \
+    "RBAC"             "Contributor on $RESOURCE_GROUP (granted in Phase 4)"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 3 — GitHub environment, secrets, variables
