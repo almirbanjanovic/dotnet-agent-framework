@@ -82,7 +82,7 @@ function Write-Done  { param([string]$Message) Write-Host "    ✓ $Message" -Fo
 function Write-Skip  { param([string]$Message) Write-Host "    · $Message" -ForegroundColor DarkGray }
 
 function Write-PhaseSummary {
-    param([int]$Number, [hashtable]$Items)
+    param([int]$Number, [hashtable]$Items, [string]$NextPhase)
     Write-Host ""
     Write-Host "    ┌ Phase $Number complete ─────────────────────────────────┐" -ForegroundColor Green
     foreach ($kv in $Items.GetEnumerator()) {
@@ -90,7 +90,11 @@ function Write-PhaseSummary {
         Write-Host "$($kv.Value)"
     }
     Write-Host "    └─────────────────────────────────────────────────────┘" -ForegroundColor Green
-    $response = Read-Host "    Continue to next phase? (Y/n)"
+    if ($NextPhase) {
+        Write-Host "    Next: " -NoNewLine -ForegroundColor DarkGray
+        Write-Host "$NextPhase" -ForegroundColor Cyan
+    }
+    $response = Read-Host "    Continue? (Y/n)"
     if ($response -eq 'n' -or $response -eq 'N') {
         Write-Host "    Stopped by user." -ForegroundColor Yellow
         exit 0
@@ -248,7 +252,7 @@ $StorageAccount = ("st" + ($ResourceGroup -replace '^rg-', '' -replace '[^a-z0-9
 if ($StorageAccount.Length -gt 24) { $StorageAccount = $StorageAccount.Substring(0, 24) }
 
 # ── Show configuration & confirm ─────────────────────────────────────────────
-Write-PhaseSummary -Number 1 -Items ([ordered]@{
+Write-PhaseSummary -Number 1 -NextPhase "Phase 2 — Create Entra app registration, service principal, and OIDC federated credential" -Items ([ordered]@{
     "Subscription"   = "$SubName ($SubscriptionId)"
     "Tenant"         = $TenantId
     "GitHub repo"    = $GitHubRepo
@@ -310,7 +314,7 @@ if ($SkipEntra) {
         Write-Done "Federated credential for repo:${GitHubRepo}:environment:${GitHubEnv}"
     }
 
-    Write-PhaseSummary -Number 2 -Items ([ordered]@{
+    Write-PhaseSummary -Number 2 -NextPhase "Phase 3 — Create GitHub environment, set repository secrets and environment variables" -Items ([ordered]@{
         "App registration" = "$AppName ($AppClientId)"
         "OIDC subject"     = "repo:${GitHubRepo}:environment:${GitHubEnv}"
         "Credential name"  = $credName
@@ -390,7 +394,7 @@ foreach ($kv in $envVars.GetEnumerator()) {
 }
 Write-Done "Set $($envVars.Count) environment variables in '$GitHubEnv'"
 
-Write-PhaseSummary -Number 3 -Items ([ordered]@{
+Write-PhaseSummary -Number 3 -NextPhase "Phase 4 — Create Azure resource group, storage account, blob container, and assign RBAC" -Items ([ordered]@{
     "Secrets"       = "AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID"
     "Environment"   = $GitHubEnv
     "Env variables" = "$($envVars.Count)"
@@ -455,7 +459,7 @@ if ($AppClientId) {
     }
 }
 
-Write-PhaseSummary -Number 4 -Items ([ordered]@{
+Write-PhaseSummary -Number 4 -NextPhase "Phase 5 — Generate terraform.tfvars and backend.hcl configuration files" -Items ([ordered]@{
     "Resource group"  = $ResourceGroup
     "Storage account" = $StorageAccount
     "Container"       = $ContainerName
