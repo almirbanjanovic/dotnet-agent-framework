@@ -144,8 +144,8 @@ foreach ($cmd in $prerequisites.Keys) {
 Write-Phase -Number 1 -Title "Authenticate"
 
 # ── Azure ────────────────────────────────────────────────────────────────────
-Write-Step "Signing in to Azure"
-az login | Out-Null
+Write-Step "Signing in to Azure (device code)"
+az login --use-device-code | Out-Null
 
 if (-not $SubscriptionId) {
     Write-Host ""
