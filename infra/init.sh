@@ -217,6 +217,30 @@ if [[ -z "$GITHUB_REPO" ]]; then echo "No GitHub repository configured."; exit 1
 REPO_NAME="${GITHUB_REPO##*/}"
 done_ "GitHub: $GITHUB_REPO"
 
+# ── Environment ──────────────────────────────────────────────────────────────
+step "Select environment"
+echo ""
+echo -e "    ${D}Choose an environment for this deployment:${W}"
+echo -e "    ${D}  1. dev       (development — default)${W}"
+echo -e "    ${D}  2. staging   (pre-production)${W}"
+echo -e "    ${D}  3. prod      (production)${W}"
+echo -e "    ${D}  4. custom    (enter your own name)${W}"
+echo ""
+read -p "    Select [1-4, or press Enter for dev]: " env_choice
+
+case "$env_choice" in
+    2) GITHUB_ENV="staging" ;;
+    3) GITHUB_ENV="prod" ;;
+    4) read -p "    Enter environment name: " GITHUB_ENV ;;
+    *) ;; # keep the default or what was passed via --env
+esac
+done_ "Environment: $GITHUB_ENV"
+
+# ── Recalculate derived names with final values ──────────────────────────────
+RESOURCE_GROUP="rg-${BASE_NAME}-${GITHUB_ENV}-${LOCATION}"
+STORAGE_ACCOUNT="st$(echo "$RESOURCE_GROUP" | sed 's/^rg-//' | tr -cd 'a-z0-9')"
+STORAGE_ACCOUNT="${STORAGE_ACCOUNT:0:24}"
+
 phase_summary 1 \
     "Subscription"   "$SUB_NAME ($SUBSCRIPTION_ID)" \
     "Tenant"         "$TENANT_ID" \
@@ -244,12 +268,7 @@ else
         APP_CLIENT_ID="$existing"
         skip_ "App '$APP_NAME' already exists: $APP_CLIENT_ID"
     else
-        APP_CLIENT_ID=$(az ad app create --display-name "$APP_NAME" --query appId -o tsv 2>/dev/null || true)
-        if [[ -z "$APP_CLIENT_ID" ]]; then
-            echo -e "    ${Y}App registration failed — re-authenticating...${W}"
-            az login >/dev/null
-            APP_CLIENT_ID=$(az ad app create --display-name "$APP_NAME" --query appId -o tsv)
-        fi
+        APP_CLIENT_ID=$(az ad app create --display-name "$APP_NAME" --query appId -o tsv)
         if [[ -z "$APP_CLIENT_ID" ]]; then
             echo "Failed to create app registration. Check your permissions."; exit 1
         fi

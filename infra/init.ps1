@@ -137,6 +137,9 @@ foreach ($cmd in $prerequisites.Keys) {
     }
 }
 
+# Disable WAM broker — prevents the gray popup issue on Windows
+az config set core.enable_broker_on_windows=false 2>$null
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 1 — Authenticate
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -145,6 +148,7 @@ Write-Phase -Number 1 -Title "Authenticate"
 
 # ── Azure ────────────────────────────────────────────────────────────────────
 Write-Step "Signing in to Azure"
+Write-Host "    A browser tab will open for authentication." -ForegroundColor DarkGray
 az login | Out-Null
 
 if (-not $SubscriptionId) {
@@ -213,6 +217,30 @@ if (-not $GitHubRepo) { throw "No GitHub repository configured." }
 $RepoName = ($GitHubRepo -split "/")[-1]
 Write-Done "GitHub: $GitHubRepo"
 
+# ── Environment ──────────────────────────────────────────────────────────────
+Write-Step "Select environment"
+Write-Host ""
+Write-Host "    Choose an environment for this deployment:" -ForegroundColor DarkGray
+Write-Host "      1. dev       (development — default)" -ForegroundColor DarkGray
+Write-Host "      2. staging   (pre-production)" -ForegroundColor DarkGray
+Write-Host "      3. prod      (production)" -ForegroundColor DarkGray
+Write-Host "      4. custom    (enter your own name)" -ForegroundColor DarkGray
+Write-Host ""
+$envChoice = Read-Host "    Select [1-4, or press Enter for dev]"
+
+switch ($envChoice) {
+    "2" { $GitHubEnv = "staging" }
+    "3" { $GitHubEnv = "prod" }
+    "4" { $GitHubEnv = Read-Host "    Enter environment name" }
+    default { } # keep the parameter default or what was passed
+}
+Write-Done "Environment: $GitHubEnv"
+
+# ── Recalculate derived names with final values ──────────────────────────────
+$ResourceGroup  = "rg-$BaseName-$GitHubEnv-$Location"
+$StorageAccount = ("st" + ($ResourceGroup -replace '^rg-', '' -replace '[^a-z0-9]', '').ToLower())
+if ($StorageAccount.Length -gt 24) { $StorageAccount = $StorageAccount.Substring(0, 24) }
+
 # ── Show configuration & confirm ─────────────────────────────────────────────
 Write-PhaseSummary -Number 1 -Items ([ordered]@{
     "Subscription"   = "$SubName ($SubscriptionId)"
@@ -242,13 +270,7 @@ if ($SkipEntra) {
         $AppClientId = $existing
         Write-Skip "App '$AppName' already exists: $AppClientId"
     } else {
-        $AppClientId = az ad app create --display-name "$AppName" --query appId -o tsv 2>$null
-        if (-not $AppClientId) {
-            Write-Host ""
-            Write-Host "    App registration failed — re-authenticating..." -ForegroundColor Yellow
-            az login | Out-Null
-            $AppClientId = az ad app create --display-name "$AppName" --query appId -o tsv
-        }
+        $AppClientId = az ad app create --display-name "$AppName" --query appId -o tsv
         if (-not $AppClientId) {
             throw "Failed to create app registration. Check your permissions."
         }
@@ -269,14 +291,16 @@ if ($SkipEntra) {
     if ($existingCred) {
         Write-Skip "Federated credential '$credName' already exists"
     } else {
-        $credParams = @{
+        $credFile = [System.IO.Path]::GetTempFileName()
+        @{
             name        = $credName
             issuer      = "https://token.actions.githubusercontent.com"
             subject     = "repo:${GitHubRepo}:environment:${GitHubEnv}"
             audiences   = @("api://AzureADTokenExchange")
             description = "GitHub Actions OIDC for $RepoName ($GitHubEnv)"
-        } | ConvertTo-Json -Compress
-        $null = az ad app federated-credential create --id "$AppClientId" --parameters $credParams
+        } | ConvertTo-Json | Set-Content -Path $credFile -Encoding UTF8
+        $null = az ad app federated-credential create --id "$AppClientId" --parameters "@$credFile"
+        Remove-Item $credFile
         Write-Done "Federated credential for repo:${GitHubRepo}:environment:${GitHubEnv}"
     }
 
