@@ -1,4 +1,4 @@
-name: Terraform Plan, Approve, Apply
+name: Terraform Plan, Approve, Apply, Seed Data
 on: 
   workflow_dispatch:
     inputs:
@@ -9,6 +9,8 @@ on:
         type: choice
         options:
           - dev
+          - staging
+          - production
 
 permissions:
   id-token: write
@@ -52,4 +54,15 @@ jobs:
     secrets:
       azureClientId: ${{ secrets.AZURE_CLIENT_ID }}
       azureTenantId: ${{ secrets.AZURE_TENANT_ID }}
-      azureSubscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}  
+      azureSubscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  seed-data:
+    name: Seed CRM Data
+    needs: [terraform-apply]
+    uses: ./.github/workflows/seed-data.yaml
+    with:
+      environment: ${{ inputs.environment }}
+    secrets:
+      azureClientId: ${{ secrets.AZURE_CLIENT_ID }}
+      azureTenantId: ${{ secrets.AZURE_TENANT_ID }}
+      azureSubscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}

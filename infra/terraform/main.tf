@@ -215,31 +215,6 @@ module "eventgrid" {
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
-# CRM Data Seeding (local-exec — runs dotnet seed-data tool)
-#--------------------------------------------------------------------------------------------------------------------------------
-
-resource "null_resource" "seed_crm" {
-  triggers = {
-    data_hash = sha256(join("", [for f in fileset("${path.module}/../../data/contoso-crm", "*.csv") :
-      filesha256("${path.module}/../../data/contoso-crm/${f}")]))
-  }
-
-  provisioner "local-exec" {
-    command     = "dotnet run --project ${path.module}/../../src/seed-data"
-    working_dir = path.module
-
-    environment = {
-      SQL_SERVER_FQDN    = module.sql.server_fqdn
-      SQL_DATABASE_NAME  = module.sql.database_name
-      SQL_ADMIN_LOGIN    = module.sql.admin_login
-      SQL_ADMIN_PASSWORD = nonsensitive(module.sql.admin_password)
-    }
-  }
-
-  depends_on = [module.sql]
-}
-
-#--------------------------------------------------------------------------------------------------------------------------------
 # RBAC - Foundry (Cognitive Services OpenAI User)
 #--------------------------------------------------------------------------------------------------------------------------------
 
