@@ -153,7 +153,14 @@ phase 1 "Authenticate"
 
 # ── Azure ────────────────────────────────────────────────────────────────────
 step "Signing in to Azure"
-az login >/dev/null
+
+az_status=$(az account show --query name -o tsv 2>/dev/null || true)
+if [[ -n "$az_status" ]]; then
+    skip_ "Already logged in as $az_status"
+else
+    echo -e "    ${D}A browser tab will open for authentication.${W}"
+    az login >/dev/null
+fi
 
 if [[ -z "$SUBSCRIPTION_ID" ]]; then
     echo ""
@@ -299,20 +306,11 @@ else
         done_ "Federated credential for repo:${GITHUB_REPO}:environment:${GITHUB_ENV}"
     fi
 
-    step "Granting Contributor role on subscription"
-    role_exists=$(az role assignment list --assignee "$APP_CLIENT_ID" --role "Contributor" --scope "/subscriptions/$SUBSCRIPTION_ID" --query "[0].id" -o tsv 2>/dev/null || true)
-    if [[ -n "$role_exists" ]]; then
-        skip_ "Contributor role already assigned"
-    else
-        az role assignment create --assignee "$APP_CLIENT_ID" --role "Contributor" --scope "/subscriptions/$SUBSCRIPTION_ID" >/dev/null
-        done_ "Contributor granted on $SUBSCRIPTION_ID"
-    fi
-
     phase_summary 2 \
         "App registration" "$APP_NAME ($APP_CLIENT_ID)" \
         "OIDC subject"     "repo:${GITHUB_REPO}:environment:${GITHUB_ENV}" \
         "Credential name"  "$CRED_NAME" \
-        "RBAC"             "Contributor on subscription"
+        "RBAC"             "Contributor on $RESOURCE_GROUP (granted in Phase 4)"
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -320,6 +318,11 @@ fi
 # ═══════════════════════════════════════════════════════════════════════════════
 
 phase 3 "GitHub environment, secrets, variables"
+
+# ── Create environment first ─────────────────────────────────────────────────
+step "Creating GitHub environment '$GITHUB_ENV'"
+gh api --method PUT "repos/$GITHUB_REPO/environments/$GITHUB_ENV" >/dev/null 2>&1 || true
+done_ "Environment '$GITHUB_ENV' ready"
 
 step "Setting repository secrets"
 gh secret set AZURE_CLIENT_ID --repo "$GITHUB_REPO" --body "$APP_CLIENT_ID"
@@ -381,7 +384,9 @@ declare -A ENV_VARS=(
 
 count=0
 for key in "${!ENV_VARS[@]}"; do
-    gh variable set "$key" --repo "$GITHUB_REPO" --env "$GITHUB_ENV" --body "${ENV_VARS[$key]}"
+    val="${ENV_VARS[$key]}"
+    if [[ -z "$val" ]]; then val=" "; fi
+    gh variable set "$key" --repo "$GITHUB_REPO" --env "$GITHUB_ENV" --body "$val"
     count=$((count + 1))
 done
 done_ "Set $count environment variables in '$GITHUB_ENV'"
@@ -434,10 +439,24 @@ step "Locking down state storage"
 az storage account update --name "$STORAGE_ACCOUNT" --resource-group "$RESOURCE_GROUP" --public-network-access Disabled >/dev/null
 done_ "Public access disabled"
 
+# ── RBAC: Contributor scoped to resource group (least privilege) ─────────────
+if [[ -n "$APP_CLIENT_ID" ]]; then
+    step "Granting Contributor role on resource group"
+    rg_scope="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP"
+    role_exists=$(az role assignment list --assignee "$APP_CLIENT_ID" --role "Contributor" --scope "$rg_scope" --query "[0].id" -o tsv 2>/dev/null || true)
+    if [[ -n "$role_exists" ]]; then
+        skip_ "Contributor role already assigned on $RESOURCE_GROUP"
+    else
+        az role assignment create --assignee "$APP_CLIENT_ID" --role "Contributor" --scope "$rg_scope" >/dev/null
+        done_ "Contributor granted on $RESOURCE_GROUP"
+    fi
+fi
+
 phase_summary 4 \
     "Resource group"  "$RESOURCE_GROUP" \
     "Storage account" "$STORAGE_ACCOUNT" \
     "Container"       "$CONTAINER_NAME" \
+    "RBAC"            "Contributor on $RESOURCE_GROUP" \
     "Public access"   "Disabled"
 
 # ═══════════════════════════════════════════════════════════════════════════════
