@@ -152,8 +152,8 @@ install_if_missing dotnet    ".NET SDK"
 phase 1 "Authenticate"
 
 # ── Azure ────────────────────────────────────────────────────────────────────
-step "Signing in to Azure (device code)"
-az login --use-device-code >/dev/null
+step "Signing in to Azure"
+az login >/dev/null
 
 if [[ -z "$SUBSCRIPTION_ID" ]]; then
     echo ""
@@ -246,8 +246,8 @@ else
     else
         APP_CLIENT_ID=$(az ad app create --display-name "$APP_NAME" --query appId -o tsv 2>/dev/null || true)
         if [[ -z "$APP_CLIENT_ID" ]]; then
-            echo -e "    ${Y}App registration failed. Re-authenticating...${W}"
-            az login --use-device-code >/dev/null
+            echo -e "    ${Y}App registration failed — re-authenticating...${W}"
+            az login >/dev/null
             APP_CLIENT_ID=$(az ad app create --display-name "$APP_NAME" --query appId -o tsv)
         fi
         if [[ -z "$APP_CLIENT_ID" ]]; then
