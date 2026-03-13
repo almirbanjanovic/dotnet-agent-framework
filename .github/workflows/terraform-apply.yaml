@@ -44,7 +44,7 @@ env:
   # ACR
   TF_VAR_create_acr: ${{ vars.CREATE_ACR }}
   TF_VAR_acr_sku: ${{ vars.ACR_SKU }}
-  TF_VAR_existing_acr_name: ${{ vars.EXISTING_ACR_NAME }}
+  TF_VAR_acr_name: ${{ vars.ACR_NAME }}
   # AKS
   TF_VAR_aks_kubernetes_version: ${{ vars.AKS_KUBERNETES_VERSION }}
   TF_VAR_aks_node_vm_size: ${{ vars.AKS_NODE_VM_SIZE }}

@@ -40,8 +40,8 @@ variable "admin_enabled" {
   default     = true
 }
 
-variable "existing_acr_name" {
-  description = "Name of existing ACR (only used when create_acr = false)"
+variable "acr_name" {
+  description = "Name of the ACR (used when create_acr = false)"
   type        = string
   default     = ""
 }

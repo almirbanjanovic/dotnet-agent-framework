@@ -373,7 +373,7 @@ $envVars = [ordered]@{
     SEARCH_INDEX_NAME                 = "knowledge-documents"
     CREATE_ACR                        = "true"
     ACR_SKU                           = "Premium"
-    EXISTING_ACR_NAME                 = ("acr" + $BaseName + $GitHubEnv + $Location) -replace '-',''
+    ACR_NAME                          = ("acr" + $BaseName + $GitHubEnv + $Location) -replace '-',''
     AKS_KUBERNETES_VERSION            = "1.34"
     AKS_NODE_VM_SIZE                  = "Standard_D4s_v5"
     AKS_NODE_COUNT                    = "2"
@@ -513,7 +513,7 @@ search_index_name = "knowledge-documents"
 # ACR
 create_acr        = true
 acr_sku           = "Premium"
-existing_acr_name = "$(('acr' + $BaseName + $GitHubEnv + $Location) -replace '-','')"
+acr_name          = "$(('acr' + $BaseName + $GitHubEnv + $Location) -replace '-','')"
 
 # AKS
 aks_kubernetes_version   = "1.34"

@@ -368,7 +368,7 @@ declare -A ENV_VARS=(
     [SEARCH_INDEX_NAME]="knowledge-documents"
     [CREATE_ACR]="true"
     [ACR_SKU]="Premium"
-    [EXISTING_ACR_NAME]="$(echo "acr${BASE_NAME}${GITHUB_ENV}${LOCATION}" | tr -d '-')"
+    [ACR_NAME]="$(echo "acr${BASE_NAME}${GITHUB_ENV}${LOCATION}" | tr -d '-')"
     [AKS_KUBERNETES_VERSION]="1.34"
     [AKS_NODE_VM_SIZE]="Standard_D4s_v5"
     [AKS_NODE_COUNT]="2"
@@ -506,7 +506,7 @@ search_index_name = "knowledge-documents"
 # ACR
 create_acr        = true
 acr_sku           = "Premium"
-existing_acr_name = "$(echo "acr${BASE_NAME}${GITHUB_ENV}${LOCATION}" | tr -d '-')"
+acr_name          = "$(echo "acr${BASE_NAME}${GITHUB_ENV}${LOCATION}" | tr -d '-')"
 
 # AKS
 aks_kubernetes_version   = "1.34"
