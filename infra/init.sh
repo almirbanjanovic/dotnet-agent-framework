@@ -180,13 +180,9 @@ done_ "Azure: $SUB_NAME ($SUBSCRIPTION_ID)"
 # ── GitHub ───────────────────────────────────────────────────────────────────
 step "Signing in to GitHub"
 echo ""
-echo -e "    ${D}The GitHub CLI will ask you to choose a protocol:${W}"
-echo -e "    ${D}  HTTPS — uses a personal access token or browser login.${W}"
-echo -e "    ${D}          Best if you don't have SSH keys set up.${W}"
-echo -e "    ${D}  SSH   — uses an SSH key pair (~/.ssh/id_ed25519).${W}"
-echo -e "    ${D}          Best if you already use SSH for git.${W}"
+echo -e "    ${D}Logging in via browser (HTTPS). A browser window will open.${W}"
 echo ""
-gh auth login
+gh auth login --hostname github.com --git-protocol https --web
 
 GITHUB_REPO=$(gh repo view --json nameWithOwner -q ".nameWithOwner" 2>/dev/null || true)
 
