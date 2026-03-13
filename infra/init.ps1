@@ -442,32 +442,6 @@ if ($AppClientId) {
     }
 }
 
-# ── RBAC: Storage Blob Data Contributor on state storage (for Entra auth) ───
-$storageScope = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup/providers/Microsoft.Storage/storageAccounts/$StorageAccount"
-$currentUserId = az ad signed-in-user show --query id -o tsv 2>$null
-
-if ($currentUserId) {
-    Write-Step "Granting Storage Blob Data Contributor to current user"
-    $blobRoleUser = az role assignment list --assignee "$currentUserId" --role "Storage Blob Data Contributor" --scope $storageScope --query "[0].id" -o tsv 2>$null
-    if ($blobRoleUser) {
-        Write-Skip "Already assigned to current user"
-    } else {
-        $null = az role assignment create --assignee "$currentUserId" --role "Storage Blob Data Contributor" --scope $storageScope
-        Write-Done "Storage Blob Data Contributor granted to current user"
-    }
-}
-
-if ($AppClientId) {
-    Write-Step "Granting Storage Blob Data Contributor to service principal"
-    $blobRoleSp = az role assignment list --assignee "$AppClientId" --role "Storage Blob Data Contributor" --scope $storageScope --query "[0].id" -o tsv 2>$null
-    if ($blobRoleSp) {
-        Write-Skip "Already assigned to service principal"
-    } else {
-        $null = az role assignment create --assignee "$AppClientId" --role "Storage Blob Data Contributor" --scope $storageScope
-        Write-Done "Storage Blob Data Contributor granted to service principal"
-    }
-}
-
 Write-PhaseSummary -Number 4 -NextPhase "Phase 5 — Generate terraform.tfvars and backend.hcl configuration files" -Items ([ordered]@{
     "Resource group"  = $ResourceGroup
     "Storage account" = $StorageAccount
