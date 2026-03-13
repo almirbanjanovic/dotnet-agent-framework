@@ -148,8 +148,14 @@ Write-Phase -Number 1 -Title "Authenticate"
 
 # ── Azure ────────────────────────────────────────────────────────────────────
 Write-Step "Signing in to Azure"
-Write-Host "    A browser tab will open for authentication." -ForegroundColor DarkGray
-az login | Out-Null
+
+$azStatus = az account show --query name -o tsv 2>$null
+if ($azStatus) {
+    Write-Skip "Already logged in as $azStatus"
+} else {
+    Write-Host "    A browser tab will open for authentication." -ForegroundColor DarkGray
+    az login | Out-Null
+}
 
 if (-not $SubscriptionId) {
     Write-Host ""
@@ -304,20 +310,11 @@ if ($SkipEntra) {
         Write-Done "Federated credential for repo:${GitHubRepo}:environment:${GitHubEnv}"
     }
 
-    Write-Step "Granting Contributor role on subscription"
-    $roleExists = az role assignment list --assignee "$AppClientId" --role "Contributor" --scope "/subscriptions/$SubscriptionId" --query "[0].id" -o tsv 2>$null
-    if ($roleExists) {
-        Write-Skip "Contributor role already assigned"
-    } else {
-        $null = az role assignment create --assignee "$AppClientId" --role "Contributor" --scope "/subscriptions/$SubscriptionId"
-        Write-Done "Contributor granted on $SubscriptionId"
-    }
-
     Write-PhaseSummary -Number 2 -Items ([ordered]@{
         "App registration" = "$AppName ($AppClientId)"
         "OIDC subject"     = "repo:${GitHubRepo}:environment:${GitHubEnv}"
         "Credential name"  = $credName
-        "RBAC"             = "Contributor on subscription"
+        "RBAC"             = "Contributor on $ResourceGroup (granted in Phase 4)"
     })
 }
 
@@ -326,6 +323,11 @@ if ($SkipEntra) {
 # ═══════════════════════════════════════════════════════════════════════════════
 
 Write-Phase -Number 3 -Title "GitHub environment, secrets, variables"
+
+# ── Create environment first ─────────────────────────────────────────────────
+Write-Step "Creating GitHub environment '$GitHubEnv'"
+$null = gh api --method PUT "repos/$GitHubRepo/environments/$GitHubEnv" 2>$null
+Write-Done "Environment '$GitHubEnv' ready"
 
 Write-Step "Setting repository secrets"
 gh secret set AZURE_CLIENT_ID --repo "$GitHubRepo" --body "$AppClientId"
@@ -386,7 +388,8 @@ $envVars = [ordered]@{
 }
 
 foreach ($kv in $envVars.GetEnumerator()) {
-    gh variable set $kv.Key --repo "$GitHubRepo" --env "$GitHubEnv" --body "$($kv.Value)"
+    $val = if ($kv.Value) { $kv.Value } else { " " }
+    gh variable set $kv.Key --repo "$GitHubRepo" --env "$GitHubEnv" --body $val
 }
 Write-Done "Set $($envVars.Count) environment variables in '$GitHubEnv'"
 
@@ -442,10 +445,24 @@ Write-Step "Locking down state storage"
 az storage account update --name $StorageAccount --resource-group $ResourceGroup --public-network-access Disabled | Out-Null
 Write-Done "Public access disabled"
 
+# ── RBAC: Contributor scoped to resource group (least privilege) ───────────
+if ($AppClientId) {
+    Write-Step "Granting Contributor role on resource group"
+    $rgScope = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup"
+    $roleExists = az role assignment list --assignee "$AppClientId" --role "Contributor" --scope $rgScope --query "[0].id" -o tsv 2>$null
+    if ($roleExists) {
+        Write-Skip "Contributor role already assigned on $ResourceGroup"
+    } else {
+        $null = az role assignment create --assignee "$AppClientId" --role "Contributor" --scope $rgScope
+        Write-Done "Contributor granted on $ResourceGroup"
+    }
+}
+
 Write-PhaseSummary -Number 4 -Items ([ordered]@{
     "Resource group"  = $ResourceGroup
     "Storage account" = $StorageAccount
     "Container"       = $ContainerName
+    "RBAC"            = "Contributor on $ResourceGroup"
     "Public access"   = "Disabled"
 })
 
