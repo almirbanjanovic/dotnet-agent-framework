@@ -37,25 +37,15 @@ The script performs 5 phases in order:
 
 | Phase | What it does |
 |:-----:|-------------|
-| **1** | Generates `terraform.tfvars` and `backend.hcl` (if they don't exist) — edit `terraform.tfvars` after to customize |
-| **2** | Creates Azure resource group, storage account, and blob container for Terraform remote state |
-| **3** | Creates Entra app registration with OIDC federation for GitHub Actions, grants Contributor role |
-| **4** | Sets GitHub repository secrets and environment variables (reads values from `terraform.tfvars`) |
-| **5** | Disables public network access on the state storage account |
+| **1** | Authenticates to Azure (pick subscription) and GitHub (detect/create repo), selects environment |
+| **2** | Creates Entra app registration with service principal and OIDC federated credential for GitHub Actions |
+| **3** | Creates GitHub environment, sets repository secrets (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`) and environment variables |
+| **4** | Creates Azure resource group, storage account, blob container for Terraform remote state, grants Contributor RBAC, then locks down public access |
+| **5** | Generates `terraform.tfvars` and `backend.hcl` configuration files |
+
+Between each phase, the script shows a summary and previews what the next phase will do before continuing.
 
 The script is idempotent — it checks for existing resources and skips what's already created.
-
-Override defaults with flags:
-
-```bash
-./init.sh --subscription "12345678-..." --repo "myorg/myrepo" --env "dev"
-```
-
-If your Entra app already exists:
-
-```bash
-./init.sh --skip-entra --app-client-id "12345678-..."
-```
 
 ## Verification checklist
 

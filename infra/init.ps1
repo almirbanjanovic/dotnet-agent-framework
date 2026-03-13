@@ -12,38 +12,14 @@
     4. Creates Azure resource group, storage account, blob container (Terraform state)
     5. Generates terraform.tfvars and backend.hcl
 
-.PARAMETER SubscriptionId
-    Azure subscription ID. If omitted, you'll be prompted to select one.
-
-.PARAMETER GitHubEnv
-    GitHub Actions environment name. Defaults to "dev".
-
-.PARAMETER Location
-    Azure region for all resources. Defaults to "eastus2".
-
-.PARAMETER BaseName
-    Project base name used in resource naming. Defaults to "dotnetagent".
-
-.PARAMETER SkipEntra
-    Skip Entra app registration. Requires AppClientId.
-
-.PARAMETER AppClientId
-    Existing app registration client ID (used with -SkipEntra).
-
 .EXAMPLE
     ./init.ps1
-    ./init.ps1 -Location "centralus" -BaseName "myproject"
-    ./init.ps1 -SkipEntra -AppClientId "12345678-..."
 #>
 
-param(
-    [string]$SubscriptionId,
-    [string]$GitHubEnv = "dev",
-    [string]$Location = "eastus2",
-    [string]$BaseName = "dotnetagent",
-    [switch]$SkipEntra,
-    [string]$AppClientId
-)
+$SubscriptionId = ""
+$GitHubEnv      = "dev"
+$Location       = "eastus2"
+$BaseName       = "dotnetagent"
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -279,65 +255,59 @@ Write-PhaseSummary -Number 1 -NextPhase "Phase 2 — Create Entra app registrati
 # PHASE 2 — Entra app registration + OIDC + RBAC
 # ═══════════════════════════════════════════════════════════════════════════════
 
-if ($SkipEntra) {
-    if (-not $AppClientId) { throw "-SkipEntra requires -AppClientId" }
-    Write-Skip "Skipping Entra setup (using existing app: $AppClientId)"
+Write-Phase -Number 2 -Title "Entra app registration + OIDC + RBAC"
+
+$AppName = "github-actions-$RepoName"
+
+Write-Step "Creating app registration"
+$existing = az ad app list --display-name "$AppName" --query "[0].appId" -o tsv 2>$null
+if ($existing) {
+    $AppClientId = $existing
+    Write-Skip "App '$AppName' already exists: $AppClientId"
 } else {
-    Write-Phase -Number 2 -Title "Entra app registration + OIDC + RBAC"
-
-    $AppName = "github-actions-$RepoName"
-
-    Write-Step "Creating app registration"
-    $existing = az ad app list --display-name "$AppName" --query "[0].appId" -o tsv 2>$null
-    if ($existing) {
-        $AppClientId = $existing
-        Write-Skip "App '$AppName' already exists: $AppClientId"
-    } else {
-        $AppClientId = az ad app create --display-name "$AppName" --query appId -o tsv
-        if (-not $AppClientId) {
-            throw "Failed to create app registration. Check your permissions."
-        }
-        Write-Done "Created app: $AppClientId"
+    $AppClientId = az ad app create --display-name "$AppName" --query appId -o tsv
+    if (-not $AppClientId) {
+        throw "Failed to create app registration. Check your permissions."
     }
-
-    $spExists = az ad sp show --id "$AppClientId" --query id -o tsv 2>$null
-    if ($spExists) {
-        Write-Skip "Service principal already exists"
-    } else {
-        $null = az ad sp create --id "$AppClientId"
-        Write-Done "Created service principal"
-    }
-
-    Write-Step "Adding OIDC federated credential"
-    $credName = "$RepoName-$GitHubEnv"
-    $existingCred = az ad app federated-credential list --id "$AppClientId" --query "[?name=='$credName'].name" -o tsv 2>$null
-    if ($existingCred) {
-        Write-Skip "Federated credential '$credName' already exists"
-    } else {
-        $credFile = [System.IO.Path]::GetTempFileName()
-        @{
-            name        = $credName
-            issuer      = "https://token.actions.githubusercontent.com"
-            subject     = "repo:${GitHubRepo}:environment:${GitHubEnv}"
-            audiences   = @("api://AzureADTokenExchange")
-            description = "GitHub Actions OIDC for $RepoName ($GitHubEnv)"
-        } | ConvertTo-Json | Set-Content -Path $credFile -Encoding UTF8
-        $null = az ad app federated-credential create --id "$AppClientId" --parameters "@$credFile"
-        Remove-Item $credFile
-        Write-Done "Federated credential for repo:${GitHubRepo}:environment:${GitHubEnv}"
-    }
-
-    Write-PhaseSummary -Number 2 -NextPhase "Phase 3 — Create GitHub environment, set repository secrets and environment variables" -Items ([ordered]@{
-        "App registration" = "$AppName ($AppClientId)"
-        "OIDC subject"     = "repo:${GitHubRepo}:environment:${GitHubEnv}"
-        "Credential name"  = $credName
-        "RBAC"             = "Contributor on $ResourceGroup (granted in Phase 4)"
-    })
+    Write-Done "Created app: $AppClientId"
 }
+
+$spExists = az ad sp show --id "$AppClientId" --query id -o tsv 2>$null
+if ($spExists) {
+    Write-Skip "Service principal already exists"
+} else {
+    $null = az ad sp create --id "$AppClientId"
+    Write-Done "Created service principal"
+}
+
+Write-Step "Adding OIDC federated credential"
+$credName = "$RepoName-$GitHubEnv"
+$existingCred = az ad app federated-credential list --id "$AppClientId" --query "[?name=='$credName'].name" -o tsv 2>$null
+if ($existingCred) {
+    Write-Skip "Federated credential '$credName' already exists"
+} else {
+    $credFile = [System.IO.Path]::GetTempFileName()
+    @{
+        name        = $credName
+        issuer      = "https://token.actions.githubusercontent.com"
+        subject     = "repo:${GitHubRepo}:environment:${GitHubEnv}"
+        audiences   = @("api://AzureADTokenExchange")
+        description = "GitHub Actions OIDC for $RepoName ($GitHubEnv)"
+    } | ConvertTo-Json | Set-Content -Path $credFile -Encoding UTF8
+    $null = az ad app federated-credential create --id "$AppClientId" --parameters "@$credFile"
+    Remove-Item $credFile
+    Write-Done "Federated credential for repo:${GitHubRepo}:environment:${GitHubEnv}"
+}
+
+Write-PhaseSummary -Number 2 -NextPhase "Phase 3 — Create GitHub environment, set repository secrets and environment variables" -Items ([ordered]@{
+    "App registration" = "$AppName ($AppClientId)"
+    "OIDC subject"     = "repo:${GitHubRepo}:environment:${GitHubEnv}"
+    "Credential name"  = $credName
+    "RBAC"             = "Contributor on $ResourceGroup (granted in Phase 4)"
+})
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 3 — GitHub environment, secrets, variables
-# ═══════════════════════════════════════════════════════════════════════════════
 
 Write-Phase -Number 3 -Title "GitHub environment, secrets, variables"
 
