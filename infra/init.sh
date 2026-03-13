@@ -179,6 +179,13 @@ done_ "Azure: $SUB_NAME ($SUBSCRIPTION_ID)"
 
 # ── GitHub ───────────────────────────────────────────────────────────────────
 step "Signing in to GitHub"
+echo ""
+echo -e "    ${D}The GitHub CLI will ask you to choose a protocol:${W}"
+echo -e "    ${D}  HTTPS — uses a personal access token or browser login.${W}"
+echo -e "    ${D}          Best if you don't have SSH keys set up.${W}"
+echo -e "    ${D}  SSH   — uses an SSH key pair (~/.ssh/id_ed25519).${W}"
+echo -e "    ${D}          Best if you already use SSH for git.${W}"
+echo ""
 gh auth login
 
 GITHUB_REPO=$(gh repo view --json nameWithOwner -q ".nameWithOwner" 2>/dev/null || true)
@@ -236,7 +243,15 @@ else
         APP_CLIENT_ID="$existing"
         skip_ "App '$APP_NAME' already exists: $APP_CLIENT_ID"
     else
-        APP_CLIENT_ID=$(az ad app create --display-name "$APP_NAME" --query appId -o tsv)
+        APP_CLIENT_ID=$(az ad app create --display-name "$APP_NAME" --query appId -o tsv 2>/dev/null || true)
+        if [[ -z "$APP_CLIENT_ID" ]]; then
+            echo -e "    ${Y}App registration failed. Re-authenticating...${W}"
+            az login --use-device-code >/dev/null
+            APP_CLIENT_ID=$(az ad app create --display-name "$APP_NAME" --query appId -o tsv)
+        fi
+        if [[ -z "$APP_CLIENT_ID" ]]; then
+            echo "Failed to create app registration. Check your permissions."; exit 1
+        fi
         done_ "Created app: $APP_CLIENT_ID"
     fi
 

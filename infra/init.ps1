@@ -172,6 +172,13 @@ Write-Done "Azure: $SubName ($SubscriptionId)"
 
 # ── GitHub ───────────────────────────────────────────────────────────────────
 Write-Step "Signing in to GitHub"
+Write-Host ""
+Write-Host "    The GitHub CLI will ask you to choose a protocol:" -ForegroundColor DarkGray
+Write-Host "      HTTPS — uses a personal access token or browser login." -ForegroundColor DarkGray
+Write-Host "              Best if you don't have SSH keys set up." -ForegroundColor DarkGray
+Write-Host "      SSH   — uses an SSH key pair (~/.ssh/id_ed25519)." -ForegroundColor DarkGray
+Write-Host "              Best if you already use SSH for git." -ForegroundColor DarkGray
+Write-Host ""
 gh auth login
 
 $GitHubRepo = gh repo view --json nameWithOwner -q ".nameWithOwner" 2>$null
@@ -234,6 +241,16 @@ if ($SkipEntra) {
         Write-Skip "App '$AppName' already exists: $AppClientId"
     } else {
         $AppClientId = az ad app create --display-name "$AppName" --query appId -o tsv
+        if (-not $AppClientId) {
+            Write-Host ""
+            Write-Host "    App registration failed. Your token may have expired." -ForegroundColor Red
+            Write-Host "    Re-authenticating..." -ForegroundColor Yellow
+            az login --use-device-code | Out-Null
+            $AppClientId = az ad app create --display-name "$AppName" --query appId -o tsv
+        }
+        if (-not $AppClientId) {
+            throw "Failed to create app registration. Check your permissions."
+        }
         Write-Done "Created app: $AppClientId"
     }
 
