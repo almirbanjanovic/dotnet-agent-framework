@@ -166,16 +166,34 @@ else
 fi
 
 if [[ -z "$SUBSCRIPTION_ID" ]]; then
-    echo ""
-    az account list --query "[].{Name:name, Id:id, IsDefault:isDefault}" -o table
-    echo ""
-    current_sub=$(az account show --query name -o tsv)
     current_id=$(az account show --query id -o tsv)
-    echo -e "    Current subscription: ${C}${current_sub} (${current_id})${W}"
-    read -p "    Use this subscription? (Y/n) " change_it
-    if [[ "$change_it" == "n" || "$change_it" == "N" ]]; then
-        read -p "    Enter subscription ID: " SUBSCRIPTION_ID
-        az account set --subscription "$SUBSCRIPTION_ID"
+    mapfile -t sub_names < <(az account list --query "[].name" -o tsv)
+    mapfile -t sub_ids   < <(az account list --query "[].id" -o tsv)
+    sub_count=${#sub_names[@]}
+    echo ""
+    echo -e "    ${D}Available subscriptions:${W}"
+    echo ""
+    for (( i=0; i<sub_count; i++ )); do
+        if [[ "${sub_ids[$i]}" == "$current_id" ]]; then
+            marker="*" color="$C"
+        else
+            marker=" " color="$W"
+        fi
+        echo -e "    ${color}${marker} $((i+1)). ${sub_names[$i]}${W}"
+        echo -e "         ${D}${sub_ids[$i]}${W}"
+    done
+    echo ""
+    echo -e "    ${D}* = current default${W}"
+    echo ""
+    read -p "    Select subscription [1-${sub_count}, or press Enter for current]: " pick
+    if [[ -n "$pick" && "$pick" =~ ^[0-9]+$ ]]; then
+        idx=$((pick - 1))
+        if (( idx >= 0 && idx < sub_count )); then
+            SUBSCRIPTION_ID="${sub_ids[$idx]}"
+            az account set --subscription "$SUBSCRIPTION_ID"
+        else
+            echo "Invalid selection: $pick"; exit 1
+        fi
     else
         SUBSCRIPTION_ID="$current_id"
     fi

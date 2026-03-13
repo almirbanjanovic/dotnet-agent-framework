@@ -162,17 +162,30 @@ if ($azStatus) {
 }
 
 if (-not $SubscriptionId) {
+    $subs = az account list --query "[].{name:name, id:id, isDefault:isDefault}" -o json | ConvertFrom-Json
+    $currentId = az account show --query id -o tsv
     Write-Host ""
-    az account list --query "[].{Name:name, Id:id, IsDefault:isDefault}" -o table
+    Write-Host "    Available subscriptions:" -ForegroundColor DarkGray
     Write-Host ""
-    $currentSub = az account show --query name -o tsv
-    $currentId  = az account show --query id -o tsv
-    Write-Host "    Current subscription: " -NoNewLine
-    Write-Host "$currentSub ($currentId)" -ForegroundColor Cyan
-    $changeIt = Read-Host "    Use this subscription? (Y/n)"
-    if ($changeIt -eq 'n' -or $changeIt -eq 'N') {
-        $SubscriptionId = Read-Host "    Enter subscription ID"
-        az account set --subscription $SubscriptionId
+    for ($i = 0; $i -lt $subs.Count; $i++) {
+        $marker = if ($subs[$i].id -eq $currentId) { "*" } else { " " }
+        $color  = if ($subs[$i].id -eq $currentId) { "Cyan" } else { "White" }
+        Write-Host "    $marker $($i + 1). " -ForegroundColor $color -NoNewLine
+        Write-Host "$($subs[$i].name)" -ForegroundColor $color
+        Write-Host "         $($subs[$i].id)" -ForegroundColor DarkGray
+    }
+    Write-Host ""
+    Write-Host "    * = current default" -ForegroundColor DarkGray
+    Write-Host ""
+    $pick = Read-Host "    Select subscription [1-$($subs.Count), or press Enter for current]"
+    if ($pick -and $pick -match '^\d+$') {
+        $idx = [int]$pick - 1
+        if ($idx -ge 0 -and $idx -lt $subs.Count) {
+            $SubscriptionId = $subs[$idx].id
+            az account set --subscription $SubscriptionId
+        } else {
+            throw "Invalid selection: $pick"
+        }
     } else {
         $SubscriptionId = $currentId
     }
