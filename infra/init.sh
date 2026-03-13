@@ -2,30 +2,27 @@
 set -euo pipefail
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# One-time bootstrap: creates Azure backend resources, Entra app registration
-# with OIDC for GitHub Actions, and configures GitHub repository secrets + variables.
+# .NET Agent Framework — Lab 0 Bootstrap
 #
 # Usage:
 #   ./init.sh
-#   ./init.sh --subscription "12345678-..." --repo "myorg/myrepo"
+#   ./init.sh --location centralus --base-name myproject
 #   ./init.sh --skip-entra --app-client-id "12345678-..."
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# ── Defaults ─────────────────────────────────────────────────────────────────
 SUBSCRIPTION_ID=""
-GITHUB_REPO=""
 GITHUB_ENV="dev"
-APP_NAME=""
+LOCATION="eastus2"
+BASE_NAME="dotnetagent"
 SKIP_ENTRA=false
 APP_CLIENT_ID=""
 
-# ── Parse arguments ──────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --subscription)    SUBSCRIPTION_ID="$2"; shift 2 ;;
-        --repo)            GITHUB_REPO="$2"; shift 2 ;;
         --env)             GITHUB_ENV="$2"; shift 2 ;;
-        --app-name)        APP_NAME="$2"; shift 2 ;;
+        --location)        LOCATION="$2"; shift 2 ;;
+        --base-name)       BASE_NAME="$2"; shift 2 ;;
         --skip-entra)      SKIP_ENTRA=true; shift ;;
         --app-client-id)   APP_CLIENT_ID="$2"; shift 2 ;;
         *)                 echo "Unknown option: $1"; exit 1 ;;
@@ -36,7 +33,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TERRAFORM_DIR="$SCRIPT_DIR/terraform"
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
-C='\033[36m' G='\033[32m' D='\033[90m' W='\033[0m' # cyan, green, dim, reset
+C='\033[36m' G='\033[32m' D='\033[90m' Y='\033[33m' W='\033[0m'
 
 banner() {
     echo -e ""
@@ -45,11 +42,11 @@ banner() {
     echo -e "  ${C}║   .NET Agent Framework — Lab 0 Bootstrap              ║${W}"
     echo -e "  ${C}║                                                       ║${W}"
     echo -e "  ${C}║   This script sets up everything you need:            ║${W}"
-    echo -e "  ${C}║     1. Config files (terraform.tfvars, backend.hcl)   ║${W}"
-    echo -e "  ${C}║     2. Azure backend (RG, storage, container)         ║${W}"
-    echo -e "  ${C}║     3. Entra app + OIDC federation                    ║${W}"
-    echo -e "  ${C}║     4. GitHub secrets + environment variables         ║${W}"
-    echo -e "  ${C}║     5. Lock down state storage                        ║${W}"
+    echo -e "  ${C}║     1. Authenticate (Azure + GitHub)                  ║${W}"
+    echo -e "  ${C}║     2. Entra app + OIDC + RBAC                        ║${W}"
+    echo -e "  ${C}║     3. GitHub environment, secrets, variables         ║${W}"
+    echo -e "  ${C}║     4. Azure backend (RG, storage, container)         ║${W}"
+    echo -e "  ${C}║     5. Config files (terraform.tfvars, backend.hcl)   ║${W}"
     echo -e "  ${C}║                                                       ║${W}"
     echo -e "  ${C}╚═══════════════════════════════════════════════════════╝${W}"
     echo -e ""
@@ -66,13 +63,17 @@ step()  { echo -e "  → $1"; }
 done_() { echo -e "    ${G}✓ $1${W}"; }
 skip_() { echo -e "    ${D}· $1${W}"; }
 
-parse_hcl_value() {
-    local file="$1" key="$2"
-    grep -E "^\s*${key}\s*=" "$file" | head -1 | sed 's/.*=\s*"\(.*\)".*/\1/'
-}
+# ── Derived names ────────────────────────────────────────────────────────────
+RESOURCE_GROUP="rg-${BASE_NAME}-${GITHUB_ENV}-${LOCATION}"
+STORAGE_ACCOUNT="st$(echo "$RESOURCE_GROUP" | sed 's/^rg-//' | tr -cd 'a-z0-9')"
+STORAGE_ACCOUNT="${STORAGE_ACCOUNT:0:24}"
 
-# ── Verify & install prerequisites ──────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# Prerequisites
+# ═══════════════════════════════════════════════════════════════════════════════
+
 banner
+
 step "Checking & installing prerequisites"
 
 install_if_missing() {
@@ -82,10 +83,9 @@ install_if_missing() {
         return
     fi
 
-    echo -e "    \033[33mInstalling $name...\033[0m"
+    echo -e "    ${Y}Installing $name...${W}"
 
     if [[ "$(uname)" == "Darwin" ]]; then
-        # macOS — use Homebrew
         if ! command -v brew >/dev/null 2>&1; then
             echo "Homebrew not found. Install from https://brew.sh then re-run."; exit 1
         fi
@@ -96,10 +96,8 @@ install_if_missing() {
             dotnet)    brew install --cask dotnet-sdk ;;
         esac
     elif command -v apt-get >/dev/null 2>&1; then
-        # Debian/Ubuntu
         case "$cmd" in
-            az)
-                curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash ;;
+            az)        curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash ;;
             gh)
                 (type -p wget >/dev/null || sudo apt-get install wget -y)
                 sudo mkdir -p -m 755 /etc/apt/keyrings
@@ -131,204 +129,96 @@ install_if_missing gh        "GitHub CLI"
 install_if_missing terraform "Terraform"
 install_if_missing dotnet    ".NET SDK"
 
-# ── Authenticate ───────────────────────────────────────────────────────────────
-step "Authenticating"
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 1 — Authenticate
+# ═══════════════════════════════════════════════════════════════════════════════
 
-echo "    Signing in to Azure CLI..."
+phase 1 "Authenticate"
+
+# ── Azure ────────────────────────────────────────────────────────────────────
+step "Signing in to Azure"
 az login >/dev/null
-acct=$(az account show --query "{name:name, id:id}" -o tsv)
-done_ "Azure: $acct"
-
-echo "    Signing in to GitHub CLI..."
-if ! gh auth status &>/dev/null; then
-    gh auth login
-fi
-gh_user=$(gh api user --jq .login 2>/dev/null || echo "unknown")
-done_ "GitHub: $gh_user"
-
-# PHASE 1 — Generate config files
-# ═══════════════════════════════════════════════════════════════════════════════
-
-phase 1 "Generate configuration files"
-
-TFVARS_FILE="$TERRAFORM_DIR/terraform.tfvars"
-
-if [[ ! -f "$TFVARS_FILE" ]]; then
-    cat > "$TFVARS_FILE" <<'TFVARS'
-tags                = {}
-resource_group_name = "rg-dotnetagent-dev-centralus"
-
-environment = "dev"
-base_name   = "dotnetagent"
-location    = "centralus"
-
-# ---------------------------------------------------------------
-# Foundry (AI Services)
-# ---------------------------------------------------------------
-cognitive_account_kind       = "AIServices"
-oai_sku_name                 = "S0"
-oai_deployment_sku_name      = "GlobalStandard"
-oai_deployment_model_format  = "OpenAI"
-oai_deployment_model_name    = "gpt-4.1"
-oai_deployment_model_version = "2025-04-14"
-oai_version_upgrade_option   = "NoAutoUpgrade"
-
-create_embedding_deployment = true
-embedding_model_name        = "text-embedding-ada-002"
-embedding_model_version     = "2"
-embedding_sku_name          = "Standard"
-embedding_capacity          = 10
-
-# ---------------------------------------------------------------
-# Cosmos DB (1 account: agents session state)
-# ---------------------------------------------------------------
-cosmos_project_name               = "dotnetagent"
-cosmos_agents_database_name       = "agents"
-cosmos_agent_state_container_name = "workshop_agent_state_store"
-
-# ---------------------------------------------------------------
-# Azure SQL Database (CRM operational data)
-# ---------------------------------------------------------------
-sql_database_name = "contoso-outdoors"
-sql_admin_login   = "sqladmin"
-
-# ---------------------------------------------------------------
-# Storage
-# ---------------------------------------------------------------
-storage_project_name = "dotnetagent"
-
-# ---------------------------------------------------------------
-# AI Search
-# ---------------------------------------------------------------
-search_sku        = "basic"
-search_index_name = "knowledge-documents"
-
-# ---------------------------------------------------------------
-# ACR
-# ---------------------------------------------------------------
-acr_project_name  = "dotnetagent"
-create_acr        = true
-acr_sku           = "Premium"
-existing_acr_name = ""
-
-# ---------------------------------------------------------------
-# AKS
-# ---------------------------------------------------------------
-aks_kubernetes_version   = null
-aks_node_vm_size         = "Standard_D4s_v5"
-aks_node_count           = 2
-aks_auto_scaling_enabled = true
-aks_node_min_count       = 1
-aks_node_max_count       = 5
-aks_os_disk_size_gb      = 64
-aks_log_retention_days   = 30
-TFVARS
-    done_ "Generated $TFVARS_FILE with default values"
-    echo "         (Edit this file to customize resource names, regions, or SKUs)"
-else
-    skip_ "Using existing $TFVARS_FILE"
-fi
-
-# ── Read values from terraform.tfvars ────────────────────────────────────────
-RESOURCE_GROUP=$(parse_hcl_value "$TFVARS_FILE" "resource_group_name")
-LOCATION=$(parse_hcl_value "$TFVARS_FILE" "location")
-ENVIRONMENT=$(parse_hcl_value "$TFVARS_FILE" "environment")
-
-# ── backend.hcl ──────────────────────────────────────────────────────────────
-BACKEND_HCL="$TERRAFORM_DIR/backend.hcl"
-
-if [[ ! -f "$BACKEND_HCL" ]]; then
-    sanitized=$(echo "$RESOURCE_GROUP" | sed 's/^rg-//' | tr -cd 'a-z0-9')
-    STORAGE_ACCOUNT="st${sanitized}"
-    STORAGE_ACCOUNT="${STORAGE_ACCOUNT:0:24}"
-
-    cat > "$BACKEND_HCL" <<EOF
-resource_group_name  = "$RESOURCE_GROUP"
-storage_account_name = "$STORAGE_ACCOUNT"
-container_name       = "tfstate"
-key                  = "$ENVIRONMENT.tfstate"
-EOF
-    done_ "Generated $BACKEND_HCL (storage account: $STORAGE_ACCOUNT)"
-else
-    skip_ "Using existing $BACKEND_HCL"
-fi
-
-STORAGE_ACCOUNT=$(parse_hcl_value "$BACKEND_HCL" "storage_account_name")
-CONTAINER_NAME=$(parse_hcl_value "$BACKEND_HCL" "container_name")
-
-# PHASE 2 — Create Azure backend resources
-# ═══════════════════════════════════════════════════════════════════════════════
-
-phase 2 "Create Azure backend resources"
-
-echo ""
-echo "    Resource Group:   $RESOURCE_GROUP"
-echo "    Storage Account:  $STORAGE_ACCOUNT"
-echo "    Container:        $CONTAINER_NAME"
-echo "    Location:         $LOCATION"
-echo ""
-
-# ── Resource group ───────────────────────────────────────────────────────────
-if ! az group show --name "$RESOURCE_GROUP" &>/dev/null; then
-    az group create --name "$RESOURCE_GROUP" --location "$LOCATION" >/dev/null
-    done_ "Created resource group $RESOURCE_GROUP"
-else
-    skip_ "Resource group $RESOURCE_GROUP already exists"
-fi
-
-# ── Storage account + container ──────────────────────────────────────────────
-WAIT_TIME=30
-
-if ! az storage account show --resource-group "$RESOURCE_GROUP" --name "$STORAGE_ACCOUNT" &>/dev/null; then
-    echo "    Creating storage account $STORAGE_ACCOUNT..."
-    az storage account create \
-        --resource-group "$RESOURCE_GROUP" \
-        --name "$STORAGE_ACCOUNT" \
-        --sku "Standard_LRS" \
-        --encryption-services blob \
-        --min-tls-version "TLS1_2" \
-        --location "$LOCATION" \
-        --public-network-access Enabled >/dev/null
-    echo "    Waiting ${WAIT_TIME}s for storage account to be ready..."
-    sleep $WAIT_TIME
-    done_ "Created storage account $STORAGE_ACCOUNT"
-else
-    skip_ "Storage account $STORAGE_ACCOUNT already exists"
-    az storage account update --name "$STORAGE_ACCOUNT" --resource-group "$RESOURCE_GROUP" --public-network-access Enabled >/dev/null
-    echo "    Enabled public network access. Waiting ${WAIT_TIME}s..."
-    sleep $WAIT_TIME
-fi
-
-if ! az storage container show --name "$CONTAINER_NAME" --account-name "$STORAGE_ACCOUNT" --auth-mode login &>/dev/null; then
-    az storage container create --name "$CONTAINER_NAME" --account-name "$STORAGE_ACCOUNT" --auth-mode login >/dev/null
-    done_ "Created container $CONTAINER_NAME"
-else
-    skip_ "Container $CONTAINER_NAME already exists"
-fi
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# PHASE 3 — Entra app registration + OIDC
-# ═══════════════════════════════════════════════════════════════════════════════
 
 if [[ -z "$SUBSCRIPTION_ID" ]]; then
-    SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+    echo ""
+    az account list --query "[].{Name:name, Id:id, IsDefault:isDefault}" -o table
+    echo ""
+    current_sub=$(az account show --query name -o tsv)
+    current_id=$(az account show --query id -o tsv)
+    echo -e "    Current subscription: ${C}${current_sub} (${current_id})${W}"
+    read -p "    Use this subscription? (Y/n) " change_it
+    if [[ "$change_it" == "n" || "$change_it" == "N" ]]; then
+        read -p "    Enter subscription ID: " SUBSCRIPTION_ID
+        az account set --subscription "$SUBSCRIPTION_ID"
+    else
+        SUBSCRIPTION_ID="$current_id"
+    fi
+else
+    az account set --subscription "$SUBSCRIPTION_ID"
 fi
-if [[ -z "$GITHUB_REPO" ]]; then
-    GITHUB_REPO=$(gh repo view --json nameWithOwner -q ".nameWithOwner" 2>/dev/null || true)
-    if [[ -z "$GITHUB_REPO" ]]; then
-        echo "Could not detect GitHub repo. Pass --repo 'owner/repo'."; exit 1
+
+SUB_NAME=$(az account show --query name -o tsv)
+TENANT_ID=$(az account show --query tenantId -o tsv)
+done_ "Azure: $SUB_NAME ($SUBSCRIPTION_ID)"
+
+# ── GitHub ───────────────────────────────────────────────────────────────────
+step "Signing in to GitHub"
+gh auth login
+
+GITHUB_REPO=$(gh repo view --json nameWithOwner -q ".nameWithOwner" 2>/dev/null || true)
+
+if [[ -n "$GITHUB_REPO" ]]; then
+    echo -e "    Detected repo: ${C}${GITHUB_REPO}${W}"
+    read -p "    Use this repo? (Y/n) " confirm_repo
+    if [[ "$confirm_repo" == "n" || "$confirm_repo" == "N" ]]; then
+        read -p "    Enter repo (owner/name): " GITHUB_REPO
+    fi
+else
+    echo -e "    ${Y}No GitHub repo detected.${W}"
+    gh_user=$(gh api user --jq .login 2>/dev/null || echo "unknown")
+    default_name=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null || echo "dotnet-agent-framework")
+
+    read -p "    (C)reate new repo '$gh_user/$default_name' or (E)nter existing? [C/e] " action
+    if [[ "$action" == "e" || "$action" == "E" ]]; then
+        read -p "    Enter repo (owner/name): " GITHUB_REPO
+    else
+        echo "    Creating repo $gh_user/$default_name..."
+        gh repo create "$default_name" --private --source . --push
+        GITHUB_REPO="$gh_user/$default_name"
+        done_ "Created $GITHUB_REPO"
     fi
 fi
+
+if [[ -z "$GITHUB_REPO" ]]; then echo "No GitHub repository configured."; exit 1; fi
 REPO_NAME="${GITHUB_REPO##*/}"
-if [[ -z "$APP_NAME" ]]; then APP_NAME="github-actions-${REPO_NAME}"; fi
-TENANT_ID=$(az account show --query tenantId -o tsv)
+done_ "GitHub: $GITHUB_REPO"
+
+# ── Show configuration ───────────────────────────────────────────────────────
+echo ""
+echo -e "    ${D}┌──────────────────────────────────────────────────┐${W}"
+echo -e "    ${D}│  Configuration                                   │${W}"
+echo -e "    ${D}├──────────────────────────────────────────────────┤${W}"
+echo -e "    ${D}│  Subscription:   $SUB_NAME${W}"
+echo -e "    ${D}│  Location:       $LOCATION${W}"
+echo -e "    ${D}│  Base name:      $BASE_NAME${W}"
+echo -e "    ${D}│  Environment:    $GITHUB_ENV${W}"
+echo -e "    ${D}│  Resource group: $RESOURCE_GROUP${W}"
+echo -e "    ${D}│  GitHub repo:    $GITHUB_REPO${W}"
+echo -e "    ${D}└──────────────────────────────────────────────────┘${W}"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 2 — Entra app registration + OIDC + RBAC
+# ═══════════════════════════════════════════════════════════════════════════════
 
 if [[ "$SKIP_ENTRA" == "true" ]]; then
     if [[ -z "$APP_CLIENT_ID" ]]; then echo "--skip-entra requires --app-client-id"; exit 1; fi
     skip_ "Skipping Entra setup (using existing app: $APP_CLIENT_ID)"
 else
-    phase 3 "Entra app registration + OIDC"
+    phase 2 "Entra app registration + OIDC + RBAC"
 
+    APP_NAME="github-actions-${REPO_NAME}"
+
+    step "Creating app registration"
     existing=$(az ad app list --display-name "$APP_NAME" --query "[0].appId" -o tsv 2>/dev/null || true)
     if [[ -n "$existing" ]]; then
         APP_CLIENT_ID="$existing"
@@ -359,7 +249,7 @@ else
             "audiences": ["api://AzureADTokenExchange"],
             "description": "GitHub Actions OIDC for '"$REPO_NAME"' ('"$GITHUB_ENV"')"
         }' >/dev/null
-        done_ "Added federated credential for repo:${GITHUB_REPO}:environment:${GITHUB_ENV}"
+        done_ "Federated credential for repo:${GITHUB_REPO}:environment:${GITHUB_ENV}"
     fi
 
     step "Granting Contributor role on subscription"
@@ -368,17 +258,17 @@ else
         skip_ "Contributor role already assigned"
     else
         az role assignment create --assignee "$APP_CLIENT_ID" --role "Contributor" --scope "/subscriptions/$SUBSCRIPTION_ID" >/dev/null
-        done_ "Granted Contributor on subscription $SUBSCRIPTION_ID"
+        done_ "Contributor granted on $SUBSCRIPTION_ID"
     fi
 fi
 
-# PHASE 4 — GitHub secrets + environment variables
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 3 — GitHub environment, secrets, variables
 # ═══════════════════════════════════════════════════════════════════════════════
 
-phase 4 "GitHub secrets + environment variables"
+phase 3 "GitHub environment, secrets, variables"
 
 step "Setting repository secrets"
-
 gh secret set AZURE_CLIENT_ID --repo "$GITHUB_REPO" --body "$APP_CLIENT_ID"
 done_ "AZURE_CLIENT_ID"
 gh secret set AZURE_TENANT_ID --repo "$GITHUB_REPO" --body "$TENANT_ID"
@@ -388,9 +278,7 @@ done_ "AZURE_SUBSCRIPTION_ID"
 
 step "Setting environment variables ($GITHUB_ENV)"
 
-# Read all values from terraform.tfvars — single source of truth
 declare -A ENV_VARS=(
-    # Backend / bootstrap
     [RESOURCE_GROUP]="$RESOURCE_GROUP"
     [LOCATION]="$LOCATION"
     [STORAGE_ACCOUNT]="$STORAGE_ACCOUNT"
@@ -398,46 +286,44 @@ declare -A ENV_VARS=(
     [STORAGE_ACCOUNT_ENCRYPTION_SERVICES]="blob"
     [STORAGE_ACCOUNT_MIN_TLS_VERSION]="TLS1_2"
     [STORAGE_ACCOUNT_PUBLIC_NETWORK_ACCESS]="Enabled"
-    [TERRAFORM_STATE_CONTAINER]="$CONTAINER_NAME"
-    [TERRAFORM_STATE_BLOB]="${ENVIRONMENT}.tfstate"
+    [TERRAFORM_STATE_CONTAINER]="tfstate"
+    [TERRAFORM_STATE_BLOB]="${GITHUB_ENV}.tfstate"
     [TERRAFORM_WORKING_DIRECTORY]="infra/terraform"
-
-    # Infrastructure (read from terraform.tfvars)
     [TAGS]="{}"
-    [ENVIRONMENT]="$ENVIRONMENT"
-    [BASE_NAME]="$(parse_hcl_value "$TFVARS_FILE" "base_name")"
-    [COGNITIVE_ACCOUNT_KIND]="$(parse_hcl_value "$TFVARS_FILE" "cognitive_account_kind")"
-    [OAI_SKU_NAME]="$(parse_hcl_value "$TFVARS_FILE" "oai_sku_name")"
-    [OAI_DEPLOYMENT_SKU_NAME]="$(parse_hcl_value "$TFVARS_FILE" "oai_deployment_sku_name")"
-    [OAI_DEPLOYMENT_MODEL_FORMAT]="$(parse_hcl_value "$TFVARS_FILE" "oai_deployment_model_format")"
-    [OAI_DEPLOYMENT_MODEL_NAME]="$(parse_hcl_value "$TFVARS_FILE" "oai_deployment_model_name")"
-    [OAI_DEPLOYMENT_MODEL_VERSION]="$(parse_hcl_value "$TFVARS_FILE" "oai_deployment_model_version")"
-    [OAI_VERSION_UPGRADE_OPTION]="$(parse_hcl_value "$TFVARS_FILE" "oai_version_upgrade_option")"
-    [CREATE_EMBEDDING_DEPLOYMENT]="$(parse_hcl_value "$TFVARS_FILE" "create_embedding_deployment")"
-    [EMBEDDING_MODEL_NAME]="$(parse_hcl_value "$TFVARS_FILE" "embedding_model_name")"
-    [EMBEDDING_MODEL_VERSION]="$(parse_hcl_value "$TFVARS_FILE" "embedding_model_version")"
-    [EMBEDDING_SKU_NAME]="$(parse_hcl_value "$TFVARS_FILE" "embedding_sku_name")"
-    [EMBEDDING_CAPACITY]="$(parse_hcl_value "$TFVARS_FILE" "embedding_capacity")"
-    [COSMOS_PROJECT_NAME]="$(parse_hcl_value "$TFVARS_FILE" "cosmos_project_name")"
-    [COSMOS_AGENTS_DATABASE_NAME]="$(parse_hcl_value "$TFVARS_FILE" "cosmos_agents_database_name")"
-    [COSMOS_AGENT_STATE_CONTAINER_NAME]="$(parse_hcl_value "$TFVARS_FILE" "cosmos_agent_state_container_name")"
-    [SQL_DATABASE_NAME]="$(parse_hcl_value "$TFVARS_FILE" "sql_database_name")"
-    [SQL_ADMIN_LOGIN]="$(parse_hcl_value "$TFVARS_FILE" "sql_admin_login")"
-    [STORAGE_PROJECT_NAME]="$(parse_hcl_value "$TFVARS_FILE" "storage_project_name")"
-    [SEARCH_SKU]="$(parse_hcl_value "$TFVARS_FILE" "search_sku")"
-    [SEARCH_INDEX_NAME]="$(parse_hcl_value "$TFVARS_FILE" "search_index_name")"
-    [ACR_PROJECT_NAME]="$(parse_hcl_value "$TFVARS_FILE" "acr_project_name")"
-    [CREATE_ACR]="$(parse_hcl_value "$TFVARS_FILE" "create_acr")"
-    [ACR_SKU]="$(parse_hcl_value "$TFVARS_FILE" "acr_sku")"
+    [ENVIRONMENT]="$GITHUB_ENV"
+    [BASE_NAME]="$BASE_NAME"
+    [COGNITIVE_ACCOUNT_KIND]="AIServices"
+    [OAI_SKU_NAME]="S0"
+    [OAI_DEPLOYMENT_SKU_NAME]="GlobalStandard"
+    [OAI_DEPLOYMENT_MODEL_FORMAT]="OpenAI"
+    [OAI_DEPLOYMENT_MODEL_NAME]="gpt-4.1"
+    [OAI_DEPLOYMENT_MODEL_VERSION]="2025-04-14"
+    [OAI_VERSION_UPGRADE_OPTION]="NoAutoUpgrade"
+    [CREATE_EMBEDDING_DEPLOYMENT]="true"
+    [EMBEDDING_MODEL_NAME]="text-embedding-ada-002"
+    [EMBEDDING_MODEL_VERSION]="2"
+    [EMBEDDING_SKU_NAME]="Standard"
+    [EMBEDDING_CAPACITY]="10"
+    [COSMOS_PROJECT_NAME]="$BASE_NAME"
+    [COSMOS_AGENTS_DATABASE_NAME]="agents"
+    [COSMOS_AGENT_STATE_CONTAINER_NAME]="workshop_agent_state_store"
+    [SQL_DATABASE_NAME]="contoso-outdoors"
+    [SQL_ADMIN_LOGIN]="sqladmin"
+    [STORAGE_PROJECT_NAME]="$BASE_NAME"
+    [SEARCH_SKU]="basic"
+    [SEARCH_INDEX_NAME]="knowledge-documents"
+    [ACR_PROJECT_NAME]="$BASE_NAME"
+    [CREATE_ACR]="true"
+    [ACR_SKU]="Premium"
     [EXISTING_ACR_NAME]=""
     [AKS_KUBERNETES_VERSION]=""
-    [AKS_NODE_VM_SIZE]="$(parse_hcl_value "$TFVARS_FILE" "aks_node_vm_size")"
-    [AKS_NODE_COUNT]="$(parse_hcl_value "$TFVARS_FILE" "aks_node_count")"
-    [AKS_AUTO_SCALING_ENABLED]="$(parse_hcl_value "$TFVARS_FILE" "aks_auto_scaling_enabled")"
-    [AKS_NODE_MIN_COUNT]="$(parse_hcl_value "$TFVARS_FILE" "aks_node_min_count")"
-    [AKS_NODE_MAX_COUNT]="$(parse_hcl_value "$TFVARS_FILE" "aks_node_max_count")"
-    [AKS_OS_DISK_SIZE_GB]="$(parse_hcl_value "$TFVARS_FILE" "aks_os_disk_size_gb")"
-    [AKS_LOG_RETENTION_DAYS]="$(parse_hcl_value "$TFVARS_FILE" "aks_log_retention_days")"
+    [AKS_NODE_VM_SIZE]="Standard_D4s_v5"
+    [AKS_NODE_COUNT]="2"
+    [AKS_AUTO_SCALING_ENABLED]="true"
+    [AKS_NODE_MIN_COUNT]="1"
+    [AKS_NODE_MAX_COUNT]="5"
+    [AKS_OS_DISK_SIZE_GB]="64"
+    [AKS_LOG_RETENTION_DAYS]="30"
 )
 
 count=0
@@ -445,28 +331,134 @@ for key in "${!ENV_VARS[@]}"; do
     gh variable set "$key" --repo "$GITHUB_REPO" --env "$GITHUB_ENV" --body "${ENV_VARS[$key]}"
     count=$((count + 1))
 done
+done_ "Set $count environment variables in '$GITHUB_ENV'"
 
-done_ "Set $count environment variables"
-
-# PHASE 5 — Lock down storage
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 4 — Azure backend resources
 # ═══════════════════════════════════════════════════════════════════════════════
 
-phase 5 "Lock down state storage"
+phase 4 "Azure backend resources"
 
+step "Creating resource group"
+if ! az group show --name "$RESOURCE_GROUP" &>/dev/null; then
+    az group create --name "$RESOURCE_GROUP" --location "$LOCATION" >/dev/null
+    done_ "Created $RESOURCE_GROUP in $LOCATION"
+else
+    skip_ "$RESOURCE_GROUP already exists"
+fi
+
+step "Creating storage account for Terraform state"
+WAIT_TIME=30
+if ! az storage account show --resource-group "$RESOURCE_GROUP" --name "$STORAGE_ACCOUNT" &>/dev/null; then
+    az storage account create \
+        --resource-group "$RESOURCE_GROUP" --name "$STORAGE_ACCOUNT" \
+        --sku "Standard_LRS" --encryption-services blob \
+        --min-tls-version "TLS1_2" --location "$LOCATION" \
+        --public-network-access Enabled >/dev/null
+    echo "    Waiting ${WAIT_TIME}s for storage account..."
+    sleep $WAIT_TIME
+    done_ "Created $STORAGE_ACCOUNT"
+else
+    skip_ "$STORAGE_ACCOUNT already exists"
+    az storage account update --name "$STORAGE_ACCOUNT" --resource-group "$RESOURCE_GROUP" --public-network-access Enabled >/dev/null
+    sleep $WAIT_TIME
+fi
+
+CONTAINER_NAME="tfstate"
+if ! az storage container show --name "$CONTAINER_NAME" --account-name "$STORAGE_ACCOUNT" --auth-mode login &>/dev/null; then
+    az storage container create --name "$CONTAINER_NAME" --account-name "$STORAGE_ACCOUNT" --auth-mode login >/dev/null
+    done_ "Created container $CONTAINER_NAME"
+else
+    skip_ "Container $CONTAINER_NAME already exists"
+fi
+
+step "Locking down state storage"
 az storage account update --name "$STORAGE_ACCOUNT" --resource-group "$RESOURCE_GROUP" --public-network-access Disabled >/dev/null
-done_ "Public access disabled on $STORAGE_ACCOUNT"
+done_ "Public access disabled"
 
-# ── Summary ──────────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 5 — Generate config files
+# ═══════════════════════════════════════════════════════════════════════════════
+
+phase 5 "Generate configuration files"
+
+cat > "$TERRAFORM_DIR/backend.hcl" <<EOF
+resource_group_name  = "$RESOURCE_GROUP"
+storage_account_name = "$STORAGE_ACCOUNT"
+container_name       = "$CONTAINER_NAME"
+key                  = "$GITHUB_ENV.tfstate"
+EOF
+done_ "backend.hcl"
+
+cat > "$TERRAFORM_DIR/terraform.tfvars" <<EOF
+tags                = {}
+resource_group_name = "$RESOURCE_GROUP"
+environment         = "$GITHUB_ENV"
+base_name           = "$BASE_NAME"
+location            = "$LOCATION"
+
+# Foundry (AI Services)
+cognitive_account_kind       = "AIServices"
+oai_sku_name                 = "S0"
+oai_deployment_sku_name      = "GlobalStandard"
+oai_deployment_model_format  = "OpenAI"
+oai_deployment_model_name    = "gpt-4.1"
+oai_deployment_model_version = "2025-04-14"
+oai_version_upgrade_option   = "NoAutoUpgrade"
+create_embedding_deployment  = true
+embedding_model_name         = "text-embedding-ada-002"
+embedding_model_version      = "2"
+embedding_sku_name           = "Standard"
+embedding_capacity           = 10
+
+# Cosmos DB (1 account: agents session state)
+cosmos_project_name               = "$BASE_NAME"
+cosmos_agents_database_name       = "agents"
+cosmos_agent_state_container_name = "workshop_agent_state_store"
+
+# Azure SQL Database (CRM operational data)
+sql_database_name = "contoso-outdoors"
+sql_admin_login   = "sqladmin"
+
+# Storage
+storage_project_name = "$BASE_NAME"
+
+# AI Search
+search_sku        = "basic"
+search_index_name = "knowledge-documents"
+
+# ACR
+acr_project_name  = "$BASE_NAME"
+create_acr        = true
+acr_sku           = "Premium"
+existing_acr_name = ""
+
+# AKS
+aks_kubernetes_version   = null
+aks_node_vm_size         = "Standard_D4s_v5"
+aks_node_count           = 2
+aks_auto_scaling_enabled = true
+aks_node_min_count       = 1
+aks_node_max_count       = 5
+aks_os_disk_size_gb      = 64
+aks_log_retention_days   = 30
+EOF
+done_ "terraform.tfvars"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+
 echo ""
 echo -e "  ${G}╔═══════════════════════════════════════════════════════╗${W}"
 echo -e "  ${G}║  Bootstrap Complete!                                  ║${W}"
 echo -e "  ${G}╠═══════════════════════════════════════════════════════╣${W}"
+echo -e "  ${G}║${W}  Subscription:     $SUB_NAME"
+echo -e "  ${G}║${W}  Location:         $LOCATION"
 echo -e "  ${G}║${W}  Resource group:   $RESOURCE_GROUP"
 echo -e "  ${G}║${W}  Storage account:  $STORAGE_ACCOUNT"
 echo -e "  ${G}║${W}  App registration: $APP_CLIENT_ID"
 echo -e "  ${G}║${W}  GitHub repo:      $GITHUB_REPO"
 echo -e "  ${G}║${W}  GitHub env:       $GITHUB_ENV"
-echo -e "  ${G}║${W}  Secrets:          3 (AZURE_CLIENT_ID, TENANT_ID, SUBSCRIPTION_ID)"
+echo -e "  ${G}║${W}  Secrets:          3"
 echo -e "  ${G}║${W}  Env variables:    $count"
 echo -e "  ${G}║${W}"
 echo -e "  ${G}║  Next: proceed to Lab 1 (terraform apply)             ║${W}"
