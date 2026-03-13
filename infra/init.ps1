@@ -81,6 +81,22 @@ function Write-Step  { param([string]$Message) Write-Host "  → $Message" -Fore
 function Write-Done  { param([string]$Message) Write-Host "    ✓ $Message" -ForegroundColor Green }
 function Write-Skip  { param([string]$Message) Write-Host "    · $Message" -ForegroundColor DarkGray }
 
+function Write-PhaseSummary {
+    param([int]$Number, [hashtable]$Items)
+    Write-Host ""
+    Write-Host "    ┌ Phase $Number complete ─────────────────────────────────┐" -ForegroundColor Green
+    foreach ($kv in $Items.GetEnumerator()) {
+        Write-Host "    │  $($kv.Key): " -ForegroundColor Green -NoNewLine
+        Write-Host "$($kv.Value)"
+    }
+    Write-Host "    └─────────────────────────────────────────────────────┘" -ForegroundColor Green
+    $response = Read-Host "    Continue to next phase? (Y/n)"
+    if ($response -eq 'n' -or $response -eq 'N') {
+        Write-Host "    Stopped by user." -ForegroundColor Yellow
+        exit 0
+    }
+}
+
 # ── Derived names ────────────────────────────────────────────────────────────
 $ResourceGroup  = "rg-$BaseName-$GitHubEnv-$Location"
 $StorageAccount = ("st" + ($ResourceGroup -replace '^rg-', '' -replace '[^a-z0-9]', '').ToLower())
@@ -188,18 +204,16 @@ if (-not $GitHubRepo) { throw "No GitHub repository configured." }
 $RepoName = ($GitHubRepo -split "/")[-1]
 Write-Done "GitHub: $GitHubRepo"
 
-# ── Show configuration ───────────────────────────────────────────────────────
-Write-Host ""
-Write-Host "    ┌──────────────────────────────────────────────────┐" -ForegroundColor DarkGray
-Write-Host "    │  Configuration                                   │" -ForegroundColor DarkGray
-Write-Host "    ├──────────────────────────────────────────────────┤" -ForegroundColor DarkGray
-Write-Host "    │  Subscription:   $SubName" -ForegroundColor DarkGray
-Write-Host "    │  Location:       $Location" -ForegroundColor DarkGray
-Write-Host "    │  Base name:      $BaseName" -ForegroundColor DarkGray
-Write-Host "    │  Environment:    $GitHubEnv" -ForegroundColor DarkGray
-Write-Host "    │  Resource group: $ResourceGroup" -ForegroundColor DarkGray
-Write-Host "    │  GitHub repo:    $GitHubRepo" -ForegroundColor DarkGray
-Write-Host "    └──────────────────────────────────────────────────┘" -ForegroundColor DarkGray
+# ── Show configuration & confirm ─────────────────────────────────────────────
+Write-PhaseSummary -Number 1 -Items ([ordered]@{
+    "Subscription"   = "$SubName ($SubscriptionId)"
+    "Tenant"         = $TenantId
+    "GitHub repo"    = $GitHubRepo
+    "Location"       = $Location
+    "Base name"      = $BaseName
+    "Environment"    = $GitHubEnv
+    "Resource group" = $ResourceGroup
+})
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 2 — Entra app registration + OIDC + RBAC
@@ -232,7 +246,7 @@ if ($SkipEntra) {
     }
 
     Write-Step "Adding OIDC federated credential"
-    $credName = "github-actions-$GitHubEnv"
+    $credName = "$RepoName-$GitHubEnv"
     $existingCred = az ad app federated-credential list --id "$AppClientId" --query "[?name=='$credName'].name" -o tsv 2>$null
     if ($existingCred) {
         Write-Skip "Federated credential '$credName' already exists"
@@ -256,6 +270,13 @@ if ($SkipEntra) {
         $null = az role assignment create --assignee "$AppClientId" --role "Contributor" --scope "/subscriptions/$SubscriptionId"
         Write-Done "Contributor granted on $SubscriptionId"
     }
+
+    Write-PhaseSummary -Number 2 -Items ([ordered]@{
+        "App registration" = "$AppName ($AppClientId)"
+        "OIDC subject"     = "repo:${GitHubRepo}:environment:${GitHubEnv}"
+        "Credential name"  = $credName
+        "RBAC"             = "Contributor on subscription"
+    })
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -327,6 +348,12 @@ foreach ($kv in $envVars.GetEnumerator()) {
 }
 Write-Done "Set $($envVars.Count) environment variables in '$GitHubEnv'"
 
+Write-PhaseSummary -Number 3 -Items ([ordered]@{
+    "Secrets"       = "AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID"
+    "Environment"   = $GitHubEnv
+    "Env variables" = "$($envVars.Count)"
+})
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 4 — Azure backend resources
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -372,6 +399,13 @@ if ($LASTEXITCODE -ne 0) {
 Write-Step "Locking down state storage"
 az storage account update --name $StorageAccount --resource-group $ResourceGroup --public-network-access Disabled | Out-Null
 Write-Done "Public access disabled"
+
+Write-PhaseSummary -Number 4 -Items ([ordered]@{
+    "Resource group"  = $ResourceGroup
+    "Storage account" = $StorageAccount
+    "Container"       = $ContainerName
+    "Public access"   = "Disabled"
+})
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 5 — Generate config files
