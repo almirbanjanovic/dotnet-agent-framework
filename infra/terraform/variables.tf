@@ -146,8 +146,8 @@ variable "acr_sku" {
   type        = string
 }
 
-variable "existing_acr_name" {
-  description = "Name of existing ACR (only used when create_acr = false)"
+variable "acr_name" {
+  description = "Name of the ACR (used when create_acr = false)"
   type        = string
 }
 

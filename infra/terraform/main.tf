@@ -109,7 +109,7 @@ module "acr" {
   resource_group_name = var.resource_group_name
   create_acr          = var.create_acr
   sku                 = var.acr_sku
-  existing_acr_name   = var.existing_acr_name
+  acr_name              = var.acr_name
   tags                = var.tags
 }
 

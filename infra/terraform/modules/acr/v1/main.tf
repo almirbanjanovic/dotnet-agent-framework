@@ -33,7 +33,7 @@ resource "azurerm_container_registry" "this" {
 # -----------------------------------------------------------------------------
 data "azurerm_container_registry" "existing" {
   count               = var.create_acr ? 0 : 1
-  name                = var.existing_acr_name
+  name                = var.acr_name
   resource_group_name = var.existing_acr_resource_group != "" ? var.existing_acr_resource_group : var.resource_group_name
 }
 
