@@ -7,7 +7,9 @@ data "azurerm_client_config" "current" {}
 locals {
   # Each module composes: {prefix}-{base_name}-{environment}-{location}
   # These two values are passed separately to every module.
-  name_base = "${var.base_name}-${var.environment}"
+  name_base    = "${var.base_name}-${var.environment}"
+  aks_dns_prefix = "aks-${var.base_name}-${var.environment}-${var.location}"
+  aks_fqdn       = "${local.aks_dns_prefix}.${var.location}.cloudapp.azure.com"
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -412,7 +414,70 @@ module "keyvault_secrets" {
     "IDENTITY-CRM-AGENT-CLIENT-ID"      = module.identity.identities["crm_agent"].client_id
     "IDENTITY-PROD-AGENT-CLIENT-ID"     = module.identity.identities["prod_agent"].client_id
     "IDENTITY-ORCH-AGENT-CLIENT-ID"     = module.identity.identities["orch_agent"].client_id
+
+    # Entra ID (BFF authentication)
+    "ENTRA-BFF-CLIENT-ID"               = module.entra.bff_client_id
+    "ENTRA-BFF-CLIENT-SECRET"           = module.entra.bff_client_secret
+    "ENTRA-TENANT-ID"                   = module.entra.tenant_id
+    "ENTRA-BFF-HOSTNAME"                = local.aks_fqdn
+
+    # Test user passwords (for lab use)
+    "TEST-USER-EMMA-PASSWORD"           = module.entra.test_user_passwords["emma"]
+    "TEST-USER-BOB-PASSWORD"            = module.entra.test_user_passwords["bob"]
+    "TEST-USER-SARAH-PASSWORD"          = module.entra.test_user_passwords["sarah"]
+    "TEST-USER-DAVE-PASSWORD"           = module.entra.test_user_passwords["dave"]
+    "TEST-USER-ADMIN-PASSWORD"          = module.entra.test_user_passwords["admin"]
   }
 
   depends_on = [module.rbac_keyvault]
+}
+
+#--------------------------------------------------------------------------------------------------------------------------------
+# Entra ID — App Registration, Test Users, Role Assignments
+#--------------------------------------------------------------------------------------------------------------------------------
+
+module "entra" {
+  source = "./modules/entra/v1"
+
+  base_name   = var.base_name
+  environment = var.environment
+
+  redirect_uris = [
+    "https://localhost:5001/signin-oidc",
+    "https://${local.aks_fqdn}/signin-oidc",
+  ]
+}
+
+#--------------------------------------------------------------------------------------------------------------------------------
+# TLS Certificate (self-signed, stored in Key Vault for AKS ingress)
+#--------------------------------------------------------------------------------------------------------------------------------
+
+module "tls_cert" {
+  source = "./modules/tls-cert/v1"
+
+  cert_name    = "tls-bff-${var.environment}"
+  key_vault_id = module.keyvault.id
+  common_name  = local.aks_fqdn
+  dns_names    = [local.aks_fqdn]
+
+  depends_on = [module.rbac_keyvault]
+}
+
+#--------------------------------------------------------------------------------------------------------------------------------
+# RBAC - Key Vault (Certificates + Secrets for Web App Routing)
+# Web App Routing needs to read the TLS cert from Key Vault
+#--------------------------------------------------------------------------------------------------------------------------------
+
+resource "azurerm_role_assignment" "web_app_routing_kv_secrets" {
+  count                = module.aks.web_app_routing_identity != null ? 1 : 0
+  scope                = module.keyvault.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = module.aks.web_app_routing_identity
+}
+
+resource "azurerm_role_assignment" "web_app_routing_kv_certs" {
+  count                = module.aks.web_app_routing_identity != null ? 1 : 0
+  scope                = module.keyvault.id
+  role_definition_name = "Key Vault Certificate User"
+  principal_id         = module.aks.web_app_routing_identity
 }

@@ -29,6 +29,16 @@ output "control_plane_identity_principal_id" {
   value       = azurerm_user_assigned_identity.aks.principal_id
 }
 
+output "fqdn" {
+  description = "FQDN of the AKS cluster (from dns_prefix)"
+  value       = azurerm_kubernetes_cluster.this.fqdn
+}
+
+output "web_app_routing_identity" {
+  description = "Object ID of the Web App Routing managed identity (for Key Vault access)"
+  value       = try(azurerm_kubernetes_cluster.this.web_app_routing[0].web_app_routing_identity[0].object_id, null)
+}
+
 output "node_resource_group" {
   description = "Auto-generated resource group for AKS node resources"
   value       = azurerm_kubernetes_cluster.this.node_resource_group

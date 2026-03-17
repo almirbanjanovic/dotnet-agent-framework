@@ -71,6 +71,10 @@ resource "azurerm_kubernetes_cluster" "this" {
   oidc_issuer_enabled       = var.oidc_issuer_enabled
   workload_identity_enabled = var.workload_identity_enabled
 
+  web_app_routing {
+    dns_zone_ids = []
+  }
+
   oms_agent {
     log_analytics_workspace_id = azurerm_log_analytics_workspace.this.id
   }

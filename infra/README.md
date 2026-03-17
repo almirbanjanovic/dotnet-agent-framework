@@ -96,17 +96,20 @@ All secrets (OpenAI endpoint/key, Cosmos DB endpoint/key, deployment names) are 
 
 > **Note:** API key and Cosmos DB key outputs are for learning/dev convenience. Do not expose sensitive values via Terraform outputs in production.
 
-## Planned infrastructure updates
+## Recent infrastructure additions
 
-The following changes are needed to support the full application architecture (7 containers in AKS):
+The following resources were added to support the full application architecture (7 containers in AKS):
 
-| Change | Details |
+| Addition | Details |
 |---|---|
-| **Expand identity module** | 2 → 8 managed identities: `id-bff`, `id-crm-api`, `id-crm-mcp`, `id-know-mcp`, `id-crm-agent`, `id-prod-agent`, `id-orch-agent`, `id-kubelet` |
-| **New: `rbac/search/v1/`** | Search Index Data Reader for `id-know-mcp` |
-| **Update RBAC modules** | Assign per-identity roles (Key Vault, SQL, OpenAI, Cosmos DB, Blob, Search, ACR) |
-| **New: `workload-identity/v1/`** | Federated credentials binding each identity to AKS OIDC issuer + K8s service accounts |
-| **Update Cosmos DB** | Add `conversations` container (partition key: `/sessionId`) for BFF-owned chat history |
+| **8 managed identities** | `id-bff`, `id-crm-api`, `id-crm-mcp`, `id-know-mcp`, `id-crm-agent`, `id-prod-agent`, `id-orch-agent`, `id-kubelet` |
+| **`rbac/search/v1/`** | Search Index Data Reader for `id-know-mcp` |
+| **`workload-identity/v1/`** | Federated credentials binding each identity to AKS OIDC issuer + K8s service accounts |
+| **`entra/v1/`** | Entra app registration, 2 app roles (Agent.User, Data.Writer), 5 test users with random passwords, role assignments |
+| **`tls-cert/v1/`** | Self-signed TLS certificate in Key Vault for AKS ingress |
+| **Web App Routing** | AKS addon for managed NGINX ingress with Key Vault TLS integration |
+| **Cosmos DB `conversations`** | New container (partition key: `/sessionId`) for BFF-owned chat history |
+| **Key Vault secrets** | Identity client IDs, Entra app credentials, test user passwords, AKS hostname |
 
 ## Module versioning
 

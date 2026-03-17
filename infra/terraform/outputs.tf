@@ -124,6 +124,11 @@ output "aks_oidc_issuer_url" {
   value       = module.aks.oidc_issuer_url
 }
 
+output "aks_fqdn" {
+  description = "AKS cluster FQDN (for ingress and Entra redirect URI)"
+  value       = local.aks_fqdn
+}
+
 # ---------------------------------------------------------------
 # Identities
 # ---------------------------------------------------------------
@@ -180,4 +185,37 @@ output "keyvault_name" {
 output "keyvault_uri" {
   description = "Key Vault URI (use this in appsettings.json)"
   value       = module.keyvault.vault_uri
+}
+
+# ---------------------------------------------------------------
+# Entra ID
+# ---------------------------------------------------------------
+
+output "entra_bff_client_id" {
+  description = "Entra app registration client ID for BFF"
+  value       = module.entra.bff_client_id
+}
+
+output "entra_tenant_id" {
+  description = "Entra tenant ID"
+  value       = module.entra.tenant_id
+}
+
+output "entra_domain" {
+  description = "Entra default verified domain"
+  value       = module.entra.domain
+}
+
+output "entra_test_user_upns" {
+  description = "Test user principal names (login emails)"
+  value       = module.entra.test_user_upns
+}
+
+# ---------------------------------------------------------------
+# TLS
+# ---------------------------------------------------------------
+
+output "tls_cert_secret_id" {
+  description = "Key Vault secret ID for the TLS certificate (used by AKS ingress)"
+  value       = module.tls_cert.versionless_secret_id
 }

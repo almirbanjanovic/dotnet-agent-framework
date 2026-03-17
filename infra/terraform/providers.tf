@@ -8,6 +8,11 @@ terraform {
       version = "~> 4.63.0"
     }
 
+    azuread = {
+      source  = "hashicorp/azuread"
+      version = "~> 3.4.0"
+    }
+
     azapi = {
       source  = "azure/azapi"
       version = "~> 2.8.0"
@@ -52,4 +57,7 @@ provider "azurerm" {
 }
 
 provider "azapi" {
+}
+
+provider "azuread" {
 }
