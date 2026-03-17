@@ -7,7 +7,7 @@ data "azurerm_client_config" "current" {}
 locals {
   # Each module composes: {prefix}-{base_name}-{environment}-{location}
   # These two values are passed separately to every module.
-  name_base    = "${var.base_name}-${var.environment}"
+  name_base      = "${var.base_name}-${var.environment}"
   aks_dns_prefix = "aks-${var.base_name}-${var.environment}-${var.location}"
   aks_fqdn       = "${local.aks_dns_prefix}.${var.location}.cloudapp.azure.com"
 }
@@ -19,8 +19,8 @@ locals {
 module "foundry" {
   source = "./modules/foundry/v1"
 
-  base_name            = var.base_name
-  environment         = var.environment
+  base_name                = var.base_name
+  environment              = var.environment
   location                 = var.location
   resource_group_name      = var.resource_group_name
   account_kind             = var.cognitive_account_kind
@@ -47,7 +47,7 @@ module "foundry" {
 module "sql" {
   source = "./modules/sql/v1"
 
-  base_name            = var.base_name
+  base_name           = var.base_name
   environment         = var.environment
   location            = var.location
   resource_group_name = var.resource_group_name
@@ -80,7 +80,7 @@ module "cosmosdb_agents" {
     }
     conversations = {
       name                = "conversations"
-      partition_key_paths  = ["/sessionId"]
+      partition_key_paths = ["/sessionId"]
     }
   }
 }
@@ -115,13 +115,13 @@ module "identity" {
 module "acr" {
   source = "./modules/acr/v1"
 
-  base_name            = var.base_name
+  base_name           = var.base_name
   environment         = var.environment
   location            = var.location
   resource_group_name = var.resource_group_name
   create_acr          = var.create_acr
   sku                 = var.acr_sku
-  acr_name              = var.acr_name
+  acr_name            = var.acr_name
   tags                = var.tags
 }
 
@@ -133,7 +133,7 @@ module "aks" {
   source = "./modules/aks/v1"
 
   base_name            = var.base_name
-  environment         = var.environment
+  environment          = var.environment
   location             = var.location
   resource_group_name  = var.resource_group_name
   kubernetes_version   = var.aks_kubernetes_version
@@ -159,7 +159,7 @@ module "aks" {
 module "storage_images" {
   source = "./modules/storage/v1"
 
-  base_name            = var.base_name
+  base_name           = var.base_name
   environment         = var.environment
   resource_group_name = var.resource_group_name
   location            = var.location
@@ -188,7 +188,7 @@ module "storage_images" {
 module "search" {
   source = "./modules/search/v1"
 
-  base_name            = var.base_name
+  base_name           = var.base_name
   environment         = var.environment
   location            = var.location
   resource_group_name = var.resource_group_name
@@ -212,7 +212,7 @@ module "search" {
 module "eventgrid" {
   source = "./modules/eventgrid/v1"
 
-  base_name            = var.base_name
+  base_name           = var.base_name
   environment         = var.environment
   resource_group_name = var.resource_group_name
   location            = var.location
@@ -323,11 +323,11 @@ module "workload_identity" {
   aks_oidc_issuer_url = module.aks.oidc_issuer_url
 
   federations = {
-    bff        = { identity_id = module.identity.identities["bff"].id,        namespace = var.k8s_namespace, service_account = "sa-bff" }
-    crm_api    = { identity_id = module.identity.identities["crm_api"].id,    namespace = var.k8s_namespace, service_account = "sa-crm-api" }
-    crm_mcp    = { identity_id = module.identity.identities["crm_mcp"].id,    namespace = var.k8s_namespace, service_account = "sa-crm-mcp" }
-    know_mcp   = { identity_id = module.identity.identities["know_mcp"].id,   namespace = var.k8s_namespace, service_account = "sa-know-mcp" }
-    crm_agent  = { identity_id = module.identity.identities["crm_agent"].id,  namespace = var.k8s_namespace, service_account = "sa-crm-agent" }
+    bff        = { identity_id = module.identity.identities["bff"].id, namespace = var.k8s_namespace, service_account = "sa-bff" }
+    crm_api    = { identity_id = module.identity.identities["crm_api"].id, namespace = var.k8s_namespace, service_account = "sa-crm-api" }
+    crm_mcp    = { identity_id = module.identity.identities["crm_mcp"].id, namespace = var.k8s_namespace, service_account = "sa-crm-mcp" }
+    know_mcp   = { identity_id = module.identity.identities["know_mcp"].id, namespace = var.k8s_namespace, service_account = "sa-know-mcp" }
+    crm_agent  = { identity_id = module.identity.identities["crm_agent"].id, namespace = var.k8s_namespace, service_account = "sa-crm-agent" }
     prod_agent = { identity_id = module.identity.identities["prod_agent"].id, namespace = var.k8s_namespace, service_account = "sa-prod-agent" }
     orch_agent = { identity_id = module.identity.identities["orch_agent"].id, namespace = var.k8s_namespace, service_account = "sa-orch-agent" }
   }
@@ -342,7 +342,7 @@ module "workload_identity" {
 module "keyvault" {
   source = "./modules/keyvault/v1"
 
-  base_name            = var.base_name
+  base_name           = var.base_name
   environment         = var.environment
   location            = var.location
   resource_group_name = var.resource_group_name
@@ -407,26 +407,26 @@ module "keyvault_secrets" {
     "SEARCH-INDEX-NAME"                 = module.search.index_name
 
     # Workload identity client IDs (used by Helm at deploy time)
-    "IDENTITY-BFF-CLIENT-ID"            = module.identity.identities["bff"].client_id
-    "IDENTITY-CRM-API-CLIENT-ID"        = module.identity.identities["crm_api"].client_id
-    "IDENTITY-CRM-MCP-CLIENT-ID"        = module.identity.identities["crm_mcp"].client_id
-    "IDENTITY-KNOW-MCP-CLIENT-ID"       = module.identity.identities["know_mcp"].client_id
-    "IDENTITY-CRM-AGENT-CLIENT-ID"      = module.identity.identities["crm_agent"].client_id
-    "IDENTITY-PROD-AGENT-CLIENT-ID"     = module.identity.identities["prod_agent"].client_id
-    "IDENTITY-ORCH-AGENT-CLIENT-ID"     = module.identity.identities["orch_agent"].client_id
+    "IDENTITY-BFF-CLIENT-ID"        = module.identity.identities["bff"].client_id
+    "IDENTITY-CRM-API-CLIENT-ID"    = module.identity.identities["crm_api"].client_id
+    "IDENTITY-CRM-MCP-CLIENT-ID"    = module.identity.identities["crm_mcp"].client_id
+    "IDENTITY-KNOW-MCP-CLIENT-ID"   = module.identity.identities["know_mcp"].client_id
+    "IDENTITY-CRM-AGENT-CLIENT-ID"  = module.identity.identities["crm_agent"].client_id
+    "IDENTITY-PROD-AGENT-CLIENT-ID" = module.identity.identities["prod_agent"].client_id
+    "IDENTITY-ORCH-AGENT-CLIENT-ID" = module.identity.identities["orch_agent"].client_id
 
     # Entra ID (BFF authentication)
-    "ENTRA-BFF-CLIENT-ID"               = module.entra.bff_client_id
-    "ENTRA-BFF-CLIENT-SECRET"           = module.entra.bff_client_secret
-    "ENTRA-TENANT-ID"                   = module.entra.tenant_id
-    "ENTRA-BFF-HOSTNAME"                = local.aks_fqdn
+    "ENTRA-BFF-CLIENT-ID"     = module.entra.bff_client_id
+    "ENTRA-BFF-CLIENT-SECRET" = module.entra.bff_client_secret
+    "ENTRA-TENANT-ID"         = module.entra.tenant_id
+    "ENTRA-BFF-HOSTNAME"      = local.aks_fqdn
 
     # Test user passwords (for lab use)
-    "TEST-USER-EMMA-PASSWORD"           = module.entra.test_user_passwords["emma"]
-    "TEST-USER-BOB-PASSWORD"            = module.entra.test_user_passwords["bob"]
-    "TEST-USER-SARAH-PASSWORD"          = module.entra.test_user_passwords["sarah"]
-    "TEST-USER-DAVE-PASSWORD"           = module.entra.test_user_passwords["dave"]
-    "TEST-USER-ADMIN-PASSWORD"          = module.entra.test_user_passwords["admin"]
+    "TEST-USER-EMMA-PASSWORD"  = module.entra.test_user_passwords["emma"]
+    "TEST-USER-BOB-PASSWORD"   = module.entra.test_user_passwords["bob"]
+    "TEST-USER-SARAH-PASSWORD" = module.entra.test_user_passwords["sarah"]
+    "TEST-USER-DAVE-PASSWORD"  = module.entra.test_user_passwords["dave"]
+    "TEST-USER-ADMIN-PASSWORD" = module.entra.test_user_passwords["admin"]
   }
 
   depends_on = [module.rbac_keyvault]

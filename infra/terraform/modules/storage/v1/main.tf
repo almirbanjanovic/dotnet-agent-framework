@@ -10,7 +10,7 @@ locals {
   # Flatten containers × files into a single map for blob uploads
   blob_uploads = merge([
     for key, container in var.containers : {
-      for file in (container.upload_source_path != "" ? fileset(container.upload_source_path, container.upload_file_pattern) : []) :
+      for file in(container.upload_source_path != "" ? fileset(container.upload_source_path, container.upload_file_pattern) : []) :
       "${key}/${file}" => {
         container_name = container.name
         file_name      = file

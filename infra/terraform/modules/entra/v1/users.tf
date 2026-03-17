@@ -50,9 +50,9 @@ locals {
   role_assignments = flatten([
     for user_key, user in var.test_users : [
       for role in user.roles : {
-        key       = "${user_key}-${role}"
-        user_key  = user_key
-        role      = role
+        key      = "${user_key}-${role}"
+        user_key = user_key
+        role     = role
       }
     ]
   ])

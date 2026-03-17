@@ -93,13 +93,13 @@ resource "azapi_resource" "search_index" {
           searchable = true
         },
         {
-          name                 = "content_vector"
-          type                 = "Collection(Edm.Single)"
-          key                  = false
-          filterable           = false
-          sortable             = false
-          facetable            = false
-          searchable           = true
+          name                = "content_vector"
+          type                = "Collection(Edm.Single)"
+          key                 = false
+          filterable          = false
+          sortable            = false
+          facetable           = false
+          searchable          = true
           vectorSearchProfile = "vector-profile"
         }
       ]
@@ -110,8 +110,8 @@ resource "azapi_resource" "search_index" {
             name = "hnsw-algorithm"
             kind = "hnsw"
             hnswParameters = {
-              metric = "cosine"
-              m      = 4
+              metric         = "cosine"
+              m              = 4
               efConstruction = 400
               efSearch       = 500
             }
@@ -119,9 +119,9 @@ resource "azapi_resource" "search_index" {
         ]
         profiles = [
           {
-            name          = "vector-profile"
+            name                       = "vector-profile"
             algorithmConfigurationName = "hnsw-algorithm"
-            vectorizer    = "openai-vectorizer"
+            vectorizer                 = "openai-vectorizer"
           }
         ]
         vectorizers = [
@@ -193,7 +193,7 @@ resource "azapi_resource" "search_skillset" {
               targetName = "pages"
             }
           ]
-          textSplitMode    = "pages"
+          textSplitMode     = "pages"
           maximumPageLength = 2000
           pageOverlapLength = 200
         },
@@ -224,7 +224,7 @@ resource "azapi_resource" "search_skillset" {
           {
             targetIndexName    = var.index_name
             parentKeyFieldName = "parent_id"
-            sourceContext       = "/document/pages/*"
+            sourceContext      = "/document/pages/*"
             mappings = [
               {
                 name   = "content"
@@ -275,9 +275,9 @@ resource "azapi_resource" "search_indexer" {
       }
       parameters = {
         configuration = {
-          dataToExtract       = "contentAndMetadata"
-          parsingMode          = "default"
-          imageAction          = "none"
+          dataToExtract = "contentAndMetadata"
+          parsingMode   = "default"
+          imageAction   = "none"
         }
       }
       fieldMappings = [
