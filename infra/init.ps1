@@ -135,6 +135,8 @@ foreach ($cmd in $prerequisites.Keys) {
 
 # Disable WAM broker — prevents the gray popup issue on Windows
 az config set core.enable_broker_on_windows=false 2>$null
+# Disable interactive subscription picker — prevents az login from hanging
+az config set core.login_experience_v2=off 2>$null
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 1 — Authenticate
@@ -146,7 +148,9 @@ Write-Phase -Number 1 -Title "Authenticate"
 Write-Step "Signing in to Azure"
 
 Write-Host "    A browser tab will open — select the correct account." -ForegroundColor DarkGray
-az login | Out-Null
+# Request Graph scope upfront to avoid stale-token errors (TokenCreatedWithOutdatedPolicies)
+# during Entra operations in Phase 2.
+az login --scope https://graph.microsoft.com/.default | Out-Null
 
 if (-not $SubscriptionId) {
     $subs = az account list --query "[].{name:name, id:id, isDefault:isDefault}" -o json | ConvertFrom-Json
@@ -276,9 +280,16 @@ if ($existing) {
     $AppClientId = $existing
     Write-Skip "App '$AppName' already exists: $AppClientId"
 } else {
-    $AppClientId = az ad app create --display-name "$AppName" --query appId -o tsv
+    $AppClientId = az ad app create --display-name "$AppName" --query appId -o tsv 2>$null
     if (-not $AppClientId) {
-        throw "Failed to create app registration. Check your permissions."
+        # Retry once — CAE challenge can occur if Entra policies changed since login
+        Write-Host "    ⚠ Entra operation failed. Re-authenticating with Graph scope..." -ForegroundColor Yellow
+        az login --scope https://graph.microsoft.com/.default --tenant $TenantId --only-show-errors --output none
+        az account set --subscription $SubscriptionId
+        $AppClientId = az ad app create --display-name "$AppName" --query appId -o tsv
+        if (-not $AppClientId) {
+            throw "Failed to create app registration. Check your permissions."
+        }
     }
     Write-Done "Created app: $AppClientId"
 }

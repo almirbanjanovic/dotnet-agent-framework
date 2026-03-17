@@ -169,7 +169,12 @@ phase 1 "Authenticate"
 step "Signing in to Azure"
 
 echo -e "    ${D}A browser tab will open \u2014 select the correct account.${W}"
-az login >/dev/null
+# Disable interactive subscription picker and WAM broker
+az config set core.login_experience_v2=off 2>/dev/null
+az config set core.enable_broker_on_windows=false 2>/dev/null
+# Request Graph scope upfront to avoid stale-token errors (TokenCreatedWithOutdatedPolicies)
+# during Entra operations in Phase 2.
+az login --scope https://graph.microsoft.com/.default >/dev/null
 
 if [[ -z "$SUBSCRIPTION_ID" ]]; then
     current_id=$(az account show --query id -o tsv)
@@ -305,9 +310,16 @@ if [[ -n "$existing" ]]; then
     APP_CLIENT_ID="$existing"
     skip_ "App '$APP_NAME' already exists: $APP_CLIENT_ID"
 else
-    APP_CLIENT_ID=$(az ad app create --display-name "$APP_NAME" --query appId -o tsv)
+    APP_CLIENT_ID=$(az ad app create --display-name "$APP_NAME" --query appId -o tsv 2>/dev/null || true)
     if [[ -z "$APP_CLIENT_ID" ]]; then
-        echo "Failed to create app registration. Check your permissions."; exit 1
+        # Retry once — CAE challenge can occur if Entra policies changed since login
+        echo -e "    ${Y}\u26a0 Entra operation failed. Re-authenticating with Graph scope...${W}"
+        az login --scope https://graph.microsoft.com/.default --tenant "$TENANT_ID" --only-show-errors --output none
+        az account set --subscription "$SUBSCRIPTION_ID"
+        APP_CLIENT_ID=$(az ad app create --display-name "$APP_NAME" --query appId -o tsv)
+        if [[ -z "$APP_CLIENT_ID" ]]; then
+            echo "Failed to create app registration. Check your permissions."; exit 1
+        fi
     fi
     done_ "Created app: $APP_CLIENT_ID"
 fi

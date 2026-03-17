@@ -37,6 +37,7 @@ banner() {
     echo -e "  ${C}║     4. terraform plan                                 ║${W}"
     echo -e "  ${C}║     5. terraform apply                                ║${W}"
     echo -e "  ${C}║     6. Seed CRM data                                  ║${W}"
+    echo -e "  ${C}║     7. Link Entra users to Customers                  ║${W}"
     echo -e "  ${C}║                                                       ║${W}"
     echo -e "  ${C}╚═══════════════════════════════════════════════════════╝${W}"
     echo -e ""
@@ -106,9 +107,12 @@ fi
 banner
 
 # ── Azure login ───────────────────────────────────────────────────────────────────
+az config set core.login_experience_v2=off 2>/dev/null
+az config set core.enable_broker_on_windows=false 2>/dev/null
 echo -e "    ${D}Signing in to Azure — select the correct account in the browser.${W}"
 echo ""
-az login >/dev/null
+# Request Graph scope upfront to avoid stale-token errors during Key Vault reads.
+az login --scope https://graph.microsoft.com/.default >/dev/null
 
 if [[ ${#tfvars_files[@]} -eq 1 ]]; then
     ENVIRONMENT="${tfvars_files[0]%.tfvars}"
@@ -170,6 +174,8 @@ az storage account update \
     --resource-group "$RESOURCE_GROUP" \
     --public-network-access Enabled >/dev/null
 
+echo -e "    ${D}Waiting 30s for access change to propagate...${W}"
+sleep 30
 done_ "Public access enabled on $STORAGE_ACCOUNT"
 
 phase_summary 1 \
@@ -282,6 +288,54 @@ dotnet run
 done_ "CRM data seeded"
 unset SQL_SERVER_FQDN SQL_DATABASE_NAME SQL_ADMIN_LOGIN SQL_ADMIN_PASSWORD
 popd >/dev/null
+
+phase_summary 6 \
+    "Phase 7 \u2014 Link Entra users to Customers table" \
+    "Status" "CRM data seeded"
+
+# \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+# PHASE 7 \u2014 Link Entra user object IDs to Customers table
+# \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+
+phase 7 "Link Entra users to Customers"
+
+step "Reading Entra object IDs from Key Vault"
+
+declare -A CUSTOMER_MAPPING=(
+    ["101"]="CUSTOMER-EMMA-ENTRA-OID"
+    ["102"]="CUSTOMER-JAMES-ENTRA-OID"
+    ["103"]="CUSTOMER-SARAH-ENTRA-OID"
+    ["104"]="CUSTOMER-DAVID-ENTRA-OID"
+    ["105"]="CUSTOMER-LISA-ENTRA-OID"
+)
+
+declare -A CUSTOMER_NAMES=(
+    ["101"]="Emma Wilson"
+    ["102"]="James Chen"
+    ["103"]="Sarah Miller"
+    ["104"]="David Park"
+    ["105"]="Lisa Torres"
+)
+
+for CID in "${!CUSTOMER_MAPPING[@]}"; do
+    SECRET_NAME="${CUSTOMER_MAPPING[$CID]}"
+    OID=$(az keyvault secret show --vault-name "$KV_NAME" --name "$SECRET_NAME" --query value -o tsv 2>/dev/null || true)
+    if [[ -n "$OID" ]]; then
+        sqlcmd -S "tcp:${SQL_FQDN},1433" -d "$SQL_DB" -U "$SQL_LOGIN" -P "$SQL_PASS" \
+            -Q "UPDATE Customers SET entra_id = '$OID' WHERE id = '$CID'" -C 2>/dev/null || true
+        done_ "${CUSTOMER_NAMES[$CID]} (ID $CID) \u2192 ${OID:0:8}..."
+    else
+        echo -e "    ${Y}\u26a0 Could not read $SECRET_NAME from Key Vault${W}"
+    fi
+done
+
+# \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+# Lock state storage
+# \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+
+step "Disabling public access on $STORAGE_ACCOUNT"
+az storage account update --name "$STORAGE_ACCOUNT" --resource-group "$RESOURCE_GROUP" --public-network-access Disabled >/dev/null
+done_ "Public access disabled on $STORAGE_ACCOUNT"
 
 # ── Read Key Vault URI ───────────────────────────────────────────────────────
 KEYVAULT_URI=$(az keyvault show --name "$KV_NAME" --query properties.vaultUri -o tsv 2>/dev/null || true)

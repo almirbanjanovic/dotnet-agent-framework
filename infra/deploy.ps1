@@ -106,9 +106,12 @@ if ($TfVarsFiles.Count -eq 0) {
 Write-Banner
 
 # ── Azure login ───────────────────────────────────────────────────────────────
+az config set core.enable_broker_on_windows=false 2>$null
+az config set core.login_experience_v2=off 2>$null
 Write-Host "    Signing in to Azure — select the correct account in the browser." -ForegroundColor DarkGray
 Write-Host ""
-az login | Out-Null
+# Request Graph scope upfront to avoid stale-token errors during Key Vault reads.
+az login --scope https://graph.microsoft.com/.default | Out-Null
 
 if ($TfVarsFiles.Count -eq 1) {
     $Environment = $TfVarsFiles[0].BaseName
@@ -168,6 +171,8 @@ az storage account update `
     --resource-group $ResourceGroup `
     --public-network-access Enabled | Out-Null
 
+Write-Host "    Waiting 30s for access change to propagate..." -ForegroundColor DarkGray
+Start-Sleep -Seconds 30
 Write-Done "Public access enabled on $StorageAccount"
 
 Write-PhaseSummary -Number 1 -NextPhase "Phase 2 — terraform init (configure backend)" -Items ([ordered]@{
