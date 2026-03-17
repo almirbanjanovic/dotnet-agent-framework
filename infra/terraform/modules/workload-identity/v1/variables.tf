@@ -1,8 +1,3 @@
-variable "resource_group_name" {
-  description = "Name of the resource group containing the managed identities"
-  type        = string
-}
-
 variable "aks_oidc_issuer_url" {
   description = "OIDC issuer URL from the AKS cluster"
   type        = string

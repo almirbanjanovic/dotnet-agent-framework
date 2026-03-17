@@ -318,7 +318,6 @@ module "rbac_search" {
 module "workload_identity" {
   source = "./modules/workload-identity/v1"
 
-  resource_group_name = var.resource_group_name
   aks_oidc_issuer_url = module.aks.oidc_issuer_url
 
   federations = {
