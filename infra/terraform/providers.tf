@@ -61,3 +61,14 @@ provider "azapi" {
 
 provider "azuread" {
 }
+
+# kubectl provider is configured dynamically using AKS cluster credentials.
+# The kubernetes provider is declared but not configured — only kubectl is used
+# because it handles unknown values at plan time (when AKS doesn't exist yet).
+provider "kubectl" {
+  host                   = module.aks.kube_config_host
+  client_certificate     = base64decode(module.aks.kube_config_client_certificate)
+  client_key             = base64decode(module.aks.kube_config_client_key)
+  cluster_ca_certificate = base64decode(module.aks.kube_config_cluster_ca)
+  load_config_file       = false
+}

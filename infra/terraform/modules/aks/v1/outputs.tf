@@ -19,6 +19,24 @@ output "kube_config_host" {
   value       = azurerm_kubernetes_cluster.this.kube_config[0].host
 }
 
+output "kube_config_client_certificate" {
+  description = "Base64-encoded client certificate for Kubernetes auth"
+  value       = azurerm_kubernetes_cluster.this.kube_config[0].client_certificate
+  sensitive   = true
+}
+
+output "kube_config_client_key" {
+  description = "Base64-encoded client key for Kubernetes auth"
+  value       = azurerm_kubernetes_cluster.this.kube_config[0].client_key
+  sensitive   = true
+}
+
+output "kube_config_cluster_ca" {
+  description = "Base64-encoded cluster CA certificate for Kubernetes auth"
+  value       = azurerm_kubernetes_cluster.this.kube_config[0].cluster_ca_certificate
+  sensitive   = true
+}
+
 output "oidc_issuer_url" {
   description = "OIDC issuer URL for workload identity federation"
   value       = azurerm_kubernetes_cluster.this.oidc_issuer_url

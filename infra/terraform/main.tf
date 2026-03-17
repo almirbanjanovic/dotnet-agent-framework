@@ -336,6 +336,40 @@ module "workload_identity" {
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
+# Kubernetes Resources (namespace + service accounts)
+# Uses kubectl provider — see providers.tf for configuration.
+# Manifest templates are in manifests/ folder.
+#--------------------------------------------------------------------------------------------------------------------------------
+
+resource "kubectl_manifest" "namespace" {
+  yaml_body = templatefile("${path.module}/manifests/namespace.yaml", {
+    namespace = var.k8s_namespace
+  })
+
+  depends_on = [module.aks]
+}
+
+resource "kubectl_manifest" "service_accounts" {
+  for_each = {
+    bff        = { name = "sa-bff", client_id = module.identity.identities["bff"].client_id }
+    crm_api    = { name = "sa-crm-api", client_id = module.identity.identities["crm_api"].client_id }
+    crm_mcp    = { name = "sa-crm-mcp", client_id = module.identity.identities["crm_mcp"].client_id }
+    know_mcp   = { name = "sa-know-mcp", client_id = module.identity.identities["know_mcp"].client_id }
+    crm_agent  = { name = "sa-crm-agent", client_id = module.identity.identities["crm_agent"].client_id }
+    prod_agent = { name = "sa-prod-agent", client_id = module.identity.identities["prod_agent"].client_id }
+    orch_agent = { name = "sa-orch-agent", client_id = module.identity.identities["orch_agent"].client_id }
+  }
+
+  yaml_body = templatefile("${path.module}/manifests/service-account.yaml", {
+    name      = each.value.name
+    namespace = var.k8s_namespace
+    client_id = each.value.client_id
+  })
+
+  depends_on = [kubectl_manifest.namespace]
+}
+
+#--------------------------------------------------------------------------------------------------------------------------------
 # Key Vault
 #--------------------------------------------------------------------------------------------------------------------------------
 
