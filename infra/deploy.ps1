@@ -88,6 +88,11 @@ if ($TfVarsFiles.Count -eq 0) {
 
 Write-Banner
 
+# ── Azure login ───────────────────────────────────────────────────────────────
+Write-Host "    Signing in to Azure — select the correct account in the browser." -ForegroundColor DarkGray
+Write-Host ""
+az login | Out-Null
+
 if ($TfVarsFiles.Count -eq 1) {
     $Environment = $TfVarsFiles[0].BaseName
     Write-Host "    Found environment: " -NoNewLine; Write-Host "$Environment" -ForegroundColor Cyan

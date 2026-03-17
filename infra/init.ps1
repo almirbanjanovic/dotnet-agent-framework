@@ -129,13 +129,8 @@ Write-Phase -Number 1 -Title "Authenticate"
 # ── Azure ────────────────────────────────────────────────────────────────────
 Write-Step "Signing in to Azure"
 
-$azStatus = az account show --query name -o tsv 2>$null
-if ($azStatus) {
-    Write-Skip "Already logged in as $azStatus"
-} else {
-    Write-Host "    A browser tab will open for authentication." -ForegroundColor DarkGray
-    az login | Out-Null
-}
+Write-Host "    A browser tab will open — select the correct account." -ForegroundColor DarkGray
+az login | Out-Null
 
 if (-not $SubscriptionId) {
     $subs = az account list --query "[].{name:name, id:id, isDefault:isDefault}" -o json | ConvertFrom-Json

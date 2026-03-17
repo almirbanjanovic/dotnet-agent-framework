@@ -86,6 +86,11 @@ fi
 
 banner
 
+# ── Azure login ───────────────────────────────────────────────────────────────────
+echo -e "    ${D}Signing in to Azure — select the correct account in the browser.${W}"
+echo ""
+az login >/dev/null
+
 if [[ ${#tfvars_files[@]} -eq 1 ]]; then
     ENVIRONMENT="${tfvars_files[0]%.tfvars}"
     echo -e "    Found environment: ${C}${ENVIRONMENT}${W}"

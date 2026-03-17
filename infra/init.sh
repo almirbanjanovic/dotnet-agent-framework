@@ -149,13 +149,8 @@ phase 1 "Authenticate"
 # ── Azure ────────────────────────────────────────────────────────────────────
 step "Signing in to Azure"
 
-az_status=$(az account show --query name -o tsv 2>/dev/null || true)
-if [[ -n "$az_status" ]]; then
-    skip_ "Already logged in as $az_status"
-else
-    echo -e "    ${D}A browser tab will open for authentication.${W}"
-    az login >/dev/null
-fi
+echo -e "    ${D}A browser tab will open \u2014 select the correct account.${W}"
+az login >/dev/null
 
 if [[ -z "$SUBSCRIPTION_ID" ]]; then
     current_id=$(az account show --query id -o tsv)
