@@ -4,7 +4,7 @@ output "certificate_id" {
 }
 
 output "secret_id" {
-  description = "Key Vault secret ID for the certificate (used by AKS Web App Routing)"
+  description = "Key Vault secret ID for the certificate (used by AKS ingress TLS)"
   value       = azurerm_key_vault_certificate.tls.secret_id
 }
 

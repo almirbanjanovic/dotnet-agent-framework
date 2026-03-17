@@ -39,7 +39,7 @@ The `appsettings.json` is shared across all projects — each references it via 
 
 | Project | Description | Connects to |
 |---|---|---|
-| `react-ui/` | React SPA (Vite + MUI + MSAL.js + SignalR). Served by nginx. | BFF API (HTTP + SignalR) |
+| `react-ui/` | React SPA (Vite + MUI + MSAL.js + SignalR). Static site container. | BFF API (HTTP + SignalR) |
 | `bff-api/` | BFF API (.NET Minimal API). JWT auth, CRM API proxy, image proxy, chat, conversation history. | CRM API, Orchestrator, Blob Storage, Cosmos DB |
 
 ### Dev Tools (not deployed)

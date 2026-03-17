@@ -373,11 +373,9 @@ $envVars = [ordered]@{
     ACR_SKU                           = "Premium"
     ACR_NAME                          = ("acr" + $BaseName + $GitHubEnv + $Location) -replace '-',''
     AKS_KUBERNETES_VERSION            = "1.34"
-    AKS_NODE_VM_SIZE                  = "Standard_D4s_v5"
-    AKS_NODE_COUNT                    = "2"
+    AKS_SYSTEM_NODE_VM_SIZE            = "Standard_D4s_v5"
+    AKS_USER_NODE_VM_SIZE              = "Standard_D4s_v5"
     AKS_AUTO_SCALING_ENABLED          = "true"
-    AKS_NODE_MIN_COUNT                = "1"
-    AKS_NODE_MAX_COUNT                = "5"
     AKS_OS_DISK_SIZE_GB               = "64"
     AKS_LOG_RETENTION_DAYS            = "30"
 }
@@ -515,14 +513,12 @@ acr_sku           = "Premium"
 acr_name          = "$(('acr' + $BaseName + $GitHubEnv + $Location) -replace '-','')"
 
 # AKS
-aks_kubernetes_version   = "1.34"
-aks_node_vm_size         = "Standard_D4s_v5"
-aks_node_count           = 2
-aks_auto_scaling_enabled = true
-aks_node_min_count       = 1
-aks_node_max_count       = 5
-aks_os_disk_size_gb      = 64
-aks_log_retention_days   = 30
+aks_kubernetes_version       = "1.34"
+aks_system_node_vm_size      = "Standard_D4s_v5"
+aks_user_node_vm_size        = "Standard_D4s_v5"
+aks_auto_scaling_enabled     = true
+aks_os_disk_size_gb          = 64
+aks_log_retention_days       = 30
 "@
 Write-Done "$GitHubEnv.tfvars"
 

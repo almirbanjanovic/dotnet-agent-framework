@@ -1,6 +1,6 @@
 # =============================================================================
 # AKS Module v1
-# Creates: Log Analytics workspace, AKS cluster (Azure CNI) with system + user node pools
+# Creates: Log Analytics workspace, AKS cluster (Azure CNI) with system + workload node pools
 # =============================================================================
 
 locals {

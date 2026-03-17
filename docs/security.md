@@ -8,7 +8,7 @@ This document describes the authentication, authorization, identity, and network
 User (browser)
   │ MSAL.js PKCE (Entra ID)
   ▼
-React UI (nginx) ─── Bearer token ───► BFF API (.NET)
+React UI (static) ─── Bearer token ───► BFF API (.NET)
   │
   ├── X-User-Id, X-User-Roles headers ──► CRM API (internal)
   ├── HTTP ──► Orchestrator Agent (internal)
@@ -195,7 +195,7 @@ Manifests are in `infra/terraform/manifests/` and applied via `kubectl_manifest`
 
 | Service | Exposure | How |
 |---|---|---|
-| React UI | **Public** | AKS Gateway API (AGC HTTPRoute, path: `/`) — nginx serving static files |
+| React UI | **Public** | AKS Gateway API (AGC HTTPRoute, path: `/`) — static file serving |
 | BFF API | **Public** | AKS Gateway API (AGC HTTPRoute, path: `/api/*`, `/hubs/*`, `/auth/*`) |
 | CRM API | **Internal only** | ClusterIP service |
 | CRM MCP | **Internal only** | ClusterIP |

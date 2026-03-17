@@ -48,7 +48,7 @@ The BFF is the sole writer/reader for conversation history in Cosmos DB. The Orc
 
 #### 5. React UI + separate BFF API
 
-The UI is a React SPA (Vite + MUI) served by nginx in its own container. The BFF is a .NET Minimal API in a separate container. React authenticates via MSAL.js (PKCE) and sends Bearer tokens to the BFF. This is the standard modern architecture — separate teams can work on frontend and backend independently.
+The UI is a React SPA (Vite + MUI) deployed as a static site in its own container. The BFF is a .NET Minimal API in a separate container. React authenticates via MSAL.js (PKCE) and sends Bearer tokens to the BFF. This is the standard modern architecture — separate teams can work on frontend and backend independently.
 
 #### 6. BFF proxies product images (most secure)
 

@@ -87,7 +87,7 @@
                 <mxCell id="orch-handoff" value="Product Agent" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" parent="aks-group" vertex="1">
                     <mxGeometry x="430" y="581.6436363636363" width="140" height="52.27272727272727" as="geometry"/>
                 </mxCell>
-                <mxCell id="orch-magentic" value="Knowledge Agent" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" parent="aks-group" vertex="1">
+                <mxCell id="orch-magentic" value="Orchestrator Agent" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" parent="aks-group" vertex="1">
                     <mxGeometry x="600" y="581.6436363636363" width="140" height="52.27272727272727" as="geometry"/>
                 </mxCell>
                 <mxCell id="mcp-knowledge" value="Knowledge (RAG)&#xa;MCP" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" parent="aks-group" vertex="1">

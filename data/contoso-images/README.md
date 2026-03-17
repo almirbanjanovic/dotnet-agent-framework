@@ -1,6 +1,6 @@
 # Product Images
 
-This folder holds product images for the Contoso Outdoors catalog. These images are uploaded to Azure Blob Storage during the seeding process and served to agents via the Product Images MCP Server.
+This folder holds product images for the Contoso Outdoors catalog. These images are uploaded to Azure Blob Storage during the seeding process and proxied to the browser through the BFF API.
 
 ## Image files
 
