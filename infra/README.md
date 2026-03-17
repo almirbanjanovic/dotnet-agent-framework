@@ -96,6 +96,18 @@ All secrets (OpenAI endpoint/key, Cosmos DB endpoint/key, deployment names) are 
 
 > **Note:** API key and Cosmos DB key outputs are for learning/dev convenience. Do not expose sensitive values via Terraform outputs in production.
 
+## Planned infrastructure updates
+
+The following changes are needed to support the full application architecture (7 containers in AKS):
+
+| Change | Details |
+|---|---|
+| **Expand identity module** | 2 → 8 managed identities: `id-bff`, `id-crm-api`, `id-crm-mcp`, `id-know-mcp`, `id-crm-agent`, `id-prod-agent`, `id-orch-agent`, `id-kubelet` |
+| **New: `rbac/search/v1/`** | Search Index Data Reader for `id-know-mcp` |
+| **Update RBAC modules** | Assign per-identity roles (Key Vault, SQL, OpenAI, Cosmos DB, Blob, Search, ACR) |
+| **New: `workload-identity/v1/`** | Federated credentials binding each identity to AKS OIDC issuer + K8s service accounts |
+| **Update Cosmos DB** | Add `conversations` container (partition key: `/sessionId`) for BFF-owned chat history |
+
 ## Module versioning
 
 Each module lives under a `v1/` folder. When a breaking change is needed, create a `v2/` alongside and migrate callers at your own pace. The old version stays in place until all references are updated.

@@ -109,9 +109,14 @@ The AI Search index is configured with:
 
 **Event Grid** triggers the indexer on new blob uploads for near-instant availability. The indexer also runs on a 5-minute schedule as a fallback.
 
-### Agent state (Agents Account — runtime only)
+### Conversation history (Cosmos DB — runtime only)
 
-The `workshop_agent_state_store` container lives in the **Agents** Cosmos DB account (Eventual consistency). It is **not seeded** — it's populated at runtime as agents have conversations. It persists conversation history and agent memory across sessions.
+The `conversations` container lives in the **Agents** Cosmos DB account (Eventual consistency). It is **not seeded** — it's populated at runtime by the BFF as users chat with agents. The BFF is the sole owner of conversation persistence. Agents are stateless — they receive conversation history in each request.
+
+- **Container:** `conversations`
+- **Partition key:** `/sessionId`
+- **Written by:** BFF (saves user messages + agent responses + tool calls)
+- **Read by:** BFF (loads history for chat panel + passes to orchestrator)
 
 ## Seeding & Indexing
 
@@ -201,7 +206,7 @@ The `.txt` files are the editable source content. The `.pdf` files are uploaded 
 | `contoso-crm/support-tickets.csv` | Azure SQL / SupportTickets | Seed tool (local-exec) |
 | `contoso-sharepoint/**/*.pdf` | Azure AI Search / `knowledge-documents` index | Terraform blob upload → AI Search indexer |
 | `contoso-images/*.png` | Azure Blob Storage / `product-images` container | Terraform blob upload |
-| (runtime) | Cosmos DB Agents / workshop_agent_state_store (`/tenant_id`, `/id`) | Agent orchestrator |
+| (runtime) | Cosmos DB Agents / conversations (`/sessionId`) | BFF (conversation history) |
 
 ## Scenario data
 
