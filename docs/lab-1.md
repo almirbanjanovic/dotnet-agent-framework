@@ -66,10 +66,11 @@ The script performs 7 phases with a confirmation gate between each:
 
 1. Go to **Actions → Terraform Plan, Approve, Apply** in your GitHub repository
 2. Click **Run workflow**, select the `dev` environment, and confirm
-3. The workflow runs in three stages:
+3. The workflow runs in four stages:
    - **Plan** — authenticates via OIDC, runs `terraform plan`, and outputs the change set
    - **Manual approval** — creates a GitHub issue for review; an approver must approve before proceeding
    - **Apply** — runs `terraform apply -auto-approve` to provision all resources
+   - **Seed Data** — seeds CRM tables from CSV via `dotnet run`, then links Entra user object IDs to the Customers table
 
 All Terraform variables are read from the GitHub environment variables that `init` configured in Lab 0.
 

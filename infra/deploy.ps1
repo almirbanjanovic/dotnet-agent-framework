@@ -35,6 +35,7 @@ function Write-Banner {
     Write-Host "  ║     4. terraform plan                                 ║" -ForegroundColor DarkCyan
     Write-Host "  ║     5. terraform apply                                ║" -ForegroundColor DarkCyan
     Write-Host "  ║     6. Seed CRM data                                  ║" -ForegroundColor DarkCyan
+    Write-Host "  ║     7. Link Entra users to Customers                  ║" -ForegroundColor DarkCyan
     Write-Host "  ║                                                       ║" -ForegroundColor DarkCyan
     Write-Host "  ╚═══════════════════════════════════════════════════════╝" -ForegroundColor DarkCyan
     Write-Host ""
@@ -338,6 +339,14 @@ foreach ($mapping in $CustomerMapping) {
         Write-Host "    ⚠ Could not read $($mapping.SecretName) from Key Vault" -ForegroundColor Yellow
     }
 }
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Lock state storage
+# ═══════════════════════════════════════════════════════════════════════════════
+
+Write-Step "Disabling public access on $StorageAccount"
+az storage account update --name $StorageAccount --resource-group $ResourceGroup --public-network-access Disabled | Out-Null
+Write-Done "Public access disabled on $StorageAccount"
 
 # ── Read Key Vault URI ────────────────────────────────────────────────────────
 $KeyVaultUri = (az keyvault show --name $KvName --query properties.vaultUri -o tsv 2>$null)

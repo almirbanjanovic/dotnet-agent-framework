@@ -64,3 +64,31 @@ jobs:
           SQL_DATABASE_NAME: ${{ steps.sql.outputs.database }}
           SQL_ADMIN_LOGIN: ${{ steps.sql.outputs.login }}
           SQL_ADMIN_PASSWORD: ${{ steps.sql.outputs.password }}
+
+      - name: Link Entra users to Customers table
+        run: |
+          KV="${{ steps.keyvault.outputs.name }}"
+          SERVER="${{ steps.sql.outputs.server }}"
+          DB="${{ steps.sql.outputs.database }}"
+          LOGIN="${{ steps.sql.outputs.login }}"
+          PASSWORD="${{ steps.sql.outputs.password }}"
+
+          declare -A CUSTOMERS=(
+            ["101"]="CUSTOMER-EMMA-ENTRA-OID"
+            ["102"]="CUSTOMER-JAMES-ENTRA-OID"
+            ["103"]="CUSTOMER-SARAH-ENTRA-OID"
+            ["104"]="CUSTOMER-DAVID-ENTRA-OID"
+            ["105"]="CUSTOMER-LISA-ENTRA-OID"
+          )
+
+          for CID in "${!CUSTOMERS[@]}"; do
+            SECRET_NAME="${CUSTOMERS[$CID]}"
+            OID=$(az keyvault secret show --vault-name "$KV" --name "$SECRET_NAME" --query value -o tsv)
+            if [ -n "$OID" ]; then
+              sqlcmd -S "tcp:${SERVER},1433" -d "$DB" -U "$LOGIN" -P "$PASSWORD" \
+                -Q "UPDATE Customers SET entra_id = '$OID' WHERE id = '$CID'" -C
+              echo "Linked customer $CID → ${OID:0:8}..."
+            else
+              echo "Warning: Could not read $SECRET_NAME from Key Vault"
+            fi
+          done
