@@ -401,7 +401,7 @@ declare -A ENV_VARS=(
     [ACR_NAME]="$(echo "acr${BASE_NAME}${GITHUB_ENV}${LOCATION}" | tr -d '-')"
     [AKS_KUBERNETES_VERSION]="1.34"
     [AKS_SYSTEM_NODE_VM_SIZE]="Standard_D4s_v5"
-    [AKS_USER_NODE_VM_SIZE]="Standard_D4s_v5"
+    [AKS_WORKLOAD_NODE_VM_SIZE]="Standard_D4s_v5"
     [AKS_AUTO_SCALING_ENABLED]="true"
     [AKS_OS_DISK_SIZE_GB]="64"
     [AKS_LOG_RETENTION_DAYS]="30"
@@ -542,7 +542,7 @@ acr_name          = "$(echo "acr${BASE_NAME}${GITHUB_ENV}${LOCATION}" | tr -d '-
 # AKS
 aks_kubernetes_version       = "1.34"
 aks_system_node_vm_size      = "Standard_D4s_v5"
-aks_user_node_vm_size        = "Standard_D4s_v5"
+aks_workload_node_vm_size    = "Standard_D4s_v5"
 aks_auto_scaling_enabled     = true
 aks_os_disk_size_gb          = 64
 aks_log_retention_days       = 30

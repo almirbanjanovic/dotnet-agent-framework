@@ -41,3 +41,9 @@ variable "tags" {
   default     = {}
 }
 
+variable "public_network_access_enabled" {
+  description = "Whether public network access is enabled for the Key Vault"
+  type        = bool
+  default     = true
+}
+

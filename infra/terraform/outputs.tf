@@ -221,6 +221,6 @@ output "entra_test_user_upns" {
 # ---------------------------------------------------------------
 
 output "tls_cert_secret_id" {
-  description = "Key Vault secret ID for the TLS certificate (used by AKS ingress)"
+  description = "Key Vault secret ID for the TLS certificate (used by AGC TLS termination)"
   value       = module.tls_cert.versionless_secret_id
 }

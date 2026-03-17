@@ -1,6 +1,6 @@
 # =============================================================================
 # TLS Certificate Module v1
-# Creates: Self-signed certificate in Key Vault for AKS ingress TLS
+# Creates: Self-signed certificate in Key Vault for AGC TLS termination
 # =============================================================================
 
 resource "azurerm_key_vault_certificate" "tls" {

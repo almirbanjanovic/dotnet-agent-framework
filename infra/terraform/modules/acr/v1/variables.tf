@@ -35,9 +35,9 @@ variable "sku" {
 }
 
 variable "admin_enabled" {
-  description = "Enable admin user on ACR"
+  description = "Enable admin user on ACR (not recommended — use RBAC instead)"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "acr_name" {
@@ -56,5 +56,11 @@ variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)
   default     = {}
+}
+
+variable "public_network_access_enabled" {
+  description = "Whether public network access is enabled for the ACR"
+  type        = bool
+  default     = true
 }
 

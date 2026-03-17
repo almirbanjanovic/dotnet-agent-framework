@@ -14,6 +14,6 @@ variable "cosmosdb_account_name" {
 }
 
 variable "principal_ids" {
-  description = "Map of logical name => principal ID to grant Cosmos DB Data Owner + Data Contributor roles"
+  description = "Map of logical name => principal ID to grant Cosmos DB Data Owner role"
   type        = map(string)
 }

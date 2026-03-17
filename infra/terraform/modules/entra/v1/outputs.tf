@@ -25,3 +25,17 @@ output "test_user_upns" {
     for key, user in azuread_user.test : key => user.user_principal_name
   }
 }
+
+output "test_user_object_ids" {
+  description = "Map of test user key → Entra object ID (used to link to SQL Customers table)"
+  value = {
+    for key, user in azuread_user.test : key => user.object_id
+  }
+}
+
+output "test_user_customer_ids" {
+  description = "Map of test user key → customer ID in SQL (from variable definition)"
+  value = {
+    for key, user in var.test_users : key => user.customer_id
+  }
+}

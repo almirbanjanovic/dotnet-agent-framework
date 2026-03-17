@@ -33,25 +33,15 @@ resource "azuread_application" "bff" {
 
   app_role {
     allowed_member_types = ["User"]
-    display_name         = "Agent User"
-    description          = "Can view customer data and chat with agents"
-    value                = "Agent.User"
-    id                   = random_uuid.role_agent_user.result
-    enabled              = true
-  }
-
-  app_role {
-    allowed_member_types = ["User"]
-    display_name         = "Data Writer"
-    description          = "Can create and update support tickets"
-    value                = "Data.Writer"
-    id                   = random_uuid.role_data_writer.result
+    display_name         = "Customer"
+    description          = "Can view own data, chat with agents, create support tickets"
+    value                = "Customer"
+    id                   = random_uuid.role_customer.result
     enabled              = true
   }
 }
 
-resource "random_uuid" "role_agent_user" {}
-resource "random_uuid" "role_data_writer" {}
+resource "random_uuid" "role_customer" {}
 
 # -----------------------------------------------------------------------------
 # Service Principal (Enterprise App)

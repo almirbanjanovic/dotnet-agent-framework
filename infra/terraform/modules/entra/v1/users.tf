@@ -59,8 +59,7 @@ locals {
 
   # Map role value → role ID from the app registration
   role_id_map = {
-    "Agent.User"  = random_uuid.role_agent_user.result
-    "Data.Writer" = random_uuid.role_data_writer.result
+    "Customer" = random_uuid.role_customer.result
   }
 }
 

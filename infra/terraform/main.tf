@@ -62,7 +62,6 @@ module "cosmosdb_agents" {
   source = "./modules/cosmosdb/v1"
 
   name_prefix         = "${var.base_name}-${var.environment}"
-  purpose             = "agents"
   location            = var.location
   resource_group_name = var.resource_group_name
   database_name       = var.cosmos_agents_database_name
@@ -153,8 +152,8 @@ module "aks" {
   system_node_vm_size = var.aks_system_node_vm_size
   system_subnet_id    = module.vnet.aks_system_subnet_id
 
-  user_node_vm_size = var.aks_user_node_vm_size
-  user_subnet_id    = module.vnet.aks_user_subnet_id
+  workload_node_vm_size = var.aks_workload_node_vm_size
+  workload_subnet_id      = module.vnet.aks_workload_subnet_id
 
   auto_scaling_enabled = var.aks_auto_scaling_enabled
   os_disk_size_gb      = var.aks_os_disk_size_gb
@@ -233,6 +232,7 @@ module "search" {
   container_name              = "sharepoint-docs"
   openai_endpoint             = module.foundry.endpoint
   openai_embedding_deployment = module.foundry.embedding_deployment_name != null ? module.foundry.embedding_deployment_name : var.embedding_model_name
+  openai_embedding_model      = var.embedding_model_name
 
   tags = var.tags
 
@@ -254,6 +254,7 @@ module "eventgrid" {
   container_name      = "sharepoint-docs"
   search_service_name = module.search.name
   search_indexer_name = module.search.indexer_name
+  search_api_key      = module.search.primary_key
 
   tags = var.tags
 
@@ -483,17 +484,24 @@ module "keyvault_secrets" {
     "IDENTITY-PROD-AGENT-CLIENT-ID" = module.identity.identities["prod_agent"].client_id
     "IDENTITY-ORCH-AGENT-CLIENT-ID" = module.identity.identities["orch_agent"].client_id
 
-    # Entra ID (React SPA authentication)
+    # Entra ID (Blazor WASM SPA authentication)
     "ENTRA-BFF-CLIENT-ID" = module.entra.bff_client_id
     "ENTRA-TENANT-ID"     = module.entra.tenant_id
     "ENTRA-BFF-HOSTNAME"  = module.agc.frontend_fqdn
 
-    # Test user passwords (for lab use)
-    "TEST-USER-EMMA-PASSWORD"  = module.entra.test_user_passwords["emma"]
-    "TEST-USER-BOB-PASSWORD"   = module.entra.test_user_passwords["bob"]
-    "TEST-USER-SARAH-PASSWORD" = module.entra.test_user_passwords["sarah"]
-    "TEST-USER-DAVE-PASSWORD"  = module.entra.test_user_passwords["dave"]
-    "TEST-USER-ADMIN-PASSWORD" = module.entra.test_user_passwords["admin"]
+    # Customer passwords (for lab use)
+    "CUSTOMER-EMMA-PASSWORD"  = module.entra.test_user_passwords["emma"]
+    "CUSTOMER-JAMES-PASSWORD" = module.entra.test_user_passwords["james"]
+    "CUSTOMER-SARAH-PASSWORD" = module.entra.test_user_passwords["sarah"]
+    "CUSTOMER-DAVID-PASSWORD" = module.entra.test_user_passwords["david"]
+    "CUSTOMER-LISA-PASSWORD"  = module.entra.test_user_passwords["lisa"]
+
+    # Customer Entra object IDs (used by deploy script to link Entra users to SQL Customers table)
+    "CUSTOMER-EMMA-ENTRA-OID"  = module.entra.test_user_object_ids["emma"]
+    "CUSTOMER-JAMES-ENTRA-OID" = module.entra.test_user_object_ids["james"]
+    "CUSTOMER-SARAH-ENTRA-OID" = module.entra.test_user_object_ids["sarah"]
+    "CUSTOMER-DAVID-ENTRA-OID" = module.entra.test_user_object_ids["david"]
+    "CUSTOMER-LISA-ENTRA-OID"  = module.entra.test_user_object_ids["lisa"]
   }
 
   depends_on = [module.rbac_keyvault]
@@ -510,13 +518,13 @@ module "entra" {
   environment = var.environment
 
   redirect_uris = [
-    "http://localhost:3000",
-    "https://${module.agc.frontend_fqdn}",
+    "https://localhost:5002/authentication/login-callback",
+    "https://${module.agc.frontend_fqdn}/authentication/login-callback",
   ]
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
-# TLS Certificate (self-signed, stored in Key Vault for AKS ingress)
+# TLS Certificate (self-signed, stored in Key Vault for AGC TLS termination)
 #--------------------------------------------------------------------------------------------------------------------------------
 
 module "tls_cert" {

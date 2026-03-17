@@ -165,7 +165,7 @@ variable "aks_system_node_vm_size" {
   type        = string
 }
 
-variable "aks_user_node_vm_size" {
+variable "aks_workload_node_vm_size" {
   description = "VM size for AKS workload node pool (application workloads)"
   type        = string
 }

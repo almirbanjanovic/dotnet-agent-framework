@@ -29,13 +29,19 @@ variable "container_name" {
 }
 
 variable "search_service_name" {
-  description = "Name of the AI Search service (for webhook URL)"
+  description = "Name of the AI Search service"
   type        = string
 }
 
 variable "search_indexer_name" {
   description = "Name of the AI Search indexer to trigger"
   type        = string
+}
+
+variable "search_api_key" {
+  description = "AI Search admin API key (used by Logic App to call indexer run API)"
+  type        = string
+  sensitive   = true
 }
 
 variable "tags" {

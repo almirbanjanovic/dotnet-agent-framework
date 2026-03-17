@@ -23,6 +23,7 @@ public static class CrmSeeder
             ("loyalty_tier", "VARCHAR(20)", false),
             ("account_status", "VARCHAR(20)", false),
             ("created_date", "DATE", false),
+            ("entra_id", "VARCHAR(36)", false),
         }),
         ["orders"] = new("Orders", "id", new[]
         {

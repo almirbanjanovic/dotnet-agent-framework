@@ -37,7 +37,7 @@ resource "azurerm_cosmosdb_account" "this" {
   }
 
   local_authentication_disabled = false
-  public_network_access_enabled = true
+  public_network_access_enabled = var.public_network_access_enabled
 
   tags = var.tags
 
@@ -66,8 +66,8 @@ resource "azurerm_cosmosdb_sql_container" "this" {
   account_name          = azurerm_cosmosdb_account.this.name
   database_name         = azurerm_cosmosdb_sql_database.this.name
   partition_key_paths   = each.value.partition_key_paths
-  partition_key_kind    = lookup(each.value, "partition_key_kind", "Hash")
-  partition_key_version = lookup(each.value, "partition_key_version", null)
+  partition_key_kind    = each.value.partition_key_kind
+  partition_key_version = each.value.partition_key_version
 
   dynamic "indexing_policy" {
     for_each = lookup(each.value, "indexing_policy", null) != null ? [each.value.indexing_policy] : []

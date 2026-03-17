@@ -67,16 +67,3 @@ resource "azurerm_storage_blob" "uploads" {
   depends_on = [azurerm_storage_container.this]
 }
 
-# -----------------------------------------------------------------------------
-# State migration — moved blocks for existing resources
-# -----------------------------------------------------------------------------
-moved {
-  from = azurerm_storage_container.this
-  to   = azurerm_storage_container.this["images"]
-}
-
-moved {
-  from = azurerm_storage_blob.images
-  to   = azurerm_storage_blob.uploads
-}
-

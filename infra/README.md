@@ -118,8 +118,8 @@ The following resources were added to support the full application architecture 
 | **8 managed identities** | `id-bff`, `id-crm-api`, `id-crm-mcp`, `id-know-mcp`, `id-crm-agent`, `id-prod-agent`, `id-orch-agent`, `id-kubelet` |
 | **`rbac/search/v1/`** | Search Index Data Reader for `id-know-mcp` |
 | **`workload-identity/v1/`** | Federated credentials binding each identity to AKS OIDC issuer + K8s service accounts |
-| **`entra/v1/`** | Entra app registration, 2 app roles (Agent.User, Data.Writer), 5 test users with random passwords, role assignments |
-| **`tls-cert/v1/`** | Self-signed TLS certificate in Key Vault for AKS ingress |
+| **`entra/v1/`** | Entra app registration, Customer app role, 5 customer test users with random passwords, role assignments |
+| **`tls-cert/v1/`** | Self-signed TLS certificate in Key Vault for AGC TLS termination |
 | **`vnet/v1/`** | Virtual Network with 3 subnets (AKS system, AKS workload, AGC) |
 | **`agc/v1/`** | App Gateway for Containers + Frontend + Subnet Association |
 | **Cosmos DB `conversations`** | New container (partition key: `/sessionId`) for BFF-owned chat history |

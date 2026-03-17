@@ -36,7 +36,7 @@ chmod +x init.sh
 The script performs 5 phases in order:
 
 | Phase | What it does |
-|:-----:|-------------|
+| :-----: | ------------- |
 | **1** | Authenticates to Azure (pick subscription) and GitHub (detect/create repo), selects environment |
 | **2** | Creates Entra app registration with service principal and OIDC federated credential for GitHub Actions |
 | **3** | Creates GitHub environment, sets repository secrets (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`) and environment variables |

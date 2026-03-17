@@ -1,6 +1,6 @@
 # =============================================================================
 # VNet Module v1
-# Creates: Virtual Network with subnets for AKS (system + user) and AGC
+# Creates: Virtual Network with subnets for AKS (system + workload) and AGC
 # =============================================================================
 
 resource "azurerm_virtual_network" "this" {
@@ -22,11 +22,11 @@ resource "azurerm_subnet" "aks_system" {
   address_prefixes     = [var.aks_system_subnet_cidr]
 }
 
-resource "azurerm_subnet" "aks_user" {
-  name                 = "snet-aks-user"
+resource "azurerm_subnet" "aks_workload" {
+  name                 = "snet-aks-workload"
   resource_group_name  = var.resource_group_name
   virtual_network_name = azurerm_virtual_network.this.name
-  address_prefixes     = [var.aks_user_subnet_cidr]
+  address_prefixes     = [var.aks_workload_subnet_cidr]
 }
 
 resource "azurerm_subnet" "agc" {

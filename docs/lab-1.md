@@ -10,31 +10,30 @@ This lab stands up the full Azure environment, validates connectivity, and seeds
 ## What gets deployed
 
 | Resource | Purpose |
-|----------|---------|
+| ---------- | --------- |
 | **Azure AI Foundry** | AI Services account with chat model (gpt-4.1) and embedding model (text-embedding-ada-002) |
 | **Azure SQL Database** | Operational CRM data (Serverless tier — customers, orders, products, etc.) |
 | **Cosmos DB** (×1 account) | Agents (state persistence) |
 | **Azure AI Search** | Knowledge base search — indexes PDFs via integrated vectorization |
-| **Event Grid** | Triggers AI Search indexer on new PDF uploads to blob storage |
+| **Event Grid** | Triggers AI Search indexer on new PDF blob uploads (via Logic App intermediary) |
 | **Storage Account** | Product images + SharePoint documents blob storage — uploaded automatically during `terraform apply` |
 | **AKS** | Kubernetes cluster for future lab deployments |
 | **ACR** | Container image registry |
 | **Key Vault** | Secrets management (endpoints, keys, deployment names) |
-| **Managed Identities** | RBAC for backend, search, and kubelet workloads |
+| **Managed Identities** | 8 per-service identities with least-privilege RBAC (bff, crm-api, crm-mcp, know-mcp, crm-agent, prod-agent, orch-agent, kubelet) |
 
 ## Step 1 — Deploy infrastructure and seed data
 
-`terraform apply` provisions all infrastructure **and** loads all data in a single step, regardless of whether you run it locally or via CI/CD:
+The deploy script provisions all infrastructure and seeds data in a single run:
 
 | What | How |
-|------|-----|
-| Azure SQL Database, Cosmos DB (agents), AI Search, Event Grid, Storage, AKS, ACR, Key Vault | Terraform resources |
-| Product images (`.png`) → `product-images` blob container | `azurerm_storage_blob` |
-| SharePoint PDFs (`.pdf`) → `sharepoint-docs` blob container | `azurerm_storage_blob` |
-| CRM data (CSV) → Azure SQL Database tables | `null_resource` + `local-exec` (runs `dotnet run src/seed-data`) |
-| PDF text extraction, chunking, embedding → AI Search index | AI Search indexer (triggered automatically after PDFs land in blob) |
-
-No separate seeding or indexing step is needed.
+| ------ | ----- |
+| Azure SQL Database, Cosmos DB (agents), AI Search, Event Grid, Storage, AKS, ACR, Key Vault | Terraform resources (phases 1–5) |
+| Product images (`.png`) → `product-images` blob container | `azurerm_storage_blob` (during terraform apply) |
+| SharePoint PDFs (`.pdf`) → `sharepoint-docs` blob container | `azurerm_storage_blob` (during terraform apply) |
+| PDF text extraction, chunking, embedding → AI Search index | AI Search indexer (triggered by Event Grid on blob upload, plus 5-min schedule fallback) |
+| CRM data (CSV) → Azure SQL Database tables | Deploy script phase 6 (runs `dotnet run` for seed-data) |
+| Entra user IDs → SQL Customers table | Deploy script phase 7 (reads object IDs from Key Vault, updates SQL) |
 
 ### Option A — Terminal
 
@@ -51,15 +50,17 @@ chmod +x deploy.sh
 ./deploy.sh
 ```
 
-The script performs 5 phases with a confirmation gate between each:
+The script performs 7 phases with a confirmation gate between each:
 
 | Phase | What it does |
-|:-----:|-------------|
+| :-----: | ------------- |
 | **1** | Re-enables public access on the state storage account (disabled after bootstrap) |
 | **2** | `terraform init` with remote backend |
 | **3** | `terraform validate` to check configuration syntax |
 | **4** | `terraform plan` to preview all changes |
-| **5** | `terraform apply` to provision resources and seed data |
+| **5** | `terraform apply` to provision resources and upload blobs |
+| **6** | Seed CRM data — reads SQL credentials from Key Vault, runs `dotnet run` for seed-data tool |
+| **7** | Link Entra users to Customers — reads Entra object IDs from Key Vault, updates `entra_id` in SQL |
 
 ### Option B — GitHub Actions
 
@@ -84,7 +85,7 @@ dotnet run -- <your-keyvault-uri>
 
 Expected output:
 
-```
+```text
   ✓ AZURE-OPENAI-ENDPOINT → AZURE_OPENAI_ENDPOINT
   ✓ AZURE-OPENAI-API-KEY → AZURE_OPENAI_API_KEY
   ✓ AZURE-OPENAI-DEPLOYMENT-NAME → AZURE_OPENAI_DEPLOYMENT_NAME
@@ -104,7 +105,7 @@ dotnet run
 
 Expected output:
 
-```
+```text
 Using Azure OpenAI endpoint: https://aif-agentic-ai-centralus-gpt-4-1.openai.azure.com/
 Deployment name: gpt-4.1
 
@@ -114,6 +115,7 @@ Agent response:
 ```
 
 If you see an error, check:
+
 - `az login` is authenticated
 - `src/appsettings.json` has non-empty values for `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT_NAME`, and `AZURE_OPENAI_API_KEY`
 - The AI Services deployment exists in the Azure portal

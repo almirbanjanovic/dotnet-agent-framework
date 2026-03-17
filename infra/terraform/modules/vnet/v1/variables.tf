@@ -30,7 +30,7 @@ variable "aks_system_subnet_cidr" {
   default     = "10.0.0.0/24"
 }
 
-variable "aks_user_subnet_cidr" {
+variable "aks_workload_subnet_cidr" {
   description = "Subnet CIDR for AKS workload node pool (application pods)"
   type        = string
   default     = "10.0.1.0/24"

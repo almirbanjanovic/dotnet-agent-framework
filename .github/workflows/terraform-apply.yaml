@@ -48,7 +48,7 @@ env:
   # AKS
   TF_VAR_aks_kubernetes_version: ${{ vars.AKS_KUBERNETES_VERSION }}
   TF_VAR_aks_system_node_vm_size: ${{ vars.AKS_SYSTEM_NODE_VM_SIZE }}
-  TF_VAR_aks_user_node_vm_size: ${{ vars.AKS_USER_NODE_VM_SIZE }}
+  TF_VAR_aks_workload_node_vm_size: ${{ vars.AKS_WORKLOAD_NODE_VM_SIZE }}
   TF_VAR_aks_auto_scaling_enabled: ${{ vars.AKS_AUTO_SCALING_ENABLED }}
   TF_VAR_aks_os_disk_size_gb: ${{ vars.AKS_OS_DISK_SIZE_GB }}
   TF_VAR_aks_log_retention_days: ${{ vars.AKS_LOG_RETENTION_DAYS }}

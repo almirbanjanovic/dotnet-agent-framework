@@ -9,43 +9,49 @@ variable "environment" {
 }
 
 variable "redirect_uris" {
-  description = "Redirect URIs for the SPA app registration (MSAL.js PKCE callback)"
+  description = "Redirect URIs for the SPA app registration (MSAL PKCE callback)"
   type        = list(string)
-  default     = ["http://localhost:3000"]
+  default     = ["https://localhost:5002/authentication/login-callback"]
 }
 
 variable "test_users" {
-  description = "Map of test users to create in Entra ID. Each user gets a random password stored in Key Vault."
+  description = "Map of customer test users to create in Entra ID. Each maps to a pre-seeded customer in Azure SQL."
   type = map(object({
     display_name  = string
     mail_nickname = string
+    customer_id   = string
     roles         = list(string)
   }))
   default = {
     emma = {
-      display_name  = "Emma CS Rep"
-      mail_nickname = "emma.csrep"
-      roles         = ["Agent.User"]
+      display_name  = "Emma Wilson"
+      mail_nickname = "emma.wilson"
+      customer_id   = "101"
+      roles         = ["Customer"]
     }
-    bob = {
-      display_name  = "Bob Senior Rep"
-      mail_nickname = "bob.senior"
-      roles         = ["Agent.User", "Data.Writer"]
+    james = {
+      display_name  = "James Chen"
+      mail_nickname = "james.chen"
+      customer_id   = "102"
+      roles         = ["Customer"]
     }
     sarah = {
-      display_name  = "Sarah Manager"
-      mail_nickname = "sarah.manager"
-      roles         = ["Agent.User", "Data.Writer"]
+      display_name  = "Sarah Miller"
+      mail_nickname = "sarah.miller"
+      customer_id   = "103"
+      roles         = ["Customer"]
     }
-    dave = {
-      display_name  = "Dave Readonly"
-      mail_nickname = "dave.readonly"
-      roles         = []
+    david = {
+      display_name  = "David Park"
+      mail_nickname = "david.park"
+      customer_id   = "104"
+      roles         = ["Customer"]
     }
-    admin = {
-      display_name  = "Admin Contoso"
-      mail_nickname = "admin.contoso"
-      roles         = ["Agent.User", "Data.Writer"]
+    lisa = {
+      display_name  = "Lisa Torres"
+      mail_nickname = "lisa.torres"
+      customer_id   = "105"
+      roles         = ["Customer"]
     }
   }
 }

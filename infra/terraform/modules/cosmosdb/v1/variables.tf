@@ -3,11 +3,6 @@ variable "name_prefix" {
   type        = string
 }
 
-variable "purpose" {
-  description = "Purpose identifier for the account (e.g., operational, knowledge, agents)"
-  type        = string
-}
-
 variable "location" {
   description = "Azure region"
   type        = string
@@ -58,4 +53,10 @@ variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)
   default     = {}
+}
+
+variable "public_network_access_enabled" {
+  description = "Whether public network access is enabled for the Cosmos DB account"
+  type        = bool
+  default     = true
 }

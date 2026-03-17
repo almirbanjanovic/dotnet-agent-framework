@@ -97,13 +97,13 @@ resource "azurerm_kubernetes_cluster" "this" {
 resource "azurerm_kubernetes_cluster_node_pool" "workload" {
   name                  = "workload"
   kubernetes_cluster_id = azurerm_kubernetes_cluster.this.id
-  vm_size               = var.user_node_vm_size
-  node_count            = var.user_node_count
+  vm_size               = var.workload_node_vm_size
+  node_count            = var.workload_node_count
   auto_scaling_enabled  = var.auto_scaling_enabled
-  min_count             = var.auto_scaling_enabled ? var.user_node_min_count : null
-  max_count             = var.auto_scaling_enabled ? var.user_node_max_count : null
+  min_count             = var.auto_scaling_enabled ? var.workload_node_min_count : null
+  max_count             = var.auto_scaling_enabled ? var.workload_node_max_count : null
   os_disk_size_gb       = var.os_disk_size_gb
-  vnet_subnet_id        = var.user_subnet_id
+  vnet_subnet_id        = var.workload_subnet_id
   mode                  = "User"
 
   upgrade_settings {

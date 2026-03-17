@@ -302,6 +302,43 @@ try {
     Pop-Location
 }
 
+Write-PhaseSummary -Number 6 -NextPhase "Phase 7 — Link Entra users to Customers table" -Items ([ordered]@{
+    "Status" = "CRM data seeded"
+})
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 7 — Link Entra user object IDs to Customers table
+# ═══════════════════════════════════════════════════════════════════════════════
+
+Write-Phase -Number 7 -Title "Link Entra users to Customers"
+
+Write-Step "Reading Entra object IDs from Key Vault"
+
+$CustomerMapping = @(
+    @{ CustomerId = "101"; SecretName = "CUSTOMER-EMMA-ENTRA-OID";  Name = "Emma Wilson" }
+    @{ CustomerId = "102"; SecretName = "CUSTOMER-JAMES-ENTRA-OID"; Name = "James Chen" }
+    @{ CustomerId = "103"; SecretName = "CUSTOMER-SARAH-ENTRA-OID"; Name = "Sarah Miller" }
+    @{ CustomerId = "104"; SecretName = "CUSTOMER-DAVID-ENTRA-OID"; Name = "David Park" }
+    @{ CustomerId = "105"; SecretName = "CUSTOMER-LISA-ENTRA-OID";  Name = "Lisa Torres" }
+)
+
+$ConnStr = "Server=tcp:${SqlFqdn},1433;Database=${SqlDb};User ID=${SqlLogin};Password=${SqlPass};Encrypt=True;TrustServerCertificate=False;"
+
+foreach ($mapping in $CustomerMapping) {
+    $oid = az keyvault secret show --vault-name $KvName --name $mapping.SecretName --query value -o tsv
+    if ($oid) {
+        $sql = "UPDATE Customers SET entra_id = @oid WHERE id = @cid"
+        Invoke-Sqlcmd -ConnectionString $ConnStr -Query $sql -Variable "oid=$oid", "cid=$($mapping.CustomerId)" -ErrorAction SilentlyContinue 2>$null
+        if (-not $?) {
+            # Fallback: use sqlcmd command-line tool
+            sqlcmd -S "tcp:${SqlFqdn},1433" -d $SqlDb -U $SqlLogin -P $SqlPass -Q "UPDATE Customers SET entra_id = '$oid' WHERE id = '$($mapping.CustomerId)'" 2>$null
+        }
+        Write-Done "$($mapping.Name) (ID $($mapping.CustomerId)) → $($oid.Substring(0,8))..."
+    } else {
+        Write-Host "    ⚠ Could not read $($mapping.SecretName) from Key Vault" -ForegroundColor Yellow
+    }
+}
+
 # ── Read Key Vault URI ────────────────────────────────────────────────────────
 $KeyVaultUri = (az keyvault show --name $KvName --query properties.vaultUri -o tsv 2>$null)
 

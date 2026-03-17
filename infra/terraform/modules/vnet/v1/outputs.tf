@@ -13,9 +13,9 @@ output "aks_system_subnet_id" {
   value       = azurerm_subnet.aks_system.id
 }
 
-output "aks_user_subnet_id" {
-  description = "Subnet ID for AKS user node pool"
-  value       = azurerm_subnet.aks_user.id
+output "aks_workload_subnet_id" {
+  description = "Subnet ID for AKS workload node pool"
+  value       = azurerm_subnet.aks_workload.id
 }
 
 output "agc_subnet_id" {

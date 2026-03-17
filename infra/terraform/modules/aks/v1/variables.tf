@@ -63,34 +63,34 @@ variable "system_subnet_id" {
 }
 
 # -----------------------------------------------------------------------------
-# User Node Pool (application workloads)
+# Workload Node Pool (application workloads)
 # -----------------------------------------------------------------------------
 
-variable "user_node_vm_size" {
-  description = "VM size for the user node pool"
+variable "workload_node_vm_size" {
+  description = "VM size for the workload node pool"
   type        = string
 }
 
-variable "user_node_count" {
-  description = "Initial node count for the user pool"
+variable "workload_node_count" {
+  description = "Initial node count for the workload pool"
   type        = number
   default     = 1
 }
 
-variable "user_node_min_count" {
-  description = "Minimum node count for user pool when auto-scaling"
+variable "workload_node_min_count" {
+  description = "Minimum node count for workload pool when auto-scaling"
   type        = number
   default     = 1
 }
 
-variable "user_node_max_count" {
-  description = "Maximum node count for user pool when auto-scaling"
+variable "workload_node_max_count" {
+  description = "Maximum node count for workload pool when auto-scaling"
   type        = number
   default     = 5
 }
 
-variable "user_subnet_id" {
-  description = "Subnet ID for user node pool (Azure CNI)"
+variable "workload_subnet_id" {
+  description = "Subnet ID for workload node pool (Azure CNI)"
   type        = string
 }
 
