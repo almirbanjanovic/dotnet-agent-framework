@@ -449,9 +449,8 @@ module "keyvault_secrets" {
     "IDENTITY-PROD-AGENT-CLIENT-ID" = module.identity.identities["prod_agent"].client_id
     "IDENTITY-ORCH-AGENT-CLIENT-ID" = module.identity.identities["orch_agent"].client_id
 
-    # Entra ID (BFF authentication)
+    # Entra ID (React SPA authentication)
     "ENTRA-BFF-CLIENT-ID"     = module.entra.bff_client_id
-    "ENTRA-BFF-CLIENT-SECRET" = module.entra.bff_client_secret
     "ENTRA-TENANT-ID"         = module.entra.tenant_id
     "ENTRA-BFF-HOSTNAME"      = local.aks_fqdn
 
@@ -477,8 +476,8 @@ module "entra" {
   environment = var.environment
 
   redirect_uris = [
-    "https://localhost:5001/signin-oidc",
-    "https://${local.aks_fqdn}/signin-oidc",
+    "http://localhost:3000",
+    "https://${local.aks_fqdn}",
   ]
 }
 

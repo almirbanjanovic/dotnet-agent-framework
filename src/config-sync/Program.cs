@@ -55,7 +55,6 @@ var secretMapping = new Dictionary<string, string>
     ["SEARCH-ADMIN-KEY"]                   = "SEARCH_ADMIN_KEY",
     ["SEARCH-INDEX-NAME"]                  = "SEARCH_INDEX_NAME",
     ["ENTRA-BFF-CLIENT-ID"]                = "AzureAd__ClientId",
-    ["ENTRA-BFF-CLIENT-SECRET"]            = "AzureAd__ClientSecret",
     ["ENTRA-TENANT-ID"]                    = "AzureAd__TenantId",
     ["ENTRA-BFF-HOSTNAME"]                 = "BFF_HOSTNAME",
 };

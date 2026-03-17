@@ -89,7 +89,7 @@ Expected output:
   ✓ AZURE-OPENAI-API-KEY → AZURE_OPENAI_API_KEY
   ✓ AZURE-OPENAI-DEPLOYMENT-NAME → AZURE_OPENAI_DEPLOYMENT_NAME
   ...
-  Wrote 17/17 secrets to .../src/appsettings.json
+  Wrote 21/21 secrets to .../src/appsettings.json
 ```
 
 ## Step 3 — Validate infrastructure

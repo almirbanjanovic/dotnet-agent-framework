@@ -1,6 +1,6 @@
 # =============================================================================
 # Entra Module v1
-# Creates: App registration, app roles, service principal, client secret
+# Creates: App registration (SPA), app roles, service principal
 # =============================================================================
 
 data "azuread_client_config" "current" {}
@@ -14,7 +14,7 @@ locals {
 }
 
 # -----------------------------------------------------------------------------
-# App Registration
+# App Registration (SPA — public client, PKCE auth, no client secret)
 # -----------------------------------------------------------------------------
 
 resource "azuread_application" "bff" {
@@ -23,12 +23,12 @@ resource "azuread_application" "bff" {
 
   sign_in_audience = "AzureADMyOrg"
 
-  web {
+  single_page_application {
     redirect_uris = var.redirect_uris
+  }
 
-    implicit_grant {
-      id_token_issuance_enabled = true
-    }
+  api {
+    requested_access_token_version = 2
   }
 
   app_role {
@@ -60,18 +60,4 @@ resource "random_uuid" "role_data_writer" {}
 resource "azuread_service_principal" "bff" {
   client_id = azuread_application.bff.client_id
   owners    = [data.azuread_client_config.current.object_id]
-}
-
-# -----------------------------------------------------------------------------
-# Client Secret
-# -----------------------------------------------------------------------------
-
-resource "azuread_application_password" "bff" {
-  application_id = azuread_application.bff.id
-  display_name   = "bff-secret-${var.environment}"
-  end_date       = timeadd(timestamp(), "8760h") # 1 year
-
-  lifecycle {
-    ignore_changes = [end_date]
-  }
 }

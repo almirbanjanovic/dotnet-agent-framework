@@ -6,7 +6,7 @@ This folder contains all .NET projects for the Contoso Outdoors agent framework.
 
 ## Configure app settings
 
-After infrastructure is deployed, run the **config-sync** tool to pull 17 secrets from Key Vault into `src/appsettings.json`. See [Lab 1 Step 2](../docs/lab-1.md#step-2--configure-app-settings) for full instructions.
+After infrastructure is deployed, run the **config-sync** tool to pull secrets from Key Vault into `src/appsettings.json`. See [Lab 1 Step 2](../docs/lab-1.md#step-2--configure-app-settings) for full instructions.
 
 > **In AKS:** Apps read the same keys from environment variables injected by Helm, so no Key Vault dependency at runtime.
 
@@ -39,7 +39,8 @@ The `appsettings.json` is shared across all projects — each references it via 
 
 | Project | Description | Connects to |
 |---|---|---|
-| `bff-api/` | Blazor Server UI + Entra auth + CRM API proxy + image proxy + chat panel + conversation history | CRM API, Orchestrator, Blob Storage, Cosmos DB |
+| `react-ui/` | React SPA (Vite + MUI + MSAL.js + SignalR). Served by nginx. | BFF API (HTTP + SignalR) |
+| `bff-api/` | BFF API (.NET Minimal API). JWT auth, CRM API proxy, image proxy, chat, conversation history. | CRM API, Orchestrator, Blob Storage, Cosmos DB |
 
 ### Dev Tools (not deployed)
 

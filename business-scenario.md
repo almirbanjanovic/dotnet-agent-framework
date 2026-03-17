@@ -18,7 +18,7 @@ Customer service agents handle requests ranging from simple product lookups to m
 | **Promotions Engine** | Active sales, discounts, and loyalty-tier-specific deals | Discount percentages, eligible categories, loyalty tier requirements |
 | **Support Tickets** | Customer support cases tied to orders | Ticket status, priority, category (shipping/product-issue/return/general) |
 | **Knowledge Base** | Guides, policies, and procedures as searchable documents | Sizing guides, care instructions, return policies, warranty info (vector-searchable via Azure AI Search) |
-| **Product Image Store** | Product photos stored in Azure Blob Storage | High-quality product images accessible via MCP tools |
+| **Product Image Store** | Product photos stored in Azure Blob Storage | High-quality product images proxied through BFF to browser (agents include `imageFilename` in markdown responses) |
 
 ## 3. Customer Scenarios
 
@@ -36,6 +36,7 @@ These scenarios are seeded into the data and have deterministic expected outcome
 2. Report the order is shipped with tracking number and estimated delivery date
 
 **Systems accessed:** Customer Database, Order Management
+**Agent route:** Orchestrator → CRM Agent
 
 ---
 
@@ -51,6 +52,7 @@ These scenarios are seeded into the data and have deterministic expected outcome
 4. Offer the boot sizing guide to help pick the right size for a replacement
 
 **Systems accessed:** Customer Database, Order Management, Knowledge Base (return policy + boot sizing guide)
+**Agent route:** Orchestrator → CRM Agent
 
 ---
 
@@ -65,7 +67,9 @@ These scenarios are seeded into the data and have deterministic expected outcome
 3. Search products in the "tents" category → show matching products with images
 4. Confirm Sarah qualifies for the promotion based on her loyalty tier
 
-**Systems accessed:** Customer Database, Promotions, Product Catalog, Product Images
+**Systems accessed:** Customer Database, Promotions, Product Catalog
+**Agent route:** Orchestrator → Product Agent
+**Note:** Product images are rendered by the React UI from the `imageFilename` field — agents do not retrieve image bytes.
 
 ---
 
@@ -81,6 +85,8 @@ These scenarios are seeded into the data and have deterministic expected outcome
 4. Explain options: replacement or refund per the return/exchange procedure
 
 **Systems accessed:** Customer Database, Order Management, Knowledge Base (warranty policy + exchange procedure), Support Tickets
+**Agent route:** Orchestrator → CRM Agent
+**Note:** Creating a support ticket requires the `Data.Writer` role.
 
 ---
 
@@ -95,9 +101,9 @@ These scenarios are seeded into the data and have deterministic expected outcome
 3. Show product images for the recommended backpacks
 4. Reference the fitting guide for torso measurement and hip belt adjustment
 
-**Systems accessed:** Product Catalog, Knowledge Base (backpack fitting guide), Product Images
-
----
+**Systems accessed:** Product Catalog, Knowledge Base (backpack fitting guide)
+**Agent route:** Orchestrator → Product Agent
+**Note:** Product images are rendered by the React UI from the `imageFilename` field.
 
 ### Scenario 6 — "How do I waterproof my tent?"
 

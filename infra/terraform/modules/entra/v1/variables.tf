@@ -9,9 +9,9 @@ variable "environment" {
 }
 
 variable "redirect_uris" {
-  description = "Redirect URIs for the BFF app registration (OpenID Connect callback)"
+  description = "Redirect URIs for the SPA app registration (MSAL.js PKCE callback)"
   type        = list(string)
-  default     = ["https://localhost:5001/signin-oidc"]
+  default     = ["http://localhost:3000"]
 }
 
 variable "test_users" {

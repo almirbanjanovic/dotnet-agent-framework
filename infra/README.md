@@ -84,13 +84,25 @@ After `terraform apply`, the following outputs are displayed:
 | `acr_login_server`           | ACR login server URL                 |
 | `aks_cluster_name`           | AKS cluster name                     |
 | `aks_oidc_issuer_url`        | OIDC issuer for workload identity    |
-| `backend_identity_client_id` | Backend workload identity client ID  |
+| `aks_fqdn`                   | AKS cluster FQDN (for ingress + Entra redirect) |
+| `bff_identity_client_id`     | BFF workload identity client ID      |
+| `crm_api_identity_client_id` | CRM API workload identity client ID  |
+| `crm_mcp_identity_client_id` | CRM MCP workload identity client ID  |
+| `know_mcp_identity_client_id`| Knowledge MCP identity client ID     |
+| `crm_agent_identity_client_id`| CRM Agent identity client ID        |
+| `prod_agent_identity_client_id`| Product Agent identity client ID   |
+| `orch_agent_identity_client_id`| Orchestrator Agent identity client ID |
 | `kubelet_identity_client_id` | Kubelet identity client ID           |
 | `keyvault_name`              | Key Vault name                       |
 | `keyvault_uri`               | Key Vault URI (for config-sync tool) |
 | `storage_images_account_name` | Product images storage account name |
 | `storage_images_blob_endpoint` | Product images blob endpoint       |
 | `storage_images_container_name` | Product images container name     |
+| `entra_bff_client_id`        | Entra app registration client ID     |
+| `entra_tenant_id`            | Entra tenant ID                      |
+| `entra_domain`               | Entra default verified domain        |
+| `entra_test_user_upns`       | Test user login emails               |
+| `tls_cert_secret_id`         | TLS cert Key Vault secret ID         |
 
 All secrets (OpenAI endpoint/key, Cosmos DB endpoint/key, deployment names) are automatically written to Key Vault by Terraform. See [Lab 1 Step 2](../docs/lab-1.md#step-2--configure-app-settings) for pulling them into local config.
 
@@ -98,7 +110,7 @@ All secrets (OpenAI endpoint/key, Cosmos DB endpoint/key, deployment names) are 
 
 ## Recent infrastructure additions
 
-The following resources were added to support the full application architecture (7 containers in AKS):
+The following resources were added to support the full application architecture (8 containers in AKS):
 
 | Addition | Details |
 |---|---|

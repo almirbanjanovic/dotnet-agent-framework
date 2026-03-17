@@ -3,12 +3,6 @@ output "bff_client_id" {
   value       = azuread_application.bff.client_id
 }
 
-output "bff_client_secret" {
-  description = "Client secret for the BFF app registration"
-  value       = azuread_application_password.bff.value
-  sensitive   = true
-}
-
 output "tenant_id" {
   description = "Entra tenant ID"
   value       = data.azuread_client_config.current.tenant_id
