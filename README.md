@@ -27,7 +27,7 @@ Each component is fully independent — own models, own Dockerfile, own Helm cha
 
 #### 1. Each agent is its own container with its own identity
 
-Following the [Microsoft Fabric](https://learn.microsoft.com/en-us/fabric/) agent model, each agent runs in its own container with its own managed identity and least-privilege RBAC. This provides blast radius isolation, independent scaling, independent deployment, and clear auditability in Azure activity logs.
+Each agent runs in its own container with its own managed identity and least-privilege RBAC. This provides blast radius isolation, independent scaling, independent deployment, and clear auditability in Azure activity logs.
 
 #### 2. One SQL database → one CRM Domain API
 
