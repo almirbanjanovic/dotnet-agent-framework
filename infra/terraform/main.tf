@@ -321,13 +321,13 @@ module "workload_identity" {
   aks_oidc_issuer_url = module.aks.oidc_issuer_url
 
   federations = {
-    bff        = { identity_id = module.identity.identities["bff"].id,        namespace = "default", service_account = "sa-bff" }
-    crm_api    = { identity_id = module.identity.identities["crm_api"].id,    namespace = "default", service_account = "sa-crm-api" }
-    crm_mcp    = { identity_id = module.identity.identities["crm_mcp"].id,    namespace = "default", service_account = "sa-crm-mcp" }
-    know_mcp   = { identity_id = module.identity.identities["know_mcp"].id,   namespace = "default", service_account = "sa-know-mcp" }
-    crm_agent  = { identity_id = module.identity.identities["crm_agent"].id,  namespace = "default", service_account = "sa-crm-agent" }
-    prod_agent = { identity_id = module.identity.identities["prod_agent"].id, namespace = "default", service_account = "sa-prod-agent" }
-    orch_agent = { identity_id = module.identity.identities["orch_agent"].id, namespace = "default", service_account = "sa-orch-agent" }
+    bff        = { identity_id = module.identity.identities["bff"].id,        namespace = var.k8s_namespace, service_account = "sa-bff" }
+    crm_api    = { identity_id = module.identity.identities["crm_api"].id,    namespace = var.k8s_namespace, service_account = "sa-crm-api" }
+    crm_mcp    = { identity_id = module.identity.identities["crm_mcp"].id,    namespace = var.k8s_namespace, service_account = "sa-crm-mcp" }
+    know_mcp   = { identity_id = module.identity.identities["know_mcp"].id,   namespace = var.k8s_namespace, service_account = "sa-know-mcp" }
+    crm_agent  = { identity_id = module.identity.identities["crm_agent"].id,  namespace = var.k8s_namespace, service_account = "sa-crm-agent" }
+    prod_agent = { identity_id = module.identity.identities["prod_agent"].id, namespace = var.k8s_namespace, service_account = "sa-prod-agent" }
+    orch_agent = { identity_id = module.identity.identities["orch_agent"].id, namespace = var.k8s_namespace, service_account = "sa-orch-agent" }
   }
 
   depends_on = [module.aks]

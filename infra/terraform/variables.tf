@@ -194,3 +194,13 @@ variable "aks_log_retention_days" {
   description = "Log Analytics workspace retention in days"
   type        = number
 }
+
+# ---------------------------------------------------------------
+# Workload Identity
+# ---------------------------------------------------------------
+
+variable "k8s_namespace" {
+  description = "Kubernetes namespace where application workloads are deployed"
+  type        = string
+  default     = "contoso"
+}
