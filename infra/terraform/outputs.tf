@@ -128,9 +128,39 @@ output "aks_oidc_issuer_url" {
 # Identities
 # ---------------------------------------------------------------
 
-output "backend_identity_client_id" {
-  description = "Client ID of the backend workload identity"
-  value       = module.identity.identities["backend"].client_id
+output "bff_identity_client_id" {
+  description = "Client ID of the BFF workload identity"
+  value       = module.identity.identities["bff"].client_id
+}
+
+output "crm_api_identity_client_id" {
+  description = "Client ID of the CRM API workload identity"
+  value       = module.identity.identities["crm_api"].client_id
+}
+
+output "crm_mcp_identity_client_id" {
+  description = "Client ID of the CRM MCP workload identity"
+  value       = module.identity.identities["crm_mcp"].client_id
+}
+
+output "know_mcp_identity_client_id" {
+  description = "Client ID of the Knowledge MCP workload identity"
+  value       = module.identity.identities["know_mcp"].client_id
+}
+
+output "crm_agent_identity_client_id" {
+  description = "Client ID of the CRM Agent workload identity"
+  value       = module.identity.identities["crm_agent"].client_id
+}
+
+output "prod_agent_identity_client_id" {
+  description = "Client ID of the Product Agent workload identity"
+  value       = module.identity.identities["prod_agent"].client_id
+}
+
+output "orch_agent_identity_client_id" {
+  description = "Client ID of the Orchestrator Agent workload identity"
+  value       = module.identity.identities["orch_agent"].client_id
 }
 
 output "kubelet_identity_client_id" {

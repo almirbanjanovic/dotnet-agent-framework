@@ -76,6 +76,10 @@ module "cosmosdb_agents" {
       partition_key_kind    = "MultiHash"
       partition_key_version = 2
     }
+    conversations = {
+      name                = "conversations"
+      partition_key_paths  = ["/sessionId"]
+    }
   }
 }
 
@@ -91,8 +95,14 @@ module "identity" {
   tags                = var.tags
 
   identities = {
-    backend = { name = "id-backend-${var.base_name}-${var.environment}-${var.location}" }
-    kubelet = { name = "id-kubelet-${var.base_name}-${var.environment}-${var.location}" }
+    bff        = { name = "id-bff-${local.name_base}-${var.location}" }
+    crm_api    = { name = "id-crm-api-${local.name_base}-${var.location}" }
+    crm_mcp    = { name = "id-crm-mcp-${local.name_base}-${var.location}" }
+    know_mcp   = { name = "id-know-mcp-${local.name_base}-${var.location}" }
+    crm_agent  = { name = "id-crm-agent-${local.name_base}-${var.location}" }
+    prod_agent = { name = "id-prod-agent-${local.name_base}-${var.location}" }
+    orch_agent = { name = "id-orch-agent-${local.name_base}-${var.location}" }
+    kubelet    = { name = "id-kubelet-${local.name_base}-${var.location}" }
   }
 }
 
@@ -224,8 +234,10 @@ module "rbac_foundry" {
   ai_services_account_id = module.foundry.account_id
 
   principal_ids = {
-    backend = module.identity.identities["backend"].principal_id
-    search  = module.search.identity_principal_id
+    crm_agent  = module.identity.identities["crm_agent"].principal_id
+    prod_agent = module.identity.identities["prod_agent"].principal_id
+    orch_agent = module.identity.identities["orch_agent"].principal_id
+    search     = module.search.identity_principal_id
   }
 }
 
@@ -241,7 +253,7 @@ module "rbac_cosmosdb_agents" {
   cosmosdb_account_name = module.cosmosdb_agents.account_name
 
   principal_ids = {
-    backend = module.identity.identities["backend"].principal_id
+    bff = module.identity.identities["bff"].principal_id
   }
 }
 
@@ -255,8 +267,8 @@ module "rbac_storage" {
   storage_account_id = module.storage_images.id
 
   principal_ids = {
-    backend = module.identity.identities["backend"].principal_id
-    search  = module.search.identity_principal_id
+    bff    = module.identity.identities["bff"].principal_id
+    search = module.search.identity_principal_id
   }
 }
 
@@ -270,7 +282,6 @@ module "rbac_acr" {
   acr_id = module.acr.id
 
   principal_ids = {
-    backend = module.identity.identities["backend"].principal_id
     kubelet = module.identity.identities["kubelet"].principal_id
   }
 }
@@ -284,6 +295,43 @@ module "rbac_aks" {
 
   resource_group_name            = var.resource_group_name
   aks_control_plane_principal_id = module.aks.control_plane_identity_principal_id
+}
+
+#--------------------------------------------------------------------------------------------------------------------------------
+# RBAC - AI Search (Search Index Data Reader)
+#--------------------------------------------------------------------------------------------------------------------------------
+
+module "rbac_search" {
+  source = "./modules/rbac/search/v1"
+
+  search_service_id = module.search.id
+
+  principal_ids = {
+    know_mcp = module.identity.identities["know_mcp"].principal_id
+  }
+}
+
+#--------------------------------------------------------------------------------------------------------------------------------
+# Workload Identity Federation (AKS OIDC → Managed Identity)
+#--------------------------------------------------------------------------------------------------------------------------------
+
+module "workload_identity" {
+  source = "./modules/workload-identity/v1"
+
+  resource_group_name = var.resource_group_name
+  aks_oidc_issuer_url = module.aks.oidc_issuer_url
+
+  federations = {
+    bff        = { identity_id = module.identity.identities["bff"].id,        namespace = "default", service_account = "sa-bff" }
+    crm_api    = { identity_id = module.identity.identities["crm_api"].id,    namespace = "default", service_account = "sa-crm-api" }
+    crm_mcp    = { identity_id = module.identity.identities["crm_mcp"].id,    namespace = "default", service_account = "sa-crm-mcp" }
+    know_mcp   = { identity_id = module.identity.identities["know_mcp"].id,   namespace = "default", service_account = "sa-know-mcp" }
+    crm_agent  = { identity_id = module.identity.identities["crm_agent"].id,  namespace = "default", service_account = "sa-crm-agent" }
+    prod_agent = { identity_id = module.identity.identities["prod_agent"].id, namespace = "default", service_account = "sa-prod-agent" }
+    orch_agent = { identity_id = module.identity.identities["orch_agent"].id, namespace = "default", service_account = "sa-orch-agent" }
+  }
+
+  depends_on = [module.aks]
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -317,8 +365,14 @@ module "rbac_keyvault" {
 
   # Secrets User: workload identities and the deployer need to read secrets
   reader_principal_ids = {
-    deployer = data.azurerm_client_config.current.object_id
-    backend  = module.identity.identities["backend"].principal_id
+    deployer   = data.azurerm_client_config.current.object_id
+    bff        = module.identity.identities["bff"].principal_id
+    crm_api    = module.identity.identities["crm_api"].principal_id
+    crm_mcp    = module.identity.identities["crm_mcp"].principal_id
+    know_mcp   = module.identity.identities["know_mcp"].principal_id
+    crm_agent  = module.identity.identities["crm_agent"].principal_id
+    prod_agent = module.identity.identities["prod_agent"].principal_id
+    orch_agent = module.identity.identities["orch_agent"].principal_id
   }
 }
 
@@ -350,6 +404,15 @@ module "keyvault_secrets" {
     "SEARCH-ENDPOINT"                   = module.search.endpoint
     "SEARCH-ADMIN-KEY"                  = module.search.primary_key
     "SEARCH-INDEX-NAME"                 = module.search.index_name
+
+    # Workload identity client IDs (used by Helm at deploy time)
+    "IDENTITY-BFF-CLIENT-ID"            = module.identity.identities["bff"].client_id
+    "IDENTITY-CRM-API-CLIENT-ID"        = module.identity.identities["crm_api"].client_id
+    "IDENTITY-CRM-MCP-CLIENT-ID"        = module.identity.identities["crm_mcp"].client_id
+    "IDENTITY-KNOW-MCP-CLIENT-ID"       = module.identity.identities["know_mcp"].client_id
+    "IDENTITY-CRM-AGENT-CLIENT-ID"      = module.identity.identities["crm_agent"].client_id
+    "IDENTITY-PROD-AGENT-CLIENT-ID"     = module.identity.identities["prod_agent"].client_id
+    "IDENTITY-ORCH-AGENT-CLIENT-ID"     = module.identity.identities["orch_agent"].client_id
   }
 
   depends_on = [module.rbac_keyvault]
