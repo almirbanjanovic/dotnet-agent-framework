@@ -84,7 +84,8 @@ After `terraform apply`, the following outputs are displayed:
 | `acr_login_server`           | ACR login server URL                 |
 | `aks_cluster_name`           | AKS cluster name                     |
 | `aks_oidc_issuer_url`        | OIDC issuer for workload identity    |
-| `aks_fqdn`                   | AKS cluster FQDN (for ingress + Entra redirect) |
+| `aks_fqdn`                   | AKS cluster FQDN                     |
+| `agc_frontend_fqdn`          | AGC frontend FQDN (for Ingress + Entra redirect URI) |
 | `bff_identity_client_id`     | BFF workload identity client ID      |
 | `crm_api_identity_client_id` | CRM API workload identity client ID  |
 | `crm_mcp_identity_client_id` | CRM MCP workload identity client ID  |
@@ -119,7 +120,7 @@ The following resources were added to support the full application architecture 
 | **`workload-identity/v1/`** | Federated credentials binding each identity to AKS OIDC issuer + K8s service accounts |
 | **`entra/v1/`** | Entra app registration, 2 app roles (Agent.User, Data.Writer), 5 test users with random passwords, role assignments |
 | **`tls-cert/v1/`** | Self-signed TLS certificate in Key Vault for AKS ingress |
-| **`vnet/v1/`** | Virtual Network with 3 subnets (AKS system, AKS user, AGC) |
+| **`vnet/v1/`** | Virtual Network with 3 subnets (AKS system, AKS workload, AGC) |
 | **`agc/v1/`** | App Gateway for Containers + Frontend + Subnet Association |
 | **Cosmos DB `conversations`** | New container (partition key: `/sessionId`) for BFF-owned chat history |
 | **Key Vault secrets** | Identity client IDs, Entra app credentials, test user passwords, AKS hostname |

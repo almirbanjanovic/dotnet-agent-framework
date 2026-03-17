@@ -123,7 +123,7 @@ If you see an error, check:
 After completing all steps, verify:
 
 - [ ] Infrastructure resources are visible in the Azure portal (or `terraform output` shows all endpoints)
-- [ ] `src/appsettings.json` has 17 non-empty values
+- [ ] `src/appsettings.json` has 21 non-empty values
 - [ ] `simple-agent` returns a joke from Azure OpenAI
 - [ ] Azure SQL Database has 6 tables with data (Customers, Orders, etc.)
 - [ ] Azure AI Search index has vectorized document chunks (check indexer status in Azure portal)

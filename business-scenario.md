@@ -174,15 +174,6 @@ Tools for searching products and checking promotions.
 | `get_promotions()` | All active promotions |
 | `get_eligible_promotions(customer_id)` | Promotions matching customer's loyalty tier |
 
-### Product Images MCP Server
-
-Tools for retrieving product photos from Azure Blob Storage.
-
-| Tool | Description |
-|------|-------------|
-| `get_product_image(product_id)` | Returns a SAS-signed URL for the product's image |
-| `list_product_images(category?)` | Browse available product images, optionally filtered by category |
-
 ### Knowledge Base MCP Server
 
 Semantic search over guides, policies, and procedures (RAG pattern).
@@ -210,7 +201,7 @@ Policy documents, guides, and procedures are uploaded to Azure Blob Storage and 
 
 ### Product Images (Azure Blob Storage)
 
-Product photos are stored in a `product-images` blob container, organized by product ID and accessible via SAS-signed URLs through the Product Images MCP Server.
+Product photos are stored in a `product-images` blob container. The BFF proxies image bytes to the browser — no direct storage URL is exposed. Agents reference images by including the `imageFilename` from product data in their markdown responses.
 
 ## 6. Knowledge Base Documents
 

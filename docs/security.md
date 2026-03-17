@@ -41,7 +41,7 @@ Terraform creates a **SPA (public client)** app registration:
 | Display name | `app-{base_name}-bff-{environment}` |
 | Type | Single-page application (public client) |
 | Sign-in audience | AzureADMyOrg (single tenant) |
-| Redirect URIs | `http://localhost:3000` (dev), `https://{aks-fqdn}` (AKS) |
+| Redirect URIs | `http://localhost:3000` (dev), `https://{agc-frontend-fqdn}` (AKS) |
 | Client secret | **None** (SPA uses PKCE, not secrets) |
 | Token version | v2 |
 
@@ -240,7 +240,7 @@ All secrets, credentials, and identity client IDs are stored in Azure Key Vault:
 Key Vault RBAC:
 - **Secrets Officer** → Terraform deployer (writes secrets during `terraform apply`)
 - **Secrets User** → all 7 workload identities + deployer (reads secrets at startup)
-- **Certificate User** → AKS Web App Routing identity (reads TLS cert for ingress)
+- **Certificate User** → Reserved for AGC TLS integration (reads TLS cert for ingress)
 
 ## Terraform Resources
 
