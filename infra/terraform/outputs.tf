@@ -125,8 +125,13 @@ output "aks_oidc_issuer_url" {
 }
 
 output "aks_fqdn" {
-  description = "AKS cluster FQDN (for ingress and Entra redirect URI)"
-  value       = local.aks_fqdn
+  description = "AKS cluster FQDN"
+  value       = module.aks.fqdn
+}
+
+output "agc_frontend_fqdn" {
+  description = "App Gateway for Containers frontend FQDN (for Ingress + Entra redirect URI)"
+  value       = module.agc.frontend_fqdn
 }
 
 # ---------------------------------------------------------------

@@ -195,8 +195,8 @@ Manifests are in `infra/terraform/manifests/` and applied via `kubectl_manifest`
 
 | Service | Exposure | How |
 |---|---|---|
-| React UI | **Public** | AKS Ingress (path: `/`) — nginx serving static files |
-| BFF API | **Public** | AKS Ingress (path: `/api/*`, `/hubs/*`, `/auth/*`) |
+| React UI | **Public** | AKS Gateway API (AGC HTTPRoute, path: `/`) — nginx serving static files |
+| BFF API | **Public** | AKS Gateway API (AGC HTTPRoute, path: `/api/*`, `/hubs/*`, `/auth/*`) |
 | CRM API | **Internal only** | ClusterIP service |
 | CRM MCP | **Internal only** | ClusterIP |
 | Knowledge MCP | **Internal only** | ClusterIP |
@@ -204,11 +204,11 @@ Manifests are in `infra/terraform/manifests/` and applied via `kubectl_manifest`
 | Product Agent | **Internal only** | ClusterIP |
 | Orchestrator Agent | **Internal only** | ClusterIP |
 
-Only the BFF is publicly accessible. All other services are internal to the AKS cluster. The BFF acts as the security perimeter — it validates every user request before forwarding to internal services.
+Only the React UI and BFF API are publicly accessible (via path-based Ingress routing on the same hostname). All other services are internal to the AKS cluster. The BFF acts as the security perimeter — it validates every user request before forwarding to internal services. The React UI serves static files only (no server-side logic, no secrets).
 
 ### TLS
 
-A self-signed TLS certificate is stored in Key Vault and used by the AKS Web App Routing addon for HTTPS termination at the ingress. The certificate's CN and SAN match the AKS cluster FQDN.
+A self-signed TLS certificate is stored in Key Vault and referenced by the Gateway API TLS configuration. The certificate's CN and SAN match the App Gateway for Containers frontend FQDN.
 
 ## Image Security
 

@@ -1,6 +1,6 @@
 # =============================================================================
 # AKS Module v1
-# Creates: Log Analytics workspace, AKS cluster with user-assigned identity
+# Creates: Log Analytics workspace, AKS cluster (Azure CNI) with system + user node pools
 # =============================================================================
 
 locals {
@@ -31,7 +31,7 @@ resource "azurerm_user_assigned_identity" "aks" {
 }
 
 # -----------------------------------------------------------------------------
-# AKS Cluster
+# AKS Cluster (Azure CNI, system node pool only)
 # -----------------------------------------------------------------------------
 resource "azurerm_kubernetes_cluster" "this" {
   name                = local.cluster_name
@@ -41,19 +41,28 @@ resource "azurerm_kubernetes_cluster" "this" {
   kubernetes_version  = var.kubernetes_version
 
   default_node_pool {
-    name                 = "system"
-    vm_size              = var.node_vm_size
-    node_count           = var.node_count
-    auto_scaling_enabled = var.auto_scaling_enabled
-    min_count            = var.auto_scaling_enabled ? var.node_min_count : null
-    max_count            = var.auto_scaling_enabled ? var.node_max_count : null
-    os_disk_size_gb      = var.os_disk_size_gb
+    name                         = "system"
+    vm_size                      = var.system_node_vm_size
+    node_count                   = var.system_node_count
+    auto_scaling_enabled         = var.auto_scaling_enabled
+    min_count                    = var.auto_scaling_enabled ? var.system_node_min_count : null
+    max_count                    = var.auto_scaling_enabled ? var.system_node_max_count : null
+    os_disk_size_gb              = var.os_disk_size_gb
+    vnet_subnet_id               = var.system_subnet_id
+    only_critical_addons_enabled = true
 
     upgrade_settings {
       drain_timeout_in_minutes      = 0
       max_surge                     = "10%"
       node_soak_duration_in_minutes = 0
     }
+  }
+
+  network_profile {
+    network_plugin = "azure"
+    network_policy = "azure"
+    service_cidr   = var.service_cidr
+    dns_service_ip = var.dns_service_ip
   }
 
   identity {
@@ -71,10 +80,6 @@ resource "azurerm_kubernetes_cluster" "this" {
   oidc_issuer_enabled       = var.oidc_issuer_enabled
   workload_identity_enabled = var.workload_identity_enabled
 
-  web_app_routing {
-    dns_zone_ids = []
-  }
-
   oms_agent {
     log_analytics_workspace_id = azurerm_log_analytics_workspace.this.id
   }
@@ -84,5 +89,29 @@ resource "azurerm_kubernetes_cluster" "this" {
   lifecycle {
     ignore_changes = [tags]
   }
+}
+
+# -----------------------------------------------------------------------------
+# Workload Node Pool (application pods — all app containers run here)
+# -----------------------------------------------------------------------------
+resource "azurerm_kubernetes_cluster_node_pool" "workload" {
+  name                  = "workload"
+  kubernetes_cluster_id = azurerm_kubernetes_cluster.this.id
+  vm_size               = var.user_node_vm_size
+  node_count            = var.user_node_count
+  auto_scaling_enabled  = var.auto_scaling_enabled
+  min_count             = var.auto_scaling_enabled ? var.user_node_min_count : null
+  max_count             = var.auto_scaling_enabled ? var.user_node_max_count : null
+  os_disk_size_gb       = var.os_disk_size_gb
+  vnet_subnet_id        = var.user_subnet_id
+  mode                  = "User"
+
+  upgrade_settings {
+    drain_timeout_in_minutes      = 0
+    max_surge                     = "10%"
+    node_soak_duration_in_minutes = 0
+  }
+
+  tags = var.tags
 }
 

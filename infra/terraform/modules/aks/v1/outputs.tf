@@ -52,11 +52,6 @@ output "fqdn" {
   value       = azurerm_kubernetes_cluster.this.fqdn
 }
 
-output "web_app_routing_identity" {
-  description = "Object ID of the Web App Routing managed identity (for Key Vault access)"
-  value       = azurerm_kubernetes_cluster.this.web_app_routing[0].web_app_routing_identity[0].object_id
-}
-
 output "node_resource_group" {
   description = "Auto-generated resource group for AKS node resources"
   value       = azurerm_kubernetes_cluster.this.node_resource_group

@@ -7,9 +7,7 @@ data "azurerm_client_config" "current" {}
 locals {
   # Each module composes: {prefix}-{base_name}-{environment}-{location}
   # These two values are passed separately to every module.
-  name_base      = "${var.base_name}-${var.environment}"
-  aks_dns_prefix = "aks-${var.base_name}-${var.environment}-${var.location}"
-  aks_fqdn       = "${local.aks_dns_prefix}.${var.location}.cloudapp.azure.com"
+  name_base = "${var.base_name}-${var.environment}"
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -109,6 +107,20 @@ module "identity" {
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
+# Virtual Network
+#--------------------------------------------------------------------------------------------------------------------------------
+
+module "vnet" {
+  source = "./modules/vnet/v1"
+
+  base_name           = var.base_name
+  environment         = var.environment
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  tags                = var.tags
+}
+
+#--------------------------------------------------------------------------------------------------------------------------------
 # Azure Container Registry
 #--------------------------------------------------------------------------------------------------------------------------------
 
@@ -126,22 +138,25 @@ module "acr" {
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
-# AKS
+# AKS (Azure CNI, system + user node pools)
 #--------------------------------------------------------------------------------------------------------------------------------
 
 module "aks" {
   source = "./modules/aks/v1"
 
-  base_name            = var.base_name
-  environment          = var.environment
-  location             = var.location
-  resource_group_name  = var.resource_group_name
-  kubernetes_version   = var.aks_kubernetes_version
-  node_vm_size         = var.aks_node_vm_size
-  node_count           = var.aks_node_count
+  base_name           = var.base_name
+  environment         = var.environment
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  kubernetes_version  = var.aks_kubernetes_version
+
+  system_node_vm_size = var.aks_system_node_vm_size
+  system_subnet_id    = module.vnet.aks_system_subnet_id
+
+  user_node_vm_size = var.aks_user_node_vm_size
+  user_subnet_id    = module.vnet.aks_user_subnet_id
+
   auto_scaling_enabled = var.aks_auto_scaling_enabled
-  node_min_count       = var.aks_node_min_count
-  node_max_count       = var.aks_node_max_count
   os_disk_size_gb      = var.aks_os_disk_size_gb
   log_retention_days   = var.aks_log_retention_days
 
@@ -150,6 +165,25 @@ module "aks" {
   kubelet_identity_resource_id = module.identity.identities["kubelet"].id
 
   tags = var.tags
+
+  depends_on = [module.vnet]
+}
+
+#--------------------------------------------------------------------------------------------------------------------------------
+# App Gateway for Containers (AGC)
+#--------------------------------------------------------------------------------------------------------------------------------
+
+module "agc" {
+  source = "./modules/agc/v1"
+
+  base_name           = var.base_name
+  environment         = var.environment
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  subnet_id           = module.vnet.agc_subnet_id
+  tags                = var.tags
+
+  depends_on = [module.vnet]
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -450,9 +484,9 @@ module "keyvault_secrets" {
     "IDENTITY-ORCH-AGENT-CLIENT-ID" = module.identity.identities["orch_agent"].client_id
 
     # Entra ID (React SPA authentication)
-    "ENTRA-BFF-CLIENT-ID"     = module.entra.bff_client_id
-    "ENTRA-TENANT-ID"         = module.entra.tenant_id
-    "ENTRA-BFF-HOSTNAME"      = local.aks_fqdn
+    "ENTRA-BFF-CLIENT-ID" = module.entra.bff_client_id
+    "ENTRA-TENANT-ID"     = module.entra.tenant_id
+    "ENTRA-BFF-HOSTNAME"  = module.agc.frontend_fqdn
 
     # Test user passwords (for lab use)
     "TEST-USER-EMMA-PASSWORD"  = module.entra.test_user_passwords["emma"]
@@ -477,7 +511,7 @@ module "entra" {
 
   redirect_uris = [
     "http://localhost:3000",
-    "https://${local.aks_fqdn}",
+    "https://${module.agc.frontend_fqdn}",
   ]
 }
 
@@ -490,25 +524,8 @@ module "tls_cert" {
 
   cert_name    = "tls-bff-${var.environment}"
   key_vault_id = module.keyvault.id
-  common_name  = local.aks_fqdn
-  dns_names    = [local.aks_fqdn]
+  common_name  = module.agc.frontend_fqdn
+  dns_names    = [module.agc.frontend_fqdn]
 
   depends_on = [module.rbac_keyvault]
-}
-
-#--------------------------------------------------------------------------------------------------------------------------------
-# RBAC - Key Vault (Certificates + Secrets for Web App Routing)
-# Web App Routing needs to read the TLS cert from Key Vault
-#--------------------------------------------------------------------------------------------------------------------------------
-
-resource "azurerm_role_assignment" "web_app_routing_kv_secrets" {
-  scope                = module.keyvault.id
-  role_definition_name = "Key Vault Secrets User"
-  principal_id         = module.aks.web_app_routing_identity
-}
-
-resource "azurerm_role_assignment" "web_app_routing_kv_certs" {
-  scope                = module.keyvault.id
-  role_definition_name = "Key Vault Certificate User"
-  principal_id         = module.aks.web_app_routing_identity
 }

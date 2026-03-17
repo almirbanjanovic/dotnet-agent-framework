@@ -160,29 +160,19 @@ variable "aks_kubernetes_version" {
   type        = string
 }
 
-variable "aks_node_vm_size" {
-  description = "VM size for AKS default node pool"
+variable "aks_system_node_vm_size" {
+  description = "VM size for AKS system node pool"
   type        = string
 }
 
-variable "aks_node_count" {
-  description = "Initial node count"
-  type        = number
+variable "aks_user_node_vm_size" {
+  description = "VM size for AKS user node pool (application workloads)"
+  type        = string
 }
 
 variable "aks_auto_scaling_enabled" {
   description = "Enable cluster auto-scaler"
   type        = bool
-}
-
-variable "aks_node_min_count" {
-  description = "Minimum node count when auto-scaling"
-  type        = number
-}
-
-variable "aks_node_max_count" {
-  description = "Maximum node count when auto-scaling"
-  type        = number
 }
 
 variable "aks_os_disk_size_gb" {
