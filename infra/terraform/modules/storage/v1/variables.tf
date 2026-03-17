@@ -37,13 +37,10 @@ variable "allow_public_access" {
 }
 
 variable "containers" {
-  description = "Map of containers to create. Each entry creates a blob container and optionally uploads files."
+  description = "Map of containers to create. Each entry creates a blob container."
   type = map(object({
-    name                = string
-    access_type         = optional(string, "private")
-    upload_source_path  = optional(string, "")
-    upload_file_pattern = optional(string, "*.png")
-    upload_content_type = optional(string, "image/png")
+    name        = string
+    access_type = optional(string, "private")
   }))
 }
 

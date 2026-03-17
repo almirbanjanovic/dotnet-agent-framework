@@ -25,11 +25,21 @@ output "identity_principal_id" {
 }
 
 output "indexer_name" {
-  description = "Name of the blob indexer"
-  value       = azapi_resource.search_indexer.name
+  description = "Name of the blob indexer (created in root main.tf after RBAC)"
+  value       = "blob-indexer"
 }
 
 output "index_name" {
   description = "Name of the search index"
   value       = var.index_name
+}
+
+output "data_source_name" {
+  description = "Name of the blob data source"
+  value       = azapi_resource.search_data_source.name
+}
+
+output "skillset_name" {
+  description = "Name of the vectorize skillset"
+  value       = azapi_resource.search_skillset.name
 }

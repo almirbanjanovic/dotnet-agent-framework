@@ -1,24 +1,12 @@
 # =============================================================================
 # Azure Storage Account Module v1
-# Creates: Storage Account + N Blob Containers + uploads files per container
+# Creates: Storage Account + N Blob Containers (control plane only)
+# Blob uploads are handled by the storage-uploads module (data plane).
 # =============================================================================
 
 locals {
   # Storage account names: 3-24 chars, lowercase alphanumeric only
   storage_account_name = substr(replace("st${var.base_name}${var.environment}${var.location}", "-", ""), 0, 24)
-
-  # Flatten containers × files into a single map for blob uploads
-  blob_uploads = merge([
-    for key, container in var.containers : {
-      for file in(container.upload_source_path != "" ? fileset(container.upload_source_path, container.upload_file_pattern) : []) :
-      "${key}/${file}" => {
-        container_name = container.name
-        file_name      = file
-        source_path    = "${container.upload_source_path}/${file}"
-        content_type   = container.upload_content_type
-      }
-    }
-  ]...)
 }
 
 # -----------------------------------------------------------------------------
@@ -49,21 +37,5 @@ resource "azurerm_storage_container" "this" {
   name                  = each.value.name
   storage_account_id    = azurerm_storage_account.this.id
   container_access_type = each.value.access_type
-}
-
-# -----------------------------------------------------------------------------
-# Upload files (flattened across all containers)
-# -----------------------------------------------------------------------------
-resource "azurerm_storage_blob" "uploads" {
-  for_each = local.blob_uploads
-
-  name                   = each.value.file_name
-  storage_account_name   = azurerm_storage_account.this.name
-  storage_container_name = each.value.container_name
-  type                   = "Block"
-  source                 = each.value.source_path
-  content_type           = each.value.content_type
-
-  depends_on = [azurerm_storage_container.this]
 }
 

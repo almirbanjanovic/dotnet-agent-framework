@@ -153,7 +153,7 @@ module "aks" {
   system_subnet_id    = module.vnet.aks_system_subnet_id
 
   workload_node_vm_size = var.aks_workload_node_vm_size
-  workload_subnet_id      = module.vnet.aks_workload_subnet_id
+  workload_subnet_id    = module.vnet.aks_workload_subnet_id
 
   auto_scaling_enabled = var.aks_auto_scaling_enabled
   os_disk_size_gb      = var.aks_os_disk_size_gb
@@ -199,19 +199,37 @@ module "storage_images" {
   tags                = var.tags
 
   containers = {
+    images          = { name = "product-images" }
+    sharepoint_docs = { name = "sharepoint-docs" }
+  }
+}
+
+#--------------------------------------------------------------------------------------------------------------------------------
+# Storage Uploads — Product Images + SharePoint Documents (data plane)
+# Separate from storage account creation so uploads can be ordered independently.
+#--------------------------------------------------------------------------------------------------------------------------------
+
+module "storage_uploads" {
+  source = "./modules/storage-uploads/v1"
+
+  storage_account_name = module.storage_images.name
+
+  uploads = {
     images = {
-      name                = "product-images"
-      upload_source_path  = "${path.module}/../../data/contoso-images"
-      upload_file_pattern = "*.png"
-      upload_content_type = "image/png"
+      container_name = "product-images"
+      source_path    = "${path.module}/../../data/contoso-images"
+      file_pattern   = "*.png"
+      content_type   = "image/png"
     }
     sharepoint_docs = {
-      name                = "sharepoint-docs"
-      upload_source_path  = "${path.module}/../../data/contoso-sharepoint"
-      upload_file_pattern = "**/*.pdf"
-      upload_content_type = "application/pdf"
+      container_name = "sharepoint-docs"
+      source_path    = "${path.module}/../../data/contoso-sharepoint"
+      file_pattern   = "**/*.pdf"
+      content_type   = "application/pdf"
     }
   }
+
+  depends_on = [module.storage_images]
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -253,12 +271,12 @@ module "eventgrid" {
   storage_account_id  = module.storage_images.id
   container_name      = "sharepoint-docs"
   search_service_name = module.search.name
-  search_indexer_name = module.search.indexer_name
+  search_indexer_name = azapi_resource.search_indexer.name
   search_api_key      = module.search.primary_key
 
   tags = var.tags
 
-  depends_on = [module.search]
+  depends_on = [azapi_resource.search_indexer]
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -346,6 +364,54 @@ module "rbac_search" {
   principal_ids = {
     know_mcp = module.identity.identities["know_mcp"].principal_id
   }
+}
+
+#--------------------------------------------------------------------------------------------------------------------------------
+# AI Search Indexer — Created AFTER RBAC so the search identity can access Storage + OpenAI
+#
+# Why this is separate from the search module:
+# The indexer runs immediately on creation (and every 5 minutes). It needs:
+# 1. RBAC in place — Storage Blob Data Reader + Cognitive Services OpenAI User
+# 2. Blobs uploaded — so the first run indexes all existing PDFs, not an empty container
+# Moving it here lets us enforce: storage uploads + RBAC → indexer.
+#--------------------------------------------------------------------------------------------------------------------------------
+
+resource "azapi_resource" "search_indexer" {
+  type      = "Microsoft.Search/searchServices/indexers@2024-07-01"
+  name      = "blob-indexer"
+  parent_id = module.search.id
+
+  body = {
+    properties = {
+      dataSourceName  = module.search.data_source_name
+      targetIndexName = module.search.index_name
+      skillsetName    = module.search.skillset_name
+      schedule = {
+        interval = "PT5M"
+      }
+      parameters = {
+        configuration = {
+          dataToExtract = "contentAndMetadata"
+          parsingMode   = "default"
+          imageAction   = "none"
+        }
+      }
+      fieldMappings = [
+        {
+          sourceFieldName = "metadata_storage_path"
+          targetFieldName = "source_file"
+        }
+      ]
+    }
+  }
+
+  schema_validation_enabled = false
+
+  depends_on = [
+    module.rbac_storage,
+    module.rbac_foundry,
+    module.storage_uploads,
+  ]
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
