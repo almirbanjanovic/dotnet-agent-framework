@@ -45,13 +45,15 @@ module "foundry" {
 module "sql" {
   source = "./modules/sql/v1"
 
-  base_name           = var.base_name
-  environment         = var.environment
-  location            = var.location
-  resource_group_name = var.resource_group_name
-  database_name       = var.sql_database_name
-  admin_login         = var.sql_admin_login
-  tags                = var.tags
+  base_name               = var.base_name
+  environment             = var.environment
+  location                = var.location
+  resource_group_name     = var.resource_group_name
+  database_name           = var.sql_database_name
+  admin_login             = var.sql_admin_login
+  tenant_id               = data.azurerm_client_config.current.tenant_id
+  entra_admin_object_id   = data.azurerm_client_config.current.object_id
+  tags                    = var.tags
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -193,6 +195,7 @@ module "storage_images" {
   source = "./modules/storage/v1"
 
   base_name           = var.base_name
+  purpose             = "data"
   environment         = var.environment
   resource_group_name = var.resource_group_name
   location            = var.location

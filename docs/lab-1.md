@@ -135,4 +135,4 @@ After completing all steps, verify:
 
 ## What's next
 
-Lab 1 is complete. Your Azure environment is fully provisioned, validated, and seeded. Future labs will build on this foundation to create domain APIs, MCP servers, and agent orchestrations.
+Lab 1 is complete. Your Azure environment is fully provisioned, validated, and seeded. Future labs will build on this foundation to create .NET Minimal APIs, MCP servers, and agent orchestrations.

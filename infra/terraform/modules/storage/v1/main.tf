@@ -6,7 +6,8 @@
 
 locals {
   # Storage account names: 3-24 chars, lowercase alphanumeric only
-  storage_account_name = substr(replace("st${var.base_name}${var.environment}${var.location}", "-", ""), 0, 24)
+  # Includes purpose suffix to avoid collision with Terraform state storage account
+  storage_account_name = substr(replace("st${var.base_name}${var.purpose}${var.environment}${var.location}", "-", ""), 0, 24)
 }
 
 # -----------------------------------------------------------------------------

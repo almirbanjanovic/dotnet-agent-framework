@@ -31,7 +31,14 @@ resource "azurerm_mssql_server" "this" {
   administrator_login          = var.admin_login
   administrator_login_password = random_password.sql_admin.result
 
-  minimum_tls_version = "1.2"
+  minimum_tls_version          = "1.2"
+  public_network_access_enabled = true
+
+  azuread_administrator {
+    login_username = var.entra_admin_login
+    object_id      = var.entra_admin_object_id
+    tenant_id      = var.tenant_id
+  }
 
   tags = var.tags
 

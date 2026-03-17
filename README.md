@@ -14,7 +14,7 @@
 | --- | --- | --- | --- | --- |
 | **Blazor WASM UI** | SPA (.NET, MudBlazor) | User interface, MSAL auth, chat panel, SignalR streaming | BFF API (HTTP + SignalR) | *(none)* |
 | **BFF API** | .NET Minimal API | JWT validation, CRM API proxy, image proxy (blob bytes), chat, conversation persistence | CRM API, Orchestrator, Blob Storage, Cosmos DB | `id-bff` |
-| **CRM API** | Domain API | All SQL data: customers, orders, products, promotions, support tickets (11 endpoints) | Azure SQL | `id-crm-api` |
+| **CRM API** | .NET Minimal API | All SQL data: customers, orders, products, promotions, support tickets (11 endpoints) | Azure SQL | `id-crm-api` |
 | **CRM MCP** | MCP Server | 10 tools wrapping all CRM API endpoints | CRM API (HTTP) | `id-crm-mcp` |
 | **Knowledge MCP** | MCP Server | 1 tool: `search_knowledge_base` | AI Search (SDK direct) | `id-know-mcp` |
 | **CRM Agent** | Agent | CRM specialist: customers, orders, billing, tickets, policies | CRM MCP + Knowledge MCP, Azure OpenAI | `id-crm-agt` |

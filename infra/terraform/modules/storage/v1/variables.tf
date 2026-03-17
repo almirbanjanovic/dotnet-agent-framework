@@ -3,6 +3,13 @@ variable "base_name" {
   description = "Project base name for resource naming"
   type        = string
 }
+
+variable "purpose" {
+  description = "Purpose suffix for storage account name (e.g., data, img) to avoid naming collisions"
+  type        = string
+  default     = ""
+}
+
 variable "environment" {
   description = "Environment name used in resource naming (e.g., dotnetagent-dev)"
   type        = string

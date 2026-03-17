@@ -36,3 +36,19 @@ variable "tags" {
   default     = {}
 }
 
+variable "tenant_id" {
+  description = "Azure AD tenant ID for Entra administrator"
+  type        = string
+}
+
+variable "entra_admin_login" {
+  description = "Display name for the Azure AD administrator"
+  type        = string
+  default     = "SQL Entra Admin"
+}
+
+variable "entra_admin_object_id" {
+  description = "Object ID of the Azure AD user or group to set as SQL admin"
+  type        = string
+}
+
