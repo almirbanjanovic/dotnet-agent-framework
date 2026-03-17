@@ -50,7 +50,6 @@ var secretMapping = new Dictionary<string, string>
     ["STORAGE-IMAGES-ENDPOINT"]            = "STORAGE_IMAGES_ENDPOINT",
     ["STORAGE-IMAGES-ACCOUNT-NAME"]        = "STORAGE_IMAGES_ACCOUNT_NAME",
     ["STORAGE-IMAGES-CONTAINER"]           = "STORAGE_IMAGES_CONTAINER",
-    ["STORAGE-IMAGES-KEY"]                 = "STORAGE_IMAGES_KEY",
     ["SEARCH-ENDPOINT"]                    = "SEARCH_ENDPOINT",
     ["SEARCH-ADMIN-KEY"]                   = "SEARCH_ADMIN_KEY",
     ["SEARCH-INDEX-NAME"]                  = "SEARCH_INDEX_NAME",

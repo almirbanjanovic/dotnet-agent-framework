@@ -159,6 +159,25 @@ Write-Host "    Location:        " -NoNewLine; Write-Host "$Location" -Foregroun
 Write-Host ""
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# PRE-FLIGHT — Clean up soft-deleted resources from previous runs
+# ═══════════════════════════════════════════════════════════════════════════════
+
+Write-Step "Checking for soft-deleted Cognitive Services accounts"
+$softDeleted = az cognitiveservices account list-deleted --query "[?contains(id, '$ResourceGroup')].[name]" -o tsv 2>$null
+if ($softDeleted) {
+    foreach ($acctName in $softDeleted -split "`n") {
+        $acctName = $acctName.Trim()
+        if ($acctName) {
+            Write-Host "    Purging soft-deleted account: $acctName" -ForegroundColor Yellow
+            az cognitiveservices account purge --location $Location --resource-group $ResourceGroup --name $acctName 2>$null
+            Write-Done "Purged $acctName"
+        }
+    }
+} else {
+    Write-Done "No soft-deleted Cognitive Services accounts found"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 1 — Unlock state storage
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -193,6 +212,36 @@ try {
     cmd /c "terraform init -upgrade -reconfigure -backend-config=backend.hcl"
     if ($LASTEXITCODE -ne 0) { throw "terraform init failed" }
     Write-Done "Terraform initialized"
+} finally {
+    Pop-Location
+}
+
+# ── Import existing Entra users into state (idempotent) ──────────────────────
+Write-Step "Importing existing Entra users into Terraform state (if needed)"
+$domain = az ad signed-in-user show --query userPrincipalName -o tsv 2>$null | ForEach-Object { $_ -replace '^[^@]+@', '' }
+$userMap = @{
+    emma  = "emma.wilson"
+    james = "james.chen"
+    sarah = "sarah.miller"
+    david = "david.park"
+    lisa  = "lisa.torres"
+}
+
+Push-Location $TerraformDir
+try {
+    foreach ($key in $userMap.Keys) {
+        $upn = "$($userMap[$key])@$domain"
+        # Check if already in state
+        $inState = terraform state list "module.entra.azuread_user.test[`"$key`"]" 2>$null
+        if (-not $inState) {
+            $oid = az ad user show --id $upn --query id -o tsv 2>$null
+            if ($oid) {
+                Write-Host "    Importing $upn → state" -ForegroundColor DarkGray
+                terraform import "module.entra.azuread_user.test[`"$key`"]" $oid 2>$null | Out-Null
+            }
+        }
+    }
+    Write-Done "Entra users synced with state"
 } finally {
     Pop-Location
 }

@@ -3,6 +3,11 @@ variable "storage_account_name" {
   type        = string
 }
 
+variable "storage_account_id" {
+  description = "Resource ID of the storage account (used for RBAC assignment)"
+  type        = string
+}
+
 variable "uploads" {
   description = "Map of upload configurations. Each entry uploads files matching file_pattern from source_path into the named container."
   type = map(object({

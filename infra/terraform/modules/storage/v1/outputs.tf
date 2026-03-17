@@ -13,12 +13,6 @@ output "primary_blob_endpoint" {
   value       = azurerm_storage_account.this.primary_blob_endpoint
 }
 
-output "primary_access_key" {
-  description = "Primary access key"
-  value       = azurerm_storage_account.this.primary_access_key
-  sensitive   = true
-}
-
 output "container_names" {
   description = "Map of logical key => blob container name"
   value       = { for k, v in azurerm_storage_container.this : k => v.name }

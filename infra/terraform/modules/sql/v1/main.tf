@@ -31,7 +31,7 @@ resource "azurerm_mssql_server" "this" {
   administrator_login          = var.admin_login
   administrator_login_password = random_password.sql_admin.result
 
-  minimum_tls_version          = "1.2"
+  minimum_tls_version           = "1.2"
   public_network_access_enabled = true
 
   azuread_administrator {

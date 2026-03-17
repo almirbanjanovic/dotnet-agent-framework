@@ -21,6 +21,8 @@ resource "azurerm_storage_account" "this" {
   account_replication_type = var.replication_type
 
   allow_nested_items_to_be_public = var.allow_public_access
+  shared_access_key_enabled       = false
+  default_to_oauth_authentication = true
 
   tags = var.tags
 

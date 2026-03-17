@@ -27,6 +27,9 @@ locals {
 
 # -----------------------------------------------------------------------------
 # Test Users
+# Uses lifecycle prevent_destroy = false and import for existing users.
+# If users already exist from a previous run, import them into state:
+#   terraform import 'module.entra.azuread_user.test[\"emma\"]' <object-id>
 # -----------------------------------------------------------------------------
 
 resource "azuread_user" "test" {

@@ -20,6 +20,10 @@ resource "azurerm_cognitive_account" "this" {
   sku_name              = var.sku_name
   custom_subdomain_name = local.subdomain
   tags                  = var.tags
+
+  lifecycle {
+    ignore_changes = [tags]
+  }
 }
 
 # -----------------------------------------------------------------------------

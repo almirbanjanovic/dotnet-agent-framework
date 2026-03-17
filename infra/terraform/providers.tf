@@ -56,6 +56,11 @@ provider "azurerm" {
   resource_provider_registrations = "extended"
 }
 
+# Register resource providers that may not be registered by default
+resource "azurerm_resource_provider_registration" "service_networking" {
+  name = "Microsoft.ServiceNetworking"
+}
+
 provider "azapi" {
 }
 

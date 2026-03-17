@@ -1,9 +1,18 @@
 # =============================================================================
 # Storage Uploads Module v1
 # Uploads files to existing blob containers (data plane only).
-# Separated from storage account creation so uploads can be ordered after
-# containers exist and independently of other control plane resources.
+# Uses Azure AD authentication (storage_account_id) because the storage
+# account has shared_access_key_enabled = false (MCAPS policy requirement).
 # =============================================================================
+
+# Grant the deployer Storage Blob Data Contributor so Terraform can upload blobs
+data "azurerm_client_config" "current" {}
+
+resource "azurerm_role_assignment" "deployer_blob_contributor" {
+  scope                = var.storage_account_id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = data.azurerm_client_config.current.object_id
+}
 
 locals {
   # Flatten uploads × files into a single map for azurerm_storage_blob
@@ -29,4 +38,6 @@ resource "azurerm_storage_blob" "this" {
   type                   = "Block"
   source                 = each.value.source_path
   content_type           = each.value.content_type
+
+  depends_on = [azurerm_role_assignment.deployer_blob_contributor]
 }

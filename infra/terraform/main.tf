@@ -45,15 +45,15 @@ module "foundry" {
 module "sql" {
   source = "./modules/sql/v1"
 
-  base_name               = var.base_name
-  environment             = var.environment
-  location                = var.location
-  resource_group_name     = var.resource_group_name
-  database_name           = var.sql_database_name
-  admin_login             = var.sql_admin_login
-  tenant_id               = data.azurerm_client_config.current.tenant_id
-  entra_admin_object_id   = data.azurerm_client_config.current.object_id
-  tags                    = var.tags
+  base_name             = var.base_name
+  environment           = var.environment
+  location              = var.location
+  resource_group_name   = var.resource_group_name
+  database_name         = var.sql_database_name
+  admin_login           = var.sql_admin_login
+  tenant_id             = data.azurerm_client_config.current.tenant_id
+  entra_admin_object_id = data.azurerm_client_config.current.object_id
+  tags                  = var.tags
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -184,7 +184,7 @@ module "agc" {
   subnet_id           = module.vnet.agc_subnet_id
   tags                = var.tags
 
-  depends_on = [module.vnet]
+  depends_on = [module.vnet, azurerm_resource_provider_registration.service_networking]
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -216,6 +216,7 @@ module "storage_uploads" {
   source = "./modules/storage-uploads/v1"
 
   storage_account_name = module.storage_images.name
+  storage_account_id   = module.storage_images.id
 
   uploads = {
     images = {
@@ -539,7 +540,6 @@ module "keyvault_secrets" {
     "STORAGE-IMAGES-ENDPOINT"           = module.storage_images.primary_blob_endpoint
     "STORAGE-IMAGES-ACCOUNT-NAME"       = module.storage_images.name
     "STORAGE-IMAGES-CONTAINER"          = module.storage_images.container_names["images"]
-    "STORAGE-IMAGES-KEY"                = module.storage_images.primary_access_key
     "SEARCH-ENDPOINT"                   = module.search.endpoint
     "SEARCH-ADMIN-KEY"                  = module.search.primary_key
     "SEARCH-INDEX-NAME"                 = module.search.index_name
