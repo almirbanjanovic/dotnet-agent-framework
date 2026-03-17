@@ -469,14 +469,12 @@ module "tls_cert" {
 #--------------------------------------------------------------------------------------------------------------------------------
 
 resource "azurerm_role_assignment" "web_app_routing_kv_secrets" {
-  count                = module.aks.web_app_routing_identity != null ? 1 : 0
   scope                = module.keyvault.id
   role_definition_name = "Key Vault Secrets User"
   principal_id         = module.aks.web_app_routing_identity
 }
 
 resource "azurerm_role_assignment" "web_app_routing_kv_certs" {
-  count                = module.aks.web_app_routing_identity != null ? 1 : 0
   scope                = module.keyvault.id
   role_definition_name = "Key Vault Certificate User"
   principal_id         = module.aks.web_app_routing_identity

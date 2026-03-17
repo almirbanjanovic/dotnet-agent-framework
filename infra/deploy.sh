@@ -54,13 +54,32 @@ done_() { echo -e "    ${G}✓ $1${W}"; }
 
 phase_summary() {
     local num="$1"; local next_desc="$2"; shift 2
-    echo ""
-    echo -e "    ${G}┌ Phase $num complete ─────────────────────────────────┐${W}"
+    
+    # Build content lines and find max width
+    local header=" Phase $num complete "
+    local lines=()
     while [[ $# -gt 0 ]]; do
-        echo -e "    ${G}│${W}  $1: $2"
+        lines+=("  $1: $2")
         shift 2
     done
-    echo -e "    ${G}└─────────────────────────────────────────────────────┘${W}"
+    
+    local max_len=${#header}
+    for line in "${lines[@]}"; do
+        (( ${#line} > max_len )) && max_len=${#line}
+    done
+    local box_width=$((max_len + 2))
+    
+    local top_fill=$(printf '─%.0s' $(seq 1 $((box_width - ${#header}))))
+    local bot_fill=$(printf '─%.0s' $(seq 1 $box_width))
+    
+    echo ""
+    echo -e "    ${G}┌${header}${top_fill}┐${W}"
+    for line in "${lines[@]}"; do
+        local pad_len=$((box_width - ${#line}))
+        local pad=$(printf ' %.0s' $(seq 1 $pad_len))
+        echo -e "    ${G}│${W}${line}${pad}${G}│${W}"
+    done
+    echo -e "    ${G}└${bot_fill}┘${W}"
     if [[ -n "$next_desc" ]]; then
         echo -e "    ${D}Next:${W} ${C}${next_desc}${W}"
     fi

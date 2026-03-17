@@ -53,13 +53,29 @@ function Write-Done  { param([string]$Message) Write-Host "    ✓ $Message" -Fo
 
 function Write-PhaseSummary {
     param([int]$Number, [hashtable]$Items, [string]$NextPhase)
-    Write-Host ""
-    Write-Host "    ┌ Phase $Number complete ─────────────────────────────────┐" -ForegroundColor Green
+    
+    # Build content lines and find max width
+    $header = " Phase $Number complete "
+    $lines = @()
     foreach ($kv in $Items.GetEnumerator()) {
-        Write-Host "    │  $($kv.Key): " -ForegroundColor Green -NoNewLine
-        Write-Host "$($kv.Value)"
+        $lines += "  $($kv.Key): $($kv.Value)"
     }
-    Write-Host "    └─────────────────────────────────────────────────────┘" -ForegroundColor Green
+    $maxLen = ($lines | ForEach-Object { $_.Length }) | Measure-Object -Maximum | Select-Object -ExpandProperty Maximum
+    $maxLen = [Math]::Max($maxLen, $header.Length)
+    $boxWidth = $maxLen + 2  # padding
+
+    $topFill = '─' * ($boxWidth - $header.Length)
+    $botFill = '─' * $boxWidth
+
+    Write-Host ""
+    Write-Host "    ┌${header}${topFill}┐" -ForegroundColor Green
+    foreach ($line in $lines) {
+        $pad = ' ' * ($boxWidth - $line.Length)
+        Write-Host "    │" -ForegroundColor Green -NoNewLine
+        Write-Host "${line}${pad}" -NoNewLine
+        Write-Host "│" -ForegroundColor Green
+    }
+    Write-Host "    └${botFill}┘" -ForegroundColor Green
     if ($NextPhase) {
         Write-Host "    Next: " -NoNewLine -ForegroundColor DarkGray
         Write-Host "$NextPhase" -ForegroundColor Cyan
