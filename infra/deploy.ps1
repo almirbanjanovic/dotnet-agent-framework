@@ -351,7 +351,7 @@ try {
             $defName = ($defId -split '/')[-1]
             $isInitiative = $defId -match 'policySetDefinitions'
             # Capture assignment-level parameter overrides
-            $assignParams = $a.parameters
+            $assignParams = if ($a.PSObject.Properties['parameters']) { $a.parameters } else { $null }
 
             if ($isInitiative) {
                 $members = az policy set-definition show --name $defName --query "policyDefinitions[].policyDefinitionId" -o json 2>$null | ConvertFrom-Json
