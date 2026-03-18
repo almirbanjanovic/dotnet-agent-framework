@@ -192,10 +192,10 @@ Write-Host ""
 Write-Host "    ┌─────────────────────────────────────────────────────────┐" -ForegroundColor Cyan
 Write-Host "    │  How would you like to deploy?                          │" -ForegroundColor Cyan
 Write-Host "    │                                                         │" -ForegroundColor Cyan
-Write-Host "    │    1. Full setup — Azure + GitHub Actions CI/CD          │" -ForegroundColor Cyan
+Write-Host "    │    1. Full setup — Azure + GitHub Actions CI/CD         │" -ForegroundColor Cyan
 Write-Host "    │       (Entra OIDC app, GitHub secrets, variables)       │" -ForegroundColor Cyan
 Write-Host "    │                                                         │" -ForegroundColor Cyan
-Write-Host "    │    2. Local only — Azure backend only                    │" -ForegroundColor Cyan
+Write-Host "    │    2. Local only — Azure backend only                   │" -ForegroundColor Cyan
 Write-Host "    │       (Deploy with ./deploy.ps1 or ./deploy.sh)         │" -ForegroundColor Cyan
 Write-Host "    └─────────────────────────────────────────────────────────┘" -ForegroundColor Cyan
 Write-Host ""
