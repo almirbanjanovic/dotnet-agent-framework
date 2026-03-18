@@ -187,8 +187,8 @@ if ($softDeletedKv) {
         $kvName = $kvName.Trim()
         if ($kvName) {
             Write-Host "    Purging soft-deleted Key Vault: $kvName" -ForegroundColor Yellow
-            az keyvault purge --name $kvName 2>$null
-            Write-Done "Purged $kvName"
+            az keyvault purge --name $kvName --no-wait 2>$null
+            Write-Done "Purged $kvName (async)"
         }
     }
 } else {

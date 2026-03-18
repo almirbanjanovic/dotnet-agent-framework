@@ -189,8 +189,8 @@ if [[ -n "$SOFT_KV" ]]; then
         kv=$(echo "$kv" | xargs)
         [[ -z "$kv" ]] && continue
         echo -e "    ${Y}Purging soft-deleted Key Vault: $kv${W}"
-        az keyvault purge --name "$kv" 2>/dev/null || true
-        done_ "Purged $kv"
+        az keyvault purge --name "$kv" --no-wait 2>/dev/null || true
+        done_ "Purged $kv (async)"
     done <<< "$SOFT_KV"
 else
     done_ "No soft-deleted Key Vaults found"
