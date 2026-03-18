@@ -44,10 +44,20 @@ jobs:
           issue-body: "Please approve or deny the deployment."
           fail-on-denial: true
 
+  purge-soft-deleted:
+    name: Purge Soft-Deleted Resources
+    needs: [manual-approval]
+    uses: ./.github/workflows/purge-soft-deleted.yaml
+    with:
+      environment: ${{ inputs.environment }}
+    secrets:
+      azureClientId: ${{ secrets.AZURE_CLIENT_ID }}
+      azureTenantId: ${{ secrets.AZURE_TENANT_ID }}
+      azureSubscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
   terraform-apply:
     name: Terraform Apply
-    needs: [manual-approval]
+    needs: [purge-soft-deleted]
     uses: ./.github/workflows/terraform-apply.yaml
     with:
       environment: ${{ inputs.environment }}

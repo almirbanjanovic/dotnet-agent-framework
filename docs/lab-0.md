@@ -43,6 +43,10 @@ The script performs 5 phases in order:
 | **4** | Creates Azure resource group, storage account, blob container for Terraform remote state, grants Contributor RBAC, then locks down public access |
 | **5** | Generates `terraform.tfvars` and `backend.hcl` configuration files |
 
+### Why `terraform.tfvars` and `backend.hcl` are gitignored
+
+These files contain environment-specific values (resource names, backend storage details) that could expose your Azure topology. They are generated locally by the init script and excluded from source control — a standard Terraform security best practice.
+
 Between each phase, the script shows a summary and previews what the next phase will do before continuing.
 
 The script is idempotent — it checks for existing resources and skips what's already created.

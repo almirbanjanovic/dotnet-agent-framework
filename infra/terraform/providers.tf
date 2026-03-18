@@ -46,10 +46,21 @@ provider "azurerm" {
       recover_soft_deleted_certificates          = true
       purge_soft_deleted_secrets_on_destroy      = true
       recover_soft_deleted_secrets               = true
+      purge_soft_deleted_keys_on_destroy         = true
+      recover_soft_deleted_keys                  = true
     }
 
     cognitive_account {
       purge_soft_delete_on_destroy = true
+    }
+
+    api_management {
+      purge_soft_delete_on_destroy = true
+      recover_soft_deleted         = true
+    }
+
+    resource_group {
+      prevent_deletion_if_contains_resources = false
     }
   }
 

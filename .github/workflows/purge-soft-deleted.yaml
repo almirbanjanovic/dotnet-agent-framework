@@ -1,0 +1,62 @@
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+    secrets:
+      azureClientId:
+        required: true
+      azureTenantId:
+        required: true
+      azureSubscriptionId:
+        required: true
+
+jobs:
+  purge:
+    name: Purge Soft-Deleted Resources
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Login to Azure using OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.azureClientId }}
+          tenant-id: ${{ secrets.azureTenantId }}
+          subscription-id: ${{ secrets.azureSubscriptionId }}
+
+      - name: Purge soft-deleted Cognitive Services accounts
+        run: |
+          SOFT_COG=$(az cognitiveservices account list-deleted \
+            --query "[?contains(id, '${{ vars.RESOURCE_GROUP }}')].[name]" -o tsv 2>/dev/null || true)
+          if [ -n "$SOFT_COG" ]; then
+            echo "$SOFT_COG" | while IFS= read -r acct; do
+              acct=$(echo "$acct" | xargs)
+              [ -z "$acct" ] && continue
+              echo "Purging: $acct"
+              az cognitiveservices account purge --location "${{ vars.LOCATION }}" \
+                --resource-group "${{ vars.RESOURCE_GROUP }}" --name "$acct" 2>/dev/null || true
+            done
+          else
+            echo "No soft-deleted Cognitive Services accounts found."
+          fi
+
+      - name: Purge soft-deleted Key Vaults
+        run: |
+          SOFT_KV=$(az keyvault list-deleted \
+            --query "[?properties.vaultId && contains(properties.vaultId, '${{ vars.RESOURCE_GROUP }}')].[name]" -o tsv 2>/dev/null || true)
+          if [ -n "$SOFT_KV" ]; then
+            echo "$SOFT_KV" | while IFS= read -r kv; do
+              kv=$(echo "$kv" | xargs)
+              [ -z "$kv" ] && continue
+              echo "Purging: $kv"
+              az keyvault purge --name "$kv" 2>/dev/null || true
+            done
+          else
+            echo "No soft-deleted Key Vaults found."
+          fi

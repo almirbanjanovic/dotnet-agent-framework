@@ -159,13 +159,16 @@ Write-Host "    Location:        " -NoNewLine; Write-Host "$Location" -Foregroun
 Write-Host ""
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# PRE-FLIGHT — Clean up soft-deleted resources from previous runs
+# PRE-FLIGHT — Purge soft-deleted resources from previous runs
+# Azure keeps deleted Key Vaults, Cognitive Services, and other resources in a
+# soft-deleted state. These block re-creation with the same name. Purge them
+# as a fail-safe before Terraform runs.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 Write-Step "Checking for soft-deleted Cognitive Services accounts"
-$softDeleted = az cognitiveservices account list-deleted --query "[?contains(id, '$ResourceGroup')].[name]" -o tsv 2>$null
-if ($softDeleted) {
-    foreach ($acctName in $softDeleted -split "`n") {
+$softDeletedCog = az cognitiveservices account list-deleted --query "[?contains(id, '$ResourceGroup')].[name]" -o tsv 2>$null
+if ($softDeletedCog) {
+    foreach ($acctName in $softDeletedCog -split "`n") {
         $acctName = $acctName.Trim()
         if ($acctName) {
             Write-Host "    Purging soft-deleted account: $acctName" -ForegroundColor Yellow
@@ -175,6 +178,21 @@ if ($softDeleted) {
     }
 } else {
     Write-Done "No soft-deleted Cognitive Services accounts found"
+}
+
+Write-Step "Checking for soft-deleted Key Vaults"
+$softDeletedKv = az keyvault list-deleted --query "[?properties.vaultId && contains(properties.vaultId, '$ResourceGroup')].[name]" -o tsv 2>$null
+if ($softDeletedKv) {
+    foreach ($kvName in $softDeletedKv -split "`n") {
+        $kvName = $kvName.Trim()
+        if ($kvName) {
+            Write-Host "    Purging soft-deleted Key Vault: $kvName" -ForegroundColor Yellow
+            az keyvault purge --name $kvName 2>$null
+            Write-Done "Purged $kvName"
+        }
+    }
+} else {
+    Write-Done "No soft-deleted Key Vaults found"
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -385,8 +403,8 @@ foreach ($mapping in $CustomerMapping) {
         $sql = "UPDATE Customers SET entra_id = @oid WHERE id = @cid"
         Invoke-Sqlcmd -ConnectionString $ConnStr -Query $sql -Variable "oid=$oid", "cid=$($mapping.CustomerId)" -ErrorAction SilentlyContinue 2>$null
         if (-not $?) {
-            # Fallback: use sqlcmd command-line tool
-            sqlcmd -S "tcp:${SqlFqdn},1433" -d $SqlDb -U $SqlLogin -P $SqlPass -Q "UPDATE Customers SET entra_id = '$oid' WHERE id = '$($mapping.CustomerId)'" 2>$null
+            # Fallback: use sqlcmd command-line tool with parameterized query
+            sqlcmd -S "tcp:${SqlFqdn},1433" -d $SqlDb -U $SqlLogin -P $SqlPass -Q "UPDATE Customers SET entra_id = '$(($oid -replace "'", "''"))' WHERE id = '$(($mapping.CustomerId -replace "'", "''"))'" 2>$null
         }
         Write-Done "$($mapping.Name) (ID $($mapping.CustomerId)) → $($oid.Substring(0,8))..."
     } else {

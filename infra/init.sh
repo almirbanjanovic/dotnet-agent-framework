@@ -312,9 +312,11 @@ if [[ -n "$existing" ]]; then
 else
     APP_CLIENT_ID=$(az ad app create --display-name "$APP_NAME" --query appId -o tsv 2>/dev/null || true)
     if [[ -z "$APP_CLIENT_ID" ]]; then
-        # Retry once — CAE challenge can occur if Entra policies changed since login
-        echo -e "    ${Y}\u26a0 Entra operation failed. Re-authenticating with Graph scope...${W}"
-        az login --scope https://graph.microsoft.com/.default --tenant "$TENANT_ID" --only-show-errors --output none
+        # Retry once — CAE challenge can occur if Entra policies changed since login.
+        # Must clear cached tokens and do a full interactive login to satisfy the challenge.
+        echo -e "    ${Y}\u26a0 Entra operation failed. Clearing cached tokens and re-authenticating...${W}"
+        az account clear 2>/dev/null
+        az login --scope https://graph.microsoft.com/.default --tenant "$TENANT_ID"
         az account set --subscription "$SUBSCRIPTION_ID"
         APP_CLIENT_ID=$(az ad app create --display-name "$APP_NAME" --query appId -o tsv)
         if [[ -z "$APP_CLIENT_ID" ]]; then

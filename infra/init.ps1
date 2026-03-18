@@ -282,9 +282,11 @@ if ($existing) {
 } else {
     $AppClientId = az ad app create --display-name "$AppName" --query appId -o tsv 2>$null
     if (-not $AppClientId) {
-        # Retry once — CAE challenge can occur if Entra policies changed since login
-        Write-Host "    ⚠ Entra operation failed. Re-authenticating with Graph scope..." -ForegroundColor Yellow
-        az login --scope https://graph.microsoft.com/.default --tenant $TenantId --only-show-errors --output none
+        # Retry once — CAE challenge can occur if Entra policies changed since login.
+        # Must clear cached tokens and do a full interactive login to satisfy the challenge.
+        Write-Host "    ⚠ Entra operation failed. Clearing cached tokens and re-authenticating..." -ForegroundColor Yellow
+        az account clear 2>$null
+        az login --scope https://graph.microsoft.com/.default --tenant $TenantId
         az account set --subscription $SubscriptionId
         $AppClientId = az ad app create --display-name "$AppName" --query appId -o tsv
         if (-not $AppClientId) {

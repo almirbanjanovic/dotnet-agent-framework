@@ -85,8 +85,11 @@ jobs:
             SECRET_NAME="${CUSTOMERS[$CID]}"
             OID=$(az keyvault secret show --vault-name "$KV" --name "$SECRET_NAME" --query value -o tsv)
             if [ -n "$OID" ]; then
+              # Escape single quotes in values to prevent SQL injection
+              SAFE_OID="${OID//\'/\'\'}" 
+              SAFE_CID="${CID//\'/\'\'}" 
               sqlcmd -S "tcp:${SERVER},1433" -d "$DB" -U "$LOGIN" -P "$PASSWORD" \
-                -Q "UPDATE Customers SET entra_id = '$OID' WHERE id = '$CID'" -C
+                -Q "UPDATE Customers SET entra_id = '${SAFE_OID}' WHERE id = '${SAFE_CID}'" -C
               echo "Linked customer $CID → ${OID:0:8}..."
             else
               echo "Warning: Could not read $SECRET_NAME from Key Vault"

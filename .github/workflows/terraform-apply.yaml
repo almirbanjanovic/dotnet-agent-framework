@@ -85,10 +85,8 @@ jobs:
         --resource-group "${{ vars.RESOURCE_GROUP }}" \
         --public-network-access Enabled
 
-        # Wait for 30 seconds
         echo "Enabling public network access and waiting for 30 seconds."
         sleep 30
-        
 
     - name: Terraform Init
       id: init
