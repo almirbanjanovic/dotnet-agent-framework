@@ -64,6 +64,8 @@ provider "azurerm" {
     }
   }
 
+  storage_use_azuread = true
+
   resource_provider_registrations = "extended"
 }
 
