@@ -124,6 +124,7 @@ The following resources were added to support the full application architecture 
 | **`tls-cert/v1/`** | Self-signed TLS certificate in Key Vault for AGC TLS termination |
 | **`vnet/v1/`** | Virtual Network with 3 subnets (AKS system, AKS workload, AGC) |
 | **`agc/v1/`** | App Gateway for Containers + Frontend + Subnet Association |
+| **Logic App (`eventgrid/v1/`)** | Bridges Event Grid → AI Search indexer (adds api-key header that Event Grid webhooks can't send) |
 | **Cosmos DB `conversations`** | New container (partition key: `/sessionId`) for BFF-owned chat history |
 | **Key Vault secrets** | Identity client IDs, Entra app credentials, test user passwords, AKS hostname |
 
