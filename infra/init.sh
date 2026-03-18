@@ -532,12 +532,18 @@ if ! $LOCAL_ONLY && [[ -n "$APP_CLIENT_ID" ]]; then
     fi
 fi
 
+if $LOCAL_ONLY; then
+    RBAC_STATUS="Skipped (local-only mode)"
+else
+    RBAC_STATUS="Contributor on $RESOURCE_GROUP"
+fi
+
 phase_summary 4 \
     "Phase 5 — Generate terraform.tfvars and backend.hcl configuration files" \
     "Resource group"  "$RESOURCE_GROUP" \
     "Storage account" "$STORAGE_ACCOUNT" \
     "Container"       "$CONTAINER_NAME" \
-    "RBAC"            "Contributor on $RESOURCE_GROUP" \
+    "RBAC"            "$RBAC_STATUS" \
     "Public access"   "Disabled"
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -627,17 +633,22 @@ if $LOCAL_ONLY; then
     echo -e "  ${G}║${W}"
     echo -e "  ${G}╚═══════════════════════════════════════════════════════════════╝${W}"
     echo ""
-else"
-echo -e "  ${G}║${W}  Subscription:     $SUB_NAME"
-echo -e "  ${G}║${W}  Location:         $LOCATION"
-echo -e "  ${G}║${W}  Resource group:   $RESOURCE_GROUP"
-echo -e "  ${G}║${W}  Storage account:  $STORAGE_ACCOUNT"
-echo -e "  ${G}║${W}  App registration: $APP_CLIENT_ID"
-echo -e "  ${G}║${W}  GitHub repo:      $GITHUB_REPO"
-echo -e "  ${G}║${W}  GitHub env:       $GITHUB_ENV"
-echo -e "  ${G}║${W}  Secrets:          3"
-echo -e "  ${G}║${W}  Env variables:    $count"
-echo -e "  ${G}║${W}"
-echo -e "  ${G}║  Next: proceed to Lab 1 (terraform apply)             ║${W}"
-echo -e "  ${G}╚═══════════════════════════════════════════════════════╝${W}"
-echo ""
+else
+    echo ""
+    echo -e "  ${G}╔═══════════════════════════════════════════════════════╗${W}"
+    echo -e "  ${G}║  Bootstrap Complete!                                  ║${W}"
+    echo -e "  ${G}╠═══════════════════════════════════════════════════════╣${W}"
+    echo -e "  ${G}║${W}  Subscription:     $SUB_NAME"
+    echo -e "  ${G}║${W}  Location:         $LOCATION"
+    echo -e "  ${G}║${W}  Resource group:   $RESOURCE_GROUP"
+    echo -e "  ${G}║${W}  Storage account:  $STORAGE_ACCOUNT"
+    echo -e "  ${G}║${W}  App registration: $APP_CLIENT_ID"
+    echo -e "  ${G}║${W}  GitHub repo:      $GITHUB_REPO"
+    echo -e "  ${G}║${W}  GitHub env:       $GITHUB_ENV"
+    echo -e "  ${G}║${W}  Secrets:          3"
+    echo -e "  ${G}║${W}  Env variables:    $count"
+    echo -e "  ${G}║${W}"
+    echo -e "  ${G}║  Next: proceed to Lab 1 (terraform apply)             ║${W}"
+    echo -e "  ${G}╚═══════════════════════════════════════════════════════╝${W}"
+    echo ""
+fi

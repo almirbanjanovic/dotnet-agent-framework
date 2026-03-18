@@ -187,8 +187,6 @@ $SubName  = az account show --query name -o tsv
 $TenantId = az account show --query tenantId -o tsv
 Write-Done "Azure: $SubName ($SubscriptionId)"
 
-if (-not $LocalOnly) {
-
 # ── Deployment mode ──────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "    ┌─────────────────────────────────────────────────────────┐" -ForegroundColor Cyan
@@ -227,6 +225,8 @@ if ($LocalOnly) {
         }
     }
 }
+
+if (-not $LocalOnly) {
 
 $ghStatus = gh auth status 2>&1
 if ($ghStatus -match "Logged in") {
@@ -511,13 +511,14 @@ if (-not $LocalOnly -and $AppClientId) {
     }
 }
 
-Write-PhaseSummary -Number 4 -NextPhase "Phase 5 — Generate terraform.tfvars and backend.hcl configuration files" -Items ([ordered]@{
+$phase4Items = [ordered]@{
     "Resource group"  = $ResourceGroup
     "Storage account" = $StorageAccount
     "Container"       = $ContainerName
-    "RBAC"            = "Contributor on $ResourceGroup"
     "Public access"   = "Disabled"
-})
+}
+if (-not $LocalOnly) { $phase4Items["RBAC"] = "Contributor on $ResourceGroup" } else { $phase4Items["RBAC"] = "Skipped (local-only mode)" }
+Write-PhaseSummary -Number 4 -NextPhase "Phase 5 — Generate terraform.tfvars and backend.hcl configuration files" -Items $phase4Items
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 5 — Generate config files
