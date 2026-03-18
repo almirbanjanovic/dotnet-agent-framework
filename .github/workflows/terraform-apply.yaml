@@ -91,11 +91,43 @@ jobs:
     - name: Terraform Init
       id: init
       run: |
-        terraform -chdir="${{ vars.TERRAFORM_WORKING_DIRECTORY }}" init \
+        terraform -chdir="${{ vars.TERRAFORM_WORKING_DIRECTORY }}" init -upgrade -reconfigure \
         -backend-config="resource_group_name=${{ vars.RESOURCE_GROUP }}" \
         -backend-config="storage_account_name=${{ vars.STORAGE_ACCOUNT }}" \
         -backend-config="container_name=${{ vars.TERRAFORM_STATE_CONTAINER }}" \
         -backend-config="key=${{ vars.TERRAFORM_STATE_BLOB }}"
+      env:
+        ARM_CLIENT_ID: ${{ secrets.azureClientId }}
+        ARM_TENANT_ID: ${{ secrets.azureTenantId }}
+        ARM_SUBSCRIPTION_ID: ${{ secrets.azureSubscriptionId }}
+        ARM_USE_OIDC: true
+        ARM_USE_AZUREAD: true
+
+    - name: Import existing Entra users into state (idempotent)
+      run: |
+        cd "${{ vars.TERRAFORM_WORKING_DIRECTORY }}"
+        DOMAIN=$(az rest --method GET --url "https://graph.microsoft.com/v1.0/domains" \
+          --query "value[?isDefault].id" -o tsv 2>/dev/null || true)
+
+        declare -A USERS=(
+          ["emma"]="emma.wilson"
+          ["james"]="james.chen"
+          ["sarah"]="sarah.miller"
+          ["david"]="david.park"
+          ["lisa"]="lisa.torres"
+        )
+
+        for key in "${!USERS[@]}"; do
+          UPN="${USERS[$key]}@${DOMAIN}"
+          IN_STATE=$(terraform state list "module.entra.azuread_user.test[\"$key\"]" 2>/dev/null || true)
+          if [ -z "$IN_STATE" ]; then
+            OID=$(az ad user show --id "$UPN" --query id -o tsv 2>/dev/null || true)
+            if [ -n "$OID" ]; then
+              echo "Importing $UPN → state"
+              terraform import "module.entra.azuread_user.test[\"$key\"]" "$OID" 2>/dev/null || true
+            fi
+          fi
+        done
       env:
         ARM_CLIENT_ID: ${{ secrets.azureClientId }}
         ARM_TENANT_ID: ${{ secrets.azureTenantId }}
@@ -118,6 +150,67 @@ jobs:
         ARM_TENANT_ID: ${{ secrets.azureTenantId }}
         ARM_USE_OIDC: true
         ARM_USE_AZUREAD: true
+
+    - name: Policy diagnostic (on apply failure)
+      if: failure() && steps.apply.outcome == 'failure'
+      run: |
+        echo "::group::Azure Policy diagnostic"
+        echo "Listing deny-effect policies that may have blocked resource creation..."
+        echo ""
+
+        SUB_ID=$(az account show --query id -o tsv)
+        RG_SCOPE="/subscriptions/$SUB_ID/resourceGroups/${{ vars.RESOURCE_GROUP }}"
+        SEEN_IDS=""
+
+        for SCOPE_ARG in "--scope $RG_SCOPE" ""; do
+          while IFS=$'\t' read -r ASSIGN_ID POLICY_NAME POLICY_DEF_ID ENFORCEMENT; do
+            [ -z "$ASSIGN_ID" ] && continue
+            [ "$ENFORCEMENT" != "Default" ] && continue
+            echo "$SEEN_IDS" | grep -qF "$ASSIGN_ID" && continue
+            SEEN_IDS="$SEEN_IDS $ASSIGN_ID"
+
+            DEF_NAME=$(echo "$POLICY_DEF_ID" | awk -F'/' '{print $NF}')
+            IS_INITIATIVE=$(echo "$POLICY_DEF_ID" | grep -c 'policySetDefinitions' || true)
+            ASSIGN_EFFECT=$(az policy assignment show --name "$(echo "$ASSIGN_ID" | awk -F'/' '{print $NF}')" \
+              --query "parameters.effect.value" -o tsv 2>/dev/null || true)
+                if [[ "$M_EFFECT" == *"parameters"* ]]; then
+                  if [ -n "$ASSIGN_EFFECT" ]; then
+                    M_EFFECT="$ASSIGN_EFFECT"
+                  else
+                    M_DEFAULT=$(az policy definition show --name "$M_NAME" \
+                      --query "parameters.effect.defaultValue" -o tsv 2>/dev/null || true)
+                    [ -n "$M_DEFAULT" ] && M_EFFECT="$M_DEFAULT"
+                  fi
+                fi
+                if [[ "${M_EFFECT,,}" == *"deny"* ]]; then
+                  M_DISPLAY=$(az policy definition show --name "$M_NAME" \
+                    --query "displayName" -o tsv 2>/dev/null || true)
+                  echo "::error::DENY policy: $M_DISPLAY (initiative: $POLICY_NAME)"
+                fi
+              done <<< "$MEMBER_DEFS"
+            else
+              EFFECT=$(az policy definition show --name "$DEF_NAME" \
+                --query "policyRule.then.effect" -o tsv 2>/dev/null || true)
+              if [[ "$EFFECT" == *"parameters"* ]]; then
+                if [ -n "$ASSIGN_EFFECT" ]; then
+                  EFFECT="$ASSIGN_EFFECT"
+                else
+                  DEFAULT_EFFECT=$(az policy definition show --name "$DEF_NAME" \
+                    --query "parameters.effect.defaultValue" -o tsv 2>/dev/null || true)
+                  [ -n "$DEFAULT_EFFECT" ] && EFFECT="$DEFAULT_EFFECT"
+                fi
+              fi
+              if [[ "${EFFECT,,}" == *"deny"* ]]; then
+                echo "::error::DENY policy: $POLICY_NAME"
+              fi
+            fi
+          done < <(az policy assignment list $SCOPE_ARG \
+            --query "[].[id, displayName, policyDefinitionId, enforcementMode]" -o tsv 2>/dev/null || true)
+        done
+
+        echo ""
+        echo "Fix your Terraform config to comply with the above policies, then re-run."
+        echo "::endgroup::"
 
     - name: Disable public access for backend storage account
       if: always()

@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TERRAFORM_DIR="$SCRIPT_DIR/terraform"
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
-C='\033[36m' G='\033[32m' D='\033[90m' Y='\033[33m' W='\033[0m'
+C='\033[36m' G='\033[32m' R='\033[31m' D='\033[90m' Y='\033[33m' W='\033[0m'
 
 # Wrap az CLI to strip Windows \r\n from stdout (WSL may call Windows az.cmd)
 az() {
@@ -229,6 +229,32 @@ step "Initializing Terraform with backend config"
 pushd "$TERRAFORM_DIR" >/dev/null
 terraform init -upgrade -reconfigure -backend-config=backend.hcl
 done_ "Terraform initialized"
+
+# ── Import existing Entra users into state (idempotent) ──────────────────────
+step "Importing existing Entra users into Terraform state (if needed)"
+DOMAIN=$(az rest --method GET --url "https://graph.microsoft.com/v1.0/domains" \
+  --query "value[?isDefault].id" -o tsv 2>/dev/null || true)
+
+declare -A USER_MAP=(
+    ["emma"]="emma.wilson"
+    ["james"]="james.chen"
+    ["sarah"]="sarah.miller"
+    ["david"]="david.park"
+    ["lisa"]="lisa.torres"
+)
+
+for key in "${!USER_MAP[@]}"; do
+    UPN="${USER_MAP[$key]}@${DOMAIN}"
+    IN_STATE=$(terraform state list "module.entra.azuread_user.test[\"$key\"]" 2>/dev/null || true)
+    if [[ -z "$IN_STATE" ]]; then
+        OID=$(az ad user show --id "$UPN" --query id -o tsv 2>/dev/null || true)
+        if [[ -n "$OID" ]]; then
+            echo -e "    ${D}Importing $UPN → state${W}"
+            terraform import "module.entra.azuread_user.test[\"$key\"]" "$OID" 2>/dev/null || true
+        fi
+    fi
+done
+done_ "Entra users synced with state"
 popd >/dev/null
 
 phase_summary 2 \
@@ -282,7 +308,83 @@ echo -e "    ${D}Resources: AI Foundry, SQL, Cosmos DB, AI Search, AKS, ACR, Key
 echo ""
 
 pushd "$TERRAFORM_DIR" >/dev/null
-terraform apply "tfplan"
+if ! terraform apply "tfplan"; then
+    # ── Post-failure diagnostic: list deny policies that may have caused the failure ──
+    echo ""
+    echo -e "    ${Y}━━ Azure Policy diagnostic ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${W}"
+    echo -e "    ${Y}If you see RequestDisallowedByPolicy above, a deny policy${W}"
+    echo -e "    ${Y}blocked resource creation. Listing deny policies...${W}"
+    echo ""
+
+    SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+    RG_SCOPE="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP"
+    SEEN_IDS=""
+
+    for SCOPE_ARG in "--scope $RG_SCOPE" ""; do
+        while IFS=$'\t' read -r ASSIGN_ID POLICY_NAME POLICY_DEF_ID ENFORCEMENT ASSIGN_PARAMS; do
+            [[ -z "$ASSIGN_ID" ]] && continue
+            [[ "$ENFORCEMENT" != "Default" ]] && continue
+            echo "$SEEN_IDS" | grep -qF "$ASSIGN_ID" && continue
+            SEEN_IDS="$SEEN_IDS $ASSIGN_ID"
+
+            DEF_NAME=$(echo "$POLICY_DEF_ID" | awk -F'/' '{print $NF}')
+            IS_INITIATIVE=$(echo "$POLICY_DEF_ID" | grep -c 'policySetDefinitions' || true)
+            # Check assignment-level effect parameter override
+            ASSIGN_EFFECT_OVERRIDE=$(az policy assignment show --name "$(echo "$ASSIGN_ID" | awk -F'/' '{print $NF}')" \
+                --query "parameters.effect.value" -o tsv 2>/dev/null || true)
+
+            if [[ $IS_INITIATIVE -gt 0 ]]; then
+                MEMBER_DEFS=$(az policy set-definition show --name "$DEF_NAME" \
+                    --query "policyDefinitions[].policyDefinitionId" -o tsv 2>/dev/null || true)
+                while IFS= read -r MEMBER_ID; do
+                    [[ -z "$MEMBER_ID" ]] && continue
+                    M_NAME=$(echo "$MEMBER_ID" | awk -F'/' '{print $NF}')
+                    # Get raw effect + resolve parameterized effects via default value
+                    M_EFFECT=$(az policy definition show --name "$M_NAME" \
+                        --query "policyRule.then.effect" -o tsv 2>/dev/null || true)
+                    if [[ "$M_EFFECT" == *"parameters"* ]]; then
+                        # Resolve: assignment override > definition default
+                        if [[ -n "$ASSIGN_EFFECT_OVERRIDE" ]]; then
+                            M_EFFECT="$ASSIGN_EFFECT_OVERRIDE"
+                        else
+                            M_DEFAULT=$(az policy definition show --name "$M_NAME" \
+                                --query "parameters.effect.defaultValue" -o tsv 2>/dev/null || true)
+                            [[ -n "$M_DEFAULT" ]] && M_EFFECT="$M_DEFAULT"
+                        fi
+                    fi
+                    if [[ "${M_EFFECT,,}" == *"deny"* ]]; then
+                        M_DISPLAY=$(az policy definition show --name "$M_NAME" \
+                            --query "displayName" -o tsv 2>/dev/null || true)
+                        echo -e "    ${R}⚠ DENY: $M_DISPLAY${W}"
+                        echo -e "      ${D}Initiative: $POLICY_NAME${W}"
+                    fi
+                done <<< "$MEMBER_DEFS"
+            else
+                EFFECT=$(az policy definition show --name "$DEF_NAME" \
+                    --query "policyRule.then.effect" -o tsv 2>/dev/null || true)
+                if [[ "$EFFECT" == *"parameters"* ]]; then
+                    if [[ -n "$ASSIGN_EFFECT_OVERRIDE" ]]; then
+                        EFFECT="$ASSIGN_EFFECT_OVERRIDE"
+                    else
+                        DEFAULT_EFFECT=$(az policy definition show --name "$DEF_NAME" \
+                            --query "parameters.effect.defaultValue" -o tsv 2>/dev/null || true)
+                        [[ -n "$DEFAULT_EFFECT" ]] && EFFECT="$DEFAULT_EFFECT"
+                    fi
+                fi
+                if [[ "${EFFECT,,}" == *"deny"* ]]; then
+                    echo -e "    ${R}⚠ DENY: $POLICY_NAME${W}"
+                fi
+            fi
+        done < <(az policy assignment list $SCOPE_ARG \
+            --query "[].[id, displayName, policyDefinitionId, enforcementMode]" -o tsv 2>/dev/null || true)
+    done
+
+    echo ""
+    echo -e "    ${Y}Fix your Terraform config to comply, then re-run deploy.${W}"
+    echo -e "    ${Y}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${W}"
+    popd >/dev/null
+    exit 1
+fi
 done_ "All resources deployed"
 popd >/dev/null
 

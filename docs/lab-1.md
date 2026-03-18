@@ -55,21 +55,26 @@ The script performs 7 phases with a confirmation gate between each:
 | Phase | What it does |
 | :-----: | ------------- |
 | **1** | Re-enables public access on the state storage account (disabled after bootstrap) |
-| **2** | `terraform init` with remote backend |
+| **2** | `terraform init` with remote backend, imports existing Entra users into Terraform state |
 | **3** | `terraform validate` to check configuration syntax |
 | **4** | `terraform plan` to preview all changes |
 | **5** | `terraform apply` to provision resources and upload blobs |
 | **6** | Seed CRM data — reads SQL credentials from Key Vault, runs `dotnet run` for seed-data tool |
 | **7** | Link Entra users to Customers — reads Entra object IDs from Key Vault, updates `entra_id` in SQL |
 
+Before Phase 1, the script runs a **pre-flight check** that purges soft-deleted Key Vaults and Cognitive Services accounts from previous runs. Azure retains these in a soft-deleted state which blocks re-creation with the same name. Key Vault purges use `--no-wait` since they can take several minutes.
+
+If `terraform apply` fails, the script runs a **post-failure diagnostic** that lists all deny-effect Azure Policy assignments (including parameterized policies in initiatives) across the subscription and resource group. This helps identify `RequestDisallowedByPolicy` errors quickly.
+
 ### Option B — GitHub Actions
 
 1. Go to **Actions → Terraform Plan, Approve, Apply** in your GitHub repository
 2. Click **Run workflow**, select the `dev` environment, and confirm
 3. The workflow runs in four stages:
-   - **Plan** — authenticates via OIDC, runs `terraform plan`, and outputs the change set
+   - **Plan** — authenticates via OIDC, imports existing Entra users into state, runs `terraform plan`, and outputs the change set
    - **Manual approval** — creates a GitHub issue for review; an approver must approve before proceeding
-   - **Apply** — runs `terraform apply -auto-approve` to provision all resources
+   - **Purge soft-deleted** — purges soft-deleted Cognitive Services and Key Vault resources that would block re-creation
+   - **Apply** — runs `terraform apply -auto-approve` to provision all resources. On failure, runs a policy diagnostic listing any deny-effect policies
    - **Seed Data** — seeds CRM tables from CSV via `dotnet run`, then links Entra user object IDs to the Customers table
 
 All Terraform variables are read from the GitHub environment variables that `init` configured in Lab 0.

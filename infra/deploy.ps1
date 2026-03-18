@@ -325,7 +325,76 @@ Write-Host ""
 Push-Location $TerraformDir
 try {
     terraform apply "tfplan"
-    if ($LASTEXITCODE -ne 0) { throw "terraform apply failed" }
+    if ($LASTEXITCODE -ne 0) {
+        # ── Post-failure diagnostic: list deny policies that may have caused the failure ──
+        Write-Host ""
+        Write-Host "    ━━ Azure Policy diagnostic ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
+        Write-Host "    If you see RequestDisallowedByPolicy above, a deny policy" -ForegroundColor Yellow
+        Write-Host "    blocked resource creation. Listing deny policies..." -ForegroundColor Yellow
+        Write-Host ""
+
+        $SubscriptionId = az account show --query id -o tsv
+        $RgScope = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup"
+        $allAssignments = @()
+        $rgA = az policy assignment list --scope $RgScope -o json 2>$null | ConvertFrom-Json
+        $subA = az policy assignment list -o json 2>$null | ConvertFrom-Json
+        if ($rgA) { $allAssignments += $rgA }
+        if ($subA) { $allAssignments += $subA }
+
+        $seen = @{}
+        foreach ($a in $allAssignments) {
+            if ($seen.ContainsKey($a.id)) { continue }
+            $seen[$a.id] = $true
+            if ($a.enforcementMode -ne 'Default') { continue }
+
+            $defId = $a.policyDefinitionId
+            $defName = ($defId -split '/')[-1]
+            $isInitiative = $defId -match 'policySetDefinitions'
+            # Capture assignment-level parameter overrides
+            $assignParams = $a.parameters
+
+            if ($isInitiative) {
+                $members = az policy set-definition show --name $defName --query "policyDefinitions[].policyDefinitionId" -o json 2>$null | ConvertFrom-Json
+                if ($members) {
+                    foreach ($m in $members) {
+                        $mName = ($m -split '/')[-1]
+                        $mDef = az policy definition show --name $mName --query "{effect:policyRule.then.effect, defaultEffect:parameters.effect.defaultValue, displayName:displayName}" -o json 2>$null | ConvertFrom-Json
+                        # Resolve effective value: assignment param override > definition default > raw effect
+                        $resolvedEffect = $mDef.effect
+                        if ($resolvedEffect -match '\[parameters') {
+                            if ($assignParams -and $assignParams.effect -and $assignParams.effect.value) {
+                                $resolvedEffect = $assignParams.effect.value
+                            } elseif ($mDef.defaultEffect) {
+                                $resolvedEffect = $mDef.defaultEffect
+                            }
+                        }
+                        if ($resolvedEffect -match '(?i)deny') {
+                            Write-Host "    ⚠ DENY: $($mDef.displayName)" -ForegroundColor Red
+                            Write-Host "      Initiative: $($a.displayName)" -ForegroundColor DarkGray
+                        }
+                    }
+                }
+            } else {
+                $pDef = az policy definition show --name $defName --query "{effect:policyRule.then.effect, defaultEffect:parameters.effect.defaultValue}" -o json 2>$null | ConvertFrom-Json
+                $resolvedEffect = $pDef.effect
+                if ($resolvedEffect -match '\[parameters') {
+                    if ($assignParams -and $assignParams.effect -and $assignParams.effect.value) {
+                        $resolvedEffect = $assignParams.effect.value
+                    } elseif ($pDef.defaultEffect) {
+                        $resolvedEffect = $pDef.defaultEffect
+                    }
+                }
+                if ($resolvedEffect -match '(?i)deny') {
+                    Write-Host "    ⚠ DENY: $($a.displayName)" -ForegroundColor Red
+                }
+            }
+        }
+
+        Write-Host ""
+        Write-Host "    Fix your Terraform config to comply, then re-run deploy." -ForegroundColor Yellow
+        Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
+        throw "terraform apply failed"
+    }
     Write-Done "All resources deployed"
 } finally {
     Pop-Location

@@ -151,3 +151,14 @@ Each module lives under a `v1/` folder. When a breaking change is needed, create
 - `terraform.tfvars`, `backend.hcl`, and `*.backend.hcl` are gitignored under `infra/.gitignore`.
 - The bootstrap scripts and workflow disable storage public network access after setup; ensure your network can reach the storage account when running Terraform locally.
 - The resource group is created by the bootstrap scripts / workflow, not by Terraform. The name is passed into `main.tf` via `resource_group_name`.
+
+## Deploy script safety features
+
+| Feature | Description |
+| --- | --- |
+| **Soft-delete purge** | Pre-flight purge of soft-deleted Cognitive Services accounts and Key Vaults. KV purges use `--no-wait` to avoid blocking. |
+| **Entra user import** | Imports existing Entra test users into Terraform state before plan/apply to prevent recreation conflicts. |
+| **CAE token retry** | If Entra operations fail due to a `TokenCreatedWithOutdatedPolicies` challenge, the script clears cached tokens and re-authenticates interactively. |
+| **Policy diagnostic** | On `terraform apply` failure, lists all deny-effect Azure Policy assignments (resolving parameterized effects through assignment overrides and definition defaults). |
+| **SQL injection prevention** | Entra-to-Customer linking uses parameterized queries (`Invoke-Sqlcmd` with named variables) or single-quote escaping as fallback. |
+| **State storage lock** | Public access on the Terraform state storage account is disabled after every run. CI/CD uses `if: always()` to guarantee this even on failure. |
