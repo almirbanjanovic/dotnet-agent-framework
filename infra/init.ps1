@@ -108,7 +108,6 @@ Write-Step "Checking & installing prerequisites"
 
 $prerequisites = @{
     "az"        = @{ Name = "Azure CLI";   WinGet = "Microsoft.AzureCLI" }
-    "gh"        = @{ Name = "GitHub CLI";  WinGet = "GitHub.cli" }
     "terraform" = @{ Name = "Terraform";   WinGet = "Hashicorp.Terraform" }
     "dotnet"    = @{ Name = ".NET SDK";    WinGet = "Microsoft.DotNet.SDK.9" }
 }
@@ -188,8 +187,46 @@ $SubName  = az account show --query name -o tsv
 $TenantId = az account show --query tenantId -o tsv
 Write-Done "Azure: $SubName ($SubscriptionId)"
 
-# ── GitHub ───────────────────────────────────────────────────────────────────
-Write-Step "Signing in to GitHub"
+if (-not $LocalOnly) {
+
+# ── Deployment mode ──────────────────────────────────────────────────────────
+Write-Host ""
+Write-Host "    ┌─────────────────────────────────────────────────────────┐" -ForegroundColor Cyan
+Write-Host "    │  How would you like to deploy?                          │" -ForegroundColor Cyan
+Write-Host "    │                                                         │" -ForegroundColor Cyan
+Write-Host "    │    1. Full setup — Azure + GitHub Actions CI/CD          │" -ForegroundColor Cyan
+Write-Host "    │       (Entra OIDC app, GitHub secrets, variables)       │" -ForegroundColor Cyan
+Write-Host "    │                                                         │" -ForegroundColor Cyan
+Write-Host "    │    2. Local only — Azure backend only                    │" -ForegroundColor Cyan
+Write-Host "    │       (Deploy with ./deploy.ps1 or ./deploy.sh)         │" -ForegroundColor Cyan
+Write-Host "    └─────────────────────────────────────────────────────────┘" -ForegroundColor Cyan
+Write-Host ""
+$modeChoice = Read-Host "    Select [1-2, or press Enter for full setup]"
+$LocalOnly = ($modeChoice -eq '2')
+
+if ($LocalOnly) {
+    Write-Done "Mode: Local only (GitHub CI/CD will be skipped)"
+} else {
+    Write-Done "Mode: Full setup (Azure + GitHub CI/CD)"
+
+    # Check GitHub CLI prerequisite
+    if (Get-Command gh -ErrorAction SilentlyContinue) {
+        Write-Done "GitHub CLI (gh)"
+    } else {
+        Write-Host "    Installing GitHub CLI..." -ForegroundColor Yellow
+        if (Get-Command winget -ErrorAction SilentlyContinue) {
+            winget install --id GitHub.cli --accept-source-agreements --accept-package-agreements | Out-Null
+            $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+            if (Get-Command gh -ErrorAction SilentlyContinue) {
+                Write-Done "GitHub CLI installed"
+            } else {
+                throw "Failed to install GitHub CLI. Install manually and re-run."
+            }
+        } else {
+            throw "GitHub CLI is not installed and winget is not available. Install manually: see docs/lab-0.md"
+        }
+    }
+}
 
 $ghStatus = gh auth status 2>&1
 if ($ghStatus -match "Logged in") {
@@ -231,6 +268,8 @@ if (-not $GitHubRepo) { throw "No GitHub repository configured." }
 $RepoName = ($GitHubRepo -split "/")[-1]
 Write-Done "GitHub: $GitHubRepo"
 
+} # end if (-not $LocalOnly)
+
 # ── Environment ──────────────────────────────────────────────────────────────
 Write-Step "Select environment"
 Write-Host ""
@@ -256,15 +295,21 @@ $StorageAccount = ("st" + ($ResourceGroup -replace '^rg-', '' -replace '[^a-z0-9
 if ($StorageAccount.Length -gt 24) { $StorageAccount = $StorageAccount.Substring(0, 24) }
 
 # ── Show configuration & confirm ─────────────────────────────────────────────
-Write-PhaseSummary -Number 1 -NextPhase "Phase 2 — Create Entra app registration, service principal, and OIDC federated credential" -Items ([ordered]@{
+$phase1Items = [ordered]@{
     "Subscription"   = "$SubName ($SubscriptionId)"
     "Tenant"         = $TenantId
-    "GitHub repo"    = $GitHubRepo
     "Location"       = $Location
     "Base name"      = $BaseName
     "Environment"    = $GitHubEnv
     "Resource group" = $ResourceGroup
-})
+    "Deploy mode"    = if ($LocalOnly) { "Local only" } else { "Full (Azure + GitHub)" }
+}
+if (-not $LocalOnly) { $phase1Items["GitHub repo"] = $GitHubRepo }
+
+$nextPhase = if ($LocalOnly) { "Phase 4 — Create Azure resource group, storage account, blob container" } else { "Phase 2 — Create Entra app registration, service principal, and OIDC federated credential" }
+Write-PhaseSummary -Number 1 -NextPhase $nextPhase -Items $phase1Items
+
+if (-not $LocalOnly) {
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 2 — Entra app registration + OIDC + RBAC
@@ -405,6 +450,8 @@ Write-PhaseSummary -Number 3 -NextPhase "Phase 4 — Create Azure resource group
     "Env variables" = "$($envVars.Count)"
 })
 
+} # end if (-not $LocalOnly) — phases 2 & 3
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 4 — Azure backend resources
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -452,7 +499,7 @@ az storage account update --name $StorageAccount --resource-group $ResourceGroup
 Write-Done "Public access disabled"
 
 # ── RBAC: Contributor scoped to resource group (least privilege) ───────────
-if ($AppClientId) {
+if (-not $LocalOnly -and $AppClientId) {
     Write-Step "Granting Contributor role on resource group"
     $rgScope = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup"
     $roleExists = az role assignment list --assignee "$AppClientId" --role "Contributor" --scope $rgScope --query "[0].id" -o tsv 2>$null
@@ -537,20 +584,44 @@ Write-Done "$GitHubEnv.tfvars"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 
-Write-Host ""
-Write-Host "  ╔═══════════════════════════════════════════════════════╗" -ForegroundColor Green
-Write-Host "  ║  Bootstrap Complete!                                  ║" -ForegroundColor Green
-Write-Host "  ╠═══════════════════════════════════════════════════════╣" -ForegroundColor Green
-Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Subscription:     $SubName"
-Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Location:         $Location"
-Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Resource group:   $ResourceGroup"
-Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Storage account:  $StorageAccount"
-Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  App registration: $AppClientId"
-Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  GitHub repo:      $GitHubRepo"
-Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  GitHub env:       $GitHubEnv"
-Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Secrets:          3"
-Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Env variables:    $($envVars.Count)"
-Write-Host "  ║" -ForegroundColor Green
-Write-Host "  ║  Next: proceed to Lab 1 (terraform apply)             ║" -ForegroundColor Green
-Write-Host "  ╚═══════════════════════════════════════════════════════╝" -ForegroundColor Green
-Write-Host ""
+if ($LocalOnly) {
+    Write-Host ""
+    Write-Host "  ╔═══════════════════════════════════════════════════════════════╗" -ForegroundColor Green
+    Write-Host "  ║  Bootstrap Complete!                                          ║" -ForegroundColor Green
+    Write-Host "  ╠═══════════════════════════════════════════════════════════════╣" -ForegroundColor Green
+    Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Subscription:     $SubName"
+    Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Location:         $Location"
+    Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Resource group:   $ResourceGroup"
+    Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Storage account:  $StorageAccount"
+    Write-Host "  ╠═══════════════════════════════════════════════════════════════╣" -ForegroundColor Green
+    Write-Host "  ║" -ForegroundColor Green
+    Write-Host "  ║" -ForegroundColor Yellow -NoNewLine; Write-Host "  ⚠  LOCAL-ONLY MODE" -ForegroundColor Yellow
+    Write-Host "  ║" -ForegroundColor Yellow -NoNewLine; Write-Host "     GitHub CI/CD was NOT configured" -ForegroundColor Yellow
+    Write-Host "  ║" -ForegroundColor Green
+    Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Deployments must be run manually:"
+    Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "    cd infra && ./deploy.ps1  (or ./deploy.sh)"
+    Write-Host "  ║" -ForegroundColor Green
+    Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  GitHub Actions workflows will NOT work until"
+    Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  you re-run this script and select option 1."
+    Write-Host "  ║" -ForegroundColor Green
+    Write-Host "  ╚═══════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+    Write-Host ""
+} else {
+    Write-Host ""
+    Write-Host "  ╔═══════════════════════════════════════════════════════╗" -ForegroundColor Green
+    Write-Host "  ║  Bootstrap Complete!                                  ║" -ForegroundColor Green
+    Write-Host "  ╠═══════════════════════════════════════════════════════╣" -ForegroundColor Green
+    Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Subscription:     $SubName"
+    Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Location:         $Location"
+    Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Resource group:   $ResourceGroup"
+    Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Storage account:  $StorageAccount"
+    Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  App registration: $AppClientId"
+    Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  GitHub repo:      $GitHubRepo"
+    Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  GitHub env:       $GitHubEnv"
+    Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Secrets:          3"
+    Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Env variables:    $($envVars.Count)"
+    Write-Host "  ║" -ForegroundColor Green
+    Write-Host "  ║  Next: proceed to Lab 1 (terraform apply)             ║" -ForegroundColor Green
+    Write-Host "  ╚═══════════════════════════════════════════════════════╝" -ForegroundColor Green
+    Write-Host ""
+}

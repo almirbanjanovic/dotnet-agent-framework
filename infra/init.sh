@@ -155,7 +155,6 @@ install_if_missing() {
 }
 
 install_if_missing az        "Azure CLI"
-install_if_missing gh        "GitHub CLI"
 install_if_missing terraform "Terraform"
 install_if_missing dotnet    ".NET SDK"
 
@@ -216,8 +215,30 @@ SUB_NAME=$(az account show --query name -o tsv)
 TENANT_ID=$(az account show --query tenantId -o tsv)
 done_ "Azure: $SUB_NAME ($SUBSCRIPTION_ID)"
 
-# ── GitHub ───────────────────────────────────────────────────────────────────
-step "Signing in to GitHub"
+# ── Deployment mode ──────────────────────────────────────────────────────────
+echo ""
+echo -e "    ${C}┌─────────────────────────────────────────────────────────┐${W}"
+echo -e "    ${C}│  How would you like to deploy?                          │${W}"
+echo -e "    ${C}│                                                         │${W}"
+echo -e "    ${C}│    1. Full setup — Azure + GitHub Actions CI/CD          │${W}"
+echo -e "    ${C}│       (Entra OIDC app, GitHub secrets, variables)       │${W}"
+echo -e "    ${C}│                                                         │${W}"
+echo -e "    ${C}│    2. Local only — Azure backend only                    │${W}"
+echo -e "    ${C}│       (Deploy with ./deploy.ps1 or ./deploy.sh)         │${W}"
+echo -e "    ${C}└─────────────────────────────────────────────────────────┘${W}"
+echo ""
+read -p "    Select [1-2, or press Enter for full setup]: " mode_choice
+LOCAL_ONLY=false
+[[ "$mode_choice" == "2" ]] && LOCAL_ONLY=true
+
+if $LOCAL_ONLY; then
+    done_ "Mode: Local only (GitHub CI/CD will be skipped)"
+else
+    done_ "Mode: Full setup (Azure + GitHub CI/CD)"
+    install_if_missing gh "GitHub CLI"
+fi
+
+if ! $LOCAL_ONLY; then
 
 if gh auth status &>/dev/null; then
     skip_ "Already logged in to GitHub"
@@ -262,6 +283,8 @@ if [[ -z "$GITHUB_REPO" ]]; then echo "No GitHub repository configured."; exit 1
 REPO_NAME="${GITHUB_REPO##*/}"
 done_ "GitHub: $GITHUB_REPO"
 
+fi # end if ! $LOCAL_ONLY
+
 # ── Environment ──────────────────────────────────────────────────────────────
 step "Select environment"
 echo ""
@@ -286,15 +309,30 @@ RESOURCE_GROUP="rg-${BASE_NAME}-${GITHUB_ENV}-${LOCATION}"
 STORAGE_ACCOUNT="st$(echo "$RESOURCE_GROUP" | sed 's/^rg-//' | tr -cd 'a-z0-9')"
 STORAGE_ACCOUNT="${STORAGE_ACCOUNT:0:24}"
 
-phase_summary 1 \
-    "Phase 2 — Create Entra app registration, service principal, and OIDC federated credential" \
-    "Subscription"   "$SUB_NAME ($SUBSCRIPTION_ID)" \
-    "Tenant"         "$TENANT_ID" \
-    "GitHub repo"    "$GITHUB_REPO" \
-    "Location"       "$LOCATION" \
-    "Base name"      "$BASE_NAME" \
-    "Environment"    "$GITHUB_ENV" \
-    "Resource group" "$RESOURCE_GROUP"
+if $LOCAL_ONLY; then
+    phase_summary 1 \
+        "Phase 4 — Create Azure resource group, storage account, blob container" \
+        "Subscription"   "$SUB_NAME ($SUBSCRIPTION_ID)" \
+        "Tenant"         "$TENANT_ID" \
+        "Location"       "$LOCATION" \
+        "Base name"      "$BASE_NAME" \
+        "Environment"    "$GITHUB_ENV" \
+        "Resource group" "$RESOURCE_GROUP" \
+        "Deploy mode"    "Local only"
+else
+    phase_summary 1 \
+        "Phase 2 — Create Entra app registration, service principal, and OIDC federated credential" \
+        "Subscription"   "$SUB_NAME ($SUBSCRIPTION_ID)" \
+        "Tenant"         "$TENANT_ID" \
+        "GitHub repo"    "$GITHUB_REPO" \
+        "Location"       "$LOCATION" \
+        "Base name"      "$BASE_NAME" \
+        "Environment"    "$GITHUB_ENV" \
+        "Resource group" "$RESOURCE_GROUP" \
+        "Deploy mode"    "Full (Azure + GitHub)"
+fi
+
+if ! $LOCAL_ONLY; then
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 2 — Entra app registration + OIDC + RBAC
@@ -436,6 +474,8 @@ phase_summary 3 \
     "Environment"   "$GITHUB_ENV" \
     "Env variables" "$count"
 
+fi # end if ! $LOCAL_ONLY — phases 2 & 3
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 4 — Azure backend resources
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -480,7 +520,7 @@ az storage account update --name "$STORAGE_ACCOUNT" --resource-group "$RESOURCE_
 done_ "Public access disabled"
 
 # ── RBAC: Contributor scoped to resource group (least privilege) ─────────────
-if [[ -n "$APP_CLIENT_ID" ]]; then
+if ! $LOCAL_ONLY && [[ -n "$APP_CLIENT_ID" ]]; then
     step "Granting Contributor role on resource group"
     rg_scope="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP"
     role_exists=$(az role assignment list --assignee "$APP_CLIENT_ID" --role "Contributor" --scope "$rg_scope" --query "[0].id" -o tsv 2>/dev/null || true)
@@ -565,10 +605,29 @@ done_ "${GITHUB_ENV}.tfvars"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 
-echo ""
-echo -e "  ${G}╔═══════════════════════════════════════════════════════╗${W}"
-echo -e "  ${G}║  Bootstrap Complete!                                  ║${W}"
-echo -e "  ${G}╠═══════════════════════════════════════════════════════╣${W}"
+if $LOCAL_ONLY; then
+    echo ""
+    echo -e "  ${G}╔═══════════════════════════════════════════════════════════════╗${W}"
+    echo -e "  ${G}║  Bootstrap Complete!                                          ║${W}"
+    echo -e "  ${G}╠═══════════════════════════════════════════════════════════════╣${W}"
+    echo -e "  ${G}║${W}  Subscription:     $SUB_NAME"
+    echo -e "  ${G}║${W}  Location:         $LOCATION"
+    echo -e "  ${G}║${W}  Resource group:   $RESOURCE_GROUP"
+    echo -e "  ${G}║${W}  Storage account:  $STORAGE_ACCOUNT"
+    echo -e "  ${G}╠═══════════════════════════════════════════════════════════════╣${W}"
+    echo -e "  ${G}║${W}"
+    echo -e "  ${Y}║  ⚠  LOCAL-ONLY MODE${W}"
+    echo -e "  ${Y}║     GitHub CI/CD was NOT configured${W}"
+    echo -e "  ${G}║${W}"
+    echo -e "  ${G}║${W}  Deployments must be run manually:"
+    echo -e "  ${G}║${W}    cd infra && ./deploy.ps1  (or ./deploy.sh)"
+    echo -e "  ${G}║${W}"
+    echo -e "  ${G}║${W}  GitHub Actions workflows will NOT work until"
+    echo -e "  ${G}║${W}  you re-run this script and select option 1."
+    echo -e "  ${G}║${W}"
+    echo -e "  ${G}╚═══════════════════════════════════════════════════════════════╝${W}"
+    echo ""
+else"
 echo -e "  ${G}║${W}  Subscription:     $SUB_NAME"
 echo -e "  ${G}║${W}  Location:         $LOCATION"
 echo -e "  ${G}║${W}  Resource group:   $RESOURCE_GROUP"
