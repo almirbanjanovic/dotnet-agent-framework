@@ -227,4 +227,4 @@ See the lab guides in [`docs/`](docs/):
 ## Notes
 
 - Provider versions are pinned in `infra/terraform/providers.tf`.
-- `terraform.tfvars`, `backend.hcl`, and `appsettings.json` are gitignored.
+- `*.tfvars`, `backend.hcl`, and `appsettings.json` are gitignored.

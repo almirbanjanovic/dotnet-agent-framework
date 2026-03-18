@@ -92,11 +92,22 @@ dotnet run -- <your-keyvault-uri>
 Expected output:
 
 ```text
+═══════════════════════════════════════════════════════════
+  Config Sync — Key Vault → appsettings.json
+═══════════════════════════════════════════════════════════
+
+  Key Vault: <your-keyvault-uri>
+  Auth:      DefaultAzureCredential (az login)
+
   ✓ AZURE-OPENAI-ENDPOINT → AZURE_OPENAI_ENDPOINT
   ✓ AZURE-OPENAI-API-KEY → AZURE_OPENAI_API_KEY
   ✓ AZURE-OPENAI-DEPLOYMENT-NAME → AZURE_OPENAI_DEPLOYMENT_NAME
   ...
-  Wrote 21/21 secrets to .../src/appsettings.json
+  Wrote 20/20 secrets to .../src/appsettings.json
+
+═══════════════════════════════════════════════════════════
+  Done! Apps can now read from appsettings.json.
+═══════════════════════════════════════════════════════════
 ```
 
 ## Step 3 — Validate infrastructure
@@ -109,10 +120,10 @@ dotnet restore
 dotnet run
 ```
 
-Expected output:
+Expected output (the joke will differ on each run — it's AI-generated):
 
 ```text
-Using Azure OpenAI endpoint: https://aif-agentic-ai-centralus-gpt-4-1.openai.azure.com/
+Using Azure OpenAI endpoint: https://<your-openai-endpoint>/
 Deployment name: gpt-4.1
 
 Agent response:
@@ -131,7 +142,7 @@ If you see an error, check:
 After completing all steps, verify:
 
 - [ ] Infrastructure resources are visible in the Azure portal (or `terraform output` shows all endpoints)
-- [ ] `src/appsettings.json` has 21 non-empty values
+- [ ] `src/appsettings.json` has 20 non-empty values
 - [ ] `simple-agent` returns a joke from Azure OpenAI
 - [ ] Azure SQL Database has 6 tables with data (Customers, Orders, etc.)
 - [ ] Azure AI Search index has vectorized document chunks (check indexer status in Azure portal)

@@ -41,11 +41,11 @@ The script performs 5 phases in order:
 | **2** | Creates Entra app registration with service principal and OIDC federated credential for GitHub Actions |
 | **3** | Creates GitHub environment, sets repository secrets (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`) and environment variables |
 | **4** | Creates Azure resource group, storage account, blob container for Terraform remote state, grants Contributor RBAC, then locks down public access |
-| **5** | Generates `terraform.tfvars` and `backend.hcl` configuration files |
+| **5** | Generates `dev.tfvars` (or `{env}.tfvars`) and `backend.hcl` configuration files |
 
-### Why `terraform.tfvars` and `backend.hcl` are gitignored
+### Why `*.tfvars` and `backend.hcl` are gitignored
 
-These files contain environment-specific values (resource names, backend storage details) that could expose your Azure topology. They are generated locally by the init script and excluded from source control — a standard Terraform security best practice.
+These files contain environment-specific values (resource names, backend storage details) that could expose your Azure topology. The init script generates `{env}.tfvars` (e.g., `dev.tfvars`) and `backend.hcl` locally — both are excluded from source control via `.gitignore`. This is a standard Terraform security best practice.
 
 Between each phase, the script shows a summary and previews what the next phase will do before continuing.
 
@@ -54,7 +54,7 @@ The script is idempotent — it checks for existing resources and skips what's a
 ## Verification checklist
 
 - [ ] Terraform remote state storage account exists in Azure
-- [ ] `infra/terraform/terraform.tfvars` exists with your infrastructure configuration
+- [ ] `infra/terraform/dev.tfvars` (or `{env}.tfvars`) exists with your infrastructure configuration
 - [ ] `infra/terraform/backend.hcl` exists with your remote state storage account details
 - [ ] App registration exists in Entra with a federated credential for your GitHub repo
 - [ ] `gh secret list` shows `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`

@@ -10,12 +10,14 @@ This folder contains all Terraform infrastructure-as-code and bootstrap scripts 
 infra/
 ├── init.ps1                   # One-time bootstrap: backend + Entra + GitHub CI/CD (PowerShell)
 ├── init.sh                    # One-time bootstrap: backend + Entra + GitHub CI/CD (Bash)
+├── deploy.ps1                 # Deploy infrastructure + seed data (PowerShell)
+├── deploy.sh                  # Deploy infrastructure + seed data (Bash)
 └── terraform/
     ├── main.tf                # Root module — wires all child modules
     ├── variables.tf           # Root input variables (no defaults)
     ├── outputs.tf             # Root outputs (endpoints, keys, names)
     ├── providers.tf           # Provider versions and backend config
-    ├── terraform.tfvars       # Your environment values (gitignored)
+    ├── dev.tfvars             # Your environment values (gitignored, name matches env)
     ├── backend.hcl            # Remote state config (gitignored)
     │
     └── modules/
@@ -149,7 +151,7 @@ Each module lives under a `v1/` folder. When a breaking change is needed, create
 ## Notes
 
 - Provider versions are pinned with `~>` constraints in `providers.tf`.
-- `terraform.tfvars`, `backend.hcl`, and `*.backend.hcl` are gitignored under `infra/.gitignore`.
+- `*.tfvars`, `backend.hcl`, and `*.backend.hcl` are gitignored under `infra/.gitignore`.
 - The bootstrap scripts and workflow disable storage public network access after setup; ensure your network can reach the storage account when running Terraform locally.
 - The resource group is created by the bootstrap scripts / workflow, not by Terraform. The name is passed into `main.tf` via `resource_group_name`.
 

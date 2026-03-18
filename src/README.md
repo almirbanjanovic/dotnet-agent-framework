@@ -47,7 +47,7 @@ The `appsettings.json` is shared across all projects — each references it via 
 | Project | Description |
 | --- | --- |
 | `config-sync/` | Pulls Key Vault secrets into `appsettings.json` |
-| `seed-data/` | Seeds Azure SQL from CSV files (runs via `terraform apply`) |
+| `seed-data/` | Seeds Azure SQL from CSV files (runs via deploy script) |
 | `simple-agent/` | Validates Azure OpenAI connectivity (Lab 1) |
 
 ## Labs
