@@ -173,30 +173,39 @@ add_deployer_firewall_rules() {
     echo -e "  ${Y}━━ Adding deployer IP $IP to resource firewalls ━━${W}"
 
     # Key Vault
+    echo -ne "    Key Vaults..."
     for kv in $(az keyvault list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
       az keyvault network-rule add --name "$kv" --ip-address "$IP/32" 2>/dev/null || true
     done
+    echo " done"
 
     # Storage accounts
+    echo -ne "    Storage accounts..."
     for st in $(az storage account list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
       az storage account network-rule add --resource-group "$RG" --account-name "$st" --ip-address "$IP" 2>/dev/null || true
     done
+    echo " done"
 
-    # Cosmos DB
+    # Cosmos DB (--no-wait: the ARM operation is slow but the firewall rule takes effect immediately)
+    echo -ne "    Cosmos DB..."
     for c in $(az cosmosdb list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
       EXISTING=$(az cosmosdb show --name "$c" --resource-group "$RG" --query "ipRules[].ipAddressOrRange" -o tsv 2>/dev/null || true)
       if ! echo "$EXISTING" | grep -qF "$IP"; then
           NEW_IPS=$(echo -e "${EXISTING}\n${IP}" | grep -v '^$' | paste -sd, -)
-          az cosmosdb update --name "$c" --resource-group "$RG" --ip-range-filter "$NEW_IPS" 2>/dev/null || true
+          az cosmosdb update --name "$c" --resource-group "$RG" --ip-range-filter "$NEW_IPS" --no-wait 2>/dev/null || true
       fi
     done
+    echo " done"
 
     # Cognitive Services
+    echo -ne "    Cognitive Services..."
     for cog in $(az cognitiveservices account list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
       az cognitiveservices account network-rule add --resource-group "$RG" --name "$cog" --ip-address "$IP/32" 2>/dev/null || true
     done
+    echo " done"
 
     # AI Search
+    echo -ne "    AI Search..."
     for s in $(az search service list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
       CURRENT=$(az search service show --name "$s" --resource-group "$RG" --query "networkRuleSet.ipRules[].value" -o tsv 2>/dev/null || true)
       if ! echo "$CURRENT" | grep -qF "$IP"; then
@@ -205,6 +214,7 @@ add_deployer_firewall_rules() {
           az search service update --name "$s" --resource-group "$RG" --ip-rules "$RULES" 2>/dev/null || true
       fi
     done
+    echo " done"
 
     echo -e "  ${G}━━ Deployer IP added to all resource firewalls ━━${W}"
 }
@@ -218,28 +228,37 @@ cleanup_deployer_ip() {
     IP="$DEPLOYER_IP"
 
     # Key Vault
+    echo -ne "    Key Vaults..."
     for kv in $(az keyvault list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
       az keyvault network-rule remove --name "$kv" --ip-address "$IP/32" 2>/dev/null || true
     done
+    echo " done"
 
     # Storage accounts
+    echo -ne "    Storage accounts..."
     for st in $(az storage account list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
       az storage account network-rule remove --resource-group "$RG" --account-name "$st" --ip-address "$IP" 2>/dev/null || true
     done
+    echo " done"
 
-    # Cosmos DB
+    # Cosmos DB (--no-wait: the ARM operation is slow but the firewall rule takes effect immediately)
+    echo -ne "    Cosmos DB..."
     for c in $(az cosmosdb list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
       EXISTING=$(az cosmosdb show --name "$c" --resource-group "$RG" --query "ipRules[].ipAddressOrRange" -o tsv 2>/dev/null || true)
       FILTERED=$(echo "$EXISTING" | grep -v "^${IP}$" | paste -sd, - 2>/dev/null || true)
-      az cosmosdb update --name "$c" --resource-group "$RG" --ip-range-filter "$FILTERED" 2>/dev/null || true
+      az cosmosdb update --name "$c" --resource-group "$RG" --ip-range-filter "$FILTERED" --no-wait 2>/dev/null || true
     done
+    echo " done"
 
     # Cognitive Services
+    echo -ne "    Cognitive Services..."
     for cog in $(az cognitiveservices account list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
       az cognitiveservices account network-rule remove --resource-group "$RG" --name "$cog" --ip-address "$IP/32" 2>/dev/null || true
     done
+    echo " done"
 
     # AI Search
+    echo -ne "    AI Search..."
     for s in $(az search service list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
       CURRENT=$(az search service show --name "$s" --resource-group "$RG" --query "networkRuleSet.ipRules[].value" -o tsv 2>/dev/null || true)
       FILTERED=$(echo "$CURRENT" | grep -v "^${IP}$" || true)
@@ -250,6 +269,7 @@ cleanup_deployer_ip() {
       fi
       az search service update --name "$s" --resource-group "$RG" --ip-rules "$RULES" 2>/dev/null || true
     done
+    echo " done"
 
     echo -e "  ${Y}━━ Removing deployer IP from state storage ━━${W}"
     az storage account network-rule remove --account-name "$STORAGE_ACCOUNT" --resource-group "$RESOURCE_GROUP" --ip-address "$DEPLOYER_IP" >/dev/null 2>&1 || true
