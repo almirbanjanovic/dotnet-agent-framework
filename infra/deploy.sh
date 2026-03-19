@@ -129,6 +129,54 @@ export ARM_DISABLE_CAE=true
 export AZURE_DISABLE_CAE=true
 export HAMILTON_DISABLE_CAE=true
 
+# ── Set up client credentials for msgraph provider ───────────────────────────
+# The Entra Agent ID API rejects delegated tokens containing Directory.AccessAsUser.All,
+# which is baked into the Azure CLI's first-party app and cannot be removed.
+# Solution: create a temporary client secret on the GitHub Actions SP, grant it
+# Application.ReadWrite.All (app permission), and export as env vars so the
+# msgraph provider uses client credentials (app-only token) instead.
+TENANT_ID=$(az account show --query tenantId -o tsv)
+SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+REPO_NAME=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null || echo "dotnet-agent-framework")
+SP_APP_NAME="github-actions-${REPO_NAME}"
+SP_CLIENT_ID=$(az ad app list --display-name "$SP_APP_NAME" --query "[0].appId" -o tsv 2>/dev/null || true)
+SP_TEMP_SECRET=""
+
+if [[ -n "$SP_CLIENT_ID" ]]; then
+    step "Configuring client credentials for Agent Identity (msgraph provider)"
+
+    # Grant Application.ReadWrite.All app permission if not already granted
+    APP_RW_ALL_ID="1bfefb4e-e0b5-418b-a88f-73c46d2cc8e9"
+    EXISTING_GRANT=$(az ad app permission list --id "$SP_CLIENT_ID" \
+        --query "[?resourceAppId=='00000003-0000-0000-c000-000000000000'].resourceAccess[?id=='$APP_RW_ALL_ID'].id" \
+        -o tsv 2>/dev/null || true)
+    if [[ -z "$EXISTING_GRANT" ]]; then
+        az ad app permission add --id "$SP_CLIENT_ID" \
+            --api "00000003-0000-0000-c000-000000000000" \
+            --api-permissions "${APP_RW_ALL_ID}=Role" 2>/dev/null || true
+        az ad app permission admin-consent --id "$SP_CLIENT_ID" 2>/dev/null || true
+        done_ "Granted Application.ReadWrite.All to $SP_APP_NAME"
+    else
+        az ad app permission admin-consent --id "$SP_CLIENT_ID" 2>/dev/null || true
+    fi
+
+    # Create a temporary client secret (valid 1 hour)
+    END_DATE=$(date -u -d "+1 hour" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v+1H '+%Y-%m-%dT%H:%M:%SZ')
+    SP_TEMP_SECRET=$(az ad app credential reset --id "$SP_CLIENT_ID" --years 0 \
+        --end-date "$END_DATE" --query password -o tsv 2>/dev/null || true)
+    if [[ -n "$SP_TEMP_SECRET" ]]; then
+        export ARM_CLIENT_ID="$SP_CLIENT_ID"
+        export ARM_CLIENT_SECRET="$SP_TEMP_SECRET"
+        export ARM_TENANT_ID="$TENANT_ID"
+        export ARM_SUBSCRIPTION_ID="$SUBSCRIPTION_ID"
+        done_ "Temporary client secret created for msgraph provider"
+    else
+        echo -e "    ${Y}⚠ Could not create client secret — Agent Identity may fail${W}"
+    fi
+else
+    echo -e "    ${Y}⚠ SP '$SP_APP_NAME' not found — run init.sh first for Agent Identity support${W}"
+fi
+
 if [[ ${#tfvars_files[@]} -eq 1 ]]; then
     ENVIRONMENT="${tfvars_files[0]%.tfvars}"
     echo -e "    Found environment: ${C}${ENVIRONMENT}${W}"
@@ -287,6 +335,14 @@ cleanup_deployer_ip() {
     echo " done"
 
     echo -e "  ${G}━━ Cleanup complete ━━${W}"
+
+    # Remove the temporary client secret created for the msgraph provider
+    if [[ -n "$SP_CLIENT_ID" && -n "$SP_TEMP_SECRET" ]]; then
+        echo -e "  ${D}Cleaning up temporary client secret...${W}"
+        CLEANUP_END=$(date -u -d "+1 minute" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v+1M '+%Y-%m-%dT%H:%M:%SZ')
+        az ad app credential reset --id "$SP_CLIENT_ID" --years 0 --end-date "$CLEANUP_END" 2>/dev/null || true
+        unset ARM_CLIENT_SECRET
+    fi
 }
 trap cleanup_deployer_ip EXIT
 

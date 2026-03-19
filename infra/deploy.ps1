@@ -246,6 +246,52 @@ $env:ARM_DISABLE_CAE = "true"
 $env:AZURE_DISABLE_CAE = "true"
 $env:HAMILTON_DISABLE_CAE = "true"
 
+# ── Set up client credentials for msgraph provider ───────────────────────────
+# The Entra Agent ID API rejects delegated tokens containing Directory.AccessAsUser.All,
+# which is baked into the Azure CLI's first-party app and cannot be removed.
+# Solution: create a temporary client secret on the GitHub Actions SP, grant it
+# Application.ReadWrite.All (app permission), and export as env vars so the
+# msgraph provider uses client credentials (app-only token) instead.
+$TenantId = az account show --query tenantId -o tsv
+$SubscriptionId = az account show --query id -o tsv
+$BaseName = Read-HclValue -FilePath "$TerraformDir\$($TfVarsFiles[0].BaseName).tfvars" -Key "base_name"
+$RepoName = (Split-Path -Leaf (git rev-parse --show-toplevel 2>$null)) 2>$null
+if (-not $RepoName) { $RepoName = "dotnet-agent-framework" }
+$SpAppName = "github-actions-$RepoName"
+$SpClientId = az ad app list --display-name "$SpAppName" --query "[0].appId" -o tsv 2>$null
+
+if ($SpClientId) {
+    Write-Step "Configuring client credentials for Agent Identity (msgraph provider)"
+
+    # Grant Application.ReadWrite.All app permission if not already granted
+    $GraphSpId = az ad sp list --filter "appId eq '00000003-0000-0000-c000-000000000000'" --query "[0].id" -o tsv 2>$null
+    $AppRwAllId = "1bfefb4e-e0b5-418b-a88f-73c46d2cc8e9" # Application.ReadWrite.All app role ID
+    $SpObjectId = az ad sp show --id "$SpClientId" --query id -o tsv 2>$null
+    $existingGrant = az ad app permission list --id "$SpClientId" --query "[?resourceAppId=='00000003-0000-0000-c000-000000000000'].resourceAccess[?id=='$AppRwAllId'].id" -o tsv 2>$null
+    if (-not $existingGrant) {
+        az ad app permission add --id "$SpClientId" --api "00000003-0000-0000-c000-000000000000" --api-permissions "${AppRwAllId}=Role" 2>$null | Out-Null
+        az ad app permission admin-consent --id "$SpClientId" 2>$null | Out-Null
+        Write-Done "Granted Application.ReadWrite.All to $SpAppName"
+    } else {
+        # Ensure admin consent is applied
+        az ad app permission admin-consent --id "$SpClientId" 2>$null | Out-Null
+    }
+
+    # Create a temporary client secret (valid 1 hour)
+    $SecretJson = az ad app credential reset --id "$SpClientId" --years 0 --end-date ((Get-Date).AddHours(1).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")) --query password -o tsv 2>$null
+    if ($SecretJson) {
+        $env:ARM_CLIENT_ID = $SpClientId
+        $env:ARM_CLIENT_SECRET = $SecretJson
+        $env:ARM_TENANT_ID = $TenantId
+        $env:ARM_SUBSCRIPTION_ID = $SubscriptionId
+        Write-Done "Temporary client secret created for msgraph provider"
+    } else {
+        Write-Host "    ⚠ Could not create client secret — Agent Identity may fail" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "    ⚠ SP '$SpAppName' not found — run init.ps1 first for Agent Identity support" -ForegroundColor Yellow
+}
+
 if ($TfVarsFiles.Count -eq 1) {
     $Environment = $TfVarsFiles[0].BaseName
     Write-Host "    Found environment: " -NoNewLine; Write-Host "$Environment" -ForegroundColor Cyan
@@ -726,10 +772,17 @@ Write-Host ""
 
 } finally {
     # ═══════════════════════════════════════════════════════════════════════════
-    # ALWAYS: Close all resource firewalls
+    # ALWAYS: Close all resource firewalls + clean up temp credentials
     # This block runs even if the deploy fails or is interrupted.
     # ═══════════════════════════════════════════════════════════════════════════
     foreach ($ip in $DeployerIps) {
         Remove-DeployerFirewallRules -ResourceGroup $ResourceGroup -DeployerIp $ip
+    }
+
+    # Remove the temporary client secret created for the msgraph provider
+    if ($SpClientId -and $env:ARM_CLIENT_SECRET) {
+        Write-Host "  Cleaning up temporary client secret..." -ForegroundColor DarkGray
+        az ad app credential reset --id "$SpClientId" --years 0 --end-date ((Get-Date).AddMinutes(1).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")) 2>$null | Out-Null
+        $env:ARM_CLIENT_SECRET = ""
     }
 }
