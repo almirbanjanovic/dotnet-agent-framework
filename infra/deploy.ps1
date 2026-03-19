@@ -262,9 +262,7 @@ if ($SpClientId) {
     Write-Step "Configuring client credentials for Agent Identity (msgraph provider)"
 
     # Grant Application.ReadWrite.All app permission if not already granted
-    $GraphSpId = az ad sp list --filter "appId eq '00000003-0000-0000-c000-000000000000'" --query "[0].id" -o tsv 2>$null
     $AppRwAllId = "1bfefb4e-e0b5-418b-a88f-73c46d2cc8e9" # Application.ReadWrite.All app role ID
-    $SpObjectId = az ad sp show --id "$SpClientId" --query id -o tsv 2>$null
     $existingGrant = az ad app permission list --id "$SpClientId" --query "[?resourceAppId=='00000003-0000-0000-c000-000000000000'].resourceAccess[?id=='$AppRwAllId'].id" -o tsv 2>$null
     if (-not $existingGrant) {
         az ad app permission add --id "$SpClientId" --api "00000003-0000-0000-c000-000000000000" --api-permissions "${AppRwAllId}=Role" 2>$null | Out-Null

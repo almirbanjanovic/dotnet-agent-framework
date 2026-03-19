@@ -160,15 +160,17 @@ if [[ -n "$SP_CLIENT_ID" ]]; then
 
     # Create a temporary client secret (valid 1 hour)
     END_DATE=$(date -u -d "+1 hour" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v+1H '+%Y-%m-%dT%H:%M:%SZ')
-    SP_TEMP_SECRET=$(az ad app credential reset --id "$SP_CLIENT_ID" --years 0 \
-        --end-date "$END_DATE" --query password -o tsv 2>/dev/null || true)
-    if [[ -n "$SP_TEMP_SECRET" ]]; then
+    SECRET_OUTPUT=$(az ad app credential reset --id "$SP_CLIENT_ID" --years 0 \
+        --end-date "$END_DATE" -o json 2>&1)
+    if [[ $? -eq 0 ]]; then
+        SP_TEMP_SECRET=$(echo "$SECRET_OUTPUT" | jq -r '.password')
         export TF_VAR_msgraph_client_id="$SP_CLIENT_ID"
         export TF_VAR_msgraph_client_secret="$SP_TEMP_SECRET"
         export TF_VAR_msgraph_tenant_id="$TENANT_ID"
         done_ "Temporary client secret created for msgraph provider"
     else
         echo -e "    ${Y}⚠ Could not create client secret — Agent Identity may fail${W}"
+        echo -e "    ${D}$SECRET_OUTPUT${W}"
     fi
 else
     echo -e "    ${Y}⚠ SP '$SP_APP_NAME' not found — run init.sh first for Agent Identity support${W}"
