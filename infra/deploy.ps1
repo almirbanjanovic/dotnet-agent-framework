@@ -51,6 +51,7 @@ function Write-Phase {
 
 function Write-Step  { param([string]$Message) Write-Host "  → $Message" -ForegroundColor White }
 function Write-Done  { param([string]$Message) Write-Host "    ✓ $Message" -ForegroundColor Green }
+function Write-Fail  { param([string]$Message) Write-Host "    ✗ $Message" -ForegroundColor Red }
 
 function Write-PhaseSummary {
     param([int]$Number, [hashtable]$Items, [string]$NextPhase)
@@ -334,7 +335,7 @@ az storage account network-rule add `
 
 Write-Host "    Waiting 30s for firewall change to propagate..." -ForegroundColor DarkGray
 Start-Sleep -Seconds 30
-Write-Done "Deployer IP added to $StorageAccount"
+Write-Done "State storage unlocked"
 
 Write-PhaseSummary -Number 1 -NextPhase "Phase 2 — terraform init (configure backend)" -Items ([ordered]@{
     "Storage account" = $StorageAccount
@@ -352,7 +353,7 @@ Write-Step "Initializing Terraform with backend config"
 Push-Location $TerraformDir
 try {
     cmd /c "terraform init -upgrade -reconfigure -backend-config=backend.hcl"
-    if ($LASTEXITCODE -ne 0) { throw "terraform init failed" }
+    if ($LASTEXITCODE -ne 0) { Write-Fail "terraform init failed"; exit 1 }
     Write-Done "Terraform initialized"
 } finally {
     Pop-Location
@@ -404,7 +405,7 @@ Write-Step "Validating Terraform configuration"
 Push-Location $TerraformDir
 try {
     terraform validate
-    if ($LASTEXITCODE -ne 0) { throw "terraform validate failed — fix errors above and re-run" }
+    if ($LASTEXITCODE -ne 0) { Write-Fail "terraform validate failed — fix errors above and re-run"; exit 1 }
     Write-Done "Configuration is valid"
 } finally {
     Pop-Location
@@ -420,21 +421,20 @@ Write-PhaseSummary -Number 3 -NextPhase "Phase 4 — terraform plan (preview inf
 
 Write-Phase -Number 4 -Title "terraform plan"
 
-# Re-add deployer IP to all resource firewalls before plan. On a retry after a
-# previous failed deploy, the finally block will have stripped the deployer IP from
-# every firewall. Terraform plan refreshes existing resources (blobs, certs) via
-# data-plane calls, so the firewalls must be open before plan runs.
-Write-Step "Ensuring deployer IP is whitelisted on existing resource firewalls"
+Write-Step "Preparing for plan (firewall rules + token refresh)"
 Add-DeployerFirewallRules -ResourceGroup $ResourceGroup -DeployerIp $DeployerIp
 Write-Host "    Waiting 30s for firewall changes to propagate..." -ForegroundColor DarkGray
 Start-Sleep -Seconds 30
+az account get-access-token --resource https://management.azure.com 2>$null | Out-Null
+az account get-access-token --resource https://graph.microsoft.com 2>$null | Out-Null
+Write-Done "Firewalls open, tokens refreshed"
 
 Write-Step "Planning infrastructure changes"
 
 Push-Location $TerraformDir
 try {
     cmd /c "terraform plan -var-file=$Environment.tfvars -out=tfplan"
-    if ($LASTEXITCODE -ne 0) { throw "terraform plan failed" }
+    if ($LASTEXITCODE -ne 0) { Write-Fail "terraform plan failed"; exit 1 }
     Write-Done "Plan saved to tfplan"
 } finally {
     Pop-Location
@@ -450,6 +450,9 @@ Write-PhaseSummary -Number 4 -NextPhase "Phase 5 — terraform apply (provision 
 # ═══════════════════════════════════════════════════════════════════════════════
 
 Write-Phase -Number 5 -Title "terraform apply"
+
+az account get-access-token --resource https://management.azure.com 2>$null | Out-Null
+az account get-access-token --resource https://graph.microsoft.com 2>$null | Out-Null
 
 Write-Step "Applying infrastructure changes"
 Write-Host "    Resources: AI Foundry, Cosmos DB, AI Search, AKS, ACR, Key Vault, Storage" -ForegroundColor DarkGray
@@ -526,7 +529,7 @@ try {
         Write-Host ""
         Write-Host "    Fix your Terraform config to comply, then re-run deploy." -ForegroundColor Yellow
         Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
-        throw "terraform apply failed"
+        Write-Fail "terraform apply failed"; exit 1
     }
     Write-Done "All resources deployed"
 } finally {
@@ -548,36 +551,30 @@ Write-PhaseSummary -Number 5 -NextPhase "Phase 6 — Seed CRM data into Cosmos D
 
 Write-Phase -Number 6 -Title "Seed CRM data"
 
-Write-Step "Discovering Key Vault in $ResourceGroup"
+Write-Step "Resolving infrastructure endpoints"
 $KvName = az keyvault list --resource-group $ResourceGroup --query "[0].name" -o tsv
 if (-not $KvName) { throw "No Key Vault found in $ResourceGroup" }
-Write-Done "Key Vault: $KvName"
-
-Write-Step "Reading Cosmos DB CRM connection info from Key Vault"
 $CosmosEndpoint = az keyvault secret show --vault-name $KvName --name "COSMOSDB-CRM-ENDPOINT" --query value -o tsv
 $CosmosKey      = az keyvault secret show --vault-name $KvName --name "COSMOSDB-CRM-KEY" --query value -o tsv
 $CosmosDb       = az keyvault secret show --vault-name $KvName --name "COSMOSDB-CRM-DATABASE" --query value -o tsv
-Write-Done "Cosmos DB: $CosmosEndpoint / $CosmosDb"
-
-Write-Step "Getting AKS credentials (Cosmos DB is behind a private endpoint)"
 $AksName = az aks list --resource-group $ResourceGroup --query "[0].name" -o tsv
 if (-not $AksName) { throw "No AKS cluster found in $ResourceGroup" }
 az aks get-credentials --resource-group $ResourceGroup --name $AksName --overwrite-existing | Out-Null
-Write-Done "AKS: $AksName"
+Write-Done "Key Vault: $KvName | Cosmos DB: $CosmosDb | AKS: $AksName"
 
-Write-Step "Publishing seed-data tool for Linux"
+Write-Step "Publishing seed-data tool"
 $SeedDataDir = Join-Path (Split-Path $ScriptDir) "src" "seed-data"
 $PublishDir   = Join-Path $SeedDataDir "bin" "publish"
 Push-Location $SeedDataDir
 try {
     dotnet publish -c Release -r linux-x64 --self-contained -o $PublishDir 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed" }
-    Write-Done "Published to $PublishDir"
+    if ($LASTEXITCODE -ne 0) { Write-Fail "dotnet publish failed"; exit 1 }
+    Write-Done "Published seed-data"
 } finally {
     Pop-Location
 }
 
-Write-Step "Running seed-data inside AKS cluster"
+Write-Step "Seeding CRM data via AKS pod"
 $K8sNamespace = "contoso"
 $PodName = "seed-data-runner"
 $CrmDataDir = Join-Path (Split-Path $ScriptDir) "data" "contoso-crm"
@@ -585,7 +582,6 @@ $CrmDataDir = Join-Path (Split-Path $ScriptDir) "data" "contoso-crm"
 # Create temporary pod
 kubectl run $PodName --image=mcr.microsoft.com/dotnet/runtime-deps:9.0 --restart=Never --namespace=$K8sNamespace --command -- sleep 600 2>&1 | Out-Null
 kubectl wait --for=condition=Ready pod/$PodName --namespace=$K8sNamespace --timeout=120s 2>&1 | Out-Null
-Write-Done "Pod $PodName ready"
 
 try {
     # Copy published app and CRM data
@@ -597,7 +593,7 @@ try {
     # Run seed-data with Cosmos DB connection
     kubectl exec $PodName --namespace=$K8sNamespace -- `
         /bin/sh -c "COSMOSDB_CRM_ENDPOINT='$CosmosEndpoint' COSMOSDB_CRM_KEY='$CosmosKey' COSMOSDB_CRM_DATABASE='$CosmosDb' CRM_DATA_PATH='/data/contoso-crm' /app/seed-data"
-    if ($LASTEXITCODE -ne 0) { throw "seed-data failed" }
+    if ($LASTEXITCODE -ne 0) { Write-Fail "seed-data failed"; exit 1 }
     Write-Done "CRM data seeded"
 } finally {
     kubectl delete pod $PodName --namespace=$K8sNamespace --force --grace-period=0 2>&1 | Out-Null
@@ -613,7 +609,7 @@ Write-PhaseSummary -Number 6 -NextPhase "Phase 7 — Link Entra users to Custome
 
 Write-Phase -Number 7 -Title "Link Entra users to Customers"
 
-Write-Step "Reading Entra object IDs from Key Vault"
+Write-Step "Building Entra mapping from Key Vault"
 
 $CustomerMapping = @(
     @{ CustomerId = "101"; SecretName = "CUSTOMER-EMMA-ENTRA-OID";  Name = "Emma Wilson" }
@@ -623,7 +619,6 @@ $CustomerMapping = @(
     @{ CustomerId = "105"; SecretName = "CUSTOMER-LISA-ENTRA-OID";  Name = "Lisa Torres" }
 )
 
-Write-Step "Building Entra mapping and updating Cosmos DB via seed-data tool"
 $EntraPairs = @()
 foreach ($mapping in $CustomerMapping) {
     $oid = az keyvault secret show --vault-name $KvName --name $mapping.SecretName --query value -o tsv
@@ -647,7 +642,7 @@ try {
 
     kubectl exec $PodName7 --namespace=$K8sNamespace -- `
         /bin/sh -c "COSMOSDB_CRM_ENDPOINT='$CosmosEndpoint' COSMOSDB_CRM_KEY='$CosmosKey' COSMOSDB_CRM_DATABASE='$CosmosDb' CRM_DATA_PATH='/dev/null' ENTRA_MAPPING='$EntraMapping' /app/seed-data"
-    if ($LASTEXITCODE -ne 0) { throw "entra linking failed" }
+    if ($LASTEXITCODE -ne 0) { Write-Fail "entra linking failed"; exit 1 }
     Write-Done "Entra users linked to Customers"
 } finally {
     kubectl delete pod $PodName7 --namespace=$K8sNamespace --force --grace-period=0 2>&1 | Out-Null
@@ -681,8 +676,4 @@ Write-Host ""
     # This block runs even if the deploy fails or is interrupted.
     # ═══════════════════════════════════════════════════════════════════════════
     Remove-DeployerFirewallRules -ResourceGroup $ResourceGroup -DeployerIp $DeployerIp
-
-    Write-Step "Removing deployer IP from $StorageAccount firewall"
-    az storage account network-rule remove --account-name $StorageAccount --resource-group $ResourceGroup --ip-address $DeployerIp 2>$null | Out-Null
-    Write-Done "Deployer IP removed from $StorageAccount"
 }

@@ -271,8 +271,6 @@ cleanup_deployer_ip() {
     done
     echo " done"
 
-    echo -e "  ${Y}━━ Removing deployer IP from state storage ━━${W}"
-    az storage account network-rule remove --account-name "$STORAGE_ACCOUNT" --resource-group "$RESOURCE_GROUP" --ip-address "$DEPLOYER_IP" >/dev/null 2>&1 || true
     echo -e "  ${G}━━ Cleanup complete ━━${W}"
 }
 trap cleanup_deployer_ip EXIT
@@ -327,7 +325,7 @@ az storage account network-rule add \
 
 echo -e "    ${D}Waiting 30s for firewall change to propagate...${W}"
 sleep 30
-done_ "Deployer IP added to $STORAGE_ACCOUNT"
+done_ "State storage unlocked"
 
 phase_summary 1 \
     "Phase 2 — terraform init (configure backend)" \
@@ -401,14 +399,13 @@ phase_summary 3 \
 
 phase 4 "terraform plan"
 
-# Re-add deployer IP to all resource firewalls before plan. On a retry after a
-# previous failed deploy, the cleanup trap will have stripped the deployer IP from
-# every firewall. Terraform plan refreshes existing resources (blobs, certs) via
-# data-plane calls, so the firewalls must be open before plan runs.
-step "Ensuring deployer IP is whitelisted on existing resource firewalls"
+step "Preparing for plan (firewall rules + token refresh)"
 add_deployer_firewall_rules "$RESOURCE_GROUP" "$DEPLOYER_IP"
 echo -e "    ${D}Waiting 30s for firewall changes to propagate...${W}"
 sleep 30
+az account get-access-token --resource https://management.azure.com >/dev/null 2>&1 || true
+az account get-access-token --resource https://graph.microsoft.com >/dev/null 2>&1 || true
+done_ "Firewalls open, tokens refreshed"
 
 step "Planning infrastructure changes"
 
@@ -427,6 +424,9 @@ phase_summary 4 \
 # ═══════════════════════════════════════════════════════════════════════════════
 
 phase 5 "terraform apply"
+
+az account get-access-token --resource https://management.azure.com >/dev/null 2>&1 || true
+az account get-access-token --resource https://graph.microsoft.com >/dev/null 2>&1 || true
 
 step "Applying infrastructure changes"
 echo -e "    ${D}Resources: AI Foundry, Cosmos DB, AI Search, AKS, ACR, Key Vault, Storage${W}"
@@ -526,39 +526,32 @@ phase_summary 5 \
 
 phase 6 "Seed CRM data"
 
-step "Discovering Key Vault in $RESOURCE_GROUP"
+step "Resolving infrastructure endpoints"
 KV_NAME=$(az keyvault list --resource-group "$RESOURCE_GROUP" --query "[0].name" -o tsv)
 if [[ -z "$KV_NAME" ]]; then echo "No Key Vault found in $RESOURCE_GROUP"; exit 1; fi
-done_ "Key Vault: $KV_NAME"
-
-step "Reading Cosmos DB CRM connection info from Key Vault"
 COSMOS_ENDPOINT=$(az keyvault secret show --vault-name "$KV_NAME" --name "COSMOSDB-CRM-ENDPOINT" --query value -o tsv)
 COSMOS_KEY=$(az keyvault secret show --vault-name "$KV_NAME" --name "COSMOSDB-CRM-KEY" --query value -o tsv)
 COSMOS_DB=$(az keyvault secret show --vault-name "$KV_NAME" --name "COSMOSDB-CRM-DATABASE" --query value -o tsv)
-done_ "Cosmos DB: $COSMOS_ENDPOINT / $COSMOS_DB"
-
-step "Getting AKS credentials (Cosmos DB is behind a private endpoint)"
 AKS_NAME=$(az aks list --resource-group "$RESOURCE_GROUP" --query "[0].name" -o tsv)
 if [[ -z "$AKS_NAME" ]]; then echo "No AKS cluster found in $RESOURCE_GROUP"; exit 1; fi
 az aks get-credentials --resource-group "$RESOURCE_GROUP" --name "$AKS_NAME" --overwrite-existing >/dev/null
-done_ "AKS: $AKS_NAME"
+done_ "Key Vault: $KV_NAME | Cosmos DB: $COSMOS_DB | AKS: $AKS_NAME"
 
-step "Publishing seed-data tool for Linux"
+step "Publishing seed-data tool"
 SEED_DATA_DIR="$(dirname "$SCRIPT_DIR")/src/seed-data"
 PUBLISH_DIR="$SEED_DATA_DIR/bin/publish"
 pushd "$SEED_DATA_DIR" >/dev/null
 dotnet publish -c Release -r linux-x64 --self-contained -o "$PUBLISH_DIR" >/dev/null 2>&1
-done_ "Published to $PUBLISH_DIR"
+done_ "Published seed-data"
 popd >/dev/null
 
-step "Running seed-data inside AKS cluster"
+step "Seeding CRM data via AKS pod"
 K8S_NAMESPACE="contoso"
 POD_NAME="seed-data-runner"
 CRM_DATA_DIR="$(dirname "$SCRIPT_DIR")/data/contoso-crm"
 
 kubectl run "$POD_NAME" --image=mcr.microsoft.com/dotnet/runtime-deps:9.0 --restart=Never --namespace="$K8S_NAMESPACE" --command -- sleep 600 >/dev/null 2>&1
 kubectl wait --for=condition=Ready "pod/$POD_NAME" --namespace="$K8S_NAMESPACE" --timeout=120s >/dev/null 2>&1
-done_ "Pod $POD_NAME ready"
 
 cleanup_seed_pod() {
     kubectl delete pod "$POD_NAME" --namespace="$K8S_NAMESPACE" --force --grace-period=0 >/dev/null 2>&1 || true
@@ -597,7 +590,6 @@ declare -A CUSTOMER_MAPPING=(
     ["105"]="CUSTOMER-LISA-ENTRA-OID"
 )
 
-step "Building Entra mapping and updating Cosmos DB via seed-data tool"
 ENTRA_PAIRS=""
 for CID in "${!CUSTOMER_MAPPING[@]}"; do
     SECRET_NAME="${CUSTOMER_MAPPING[$CID]}"
