@@ -779,67 +779,30 @@ phase_summary 5 \
 # ═══════════════════════════════════════════════════════════════════════════════
 
 phase 6 "Seed CRM data"
-info_ "Runs the seed-data tool inside an AKS pod (workload identity)."
-info_ "Upserts customers, orders, products, promotions, and tickets"
-info_ "from CSV files into Cosmos DB containers."
 
-step "Resolving infrastructure endpoints"
+step "Resolving infrastructure endpoints from Key Vault"
 KV_NAME=$(az keyvault list --resource-group "$RESOURCE_GROUP" --query "[0].name" -o tsv)
 if [[ -z "$KV_NAME" ]]; then echo "No Key Vault found in $RESOURCE_GROUP"; exit 1; fi
 COSMOS_ENDPOINT=$(az keyvault secret show --vault-name "$KV_NAME" --name "COSMOSDB-CRM-ENDPOINT" --query value -o tsv)
 COSMOS_DB=$(az keyvault secret show --vault-name "$KV_NAME" --name "COSMOSDB-CRM-DATABASE" --query value -o tsv)
-AKS_NAME=$(az aks list --resource-group "$RESOURCE_GROUP" --query "[0].name" -o tsv)
-if [[ -z "$AKS_NAME" ]]; then echo "No AKS cluster found in $RESOURCE_GROUP"; exit 1; fi
-az aks get-credentials --resource-group "$RESOURCE_GROUP" --name "$AKS_NAME" --overwrite-existing >/dev/null
-done_ "Key Vault: $KV_NAME | Cosmos DB: $COSMOS_DB | AKS: $AKS_NAME"
+done_ "Cosmos DB: $COSMOS_ENDPOINT ($COSMOS_DB)"
 
-step "Publishing seed-data tool"
+step "Running seed-data (dotnet run -- uses DefaultAzureCredential)"
 SEED_DATA_DIR="$(dirname "$SCRIPT_DIR")/src/seed-data"
-PUBLISH_DIR="$SEED_DATA_DIR/bin/publish"
 pushd "$SEED_DATA_DIR" >/dev/null
-dotnet publish -c Release -r linux-x64 --self-contained -o "$PUBLISH_DIR" >/dev/null 2>&1
-done_ "Published seed-data"
+COSMOSDB_CRM_ENDPOINT="$COSMOS_ENDPOINT" COSMOSDB_CRM_DATABASE="$COSMOS_DB" dotnet run
+done_ "CRM data seeded"
 popd >/dev/null
 
-step "Seeding CRM data via AKS pod"
-K8S_NAMESPACE="contoso"
-POD_NAME="seed-data-runner"
-CRM_DATA_DIR="$(dirname "$SCRIPT_DIR")/data/contoso-crm"
-
-# Create temporary pod with sa-crm-api workload identity (RBAC-based auth to Cosmos DB)
-POD_OVERRIDES='{"metadata":{"labels":{"azure.workload.identity/use":"true"}},"spec":{"serviceAccountName":"sa-crm-api"}}'
-kubectl run "$POD_NAME" --image=mcr.microsoft.com/dotnet/runtime-deps:9.0 --restart=Never --namespace="$K8S_NAMESPACE" --overrides="$POD_OVERRIDES" --command -- sleep 600 >/dev/null 2>&1
-kubectl wait --for=condition=Ready "pod/$POD_NAME" --namespace="$K8S_NAMESPACE" --timeout=120s >/dev/null 2>&1
-
-cleanup_seed_pod() {
-    kubectl delete pod "$POD_NAME" --namespace="$K8S_NAMESPACE" --force --grace-period=0 >/dev/null 2>&1 || true
-}
-# Pod cleanup handled inline below (trap EXIT reserved for deployer IP cleanup)
-
-kubectl exec "$POD_NAME" --namespace="$K8S_NAMESPACE" -- mkdir -p /app /data/contoso-crm >/dev/null 2>&1
-kubectl cp "$PUBLISH_DIR" "${K8S_NAMESPACE}/${POD_NAME}:/app" >/dev/null 2>&1
-kubectl cp "$CRM_DATA_DIR" "${K8S_NAMESPACE}/${POD_NAME}:/data/contoso-crm" >/dev/null 2>&1
-kubectl exec "$POD_NAME" --namespace="$K8S_NAMESPACE" -- chmod +x /app/seed-data >/dev/null 2>&1
-
-kubectl exec "$POD_NAME" --namespace="$K8S_NAMESPACE" -- \
-    /bin/sh -c "COSMOSDB_CRM_ENDPOINT='$COSMOS_ENDPOINT' COSMOSDB_CRM_DATABASE='$COSMOS_DB' CRM_DATA_PATH='/data/contoso-crm' /app/seed-data"
-done_ "CRM data seeded"
-
-kubectl delete pod "$POD_NAME" --namespace="$K8S_NAMESPACE" --force --grace-period=0 >/dev/null 2>&1 || true
-# (trap - EXIT removed — deployer IP cleanup trap handles all cleanup)
-
 phase_summary 6 \
-    "Phase 7 \u2014 Link Entra users to Customers" \
+    "Phase 7 -- Link Entra users to Customers" \
     "Status" "CRM data seeded"
 
-# \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+# ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 7 — Link Entra user object IDs to Customers
-# \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+# ═══════════════════════════════════════════════════════════════════════════════
 
 phase 7 "Link Entra users to Customers"
-info_ "Reads each test user's Entra object ID from Key Vault and"
-info_ "writes it to the corresponding Customer document in Cosmos DB."
-info_ "This is how the app knows 'Emma Wilson' in Entra = customer 101."
 
 step "Reading Entra object IDs from Key Vault"
 
@@ -858,26 +821,18 @@ for CID in "${!CUSTOMER_MAPPING[@]}"; do
     if [[ -n "$OID" ]]; then
         if [[ -n "$ENTRA_PAIRS" ]]; then ENTRA_PAIRS="${ENTRA_PAIRS};"; fi
         ENTRA_PAIRS="${ENTRA_PAIRS}${CID}=${OID}"
+        done_ "Customer $CID linked"
     else
         echo -e "    ${Y}Could not read $SECRET_NAME from Key Vault${W}"
     fi
 done
 
-# Reuse the seed-data pod pattern to run entra linking inside the cluster
-POD_NAME7="entra-linker"
-POD_OVERRIDES7='{"metadata":{"labels":{"azure.workload.identity/use":"true"}},"spec":{"serviceAccountName":"sa-crm-api"}}'
-kubectl run "$POD_NAME7" --image=mcr.microsoft.com/dotnet/runtime-deps:9.0 --restart=Never --namespace="$K8S_NAMESPACE" --overrides="$POD_OVERRIDES7" --command -- sleep 300 >/dev/null 2>&1
-kubectl wait --for=condition=Ready "pod/$POD_NAME7" --namespace="$K8S_NAMESPACE" --timeout=120s >/dev/null 2>&1
-
-kubectl exec "$POD_NAME7" --namespace="$K8S_NAMESPACE" -- mkdir -p /app >/dev/null 2>&1
-kubectl cp "$PUBLISH_DIR" "${K8S_NAMESPACE}/${POD_NAME7}:/app" >/dev/null 2>&1
-kubectl exec "$POD_NAME7" --namespace="$K8S_NAMESPACE" -- chmod +x /app/seed-data >/dev/null 2>&1
-
-kubectl exec "$POD_NAME7" --namespace="$K8S_NAMESPACE" -- \
-    /bin/sh -c "COSMOSDB_CRM_ENDPOINT='$COSMOS_ENDPOINT' COSMOSDB_CRM_DATABASE='$COSMOS_DB' CRM_DATA_PATH='/dev/null' ENTRA_MAPPING='$ENTRA_PAIRS' /app/seed-data"
+step "Linking Entra users to Cosmos DB Customers (dotnet run)"
+pushd "$SEED_DATA_DIR" >/dev/null
+COSMOSDB_CRM_ENDPOINT="$COSMOS_ENDPOINT" COSMOSDB_CRM_DATABASE="$COSMOS_DB" \
+    CRM_DATA_PATH="/dev/null" ENTRA_MAPPING="$ENTRA_PAIRS" dotnet run
 done_ "Entra users linked to Customers"
-
-kubectl delete pod "$POD_NAME7" --namespace="$K8S_NAMESPACE" --force --grace-period=0 >/dev/null 2>&1 || true
+popd >/dev/null
 
 # ── Read Key Vault URI ───────────────────────────────────────────────────────
 KEYVAULT_URI=$(az keyvault show --name "$KV_NAME" --query properties.vaultUri -o tsv 2>/dev/null || true)

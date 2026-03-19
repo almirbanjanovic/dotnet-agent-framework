@@ -83,9 +83,10 @@ function Write-Phase {
             "Also uploads images and PDFs to blob storage."
         )}
         6 { @(
-            "Runs seed-data inside an AKS pod using workload",
-            "identity (RBAC, no keys). Upserts customers,",
-            "orders, products, promotions, tickets from CSV."
+            "Runs seed-data directly using DefaultAzureCredential.",
+            "Upserts customers, orders, products, promotions,",
+            "and tickets from CSV files into Cosmos DB.",
+            "Authenticates via az login (RBAC, no keys)."
         )}
         7 { @(
             "Reads each test user Entra object ID from Key",
@@ -795,52 +796,24 @@ Write-PhaseSummary -Number 5 -NextPhase "Phase 6 — Seed CRM data into Cosmos D
 
 Write-Phase -Number 6 -Title "Seed CRM data"
 
-Write-Step "Resolving infrastructure endpoints"
+Write-Step "Resolving infrastructure endpoints from Key Vault"
 $KvName = az keyvault list --resource-group $ResourceGroup --query "[0].name" -o tsv
 if (-not $KvName) { throw "No Key Vault found in $ResourceGroup" }
 $CosmosEndpoint = az keyvault secret show --vault-name $KvName --name "COSMOSDB-CRM-ENDPOINT" --query value -o tsv
 $CosmosDb       = az keyvault secret show --vault-name $KvName --name "COSMOSDB-CRM-DATABASE" --query value -o tsv
-$AksName = az aks list --resource-group $ResourceGroup --query "[0].name" -o tsv
-if (-not $AksName) { throw "No AKS cluster found in $ResourceGroup" }
-az aks get-credentials --resource-group $ResourceGroup --name $AksName --overwrite-existing | Out-Null
-Write-Done "Key Vault: $KvName | Cosmos DB: $CosmosDb | AKS: $AksName"
+Write-Done "Cosmos DB: $CosmosEndpoint ($CosmosDb)"
 
-Write-Step "Publishing seed-data tool"
+Write-Step "Running seed-data (dotnet run -- uses DefaultAzureCredential)"
 $SeedDataDir = Join-Path (Split-Path $ScriptDir) "src" "seed-data"
-$PublishDir   = Join-Path $SeedDataDir "bin" "publish"
 Push-Location $SeedDataDir
 try {
-    dotnet publish -c Release -r linux-x64 --self-contained -o $PublishDir 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { Write-Fail "dotnet publish failed"; exit 1 }
-    Write-Done "Published seed-data"
-} finally {
-    Pop-Location
-}
-
-Write-Step "Seeding CRM data via AKS pod"
-$K8sNamespace = "contoso"
-$PodName = "seed-data-runner"
-$CrmDataDir = Join-Path (Split-Path $ScriptDir) "data" "contoso-crm"
-
-# Create temporary pod with sa-crm-api workload identity (RBAC-based auth to Cosmos DB)
-$PodOverrides = '{"metadata":{"labels":{"azure.workload.identity/use":"true"}},"spec":{"serviceAccountName":"sa-crm-api"}}'
-kubectl run $PodName --image=mcr.microsoft.com/dotnet/runtime-deps:9.0 --restart=Never --namespace=$K8sNamespace --overrides=$PodOverrides --command -- sleep 600 2>&1 | Out-Null
-kubectl wait --for=condition=Ready pod/$PodName --namespace=$K8sNamespace --timeout=120s 2>&1 | Out-Null
-
-try {
-    # Copy published app and CRM data
-    kubectl exec $PodName --namespace=$K8sNamespace -- mkdir -p /app /data/contoso-crm 2>&1 | Out-Null
-    kubectl cp $PublishDir "${K8sNamespace}/${PodName}:/app" 2>&1 | Out-Null
-    kubectl cp $CrmDataDir "${K8sNamespace}/${PodName}:/data/contoso-crm" 2>&1 | Out-Null
-    kubectl exec $PodName --namespace=$K8sNamespace -- chmod +x /app/seed-data 2>&1 | Out-Null
-
-    # Run seed-data with Cosmos DB connection (uses workload identity — no key needed)
-    kubectl exec $PodName --namespace=$K8sNamespace -- `
-        /bin/sh -c "COSMOSDB_CRM_ENDPOINT='$CosmosEndpoint' COSMOSDB_CRM_DATABASE='$CosmosDb' CRM_DATA_PATH='/data/contoso-crm' /app/seed-data"
+    $env:COSMOSDB_CRM_ENDPOINT = $CosmosEndpoint
+    $env:COSMOSDB_CRM_DATABASE = $CosmosDb
+    dotnet run
     if ($LASTEXITCODE -ne 0) { Write-Fail "seed-data failed"; exit 1 }
     Write-Done "CRM data seeded"
 } finally {
-    kubectl delete pod $PodName --namespace=$K8sNamespace --force --grace-period=0 2>&1 | Out-Null
+    Pop-Location
 }
 
 Write-PhaseSummary -Number 6 -NextPhase "Phase 7 — Link Entra users to Customers" -Items ([ordered]@{
@@ -853,7 +826,7 @@ Write-PhaseSummary -Number 6 -NextPhase "Phase 7 — Link Entra users to Custome
 
 Write-Phase -Number 7 -Title "Link Entra users to Customers"
 
-Write-Step "Building Entra mapping from Key Vault"
+Write-Step "Reading Entra object IDs from Key Vault"
 
 $CustomerMapping = @(
     @{ CustomerId = "101"; SecretName = "CUSTOMER-EMMA-ENTRA-OID";  Name = "Emma Wilson" }
@@ -868,29 +841,27 @@ foreach ($mapping in $CustomerMapping) {
     $oid = az keyvault secret show --vault-name $KvName --name $mapping.SecretName --query value -o tsv
     if ($oid) {
         $EntraPairs += "$($mapping.CustomerId)=$oid"
+        Write-Done "$($mapping.Name) (customer $($mapping.CustomerId))"
     } else {
         Write-Host "    ⚠ Could not read $($mapping.SecretName) from Key Vault" -ForegroundColor Yellow
     }
 }
 $EntraMapping = $EntraPairs -join ";"
 
-# Reuse the seed-data pod pattern to run entra linking inside the cluster
-$PodName7 = "entra-linker"
-$PodOverrides7 = '{"metadata":{"labels":{"azure.workload.identity/use":"true"}},"spec":{"serviceAccountName":"sa-crm-api"}}'
-kubectl run $PodName7 --image=mcr.microsoft.com/dotnet/runtime-deps:9.0 --restart=Never --namespace=$K8sNamespace --overrides=$PodOverrides7 --command -- sleep 300 2>&1 | Out-Null
-kubectl wait --for=condition=Ready pod/$PodName7 --namespace=$K8sNamespace --timeout=120s 2>&1 | Out-Null
-
+Write-Step "Linking Entra users to Cosmos DB Customers (dotnet run)"
+Push-Location $SeedDataDir
 try {
-    kubectl exec $PodName7 --namespace=$K8sNamespace -- mkdir -p /app 2>&1 | Out-Null
-    kubectl cp $PublishDir "${K8sNamespace}/${PodName7}:/app" 2>&1 | Out-Null
-    kubectl exec $PodName7 --namespace=$K8sNamespace -- chmod +x /app/seed-data 2>&1 | Out-Null
-
-    kubectl exec $PodName7 --namespace=$K8sNamespace -- `
-        /bin/sh -c "COSMOSDB_CRM_ENDPOINT='$CosmosEndpoint' COSMOSDB_CRM_DATABASE='$CosmosDb' CRM_DATA_PATH='/dev/null' ENTRA_MAPPING='$EntraMapping' /app/seed-data"
+    $env:COSMOSDB_CRM_ENDPOINT = $CosmosEndpoint
+    $env:COSMOSDB_CRM_DATABASE = $CosmosDb
+    $env:CRM_DATA_PATH = "/dev/null"
+    $env:ENTRA_MAPPING = $EntraMapping
+    dotnet run
     if ($LASTEXITCODE -ne 0) { Write-Fail "entra linking failed"; exit 1 }
     Write-Done "Entra users linked to Customers"
 } finally {
-    kubectl delete pod $PodName7 --namespace=$K8sNamespace --force --grace-period=0 2>&1 | Out-Null
+    $env:CRM_DATA_PATH = $null
+    $env:ENTRA_MAPPING = $null
+    Pop-Location
 }
 
 # ── Read Key Vault URI ────────────────────────────────────────────────────────

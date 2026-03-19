@@ -354,9 +354,10 @@ module "rbac_cosmosdb_crm" {
   cosmosdb_account_name = module.cosmosdb_crm.account_name
 
   principal_ids = {
-    bff     = module.identity.identities["bff"].principal_id
-    crm_api = module.identity.identities["crm_api"].principal_id
-    crm_mcp = module.identity.identities["crm_mcp"].principal_id
+    bff      = module.identity.identities["bff"].principal_id
+    crm_api  = module.identity.identities["crm_api"].principal_id
+    crm_mcp  = module.identity.identities["crm_mcp"].principal_id
+    deployer = data.azurerm_client_config.current.object_id
   }
 }
 

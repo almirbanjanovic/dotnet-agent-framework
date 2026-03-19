@@ -58,7 +58,7 @@ The script performs 8 phases (0-7) with a confirmation gate between each:
 | **3** | `terraform validate` to check configuration syntax |
 | **4** | `terraform plan` to preview all changes |
 | **5** | `terraform apply` to provision resources and upload blobs |
-| **6** | Seed CRM data — runs seed-data tool inside AKS pod with workload identity (RBAC-based, no keys) |
+| **6** | Seed CRM data -- runs seed-data tool directly via `dotnet run` with DefaultAzureCredential (firewalls are open, deployer has Cosmos DB RBAC) |
 | **7** | Link Entra users to Customers — reads Entra object IDs from Key Vault, updates `entra_id` in Cosmos DB |
 
 Before Phase 1, the script runs a **pre-flight check** that purges soft-deleted Key Vaults and Cognitive Services accounts from previous runs. Azure retains these in a soft-deleted state which blocks re-creation with the same name. Key Vault purges use `--no-wait` since they can take several minutes.
