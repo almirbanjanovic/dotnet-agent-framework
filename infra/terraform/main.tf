@@ -4,6 +4,8 @@
 
 data "azurerm_client_config" "current" {}
 
+data "azuread_client_config" "current" {}
+
 # Deployer public IP — used for firewall exceptions during provisioning
 data "http" "deployer_ip" {
   url = "https://api.ipify.org"
@@ -144,14 +146,17 @@ module "identity" {
 #--------------------------------------------------------------------------------------------------------------------------------
 
 module "agent_identity" {
-  source = "./modules/agent-identity/v1"
+  source = "./modules/agent-identity/v2"
 
   environment         = var.environment
+  resource_group_name = var.resource_group_name
   aks_oidc_issuer_url = module.aks.oidc_issuer_url
+  sponsor_object_id   = data.azuread_client_config.current.object_id
+  owner_object_id     = data.azuread_client_config.current.object_id
 
   agents = {
-    crm_agent  = { blueprint_display_name = "Contoso CRM Agent",          namespace = var.k8s_namespace, service_account = "sa-crm-agent" }
-    prod_agent = { blueprint_display_name = "Contoso Product Agent",      namespace = var.k8s_namespace, service_account = "sa-prod-agent" }
+    crm_agent  = { blueprint_display_name = "Contoso CRM Agent", namespace = var.k8s_namespace, service_account = "sa-crm-agent" }
+    prod_agent = { blueprint_display_name = "Contoso Product Agent", namespace = var.k8s_namespace, service_account = "sa-prod-agent" }
     orch_agent = { blueprint_display_name = "Contoso Orchestrator Agent", namespace = var.k8s_namespace, service_account = "sa-orch-agent" }
   }
 
@@ -295,11 +300,11 @@ module "storage_uploads" {
 module "search" {
   source = "./modules/search/v1"
 
-  base_name             = var.base_name
-  environment           = var.environment
-  location              = var.location
-  resource_group_name   = var.resource_group_name
-  sku                   = var.search_sku
+  base_name           = var.base_name
+  environment         = var.environment
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  sku                 = var.search_sku
 
   allowed_ips = [local.deployer_ip]
   tags        = var.tags
@@ -334,7 +339,10 @@ module "rbac_cosmosdb_agents" {
   cosmosdb_account_name = module.cosmosdb_agents.account_name
 
   principal_ids = {
-    bff = module.identity.identities["bff"].principal_id
+    bff        = module.identity.identities["bff"].principal_id
+    crm_agent  = module.agent_identity.agents["crm_agent"].object_id
+    prod_agent = module.agent_identity.agents["prod_agent"].object_id
+    orch_agent = module.agent_identity.agents["orch_agent"].object_id
   }
 }
 

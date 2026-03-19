@@ -103,3 +103,7 @@
 **`.gitignore` hardened:** Added a `# Terraform` section with 11 patterns (`*.tfstate`, `*.tfstate.*`, `.terraform/`, `.terraform.lock.hcl`, `override.tf`, `override.tf.json`, `*_override.tf`, `*_override.tf.json`, `*.tfvars`, `*.tfvars.json`, `backend.hcl`). These prevent accidental commits of state files, local overrides, variable files with secrets, and backend configs. Existing patterns were preserved.
 
 **EventGrid module deleted:** Removed `infra/terraform/modules/eventgrid/` (v1/ with main.tf, variables.tf, outputs.tf). The module was never instantiated in main.tf and had a security concern — it passed AI Search admin API keys as plaintext into a Logic App HTTP action body. Grep confirmed zero references outside the module directory itself. Module count drops from 21 to 20.
+
+### 2026-03-20 — Agent Identity v2 (msgraph)
+
+**Agent Identity v2 architecture:** Implemented a new `agent-identity/v2` module using the `microsoft/msgraph` provider to create Agent Identity Blueprints, Blueprint Principals, and AKS federated identity credentials via Graph beta. The blueprint service now owns runtime identity creation, with Terraform only provisioning the blueprint and principal objects. Updated main.tf to use v2 and fixed Cosmos DB RBAC for agent principals.

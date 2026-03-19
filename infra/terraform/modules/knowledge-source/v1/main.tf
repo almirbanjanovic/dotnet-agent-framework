@@ -15,7 +15,7 @@ locals {
       containerName    = var.container_name
       ingestionParameters = {
         disableImageVerbalization = true
-        contentExtractionMode    = "minimal"
+        contentExtractionMode     = "minimal"
         ingestionSchedule = {
           interval = "PT5M"
         }

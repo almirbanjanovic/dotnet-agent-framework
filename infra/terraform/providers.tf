@@ -28,6 +28,11 @@ terraform {
       version = "~> 1.19.0"
     }
 
+    msgraph = {
+      source  = "microsoft/msgraph"
+      version = "~> 0.3.0"
+    }
+
     random = {
       source  = "hashicorp/random"
       version = "~> 3.6.0"
@@ -78,6 +83,9 @@ provider "azapi" {
 }
 
 provider "azuread" {
+}
+
+provider "msgraph" {
 }
 
 # kubectl provider is configured dynamically using AKS cluster credentials.
