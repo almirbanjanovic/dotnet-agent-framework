@@ -1,0 +1,16 @@
+{
+  "assignments": [
+    {
+      "assignment_id": "got-001",
+      "universe": "Game of Thrones",
+      "timestamp": "2026-03-19T13:52:18Z",
+      "agents": [
+        { "name": "Tyrion", "role": "Lead" },
+        { "name": "Arya", "role": "Backend Dev" },
+        { "name": "Sansa", "role": "Frontend Dev" },
+        { "name": "Varys", "role": "Tester" },
+        { "name": "Bran", "role": "DevOps/Infra" }
+      ]
+    }
+  ]
+}

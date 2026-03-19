@@ -1,0 +1,44 @@
+{
+  "agents": [
+    {
+      "persistent_name": "Tyrion",
+      "role": "Lead",
+      "universe": "Game of Thrones",
+      "created_at": "2026-03-19T13:52:18Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Arya",
+      "role": "Backend Dev",
+      "universe": "Game of Thrones",
+      "created_at": "2026-03-19T13:52:18Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Sansa",
+      "role": "Frontend Dev",
+      "universe": "Game of Thrones",
+      "created_at": "2026-03-19T13:52:18Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Varys",
+      "role": "Tester",
+      "universe": "Game of Thrones",
+      "created_at": "2026-03-19T13:52:18Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Bran",
+      "role": "DevOps/Infra",
+      "universe": "Game of Thrones",
+      "created_at": "2026-03-19T13:52:18Z",
+      "legacy_named": false,
+      "status": "active"
+    }
+  ]
+}
