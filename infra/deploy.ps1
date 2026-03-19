@@ -368,10 +368,10 @@ if ($SpClientId) {
     az ad app permission admin-consent --id "$SpClientId" 2>$null | Out-Null
     Write-Done "Admin consent applied"
 
-    # Wait for consent to propagate (Graph API needs time to sync permissions)
-    if (-not $existingGrant) {
-        Write-Wait -Seconds 60 -Message "Consent propagation"
-    }
+    # Graph API needs time to propagate permissions.
+    # First grant: 60s. Subsequent runs: 10s (consent exists, just needs token refresh).
+    $waitSecs = if (-not $existingGrant) { 60 } else { 10 }
+    Write-Wait -Seconds $waitSecs -Message "Consent propagation"
 
     # ── Step 3: Create temporary client secret ───────────────────────────────
     Write-Step "Creating temporary client secret (expires in 1 hour)..."
