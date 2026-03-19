@@ -5,7 +5,7 @@
 
 locals {
   account_name = "aif-${var.base_name}-${var.environment}-${var.location}"
-  subdomain    = lower("${local.account_name}-${replace(var.deployment_model_name, ".", "-")}")
+  subdomain    = lower(local.account_name)
 }
 
 # -----------------------------------------------------------------------------

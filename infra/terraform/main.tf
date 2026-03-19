@@ -295,45 +295,14 @@ module "storage_uploads" {
 module "search" {
   source = "./modules/search/v1"
 
-  base_name           = var.base_name
-  environment         = var.environment
-  location            = var.location
-  resource_group_name = var.resource_group_name
-  sku                 = var.search_sku
-  index_name          = var.search_index_name
-
-  storage_account_id          = module.storage_images.id
-  container_name              = "sharepoint-docs"
-  openai_endpoint             = module.foundry.endpoint
-  openai_embedding_deployment = module.foundry.embedding_deployment_name != null ? module.foundry.embedding_deployment_name : var.embedding_model_name
-  openai_embedding_model      = var.embedding_model_name
+  base_name             = var.base_name
+  environment           = var.environment
+  location              = var.location
+  resource_group_name   = var.resource_group_name
+  sku                   = var.search_sku
 
   allowed_ips = [local.deployer_ip]
   tags        = var.tags
-
-  depends_on = [module.storage_images]
-}
-
-#--------------------------------------------------------------------------------------------------------------------------------
-# Event Grid — Blob upload triggers AI Search indexer
-#--------------------------------------------------------------------------------------------------------------------------------
-
-module "eventgrid" {
-  source = "./modules/eventgrid/v1"
-
-  base_name           = var.base_name
-  environment         = var.environment
-  resource_group_name = var.resource_group_name
-  location            = var.location
-  storage_account_id  = module.storage_images.id
-  container_name      = "sharepoint-docs"
-  search_service_name = module.search.name
-  search_indexer_name = azapi_resource.search_indexer.name
-  search_api_key      = module.search.primary_key
-
-  tags = var.tags
-
-  depends_on = [azapi_resource.search_indexer]
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -442,47 +411,28 @@ module "rbac_search" {
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
-# AI Search Indexer — Created AFTER RBAC so the search identity can access Storage + OpenAI
+# AI Search Knowledge Source — single PUT creates index, data source, skillset, indexer
 #
-# Why this is separate from the search module:
-# The indexer runs immediately on creation (and every 5 minutes). It needs:
-# 1. RBAC in place — Storage Blob Data Reader + Cognitive Services OpenAI User
-# 2. Blobs uploaded — so the first run indexes all existing PDFs, not an empty container
-# Moving it here lets us enforce: storage uploads + RBAC → indexer.
+# Created AFTER RBAC + blob uploads so the auto-generated indexer can:
+# 1. Read blobs (Storage Blob Data Reader on search identity)
+# 2. Call Azure OpenAI for embeddings (Cognitive Services OpenAI User)
+# 3. Index existing PDFs on first run
 #--------------------------------------------------------------------------------------------------------------------------------
 
-resource "azapi_resource" "search_indexer" {
-  type      = "Microsoft.Search/searchServices/indexers@2024-07-01"
-  name      = "blob-indexer"
-  parent_id = module.search.id
+module "knowledge_source" {
+  source = "./modules/knowledge-source/v1"
 
-  body = {
-    properties = {
-      dataSourceName  = module.search.data_source_name
-      targetIndexName = module.search.index_name
-      skillsetName    = module.search.skillset_name
-      schedule = {
-        interval = "PT5M"
-      }
-      parameters = {
-        configuration = {
-          dataToExtract = "contentAndMetadata"
-          parsingMode   = "default"
-          imageAction   = "none"
-        }
-      }
-      fieldMappings = [
-        {
-          sourceFieldName = "metadata_storage_path"
-          targetFieldName = "source_file"
-        }
-      ]
-    }
-  }
-
-  schema_validation_enabled = false
+  name                        = var.search_index_name
+  search_endpoint             = module.search.endpoint
+  search_api_key              = module.search.primary_key
+  storage_account_id          = module.storage_images.id
+  container_name              = "sharepoint-docs"
+  openai_endpoint             = module.foundry.endpoint
+  openai_embedding_deployment = module.foundry.embedding_deployment_name != null ? module.foundry.embedding_deployment_name : var.embedding_model_name
+  openai_embedding_model      = var.embedding_model_name
 
   depends_on = [
+    module.search,
     module.rbac_storage,
     module.rbac_foundry,
     module.storage_uploads,
@@ -616,7 +566,7 @@ module "keyvault_secrets" {
     "STORAGE-IMAGES-CONTAINER"          = module.storage_images.container_names["images"]
     "SEARCH-ENDPOINT"                   = module.search.endpoint
     "SEARCH-ADMIN-KEY"                  = nonsensitive(module.search.primary_key)
-    "SEARCH-INDEX-NAME"                 = module.search.index_name
+    "SEARCH-INDEX-NAME"                 = module.knowledge_source.index_name
 
     # Workload identity client IDs (used by Helm at deploy time)
     "IDENTITY-BFF-CLIENT-ID"        = module.identity.identities["bff"].client_id
