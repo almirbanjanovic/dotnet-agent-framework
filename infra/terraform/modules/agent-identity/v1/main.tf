@@ -26,12 +26,14 @@ resource "msgraph_resource" "blueprint" {
   api_version = "beta"
 
   body = {
-    "@odata.type"         = "#Microsoft.Graph.AgentIdentityBlueprint"
-    displayName           = each.value.blueprint_display_name
-    signInAudience        = "AzureADMyOrg"
-    "sponsors@odata.bind" = ["https://graph.microsoft.com/v1.0/users/${var.sponsor_object_id}"]
-    "owners@odata.bind"   = ["https://graph.microsoft.com/v1.0/users/${var.owner_object_id}"]
+    "@odata.type"  = "#Microsoft.Graph.AgentIdentityBlueprint"
+    displayName    = each.value.blueprint_display_name
+    signInAudience = "AzureADMyOrg"
   }
+
+  # sponsors and owners are set via separate Graph API calls if needed.
+  # Including them as @odata.bind in the body causes plan drift on every run
+  # because Graph returns expanded objects on GET, not bind URIs.
 
   response_export_values = {
     appId       = "appId"

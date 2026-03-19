@@ -149,8 +149,6 @@ module "agent_identity" {
   source = "./modules/agent-identity/v1"
 
   aks_oidc_issuer_url = module.aks.oidc_issuer_url
-  sponsor_object_id   = data.azuread_client_config.current.object_id
-  owner_object_id     = data.azuread_client_config.current.object_id
 
   agents = {
     crm_agent  = { blueprint_display_name = "Contoso CRM Agent", namespace = var.k8s_namespace, service_account = "sa-crm-agent" }

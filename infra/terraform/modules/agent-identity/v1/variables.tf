@@ -7,16 +7,6 @@ variable "aks_oidc_issuer_url" {
   type        = string
 }
 
-variable "sponsor_object_id" {
-  description = "Entra object ID of the human sponsor for Agent Identity Blueprints."
-  type        = string
-}
-
-variable "owner_object_id" {
-  description = "Entra object ID of the human owner for Agent Identity Blueprints."
-  type        = string
-}
-
 variable "agents" {
   description = <<-EOT
     Map of agent identities to create. Each entry creates:
