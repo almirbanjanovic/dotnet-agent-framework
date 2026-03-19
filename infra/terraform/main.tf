@@ -129,15 +129,33 @@ module "identity" {
   tags                = var.tags
 
   identities = {
-    bff        = { name = "id-bff-${local.name_base}-${var.location}" }
-    crm_api    = { name = "id-crm-api-${local.name_base}-${var.location}" }
-    crm_mcp    = { name = "id-crm-mcp-${local.name_base}-${var.location}" }
-    know_mcp   = { name = "id-know-mcp-${local.name_base}-${var.location}" }
-    crm_agent  = { name = "id-crm-agent-${local.name_base}-${var.location}" }
-    prod_agent = { name = "id-prod-agent-${local.name_base}-${var.location}" }
-    orch_agent = { name = "id-orch-agent-${local.name_base}-${var.location}" }
-    kubelet    = { name = "id-kubelet-${local.name_base}-${var.location}" }
+    bff      = { name = "id-bff-${local.name_base}-${var.location}" }
+    crm_api  = { name = "id-crm-api-${local.name_base}-${var.location}" }
+    crm_mcp  = { name = "id-crm-mcp-${local.name_base}-${var.location}" }
+    know_mcp = { name = "id-know-mcp-${local.name_base}-${var.location}" }
+    kubelet  = { name = "id-kubelet-${local.name_base}-${var.location}" }
   }
+}
+
+#--------------------------------------------------------------------------------------------------------------------------------
+# Agent Identities (Entra Agent ID Platform)
+# Creates Agent Identity Blueprints + Agent Identity service principals + FIC for AKS.
+# These replace managed identities for agents. Non-agent services keep managed identities.
+#--------------------------------------------------------------------------------------------------------------------------------
+
+module "agent_identity" {
+  source = "./modules/agent-identity/v1"
+
+  environment         = var.environment
+  aks_oidc_issuer_url = module.aks.oidc_issuer_url
+
+  agents = {
+    crm_agent  = { blueprint_display_name = "Contoso CRM Agent",          namespace = var.k8s_namespace, service_account = "sa-crm-agent" }
+    prod_agent = { blueprint_display_name = "Contoso Product Agent",      namespace = var.k8s_namespace, service_account = "sa-prod-agent" }
+    orch_agent = { blueprint_display_name = "Contoso Orchestrator Agent", namespace = var.k8s_namespace, service_account = "sa-orch-agent" }
+  }
+
+  depends_on = [module.aks]
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -328,9 +346,9 @@ module "rbac_foundry" {
   ai_services_account_id = module.foundry.account_id
 
   principal_ids = {
-    crm_agent  = module.identity.identities["crm_agent"].principal_id
-    prod_agent = module.identity.identities["prod_agent"].principal_id
-    orch_agent = module.identity.identities["orch_agent"].principal_id
+    crm_agent  = module.agent_identity.agents["crm_agent"].object_id
+    prod_agent = module.agent_identity.agents["prod_agent"].object_id
+    orch_agent = module.agent_identity.agents["orch_agent"].object_id
     search     = module.search.identity_principal_id
   }
 }
@@ -480,14 +498,13 @@ module "workload_identity" {
 
   aks_oidc_issuer_url = module.aks.oidc_issuer_url
 
+  # Agent federations are handled by the agent-identity module (FIC on app registrations).
+  # Only non-agent services use managed identity federation here.
   federations = {
-    bff        = { identity_id = module.identity.identities["bff"].id, namespace = var.k8s_namespace, service_account = "sa-bff" }
-    crm_api    = { identity_id = module.identity.identities["crm_api"].id, namespace = var.k8s_namespace, service_account = "sa-crm-api" }
-    crm_mcp    = { identity_id = module.identity.identities["crm_mcp"].id, namespace = var.k8s_namespace, service_account = "sa-crm-mcp" }
-    know_mcp   = { identity_id = module.identity.identities["know_mcp"].id, namespace = var.k8s_namespace, service_account = "sa-know-mcp" }
-    crm_agent  = { identity_id = module.identity.identities["crm_agent"].id, namespace = var.k8s_namespace, service_account = "sa-crm-agent" }
-    prod_agent = { identity_id = module.identity.identities["prod_agent"].id, namespace = var.k8s_namespace, service_account = "sa-prod-agent" }
-    orch_agent = { identity_id = module.identity.identities["orch_agent"].id, namespace = var.k8s_namespace, service_account = "sa-orch-agent" }
+    bff      = { identity_id = module.identity.identities["bff"].id, namespace = var.k8s_namespace, service_account = "sa-bff" }
+    crm_api  = { identity_id = module.identity.identities["crm_api"].id, namespace = var.k8s_namespace, service_account = "sa-crm-api" }
+    crm_mcp  = { identity_id = module.identity.identities["crm_mcp"].id, namespace = var.k8s_namespace, service_account = "sa-crm-mcp" }
+    know_mcp = { identity_id = module.identity.identities["know_mcp"].id, namespace = var.k8s_namespace, service_account = "sa-know-mcp" }
   }
 
   depends_on = [module.aks]
@@ -513,9 +530,9 @@ resource "kubectl_manifest" "service_accounts" {
     crm_api    = { name = "sa-crm-api", client_id = module.identity.identities["crm_api"].client_id }
     crm_mcp    = { name = "sa-crm-mcp", client_id = module.identity.identities["crm_mcp"].client_id }
     know_mcp   = { name = "sa-know-mcp", client_id = module.identity.identities["know_mcp"].client_id }
-    crm_agent  = { name = "sa-crm-agent", client_id = module.identity.identities["crm_agent"].client_id }
-    prod_agent = { name = "sa-prod-agent", client_id = module.identity.identities["prod_agent"].client_id }
-    orch_agent = { name = "sa-orch-agent", client_id = module.identity.identities["orch_agent"].client_id }
+    crm_agent  = { name = "sa-crm-agent", client_id = module.agent_identity.agents["crm_agent"].client_id }
+    prod_agent = { name = "sa-prod-agent", client_id = module.agent_identity.agents["prod_agent"].client_id }
+    orch_agent = { name = "sa-orch-agent", client_id = module.agent_identity.agents["orch_agent"].client_id }
   }
 
   yaml_body = templatefile("${path.module}/manifests/service-account.yaml", {
@@ -564,9 +581,9 @@ module "rbac_keyvault" {
     crm_api    = module.identity.identities["crm_api"].principal_id
     crm_mcp    = module.identity.identities["crm_mcp"].principal_id
     know_mcp   = module.identity.identities["know_mcp"].principal_id
-    crm_agent  = module.identity.identities["crm_agent"].principal_id
-    prod_agent = module.identity.identities["prod_agent"].principal_id
-    orch_agent = module.identity.identities["orch_agent"].principal_id
+    crm_agent  = module.agent_identity.agents["crm_agent"].object_id
+    prod_agent = module.agent_identity.agents["prod_agent"].object_id
+    orch_agent = module.agent_identity.agents["orch_agent"].object_id
   }
 
   # Certificates Officer: the deployer needs to create TLS certificates
@@ -606,9 +623,17 @@ module "keyvault_secrets" {
     "IDENTITY-CRM-API-CLIENT-ID"    = module.identity.identities["crm_api"].client_id
     "IDENTITY-CRM-MCP-CLIENT-ID"    = module.identity.identities["crm_mcp"].client_id
     "IDENTITY-KNOW-MCP-CLIENT-ID"   = module.identity.identities["know_mcp"].client_id
-    "IDENTITY-CRM-AGENT-CLIENT-ID"  = module.identity.identities["crm_agent"].client_id
-    "IDENTITY-PROD-AGENT-CLIENT-ID" = module.identity.identities["prod_agent"].client_id
-    "IDENTITY-ORCH-AGENT-CLIENT-ID" = module.identity.identities["orch_agent"].client_id
+    "IDENTITY-CRM-AGENT-CLIENT-ID"  = module.agent_identity.agents["crm_agent"].client_id
+    "IDENTITY-PROD-AGENT-CLIENT-ID" = module.agent_identity.agents["prod_agent"].client_id
+    "IDENTITY-ORCH-AGENT-CLIENT-ID" = module.agent_identity.agents["orch_agent"].client_id
+
+    # Agent identity details (Entra Agent ID platform)
+    "AGENT-CRM-OBJECT-ID"      = module.agent_identity.agents["crm_agent"].object_id
+    "AGENT-PROD-OBJECT-ID"     = module.agent_identity.agents["prod_agent"].object_id
+    "AGENT-ORCH-OBJECT-ID"     = module.agent_identity.agents["orch_agent"].object_id
+    "AGENT-CRM-APP-OBJECT-ID"  = module.agent_identity.agents["crm_agent"].app_object_id
+    "AGENT-PROD-APP-OBJECT-ID" = module.agent_identity.agents["prod_agent"].app_object_id
+    "AGENT-ORCH-APP-OBJECT-ID" = module.agent_identity.agents["orch_agent"].app_object_id
 
     # Entra ID (Blazor WASM SPA authentication)
     "ENTRA-BFF-CLIENT-ID" = module.entra.bff_client_id
@@ -638,6 +663,7 @@ module "keyvault_secrets" {
     module.storage_images,
     module.search,
     module.identity,
+    module.agent_identity,
     module.entra,
     module.agc,
   ]

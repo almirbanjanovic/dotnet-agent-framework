@@ -159,18 +159,33 @@ output "know_mcp_identity_client_id" {
 }
 
 output "crm_agent_identity_client_id" {
-  description = "Client ID of the CRM Agent workload identity"
-  value       = module.identity.identities["crm_agent"].client_id
+  description = "Client ID of the CRM Agent identity (Entra Agent ID)"
+  value       = module.agent_identity.agents["crm_agent"].client_id
 }
 
 output "prod_agent_identity_client_id" {
-  description = "Client ID of the Product Agent workload identity"
-  value       = module.identity.identities["prod_agent"].client_id
+  description = "Client ID of the Product Agent identity (Entra Agent ID)"
+  value       = module.agent_identity.agents["prod_agent"].client_id
 }
 
 output "orch_agent_identity_client_id" {
-  description = "Client ID of the Orchestrator Agent workload identity"
-  value       = module.identity.identities["orch_agent"].client_id
+  description = "Client ID of the Orchestrator Agent identity (Entra Agent ID)"
+  value       = module.agent_identity.agents["orch_agent"].client_id
+}
+
+output "crm_agent_object_id" {
+  description = "Object ID of the CRM Agent service principal (Entra Agent ID)"
+  value       = module.agent_identity.agents["crm_agent"].object_id
+}
+
+output "prod_agent_object_id" {
+  description = "Object ID of the Product Agent service principal (Entra Agent ID)"
+  value       = module.agent_identity.agents["prod_agent"].object_id
+}
+
+output "orch_agent_object_id" {
+  description = "Object ID of the Orchestrator Agent service principal (Entra Agent ID)"
+  value       = module.agent_identity.agents["orch_agent"].object_id
 }
 
 output "kubelet_identity_client_id" {
