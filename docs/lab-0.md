@@ -15,7 +15,7 @@ This lab performs the one-time setup required before any infrastructure can be d
 
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) — run `az login` before starting
 - [GitHub CLI](https://cli.github.com/) — run `gh auth login` before starting
-- [Terraform >= 1.14.6](https://developer.hashicorp.com/terraform/install)
+- [Terraform >= 1.14.7](https://developer.hashicorp.com/terraform/install)
 - [.NET SDK 9.0+](https://dotnet.microsoft.com/download)
 
 ## Run the bootstrap script

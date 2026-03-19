@@ -80,7 +80,7 @@ infra/
 ## Prerequisites
 
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) — run `az login` before any operations
-- [Terraform >= 1.14.6](https://developer.hashicorp.com/terraform/install)
+- [Terraform >= 1.14.7](https://developer.hashicorp.com/terraform/install)
 
 ## Outputs
 
@@ -178,7 +178,7 @@ Each module lives under a `v1/` folder. When a breaking change is needed, create
 | Feature | Description |
 | --- | --- |
 | **Soft-delete purge** | Pre-flight purge of soft-deleted Cognitive Services accounts and Key Vaults. KV purges use `--no-wait` to avoid blocking. |
-| **Entra user import** | Imports existing Entra test users into Terraform state before plan/apply to prevent recreation conflicts. |
+| **Agent Identity SP** | Auto-creates or reuses a service principal for the msgraph provider. Grants Agent Identity Graph API permissions and creates a temporary client secret that expires in 1 hour. Cleaned up on script exit. |
 | **CAE token retry** | If Entra operations fail due to a `TokenCreatedWithOutdatedPolicies` challenge, the script clears cached tokens and re-authenticates interactively. |
 | **Policy diagnostic** | On `terraform apply` failure, lists all deny-effect Azure Policy assignments (resolving parameterized effects through assignment overrides and definition defaults). |
 | **Entra-to-Customer linking** | Entra user IDs are linked to Customer documents in Cosmos DB using the seed-data tool's `ENTRA_MAPPING` mode. |

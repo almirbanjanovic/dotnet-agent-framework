@@ -17,8 +17,8 @@ This lab stands up the full Azure environment, validates connectivity, and seeds
 | **Storage Account** | Product images + SharePoint documents blob storage — uploaded automatically during `terraform apply` |
 | **AKS** | Kubernetes cluster for future lab deployments |
 | **ACR** | Container image registry |
-| **Key Vault** | Secrets management (endpoints, keys, deployment names) |
-| **Managed Identities** | 8 per-service identities with least-privilege RBAC (bff, crm-api, crm-mcp, know-mcp, crm-agent, prod-agent, orch-agent, kubelet) |
+| **Key Vault** | Secrets management (endpoints, deployment names, identity client IDs — no API keys, RBAC only) |
+| **Managed Identities** | 5 non-agent identities (bff, crm-api, crm-mcp, know-mcp, kubelet) + 3 agent identities (CRM Agent, Product Agent, Orchestrator Agent via Entra Agent ID) — all with least-privilege RBAC |
 
 ## Step 1 — Deploy infrastructure and seed data
 
@@ -48,12 +48,13 @@ chmod +x deploy.sh
 ./deploy.sh
 ```
 
-The script performs 7 phases with a confirmation gate between each:
+The script performs 8 phases (0-7) with a confirmation gate between each:
 
 | Phase | What it does |
 | :-----: | ------------- |
-| **1** | Re-enables public access on the state storage account (disabled after bootstrap) |
-| **2** | `terraform init` with remote backend, imports existing Entra users into Terraform state |
+| **0** | Agent Identity SP -- creates or finds service principal for Terraform's msgraph provider (needed for Entra Agent ID API) |
+| **1** | Opens resource firewalls (adds deployer IP to Key Vault, Storage, Cosmos DB, AI Services, AI Search) |
+| **2** | `terraform init` with remote backend |
 | **3** | `terraform validate` to check configuration syntax |
 | **4** | `terraform plan` to preview all changes |
 | **5** | `terraform apply` to provision resources and upload blobs |
@@ -69,7 +70,7 @@ If `terraform apply` fails, the script runs a **post-failure diagnostic** that l
 1. Go to **Actions → Terraform Plan, Approve, Apply** in your GitHub repository
 2. Click **Run workflow**, select the `dev` environment, and confirm
 3. The workflow runs in four stages:
-   - **Plan** — authenticates via OIDC, imports existing Entra users into state, runs `terraform plan`, and outputs the change set
+   - **Plan** -- authenticates via OIDC, runs `terraform plan`, and outputs the change set
    - **Manual approval** — creates a GitHub issue for review; an approver must approve before proceeding
    - **Purge soft-deleted** — purges soft-deleted Cognitive Services and Key Vault resources that would block re-creation
    - **Apply** — runs `terraform apply -auto-approve` to provision all resources. On failure, runs a policy diagnostic listing any deny-effect policies

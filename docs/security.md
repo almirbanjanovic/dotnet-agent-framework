@@ -469,11 +469,11 @@ All secrets, credentials, and identity client IDs are stored in Azure Key Vault:
 
 | Category | Secrets |
 | --- | --- |
-| Azure OpenAI | Endpoint, API key, deployment names |
-| Cosmos DB (CRM) | Endpoint, key, database name |
-| Cosmos DB (Agents) | Endpoint, key, database name |
-| Blob Storage | Endpoint, account name, container, key |
-| AI Search | Endpoint, admin key, index name |
+| Azure OpenAI | Endpoint, deployment names |
+| Cosmos DB (CRM) | Endpoint, database name |
+| Cosmos DB (Agents) | Endpoint, database name |
+| Blob Storage | Endpoint, account name, container |
+| AI Search | Endpoint, index name |
 | Entra ID | BFF client ID, tenant ID, hostname (no client secret — the Blazor app is a browser-based SPA) |
 | Workload Identities | Client IDs for 4 non-agent managed identities |
 | Agent Identities | Client IDs, object IDs, and blueprint IDs for 3 agent identities |
