@@ -66,3 +66,15 @@ variable "allowed_ips" {
   type        = list(string)
   default     = []
 }
+
+variable "portal_access_enabled" {
+  description = "Whether to add Azure Portal Middleware IPs to the firewall (enables Data Explorer, Browse Collections)"
+  type        = bool
+  default     = true
+}
+
+variable "azure_portal_ips" {
+  description = "Azure Portal Middleware IPs for NoSQL (All category). See: https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-configure-firewall"
+  type        = list(string)
+  default     = ["13.91.105.215", "4.210.172.107", "13.88.56.148", "40.91.218.243"]
+}
