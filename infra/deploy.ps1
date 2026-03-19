@@ -175,10 +175,12 @@ function Write-PhaseSummary {
         Write-Host "    Next: " -NoNewLine -ForegroundColor DarkGray
         Write-Host "$NextPhase" -ForegroundColor Cyan
     }
-    $response = Read-Host "    Continue? (Y/n)"
-    if ($response -eq 'n' -or $response -eq 'N') {
-        Write-Host "    Stopped by user." -ForegroundColor Yellow
-        exit 0
+    if (-not $script:AutoMode) {
+        $response = Read-Host "    Continue? (Y/n)"
+        if ($response -eq 'n' -or $response -eq 'N') {
+            Write-Host "    Stopped by user." -ForegroundColor Yellow
+            exit 0
+        }
     }
 }
 
@@ -341,6 +343,24 @@ if ($TfVarsFiles.Count -eq 0) {
 }
 
 Write-Banner
+
+# ── Run mode ─────────────────────────────────────────────────────────────────
+Write-Host "    How would you like to run this deployment?" -ForegroundColor DarkGray
+Write-Host ""
+Write-Host "      1. Interactive  — pause between phases for review" -ForegroundColor Cyan
+Write-Host "      2. Auto         — run all phases without stopping" -ForegroundColor Cyan
+Write-Host ""
+$modeInput = Read-Host "    Select [1-2, or press Enter for interactive]"
+$script:AutoMode = ($modeInput -eq '2')
+if ($script:AutoMode) {
+    Write-Host ""
+    Write-Host "    ✓ Auto mode — will run all phases without pausing." -ForegroundColor Green
+    Write-Host "      (Script will still stop on errors.)" -ForegroundColor DarkGray
+} else {
+    Write-Host ""
+    Write-Host "    ✓ Interactive mode — will pause between each phase." -ForegroundColor Green
+}
+Write-Host ""
 
 # ── Azure login ───────────────────────────────────────────────────────────────
 az config set core.enable_broker_on_windows=false 2>$null

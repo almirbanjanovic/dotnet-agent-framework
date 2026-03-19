@@ -175,10 +175,12 @@ phase_summary() {
     if [[ -n "$next_desc" ]]; then
         echo -e "    ${D}Next:${W} ${C}${next_desc}${W}"
     fi
-    read -p "    Continue? (Y/n) " response
-    if [[ "$response" == "n" || "$response" == "N" ]]; then
-        echo -e "    ${Y}Stopped by user.${W}"
-        exit 0
+    if [[ "$AUTO_MODE" != "true" ]]; then
+        read -p "    Continue? (Y/n) " response
+        if [[ "$response" == "n" || "$response" == "N" ]]; then
+            echo -e "    ${Y}Stopped by user.${W}"
+            exit 0
+        fi
     fi
 }
 
@@ -196,6 +198,25 @@ if [[ ${#tfvars_files[@]} -eq 0 ]]; then
 fi
 
 banner
+
+# ── Run mode ─────────────────────────────────────────────────────────────────
+echo -e "    ${D}How would you like to run this deployment?${W}"
+echo ""
+echo -e "      ${C}1. Interactive  — pause between phases for review${W}"
+echo -e "      ${C}2. Auto         — run all phases without stopping${W}"
+echo ""
+read -p "    Select [1-2, or press Enter for interactive]: " mode_input
+AUTO_MODE=false
+if [[ "$mode_input" == "2" ]]; then
+    AUTO_MODE=true
+    echo ""
+    echo -e "    ${G}✓ Auto mode — will run all phases without pausing.${W}"
+    echo -e "      ${D}(Script will still stop on errors.)${W}"
+else
+    echo ""
+    echo -e "    ${G}✓ Interactive mode — will pause between each phase.${W}"
+fi
+echo ""
 
 # ── Azure login ───────────────────────────────────────────────────────────────────
 az config set core.login_experience_v2=off 2>/dev/null
