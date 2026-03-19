@@ -95,6 +95,58 @@ function Read-HclValue {
     return $null
 }
 
+function Add-DeployerFirewallRules {
+    param([string]$ResourceGroup, [string]$DeployerIp)
+    Write-Host ""
+    Write-Host "  ━━ Adding deployer IP $DeployerIp to resource firewalls ━━" -ForegroundColor Yellow
+
+    # Key Vault
+    $kvNames = az keyvault list --resource-group $ResourceGroup --query "[].name" -o tsv 2>$null
+    foreach ($kv in ($kvNames -split "`n" | Where-Object { $_ })) {
+        az keyvault network-rule add --name $kv.Trim() --ip-address "$DeployerIp/32" 2>$null | Out-Null
+    }
+
+    # Storage accounts (excluding state storage — handled separately)
+    $stNames = az storage account list --resource-group $ResourceGroup --query "[].name" -o tsv 2>$null
+    foreach ($st in ($stNames -split "`n" | Where-Object { $_ })) {
+        az storage account network-rule add --resource-group $ResourceGroup --account-name $st.Trim() --ip-address $DeployerIp 2>$null | Out-Null
+    }
+
+    # Cosmos DB
+    $cosmosNames = az cosmosdb list --resource-group $ResourceGroup --query "[].name" -o tsv 2>$null
+    foreach ($c in ($cosmosNames -split "`n" | Where-Object { $_ })) {
+        $c = $c.Trim()
+        $existing = az cosmosdb show --name $c --resource-group $ResourceGroup --query "ipRules[].ipAddressOrRange" -o tsv 2>$null
+        $alreadyPresent = ($existing -split "`n" | Where-Object { $_.Trim() -eq $DeployerIp })
+        if (-not $alreadyPresent) {
+            $newIps = @($existing -split "`n" | Where-Object { $_ }) + @($DeployerIp)
+            $ipFilter = ($newIps | ForEach-Object { $_.Trim() } | Where-Object { $_ }) -join ","
+            az cosmosdb update --name $c --resource-group $ResourceGroup --ip-range-filter $ipFilter 2>$null | Out-Null
+        }
+    }
+
+    # Cognitive Services
+    $cogNames = az cognitiveservices account list --resource-group $ResourceGroup --query "[].name" -o tsv 2>$null
+    foreach ($cog in ($cogNames -split "`n" | Where-Object { $_ })) {
+        az cognitiveservices account network-rule add --resource-group $ResourceGroup --name $cog.Trim() --ip-address "$DeployerIp/32" 2>$null | Out-Null
+    }
+
+    # AI Search
+    $searchNames = az search service list --resource-group $ResourceGroup --query "[].name" -o tsv 2>$null
+    foreach ($s in ($searchNames -split "`n" | Where-Object { $_ })) {
+        $s = $s.Trim()
+        $currentIps = az search service show --name $s --resource-group $ResourceGroup --query "networkRuleSet.ipRules[].value" -o tsv 2>$null
+        $alreadyPresent = ($currentIps -split "`n" | Where-Object { $_.Trim() -eq $DeployerIp })
+        if (-not $alreadyPresent) {
+            $newRules = @($currentIps -split "`n" | Where-Object { $_ } | ForEach-Object { @{value=$_.Trim()} }) + @(@{value=$DeployerIp})
+            $ipRules = $newRules | ConvertTo-Json -Compress
+            az search service update --name $s --resource-group $ResourceGroup --ip-rules $ipRules 2>$null | Out-Null
+        }
+    }
+
+    Write-Host "  ━━ Deployer IP added to all resource firewalls ━━" -ForegroundColor Green
+}
+
 function Remove-DeployerFirewallRules {
     param([string]$ResourceGroup, [string]$DeployerIp)
     Write-Host ""
@@ -347,6 +399,15 @@ Write-PhaseSummary -Number 3 -NextPhase "Phase 4 — terraform plan (preview inf
 # ═══════════════════════════════════════════════════════════════════════════════
 
 Write-Phase -Number 4 -Title "terraform plan"
+
+# Re-add deployer IP to all resource firewalls before plan. On a retry after a
+# previous failed deploy, the finally block will have stripped the deployer IP from
+# every firewall. Terraform plan refreshes existing resources (blobs, certs) via
+# data-plane calls, so the firewalls must be open before plan runs.
+Write-Step "Ensuring deployer IP is whitelisted on existing resource firewalls"
+Add-DeployerFirewallRules -ResourceGroup $ResourceGroup -DeployerIp $DeployerIp
+Write-Host "    Waiting 30s for firewall changes to propagate..." -ForegroundColor DarkGray
+Start-Sleep -Seconds 30
 
 Write-Step "Planning infrastructure changes"
 

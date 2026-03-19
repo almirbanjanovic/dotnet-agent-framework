@@ -166,6 +166,49 @@ DEPLOYER_IP=$(curl -s --max-time 10 https://api.ipify.org)
 echo -e "    Deployer IP:     ${C}${DEPLOYER_IP}${W}"
 echo ""
 
+# ── Add deployer IP to all resource firewalls (for plan/apply state refresh) ──
+add_deployer_firewall_rules() {
+    local RG="$1" IP="$2"
+    echo ""
+    echo -e "  ${Y}━━ Adding deployer IP $IP to resource firewalls ━━${W}"
+
+    # Key Vault
+    for kv in $(az keyvault list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
+      az keyvault network-rule add --name "$kv" --ip-address "$IP/32" 2>/dev/null || true
+    done
+
+    # Storage accounts
+    for st in $(az storage account list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
+      az storage account network-rule add --resource-group "$RG" --account-name "$st" --ip-address "$IP" 2>/dev/null || true
+    done
+
+    # Cosmos DB
+    for c in $(az cosmosdb list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
+      EXISTING=$(az cosmosdb show --name "$c" --resource-group "$RG" --query "ipRules[].ipAddressOrRange" -o tsv 2>/dev/null || true)
+      if ! echo "$EXISTING" | grep -qF "$IP"; then
+          NEW_IPS=$(echo -e "${EXISTING}\n${IP}" | grep -v '^$' | paste -sd, -)
+          az cosmosdb update --name "$c" --resource-group "$RG" --ip-range-filter "$NEW_IPS" 2>/dev/null || true
+      fi
+    done
+
+    # Cognitive Services
+    for cog in $(az cognitiveservices account list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
+      az cognitiveservices account network-rule add --resource-group "$RG" --name "$cog" --ip-address "$IP/32" 2>/dev/null || true
+    done
+
+    # AI Search
+    for s in $(az search service list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
+      CURRENT=$(az search service show --name "$s" --resource-group "$RG" --query "networkRuleSet.ipRules[].value" -o tsv 2>/dev/null || true)
+      if ! echo "$CURRENT" | grep -qF "$IP"; then
+          ALL_IPS=$(echo -e "${CURRENT}\n${IP}" | grep -v '^$')
+          RULES=$(echo "$ALL_IPS" | jq -Rn '[inputs | {value: .}]')
+          az search service update --name "$s" --resource-group "$RG" --ip-rules "$RULES" 2>/dev/null || true
+      fi
+    done
+
+    echo -e "  ${G}━━ Deployer IP added to all resource firewalls ━━${W}"
+}
+
 # ── Cleanup: ALWAYS remove deployer IP from all firewalls (even on error) ────
 cleanup_deployer_ip() {
     echo ""
@@ -337,6 +380,15 @@ phase_summary 3 \
 # ═══════════════════════════════════════════════════════════════════════════════
 
 phase 4 "terraform plan"
+
+# Re-add deployer IP to all resource firewalls before plan. On a retry after a
+# previous failed deploy, the cleanup trap will have stripped the deployer IP from
+# every firewall. Terraform plan refreshes existing resources (blobs, certs) via
+# data-plane calls, so the firewalls must be open before plan runs.
+step "Ensuring deployer IP is whitelisted on existing resource firewalls"
+add_deployer_firewall_rules "$RESOURCE_GROUP" "$DEPLOYER_IP"
+echo -e "    ${D}Waiting 30s for firewall changes to propagate...${W}"
+sleep 30
 
 step "Planning infrastructure changes"
 
