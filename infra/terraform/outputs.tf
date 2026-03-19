@@ -21,17 +21,22 @@ output "embedding_deployment_name" {
 }
 
 # ---------------------------------------------------------------
-# Azure SQL Database — Operational (CRM)
+# Cosmos DB — CRM (operational data)
 # ---------------------------------------------------------------
 
-output "sql_server_fqdn" {
-  description = "Azure SQL Server fully qualified domain name"
-  value       = module.sql.server_fqdn
+output "cosmosdb_crm_endpoint" {
+  description = "Cosmos DB CRM account endpoint"
+  value       = module.cosmosdb_crm.endpoint
 }
 
-output "sql_database_name" {
-  description = "Azure SQL Database name"
-  value       = module.sql.database_name
+output "cosmosdb_crm_account_name" {
+  description = "Cosmos DB CRM account name"
+  value       = module.cosmosdb_crm.account_name
+}
+
+output "cosmosdb_crm_database_name" {
+  description = "Cosmos DB CRM database name"
+  value       = module.cosmosdb_crm.database_name
 }
 
 # ---------------------------------------------------------------

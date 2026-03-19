@@ -39,8 +39,6 @@ infra/
         │   └── v1/
         ├── search/            # Azure AI Search + index, data source, skillset (AzAPI)
         │   └── v1/
-        ├── sql/               # Azure SQL Server + Database (Serverless)
-        │   └── v1/
         ├── storage/           # Azure Storage Account + blob containers (control plane)
         │   └── v1/
         ├── storage-uploads/   # Blob file uploads (data plane, separate ordering)
@@ -76,8 +74,9 @@ After `terraform apply`, the following outputs are displayed:
 | `openai_api_key` | API key (dev/learning convenience) |
 | `openai_deployment_name` | Chat model deployment name |
 | `embedding_deployment_name` | Embedding model deployment name |
-| `sql_server_fqdn` | Azure SQL Server FQDN |
-| `sql_database_name` | Azure SQL Database name |
+| `cosmosdb_crm_endpoint` | CRM Cosmos DB endpoint |
+| `cosmosdb_crm_account_name` | CRM Cosmos DB account name |
+| `cosmosdb_crm_database_name` | CRM database name |
 | `cosmosdb_agents_endpoint` | Agents Cosmos DB endpoint |
 | `cosmosdb_agents_account_name` | Agents Cosmos DB account name |
 | `cosmosdb_agents_database_name` | Agents database name |
@@ -163,5 +162,5 @@ Each module lives under a `v1/` folder. When a breaking change is needed, create
 | **Entra user import** | Imports existing Entra test users into Terraform state before plan/apply to prevent recreation conflicts. |
 | **CAE token retry** | If Entra operations fail due to a `TokenCreatedWithOutdatedPolicies` challenge, the script clears cached tokens and re-authenticates interactively. |
 | **Policy diagnostic** | On `terraform apply` failure, lists all deny-effect Azure Policy assignments (resolving parameterized effects through assignment overrides and definition defaults). |
-| **SQL injection prevention** | Entra-to-Customer linking uses parameterized queries (`Invoke-Sqlcmd` with named variables) or single-quote escaping as fallback. |
+| **Entra-to-Customer linking** | Entra user IDs are linked to Customer documents in Cosmos DB using the seed-data tool's `ENTRA_MAPPING` mode. |
 | **State storage lock** | Public access on the Terraform state storage account is disabled after every run. CI/CD uses `if: always()` to guarantee this even on failure. |

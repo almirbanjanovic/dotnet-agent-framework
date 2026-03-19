@@ -56,11 +56,15 @@ jobs:
             az keyvault network-rule add --name "$kv" --ip-address "$DEPLOYER_IP/32" 2>/dev/null || true
           done
 
-          # SQL Server
-          for sql in $(az sql server list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
-            az sql server update --name "$sql" --resource-group "$RG" --enable-public-network true 2>/dev/null || true
-            az sql server firewall-rule create --server "$sql" --resource-group "$RG" --name AllowDeployer \
-              --start-ip-address "$DEPLOYER_IP" --end-ip-address "$DEPLOYER_IP" 2>/dev/null || true
+          # Cosmos DB
+          for c in $(az cosmosdb list --resource-group \"$RG\" --query \"[].name\" -o tsv 2>/dev/null); do
+            EXISTING=$(az cosmosdb show --name \"$c\" --resource-group \"$RG\" --query \"ipRules[].ipAddressOrRange\" -o tsv 2>/dev/null || true)
+            CURRENT_IPS=$(echo \"$EXISTING\" | paste -sd, - 2>/dev/null || true)
+            if [ -n \"$CURRENT_IPS\" ]; then
+              az cosmosdb update --name \"$c\" --resource-group \"$RG\" --ip-range-filter \"${CURRENT_IPS},${DEPLOYER_IP}\" 2>/dev/null || true
+            else
+              az cosmosdb update --name \"$c\" --resource-group \"$RG\" --ip-range-filter \"$DEPLOYER_IP\" 2>/dev/null || true
+            fi
           done
 
           echo "Deployer IP $DEPLOYER_IP added to firewalls"
@@ -73,33 +77,26 @@ jobs:
             --query "[0].name" -o tsv)
           echo "name=$KV_NAME" >> "$GITHUB_OUTPUT"
 
-      - name: Read SQL connection info from Key Vault
-        id: sql
+      - name: Read Cosmos DB CRM connection info from Key Vault
+        id: cosmos
         run: |
           KV="${{ steps.keyvault.outputs.name }}"
-          echo "server=$(az keyvault secret show --vault-name "$KV" --name SQL-SERVER-FQDN --query value -o tsv)" >> "$GITHUB_OUTPUT"
-          echo "database=$(az keyvault secret show --vault-name "$KV" --name SQL-DATABASE-NAME --query value -o tsv)" >> "$GITHUB_OUTPUT"
-
-      - name: Get SQL access token
-        id: sqltoken
-        run: |
-          TOKEN=$(az account get-access-token --resource https://database.windows.net/ --query accessToken -o tsv)
-          echo "::add-mask::$TOKEN"
-          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+          echo "endpoint=$(az keyvault secret show --vault-name "$KV" --name COSMOSDB-CRM-ENDPOINT --query value -o tsv)" >> "$GITHUB_OUTPUT"
+          echo "database=$(az keyvault secret show --vault-name "$KV" --name COSMOSDB-CRM-DATABASE --query value -o tsv)" >> "$GITHUB_OUTPUT"
+          KEY=$(az keyvault secret show --vault-name "$KV" --name COSMOSDB-CRM-KEY --query value -o tsv)
+          echo "::add-mask::$KEY"
+          echo "key=$KEY" >> "$GITHUB_OUTPUT"
 
       - name: Seed CRM data
         run: dotnet run --project src/seed-data
         env:
-          SQL_SERVER_FQDN: ${{ steps.sql.outputs.server }}
-          SQL_DATABASE_NAME: ${{ steps.sql.outputs.database }}
-          SQL_ACCESS_TOKEN: ${{ steps.sqltoken.outputs.token }}
+          COSMOSDB_CRM_ENDPOINT: ${{ steps.cosmos.outputs.endpoint }}
+          COSMOSDB_CRM_KEY: ${{ steps.cosmos.outputs.key }}
+          COSMOSDB_CRM_DATABASE: ${{ steps.cosmos.outputs.database }}
 
-      - name: Link Entra users to Customers table
+      - name: Link Entra users to Customers
         run: |
           KV="${{ steps.keyvault.outputs.name }}"
-          SERVER="${{ steps.sql.outputs.server }}"
-          DB="${{ steps.sql.outputs.database }}"
-          TOKEN="${{ steps.sqltoken.outputs.token }}"
 
           declare -A CUSTOMERS=(
             ["101"]="CUSTOMER-EMMA-ENTRA-OID"
@@ -109,16 +106,22 @@ jobs:
             ["105"]="CUSTOMER-LISA-ENTRA-OID"
           )
 
+          ENTRA_PAIRS=""
           for CID in "${!CUSTOMERS[@]}"; do
             SECRET_NAME="${CUSTOMERS[$CID]}"
             OID=$(az keyvault secret show --vault-name "$KV" --name "$SECRET_NAME" --query value -o tsv 2>/dev/null || true)
             if [ -n "$OID" ]; then
-              SAFE_OID="${OID//\'/\'\'}"
-              SAFE_CID="${CID//\'/\'\'}"
-              sqlcmd -S "tcp:${SERVER},1433" -d "$DB" --authentication-method=ActiveDirectoryAccessToken -P "$TOKEN" \
-                -Q "UPDATE Customers SET entra_id = '${SAFE_OID}' WHERE id = '${SAFE_CID}'" -C 2>/dev/null || true
+              if [ -n "$ENTRA_PAIRS" ]; then ENTRA_PAIRS="${ENTRA_PAIRS};"; fi
+              ENTRA_PAIRS="${ENTRA_PAIRS}${CID}=${OID}"
               echo "Linked customer $CID → ${OID:0:8}..."
             else
               echo "Warning: Could not read $SECRET_NAME from Key Vault"
             fi
           done
+
+          ENTRA_MAPPING="$ENTRA_PAIRS" dotnet run --project src/seed-data
+        env:
+          COSMOSDB_CRM_ENDPOINT: ${{ steps.cosmos.outputs.endpoint }}
+          COSMOSDB_CRM_KEY: ${{ steps.cosmos.outputs.key }}
+          COSMOSDB_CRM_DATABASE: ${{ steps.cosmos.outputs.database }}
+          CRM_DATA_PATH: /dev/null

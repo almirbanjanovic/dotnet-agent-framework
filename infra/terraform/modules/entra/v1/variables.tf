@@ -15,7 +15,7 @@ variable "redirect_uris" {
 }
 
 variable "test_users" {
-  description = "Map of customer test users to create in Entra ID. Each maps to a pre-seeded customer in Azure SQL."
+  description = "Map of customer test users to create in Entra ID. Each maps to a pre-seeded customer in Cosmos DB."
   type = map(object({
     display_name  = string
     mail_nickname = string

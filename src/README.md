@@ -18,7 +18,7 @@ The `appsettings.json` is shared across all projects — each references it via 
 
 | Project | Description | Backing Service |
 | --- | --- | --- |
-| `crm-api/` | All CRM data: customers, orders, products, promotions, support tickets (11 endpoints). ASP.NET Core Minimal API. | Azure SQL Database (6 tables) |
+| `crm-api/` | All CRM data: customers, orders, products, promotions, support tickets (11 endpoints). ASP.NET Core Minimal API. | Cosmos DB CRM (6 containers) |
 
 ### MCP Servers
 
@@ -47,7 +47,7 @@ The `appsettings.json` is shared across all projects — each references it via 
 | Project | Description |
 | --- | --- |
 | `config-sync/` | Pulls Key Vault secrets into `appsettings.json` |
-| `seed-data/` | Seeds Azure SQL from CSV files (runs via deploy script) |
+| `seed-data/` | Seeds Cosmos DB from CSV files (runs via deploy script) |
 | `simple-agent/` | Validates Azure OpenAI connectivity (Lab 1) |
 
 ## Labs
@@ -55,7 +55,7 @@ The `appsettings.json` is shared across all projects — each references it via 
 | # | Lab | Description |
 | --- | --- | --- |
 | 0 | [Lab 0 — Bootstrap](../docs/lab-0.md) | One-time setup: Terraform config files, remote state backend, CI/CD |
-| 1 | [Lab 1 — Infrastructure, Validation & Data Seeding](../docs/lab-1.md) | Deploy Azure infrastructure, validate with simple-agent, seed Azure SQL |
+| 1 | [Lab 1 — Infrastructure, Validation & Data Seeding](../docs/lab-1.md) | Deploy Azure infrastructure, validate with simple-agent, seed Cosmos DB |
 
 ## Running a project
 

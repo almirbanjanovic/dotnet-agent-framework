@@ -192,7 +192,7 @@ Semantic search over guides, policies, and procedures (RAG pattern).
 
 ## 5. Data Model
 
-### Structured Data (CSV \u2192 Azure SQL Database)
+### Structured Data (CSV → Cosmos DB)
 
 | Entity | Fields | Primary Key |
 | -------- | -------- | ------------- |

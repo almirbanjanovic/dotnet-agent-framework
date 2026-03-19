@@ -191,12 +191,6 @@ cleanup_deployer_ip() {
       az cosmosdb update --name "$c" --resource-group "$RG" --ip-range-filter "$FILTERED" 2>/dev/null || true
     done
 
-    # SQL Server
-    for sql in $(az sql server list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
-      az sql server firewall-rule delete --server "$sql" --resource-group "$RG" --name AllowDeployer -y 2>/dev/null || true
-      az sql server update --name "$sql" --resource-group "$RG" --enable-public-network false 2>/dev/null || true
-    done
-
     # Cognitive Services
     for cog in $(az cognitiveservices account list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
       az cognitiveservices account network-rule remove --resource-group "$RG" --name "$cog" --ip-address "$IP/32" 2>/dev/null || true
@@ -363,7 +357,7 @@ phase_summary 4 \
 phase 5 "terraform apply"
 
 step "Applying infrastructure changes"
-echo -e "    ${D}Resources: AI Foundry, SQL, Cosmos DB, AI Search, AKS, ACR, Key Vault, Storage${W}"
+echo -e "    ${D}Resources: AI Foundry, Cosmos DB, AI Search, AKS, ACR, Key Vault, Storage${W}"
 echo ""
 
 pushd "$TERRAFORM_DIR" >/dev/null
@@ -451,7 +445,7 @@ popd >/dev/null
 rm -f "$TERRAFORM_DIR/tfplan"
 
 phase_summary 5 \
-    "Phase 6 — Seed CRM data into Azure SQL Database" \
+    "Phase 6 — Seed CRM data into Cosmos DB" \
     "Status" "Applied successfully"
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -465,21 +459,17 @@ KV_NAME=$(az keyvault list --resource-group "$RESOURCE_GROUP" --query "[0].name"
 if [[ -z "$KV_NAME" ]]; then echo "No Key Vault found in $RESOURCE_GROUP"; exit 1; fi
 done_ "Key Vault: $KV_NAME"
 
-step "Reading SQL connection info from Key Vault"
-SQL_FQDN=$(az keyvault secret show --vault-name "$KV_NAME" --name "SQL-SERVER-FQDN" --query value -o tsv)
-SQL_DB=$(az keyvault secret show --vault-name "$KV_NAME" --name "SQL-DATABASE-NAME" --query value -o tsv)
-done_ "SQL Server: $SQL_FQDN / $SQL_DB"
+step "Reading Cosmos DB CRM connection info from Key Vault"
+COSMOS_ENDPOINT=$(az keyvault secret show --vault-name "$KV_NAME" --name "COSMOSDB-CRM-ENDPOINT" --query value -o tsv)
+COSMOS_KEY=$(az keyvault secret show --vault-name "$KV_NAME" --name "COSMOSDB-CRM-KEY" --query value -o tsv)
+COSMOS_DB=$(az keyvault secret show --vault-name "$KV_NAME" --name "COSMOSDB-CRM-DATABASE" --query value -o tsv)
+done_ "Cosmos DB: $COSMOS_ENDPOINT / $COSMOS_DB"
 
-step "Getting AKS credentials (SQL is behind a private endpoint)"
+step "Getting AKS credentials (Cosmos DB is behind a private endpoint)"
 AKS_NAME=$(az aks list --resource-group "$RESOURCE_GROUP" --query "[0].name" -o tsv)
 if [[ -z "$AKS_NAME" ]]; then echo "No AKS cluster found in $RESOURCE_GROUP"; exit 1; fi
 az aks get-credentials --resource-group "$RESOURCE_GROUP" --name "$AKS_NAME" --overwrite-existing >/dev/null
 done_ "AKS: $AKS_NAME"
-
-step "Getting SQL access token"
-SQL_TOKEN=$(az account get-access-token --resource https://database.windows.net/ --query accessToken -o tsv)
-if [[ -z "$SQL_TOKEN" ]]; then echo "Failed to get SQL access token"; exit 1; fi
-done_ "Token acquired"
 
 step "Publishing seed-data tool for Linux"
 SEED_DATA_DIR="$(dirname "$SCRIPT_DIR")/src/seed-data"
@@ -509,18 +499,18 @@ kubectl cp "$CRM_DATA_DIR" "${K8S_NAMESPACE}/${POD_NAME}:/data/contoso-crm" >/de
 kubectl exec "$POD_NAME" --namespace="$K8S_NAMESPACE" -- chmod +x /app/seed-data >/dev/null 2>&1
 
 kubectl exec "$POD_NAME" --namespace="$K8S_NAMESPACE" -- \
-    /bin/sh -c "SQL_SERVER_FQDN='$SQL_FQDN' SQL_DATABASE_NAME='$SQL_DB' SQL_ACCESS_TOKEN='$SQL_TOKEN' CRM_DATA_PATH='/data/contoso-crm' /app/seed-data"
+    /bin/sh -c "COSMOSDB_CRM_ENDPOINT='$COSMOS_ENDPOINT' COSMOSDB_CRM_KEY='$COSMOS_KEY' COSMOSDB_CRM_DATABASE='$COSMOS_DB' CRM_DATA_PATH='/data/contoso-crm' /app/seed-data"
 done_ "CRM data seeded"
 
 kubectl delete pod "$POD_NAME" --namespace="$K8S_NAMESPACE" --force --grace-period=0 >/dev/null 2>&1 || true
 # (trap - EXIT removed — deployer IP cleanup trap handles all cleanup)
 
 phase_summary 6 \
-    "Phase 7 \u2014 Link Entra users to Customers table" \
+    "Phase 7 \u2014 Link Entra users to Customers" \
     "Status" "CRM data seeded"
 
 # \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
-# PHASE 7 \u2014 Link Entra user object IDs to Customers table
+# PHASE 7 — Link Entra user object IDs to Customers
 # \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
 
 phase 7 "Link Entra users to Customers"
@@ -535,38 +525,31 @@ declare -A CUSTOMER_MAPPING=(
     ["105"]="CUSTOMER-LISA-ENTRA-OID"
 )
 
-declare -A CUSTOMER_NAMES=(
-    ["101"]="Emma Wilson"
-    ["102"]="James Chen"
-    ["103"]="Sarah Miller"
-    ["104"]="David Park"
-    ["105"]="Lisa Torres"
-)
-
-step "Running SQL updates via AKS pod (private endpoint)"
-POD_NAME7="sql-entra-linker"
-kubectl run "$POD_NAME7" --image=mcr.microsoft.com/mssql-tools:latest --restart=Never --namespace="$K8S_NAMESPACE" --command -- sleep 300 >/dev/null 2>&1
-kubectl wait --for=condition=Ready "pod/$POD_NAME7" --namespace="$K8S_NAMESPACE" --timeout=120s >/dev/null 2>&1
-
-cleanup_linker_pod() {
-    kubectl delete pod "$POD_NAME7" --namespace="$K8S_NAMESPACE" --force --grace-period=0 >/dev/null 2>&1 || true
-}
-# Pod cleanup handled inline below (trap EXIT reserved for deployer IP cleanup)
-
+step "Building Entra mapping and updating Cosmos DB via seed-data tool"
+ENTRA_PAIRS=""
 for CID in "${!CUSTOMER_MAPPING[@]}"; do
     SECRET_NAME="${CUSTOMER_MAPPING[$CID]}"
     OID=$(az keyvault secret show --vault-name "$KV_NAME" --name "$SECRET_NAME" --query value -o tsv 2>/dev/null || true)
     if [[ -n "$OID" ]]; then
-        SAFE_OID="${OID//\'/\'\'}"
-        SAFE_CID="${CID//\'/\'\'}"
-        kubectl exec "$POD_NAME7" --namespace="$K8S_NAMESPACE" -- \
-            /opt/mssql-tools/bin/sqlcmd -S "tcp:${SQL_FQDN},1433" -d "$SQL_DB" -P "$SQL_TOKEN" -U "integratedauth" -G \
-            -Q "UPDATE Customers SET entra_id = '${SAFE_OID}' WHERE id = '${SAFE_CID}'" -C 2>/dev/null || true
-        done_ "${CUSTOMER_NAMES[$CID]} (ID $CID) \u2192 ${OID:0:8}..."
+        if [[ -n "$ENTRA_PAIRS" ]]; then ENTRA_PAIRS="${ENTRA_PAIRS};"; fi
+        ENTRA_PAIRS="${ENTRA_PAIRS}${CID}=${OID}"
     else
-        echo -e "    ${Y}\u26a0 Could not read $SECRET_NAME from Key Vault${W}"
+        echo -e "    ${Y}Could not read $SECRET_NAME from Key Vault${W}"
     fi
 done
+
+# Reuse the seed-data pod pattern to run entra linking inside the cluster
+POD_NAME7="entra-linker"
+kubectl run "$POD_NAME7" --image=mcr.microsoft.com/dotnet/runtime-deps:9.0 --restart=Never --namespace="$K8S_NAMESPACE" --command -- sleep 300 >/dev/null 2>&1
+kubectl wait --for=condition=Ready "pod/$POD_NAME7" --namespace="$K8S_NAMESPACE" --timeout=120s >/dev/null 2>&1
+
+kubectl exec "$POD_NAME7" --namespace="$K8S_NAMESPACE" -- mkdir -p /app >/dev/null 2>&1
+kubectl cp "$PUBLISH_DIR" "${K8S_NAMESPACE}/${POD_NAME7}:/app" >/dev/null 2>&1
+kubectl exec "$POD_NAME7" --namespace="$K8S_NAMESPACE" -- chmod +x /app/seed-data >/dev/null 2>&1
+
+kubectl exec "$POD_NAME7" --namespace="$K8S_NAMESPACE" -- \
+    /bin/sh -c "COSMOSDB_CRM_ENDPOINT='$COSMOS_ENDPOINT' COSMOSDB_CRM_KEY='$COSMOS_KEY' COSMOSDB_CRM_DATABASE='$COSMOS_DB' CRM_DATA_PATH='/dev/null' ENTRA_MAPPING='$ENTRA_PAIRS' /app/seed-data"
+done_ "Entra users linked to Customers"
 
 kubectl delete pod "$POD_NAME7" --namespace="$K8S_NAMESPACE" --force --grace-period=0 >/dev/null 2>&1 || true
 

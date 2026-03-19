@@ -1,90 +1,43 @@
 using System.Globalization;
-using Microsoft.Data.SqlClient;
+using System.Text.Json;
+using Microsoft.Azure.Cosmos;
 
 namespace seed_data;
 
 /// <summary>
-/// Seeds Azure SQL Database tables from CSV files in the contoso-crm folder.
-/// Creates tables if they don't exist, then upserts rows using MERGE.
+/// Seeds Cosmos DB containers from CSV files in the contoso-crm folder.
+/// Creates containers if they don't exist, then upserts documents.
 /// </summary>
 public static class CrmSeeder
 {
-    // Maps CSV filename (without extension) to table name and column definitions
-    private static readonly Dictionary<string, TableDef> TableMap = new()
+    // Maps CSV filename (without extension) to container name and partition key path
+    private static readonly Dictionary<string, ContainerDef> ContainerMap = new()
     {
-        ["customers"] = new("Customers", "id", new[]
-        {
-            ("id", "VARCHAR(10)", true),
-            ("first_name", "VARCHAR(50)", false),
-            ("last_name", "VARCHAR(50)", false),
-            ("email", "VARCHAR(100)", false),
-            ("phone", "VARCHAR(20)", false),
-            ("address", "VARCHAR(200)", false),
-            ("loyalty_tier", "VARCHAR(20)", false),
-            ("account_status", "VARCHAR(20)", false),
-            ("created_date", "DATE", false),
-            ("entra_id", "VARCHAR(36)", false),
-        }),
-        ["orders"] = new("Orders", "id", new[]
-        {
-            ("id", "INT", true),
-            ("customer_id", "VARCHAR(10)", false),
-            ("order_date", "DATE", false),
-            ("status", "VARCHAR(20)", false),
-            ("total_amount", "DECIMAL(10,2)", false),
-            ("shipping_address", "VARCHAR(200)", false),
-            ("tracking_number", "VARCHAR(50)", false),
-            ("estimated_delivery", "DATE", false),
-        }),
-        ["order-items"] = new("OrderItems", "id", new[]
-        {
-            ("id", "INT", true),
-            ("order_id", "INT", false),
-            ("product_id", "VARCHAR(10)", false),
-            ("product_name", "VARCHAR(100)", false),
-            ("quantity", "INT", false),
-            ("unit_price", "DECIMAL(10,2)", false),
-        }),
-        ["products"] = new("Products", "id", new[]
-        {
-            ("id", "VARCHAR(10)", true),
-            ("name", "VARCHAR(100)", false),
-            ("category", "VARCHAR(50)", false),
-            ("description", "VARCHAR(500)", false),
-            ("price", "DECIMAL(10,2)", false),
-            ("in_stock", "BIT", false),
-            ("rating", "DECIMAL(3,1)", false),
-            ("weight_kg", "DECIMAL(5,2)", false),
-            ("image_filename", "VARCHAR(100)", false),
-        }),
-        ["promotions"] = new("Promotions", "id", new[]
-        {
-            ("id", "VARCHAR(20)", true),
-            ("name", "VARCHAR(100)", false),
-            ("description", "VARCHAR(500)", false),
-            ("discount_percent", "INT", false),
-            ("eligible_categories", "VARCHAR(200)", false),
-            ("min_loyalty_tier", "VARCHAR(20)", false),
-            ("start_date", "DATE", false),
-            ("end_date", "DATE", false),
-            ("active", "BIT", false),
-        }),
-        ["support-tickets"] = new("SupportTickets", "id", new[]
-        {
-            ("id", "VARCHAR(20)", true),
-            ("customer_id", "VARCHAR(10)", false),
-            ("order_id", "INT", false),
-            ("category", "VARCHAR(30)", false),
-            ("subject", "VARCHAR(200)", false),
-            ("description", "VARCHAR(1000)", false),
-            ("status", "VARCHAR(20)", false),
-            ("priority", "VARCHAR(20)", false),
-            ("opened_at", "DATE", false),
-            ("closed_at", "DATE", false),
-        }),
+        ["customers"]       = new("Customers",      "/id"),
+        ["orders"]          = new("Orders",          "/customer_id"),
+        ["order-items"]     = new("OrderItems",      "/order_id"),
+        ["products"]        = new("Products",        "/id"),
+        ["promotions"]      = new("Promotions",      "/id"),
+        ["support-tickets"] = new("SupportTickets",  "/customer_id"),
     };
 
-    public static async Task SeedAsync(string connectionString, string crmFolder, string? accessToken = null)
+    // Fields that should be stored as numbers
+    private static readonly HashSet<string> IntFields = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "order_id", "quantity", "discount_percent"
+    };
+
+    private static readonly HashSet<string> DecimalFields = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "total_amount", "unit_price", "price", "rating", "weight_kg"
+    };
+
+    private static readonly HashSet<string> BoolFields = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "in_stock", "active"
+    };
+
+    public static async Task SeedAsync(CosmosClient cosmosClient, string databaseName, string crmFolder)
     {
         if (!Directory.Exists(crmFolder))
         {
@@ -95,115 +48,98 @@ public static class CrmSeeder
         var csvFiles = Directory.GetFiles(crmFolder, "*.csv");
         Console.WriteLine($"  Found {csvFiles.Length} CSV files in {Path.GetFileName(crmFolder)}/\n");
 
-        await using var connection = new SqlConnection(connectionString);
-        if (!string.IsNullOrEmpty(accessToken))
-            connection.AccessToken = accessToken;
-        await connection.OpenAsync();
+        var database = cosmosClient.GetDatabase(databaseName);
 
-        // Create tables in dependency order (parents before children)
-        var tableOrder = new[] { "customers", "products", "promotions", "orders", "order-items", "support-tickets" };
-
-        foreach (var fileName in tableOrder)
+        // Ensure containers exist
+        foreach (var (_, containerDef) in ContainerMap)
         {
-            if (TableMap.TryGetValue(fileName, out var tableDef))
-            {
-                await CreateTableIfNotExistsAsync(connection, tableDef);
-            }
+            await database.CreateContainerIfNotExistsAsync(containerDef.ContainerName, containerDef.PartitionKeyPath);
         }
 
-        // Seed data
-        foreach (var csvFile in csvFiles)
-        {
-            var fileName = Path.GetFileNameWithoutExtension(csvFile);
+        // Seed data in dependency order (parents before children)
+        var seedOrder = new[] { "customers", "products", "promotions", "orders", "order-items", "support-tickets" };
 
-            if (!TableMap.TryGetValue(fileName, out var tableDef))
+        foreach (var fileName in seedOrder)
+        {
+            var csvFile = csvFiles.FirstOrDefault(f =>
+                Path.GetFileNameWithoutExtension(f).Equals(fileName, StringComparison.OrdinalIgnoreCase));
+
+            if (csvFile is null)
             {
-                Console.WriteLine($"  ⚠ Skipping {fileName}.csv — no table mapping defined");
+                Console.WriteLine($"  ⚠ {fileName}.csv not found, skipping");
                 continue;
             }
 
+            if (!ContainerMap.TryGetValue(fileName, out var containerDef))
+            {
+                Console.WriteLine($"  ⚠ Skipping {fileName}.csv — no container mapping defined");
+                continue;
+            }
+
+            var container = database.GetContainer(containerDef.ContainerName);
             var rows = ParseCsv(csvFile);
             int count = 0;
 
             foreach (var row in rows)
             {
-                await UpsertRowAsync(connection, tableDef, row);
+                // Cosmos DB requires a string "id" field
+                if (!row.ContainsKey("id"))
+                {
+                    Console.WriteLine($"  ⚠ Row in {fileName}.csv missing 'id' field, skipping");
+                    continue;
+                }
+
+                // Build a typed document for JSON serialization
+                var doc = new Dictionary<string, object?>();
+                foreach (var (key, value) in row)
+                {
+                    doc[key] = ConvertValue(key, value);
+                }
+
+                // Ensure id is always a string for Cosmos DB
+                doc["id"] = row["id"]!.ToString();
+
+                // Extract partition key value
+                var pkPath = containerDef.PartitionKeyPath.TrimStart('/');
+                var pkValue = doc.TryGetValue(pkPath, out var pk) ? pk?.ToString() ?? "" : "";
+
+                await container.UpsertItemAsync(doc, new PartitionKey(pkValue));
                 count++;
             }
 
-            Console.WriteLine($"  ✓ {tableDef.TableName}: {count} rows upserted");
+            Console.WriteLine($"  ✓ {containerDef.ContainerName}: {count} documents upserted");
         }
 
-        // Verify all tables have data
+        // Verify all containers have data
         Console.WriteLine();
         Console.WriteLine("  Verifying seeded data...\n");
 
         bool allPassed = true;
-        foreach (var tableDef in TableMap.Values)
+        foreach (var containerDef in ContainerMap.Values)
         {
-            await using var cmd = new SqlCommand($"SELECT COUNT(*) FROM {tableDef.TableName}", connection);
-            var rowCount = (int)(await cmd.ExecuteScalarAsync())!;
+            var container = database.GetContainer(containerDef.ContainerName);
+            var query = new QueryDefinition("SELECT VALUE COUNT(1) FROM c");
+            using var iterator = container.GetItemQueryIterator<int>(query);
+            var response = await iterator.ReadNextAsync();
+            var rowCount = response.FirstOrDefault();
 
             if (rowCount > 0)
             {
-                Console.WriteLine($"  ✓ {tableDef.TableName}: {rowCount} rows");
+                Console.WriteLine($"  ✓ {containerDef.ContainerName}: {rowCount} documents");
             }
             else
             {
-                Console.WriteLine($"  ✗ {tableDef.TableName}: 0 rows — VERIFICATION FAILED");
+                Console.WriteLine($"  ✗ {containerDef.ContainerName}: 0 documents — VERIFICATION FAILED");
                 allPassed = false;
             }
         }
 
         if (!allPassed)
         {
-            throw new InvalidOperationException("Data verification failed — one or more tables have 0 rows.");
+            throw new InvalidOperationException("Data verification failed — one or more containers have 0 documents.");
         }
 
-        Console.WriteLine("\n  ✓ All tables verified successfully");
-    }
-
-    private static async Task CreateTableIfNotExistsAsync(SqlConnection connection, TableDef tableDef)
-    {
-        var columns = string.Join(",\n    ",
-            tableDef.Columns.Select(c =>
-                $"{c.Name} {c.SqlType}{(c.IsPrimaryKey ? " PRIMARY KEY" : "")}"));
-
-        var sql = $"""
-            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = '{tableDef.TableName}')
-            CREATE TABLE {tableDef.TableName} (
-                {columns}
-            )
-            """;
-
-        await using var cmd = new SqlCommand(sql, connection);
-        await cmd.ExecuteNonQueryAsync();
-    }
-
-    private static async Task UpsertRowAsync(SqlConnection connection, TableDef tableDef, Dictionary<string, string?> row)
-    {
-        var columns = tableDef.Columns.Select(c => c.Name).ToList();
-        var paramNames = columns.Select(c => $"@{c}").ToList();
-        var updateSet = columns.Where(c => c != tableDef.PrimaryKey)
-            .Select(c => $"T.{c} = S.{c}").ToList();
-
-        var sql = $"""
-            MERGE {tableDef.TableName} AS T
-            USING (SELECT {string.Join(", ", paramNames.Select((p, i) => $"{p} AS {columns[i]}"))}) AS S
-            ON T.{tableDef.PrimaryKey} = S.{tableDef.PrimaryKey}
-            WHEN MATCHED THEN UPDATE SET {string.Join(", ", updateSet)}
-            WHEN NOT MATCHED THEN INSERT ({string.Join(", ", columns)}) VALUES ({string.Join(", ", paramNames)});
-            """;
-
-        await using var cmd = new SqlCommand(sql, connection);
-
-        foreach (var col in tableDef.Columns)
-        {
-            var value = row.TryGetValue(col.Name, out var v) ? v : null;
-            cmd.Parameters.AddWithValue($"@{col.Name}", ConvertValue(value, col.SqlType) ?? DBNull.Value);
-        }
-
-        await cmd.ExecuteNonQueryAsync();
+        Console.WriteLine("\n  ✓ All containers verified successfully");
     }
 
     private static List<Dictionary<string, string?>> ParseCsv(string filePath)
@@ -263,20 +199,55 @@ public static class CrmSeeder
         return fields.ToArray();
     }
 
-    private static object? ConvertValue(string? value, string sqlType)
+    private static object? ConvertValue(string fieldName, string? value)
     {
         if (string.IsNullOrEmpty(value)) return null;
 
-        return sqlType.ToUpperInvariant() switch
-        {
-            "BIT" => value.Equals("true", StringComparison.OrdinalIgnoreCase),
-            "INT" => int.Parse(value, CultureInfo.InvariantCulture),
-            var t when t.StartsWith("DECIMAL") =>
-                decimal.Parse(value, NumberStyles.Float, CultureInfo.InvariantCulture),
-            "DATE" => DateTime.Parse(value, CultureInfo.InvariantCulture),
-            _ => value,
-        };
+        if (BoolFields.Contains(fieldName))
+            return value.Equals("true", StringComparison.OrdinalIgnoreCase);
+
+        if (IntFields.Contains(fieldName))
+            return int.TryParse(value, CultureInfo.InvariantCulture, out var i) ? i : value;
+
+        if (DecimalFields.Contains(fieldName))
+            return double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : value;
+
+        return value;
     }
 
-    private record TableDef(string TableName, string PrimaryKey, (string Name, string SqlType, bool IsPrimaryKey)[] Columns);
+    private record ContainerDef(string ContainerName, string PartitionKeyPath);
+
+    /// <summary>
+    /// Links Entra user object IDs to customer documents in the Customers container.
+    /// </summary>
+    /// <param name="cosmosClient">Cosmos DB client.</param>
+    /// <param name="databaseName">Database name.</param>
+    /// <param name="mapping">Semicolon-separated "customer_id=entra_oid" pairs.</param>
+    public static async Task LinkEntraIdsAsync(CosmosClient cosmosClient, string databaseName, string mapping)
+    {
+        var container = cosmosClient.GetContainer(databaseName, "Customers");
+
+        foreach (var pair in mapping.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = pair.Split('=', 2);
+            if (parts.Length != 2) continue;
+
+            var customerId = parts[0].Trim();
+            var entraOid = parts[1].Trim();
+
+            try
+            {
+                var response = await container.ReadItemAsync<Dictionary<string, object?>>(
+                    customerId, new PartitionKey(customerId));
+                var doc = response.Resource;
+                doc["entra_id"] = entraOid;
+                await container.UpsertItemAsync(doc, new PartitionKey(customerId));
+                Console.WriteLine($"  ✓ Customer {customerId} → {entraOid[..8]}...");
+            }
+            catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                Console.WriteLine($"  ⚠ Customer {customerId} not found, skipping");
+            }
+        }
+    }
 }

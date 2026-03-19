@@ -121,14 +121,6 @@ function Remove-DeployerFirewallRules {
         az cosmosdb update --name $c --resource-group $ResourceGroup --ip-range-filter $filtered 2>$null | Out-Null
     }
 
-    # SQL Server
-    $sqlNames = az sql server list --resource-group $ResourceGroup --query "[].name" -o tsv 2>$null
-    foreach ($sql in ($sqlNames -split "`n" | Where-Object { $_ })) {
-        $sql = $sql.Trim()
-        az sql server firewall-rule delete --server $sql --resource-group $ResourceGroup --name AllowDeployer -y 2>$null | Out-Null
-        az sql server update --name $sql --resource-group $ResourceGroup --enable-public-network false 2>$null | Out-Null
-    }
-
     # Cognitive Services
     $cogNames = az cognitiveservices account list --resource-group $ResourceGroup --query "[].name" -o tsv 2>$null
     foreach ($cog in ($cogNames -split "`n" | Where-Object { $_ })) {
@@ -379,7 +371,7 @@ Write-PhaseSummary -Number 4 -NextPhase "Phase 5 — terraform apply (provision 
 Write-Phase -Number 5 -Title "terraform apply"
 
 Write-Step "Applying infrastructure changes"
-Write-Host "    Resources: AI Foundry, SQL, Cosmos DB, AI Search, AKS, ACR, Key Vault, Storage" -ForegroundColor DarkGray
+Write-Host "    Resources: AI Foundry, Cosmos DB, AI Search, AKS, ACR, Key Vault, Storage" -ForegroundColor DarkGray
 Write-Host ""
 
 Push-Location $TerraformDir
@@ -465,7 +457,7 @@ if (Test-Path "$TerraformDir\tfplan") {
     Remove-Item "$TerraformDir\tfplan" -Force
 }
 
-Write-PhaseSummary -Number 5 -NextPhase "Phase 6 — Seed CRM data into Azure SQL Database" -Items ([ordered]@{
+Write-PhaseSummary -Number 5 -NextPhase "Phase 6 — Seed CRM data into Cosmos DB" -Items ([ordered]@{
     "Status" = "Applied successfully"
 })
 
@@ -480,21 +472,17 @@ $KvName = az keyvault list --resource-group $ResourceGroup --query "[0].name" -o
 if (-not $KvName) { throw "No Key Vault found in $ResourceGroup" }
 Write-Done "Key Vault: $KvName"
 
-Write-Step "Reading SQL connection info from Key Vault"
-$SqlFqdn  = az keyvault secret show --vault-name $KvName --name "SQL-SERVER-FQDN" --query value -o tsv
-$SqlDb    = az keyvault secret show --vault-name $KvName --name "SQL-DATABASE-NAME" --query value -o tsv
-Write-Done "SQL Server: $SqlFqdn / $SqlDb"
+Write-Step "Reading Cosmos DB CRM connection info from Key Vault"
+$CosmosEndpoint = az keyvault secret show --vault-name $KvName --name "COSMOSDB-CRM-ENDPOINT" --query value -o tsv
+$CosmosKey      = az keyvault secret show --vault-name $KvName --name "COSMOSDB-CRM-KEY" --query value -o tsv
+$CosmosDb       = az keyvault secret show --vault-name $KvName --name "COSMOSDB-CRM-DATABASE" --query value -o tsv
+Write-Done "Cosmos DB: $CosmosEndpoint / $CosmosDb"
 
-Write-Step "Getting AKS credentials (SQL is behind a private endpoint)"
+Write-Step "Getting AKS credentials (Cosmos DB is behind a private endpoint)"
 $AksName = az aks list --resource-group $ResourceGroup --query "[0].name" -o tsv
 if (-not $AksName) { throw "No AKS cluster found in $ResourceGroup" }
 az aks get-credentials --resource-group $ResourceGroup --name $AksName --overwrite-existing | Out-Null
 Write-Done "AKS: $AksName"
-
-Write-Step "Getting SQL access token"
-$SqlToken = az account get-access-token --resource https://database.windows.net/ --query accessToken -o tsv
-if (-not $SqlToken) { throw "Failed to get SQL access token" }
-Write-Done "Token acquired"
 
 Write-Step "Publishing seed-data tool for Linux"
 $SeedDataDir = Join-Path (Split-Path $ScriptDir) "src" "seed-data"
@@ -525,21 +513,21 @@ try {
     kubectl cp $CrmDataDir "${K8sNamespace}/${PodName}:/data/contoso-crm" 2>&1 | Out-Null
     kubectl exec $PodName --namespace=$K8sNamespace -- chmod +x /app/seed-data 2>&1 | Out-Null
 
-    # Run seed-data with access token
+    # Run seed-data with Cosmos DB connection
     kubectl exec $PodName --namespace=$K8sNamespace -- `
-        /bin/sh -c "SQL_SERVER_FQDN='$SqlFqdn' SQL_DATABASE_NAME='$SqlDb' SQL_ACCESS_TOKEN='$SqlToken' CRM_DATA_PATH='/data/contoso-crm' /app/seed-data"
+        /bin/sh -c "COSMOSDB_CRM_ENDPOINT='$CosmosEndpoint' COSMOSDB_CRM_KEY='$CosmosKey' COSMOSDB_CRM_DATABASE='$CosmosDb' CRM_DATA_PATH='/data/contoso-crm' /app/seed-data"
     if ($LASTEXITCODE -ne 0) { throw "seed-data failed" }
     Write-Done "CRM data seeded"
 } finally {
     kubectl delete pod $PodName --namespace=$K8sNamespace --force --grace-period=0 2>&1 | Out-Null
 }
 
-Write-PhaseSummary -Number 6 -NextPhase "Phase 7 — Link Entra users to Customers table" -Items ([ordered]@{
+Write-PhaseSummary -Number 6 -NextPhase "Phase 7 — Link Entra users to Customers" -Items ([ordered]@{
     "Status" = "CRM data seeded"
 })
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# PHASE 7 — Link Entra user object IDs to Customers table
+# PHASE 7 — Link Entra user object IDs to Customers
 # ═══════════════════════════════════════════════════════════════════════════════
 
 Write-Phase -Number 7 -Title "Link Entra users to Customers"
@@ -554,25 +542,32 @@ $CustomerMapping = @(
     @{ CustomerId = "105"; SecretName = "CUSTOMER-LISA-ENTRA-OID";  Name = "Lisa Torres" }
 )
 
-Write-Step "Running SQL updates via AKS pod (private endpoint)"
-$PodName7 = "sql-entra-linker"
-kubectl run $PodName7 --image=mcr.microsoft.com/mssql-tools:latest --restart=Never --namespace=$K8sNamespace --command -- sleep 300 2>&1 | Out-Null
+Write-Step "Building Entra mapping and updating Cosmos DB via seed-data tool"
+$EntraPairs = @()
+foreach ($mapping in $CustomerMapping) {
+    $oid = az keyvault secret show --vault-name $KvName --name $mapping.SecretName --query value -o tsv
+    if ($oid) {
+        $EntraPairs += "$($mapping.CustomerId)=$oid"
+    } else {
+        Write-Host "    ⚠ Could not read $($mapping.SecretName) from Key Vault" -ForegroundColor Yellow
+    }
+}
+$EntraMapping = $EntraPairs -join ";"
+
+# Reuse the seed-data pod pattern to run entra linking inside the cluster
+$PodName7 = "entra-linker"
+kubectl run $PodName7 --image=mcr.microsoft.com/dotnet/runtime-deps:9.0 --restart=Never --namespace=$K8sNamespace --command -- sleep 300 2>&1 | Out-Null
 kubectl wait --for=condition=Ready pod/$PodName7 --namespace=$K8sNamespace --timeout=120s 2>&1 | Out-Null
 
 try {
-    foreach ($mapping in $CustomerMapping) {
-        $oid = az keyvault secret show --vault-name $KvName --name $mapping.SecretName --query value -o tsv
-        if ($oid) {
-            $safeOid = $oid -replace "'", "''"
-            $safeCid = $mapping.CustomerId -replace "'", "''"
-            $sqlCmd = "UPDATE Customers SET entra_id = '${safeOid}' WHERE id = '${safeCid}'"
-            kubectl exec $PodName7 --namespace=$K8sNamespace -- `
-                /opt/mssql-tools/bin/sqlcmd -S "tcp:${SqlFqdn},1433" -d $SqlDb -P "$SqlToken" -U "integratedauth" -G -Q $sqlCmd 2>&1 | Out-Null
-            Write-Done "$($mapping.Name) (ID $($mapping.CustomerId)) → $($oid.Substring(0,8))..."
-        } else {
-            Write-Host "    ⚠ Could not read $($mapping.SecretName) from Key Vault" -ForegroundColor Yellow
-        }
-    }
+    kubectl exec $PodName7 --namespace=$K8sNamespace -- mkdir -p /app 2>&1 | Out-Null
+    kubectl cp $PublishDir "${K8sNamespace}/${PodName7}:/app" 2>&1 | Out-Null
+    kubectl exec $PodName7 --namespace=$K8sNamespace -- chmod +x /app/seed-data 2>&1 | Out-Null
+
+    kubectl exec $PodName7 --namespace=$K8sNamespace -- `
+        /bin/sh -c "COSMOSDB_CRM_ENDPOINT='$CosmosEndpoint' COSMOSDB_CRM_KEY='$CosmosKey' COSMOSDB_CRM_DATABASE='$CosmosDb' CRM_DATA_PATH='/dev/null' ENTRA_MAPPING='$EntraMapping' /app/seed-data"
+    if ($LASTEXITCODE -ne 0) { throw "entra linking failed" }
+    Write-Done "Entra users linked to Customers"
 } finally {
     kubectl delete pod $PodName7 --namespace=$K8sNamespace --force --grace-period=0 2>&1 | Out-Null
 }

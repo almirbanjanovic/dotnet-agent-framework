@@ -27,14 +27,14 @@ output "test_user_upns" {
 }
 
 output "test_user_object_ids" {
-  description = "Map of test user key → Entra object ID (used to link to SQL Customers table)"
+  description = "Map of test user key → Entra object ID (used to link to Cosmos DB Customers container)"
   value = {
     for key, user in azuread_user.test : key => user.object_id
   }
 }
 
 output "test_user_customer_ids" {
-  description = "Map of test user key → customer ID in SQL (from variable definition)"
+  description = "Map of test user key → customer ID in Cosmos DB (from variable definition)"
   value = {
     for key, user in var.test_users : key => user.customer_id
   }

@@ -55,13 +55,6 @@ jobs:
             echo "  ✓ Cosmos DB: $c"
           done
 
-          # SQL Server
-          for sql in $(az sql server list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
-            az sql server firewall-rule delete --server "$sql" --resource-group "$RG" --name AllowDeployer -y 2>/dev/null || true
-            az sql server update --name "$sql" --resource-group "$RG" --enable-public-network false 2>/dev/null || true
-            echo "  ✓ SQL Server: $sql"
-          done
-
           # Cognitive Services (AI Foundry)
           for cog in $(az cognitiveservices account list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
             az cognitiveservices account network-rule remove --resource-group "$RG" --name "$cog" --ip-address "$IP/32" 2>/dev/null || true

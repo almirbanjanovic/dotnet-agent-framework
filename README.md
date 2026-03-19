@@ -14,7 +14,7 @@
 | --- | --- | --- | --- | --- |
 | **Blazor WASM UI** | SPA (.NET, MudBlazor) | User interface, MSAL auth, chat panel, SignalR streaming | BFF API (HTTP + SignalR) | *(none)* |
 | **BFF API** | .NET Minimal API | JWT validation, CRM API proxy, image proxy (blob bytes), chat, conversation persistence | CRM API, Orchestrator, Blob Storage, Cosmos DB | `id-bff` |
-| **CRM API** | .NET Minimal API | All SQL data: customers, orders, products, promotions, support tickets (11 endpoints) | Azure SQL | `id-crm-api` |
+| **CRM API** | .NET Minimal API | All CRM data: customers, orders, products, promotions, support tickets (11 endpoints) | Cosmos DB (CRM) | `id-crm-api` |
 | **CRM MCP** | MCP Server | 10 tools wrapping all CRM API endpoints | CRM API (HTTP) | `id-crm-mcp` |
 | **Knowledge MCP** | MCP Server | 1 tool: `search_knowledge_base` | AI Search (SDK direct) | `id-know-mcp` |
 | **CRM Agent** | Agent | CRM specialist: customers, orders, billing, tickets, policies | CRM MCP + Knowledge MCP, Azure OpenAI | `id-crm-agt` |
@@ -62,12 +62,12 @@ Agents get `imageFilename` from the `get_product_detail` tool. They include it a
 
 ```text
 Path 1 — Direct data (no agent):
-  Browser → Blazor WASM UI → BFF API → CRM API → Azure SQL
+  Browser → Blazor WASM UI → BFF API → CRM API → Cosmos DB (CRM)
 
 Path 2 — Agent chat:
   Browser → Blazor WASM UI → BFF API → save user msg to Cosmos
     → Orchestrator Agent (with history) → classify intent
-      → CRM Agent → CRM MCP tools → CRM API → SQL
+      → CRM Agent → CRM MCP tools → CRM API → Cosmos DB
                    → Knowledge MCP tools → AI Search
       → response back to Orchestrator → BFF
     → save assistant msg to Cosmos → render in ChatPanel
@@ -82,7 +82,7 @@ Path 3 — Product image:
 | --- | --- | --- | --- |
 | blazor-ui | Ingress (public, path: /) | *(none)* | BFF API (HTTP + SignalR) |
 | bff-api | Ingress (path: /api/*, /hubs/*) | `id-bff` | CRM API, Orchestrator, Blob Storage, Cosmos DB |
-| crm-api | ClusterIP | `id-crm-api` | Azure SQL |
+| crm-api | ClusterIP | `id-crm-api` | Cosmos DB (CRM) |
 | crm-mcp | ClusterIP | `id-crm-mcp` | CRM API |
 | knowledge-mcp | ClusterIP | `id-know-mcp` | AI Search |
 | crm-agent | ClusterIP | `id-crm-agt` | CRM MCP, Knowledge MCP, Azure OpenAI |
@@ -91,9 +91,9 @@ Path 3 — Product image:
 
 ### Data flow
 
-#### Structured data (CRM → Azure SQL Database)
+#### Structured data (CRM → Cosmos DB)
 
-CSV files in `data/contoso-crm/` are parsed by the seed tool and upserted into **Azure SQL Database** tables with proper relational modeling (joins, foreign keys). Agents query this data via MCP tools → CRM API → SQL queries. The Blazor WASM UI queries the same data via BFF API → CRM API.
+CSV files in `data/contoso-crm/` are parsed by the seed tool and upserted into **Cosmos DB** containers as JSON documents. Agents query this data via MCP tools → CRM API → NoSQL queries. The Blazor WASM UI queries the same data via BFF API → CRM API.
 
 #### Unstructured data (SharePoint → Azure AI Search)
 
@@ -108,8 +108,8 @@ Product images in `data/contoso-images/` are uploaded to a private `product-imag
 | Resource | Purpose |
 | ---------- | --------- |
 | **Azure AI Foundry** | AI Services account with chat model (gpt-4.1) and embedding model (text-embedding-ada-002) |
-| **Azure SQL Database** | Operational CRM data (Serverless tier) — 6 tables |
-| **Cosmos DB** | Conversation history + agent session state (Eventual consistency) |
+| **Cosmos DB** (CRM) | Operational CRM data — 6 containers |
+| **Cosmos DB** (Agents) | Conversation history + agent session state (Eventual consistency) |
 | **Azure AI Search** | Knowledge base — indexes PDFs via integrated vectorization (Basic tier) |
 | **Event Grid** | Triggers AI Search indexer on new PDF blob uploads (via Logic App intermediary) |
 | **Storage Account** | Product images + SharePoint documents blob storage |
@@ -126,7 +126,7 @@ See [docs/security.md](docs/security.md) for the full security architecture: aut
 
 | Component | Technology |
 | --- | --- |
-| Domain API | ASP.NET Core Minimal API, Microsoft.Data.SqlClient |
+| Domain API | ASP.NET Core Minimal API, Microsoft.Azure.Cosmos |
 | MCP Servers | [ModelContextProtocol C# SDK](https://github.com/modelcontextprotocol/csharp-sdk) (Streamable HTTP) |
 | Agents | [Microsoft.Agents.AI](https://learn.microsoft.com/en-us/agent-framework/agents/), Azure.AI.OpenAI |
 | BFF + UI | Blazor WebAssembly ([MudBlazor](https://mudblazor.com/), Microsoft.Authentication.Msal, SignalR.Client) + .NET Minimal API (separate containers) |
@@ -179,10 +179,10 @@ infra/
 src/
   appsettings.json                → Shared config (gitignored, populated by config-sync)
   config-sync/                    → Tool: Key Vault → appsettings.json
-  seed-data/                      → Tool: CSV → Azure SQL (runs during deploy phase 6)
+  seed-data/                      → Tool: CSV → Cosmos DB (runs during deploy phase 6)
   simple-agent/                   → Lab 1 validation (Azure OpenAI connectivity test)
 
-  crm-api/                        → Domain API: all SQL data (11 endpoints)
+  crm-api/                        → Domain API: all CRM data (11 endpoints)
   crm-api.tests/
 
   crm-mcp/                        → MCP Server: 10 CRM tools → CRM API
@@ -227,7 +227,7 @@ See the lab guides in [`docs/`](docs/):
 | # | Lab | Description |
 | --- | ----- | ------------- |
 | 0 | [Lab 0 — Bootstrap](docs/lab-0.md) | One-time setup: Terraform config files, remote state backend, CI/CD configuration |
-| 1 | [Lab 1 — Infrastructure, Validation & Data Seeding](docs/lab-1.md) | Deploy Azure infrastructure, validate with simple-agent, seed Azure SQL with CRM data |
+| 1 | [Lab 1 — Infrastructure, Validation & Data Seeding](docs/lab-1.md) | Deploy Azure infrastructure, validate with simple-agent, seed Cosmos DB with CRM data |
 
 ## Notes
 

@@ -28,10 +28,10 @@ The security model has **two independent authentication flows** that solve diffe
 | --- | --- | --- |
 | **Question answered** | "Which *human* is making this request?" | "Which *service* is calling this Azure resource?" |
 | **Who authenticates** | Customer (Emma, James, Sarah...) | Kubernetes pod (crm-api, bff, crm-agent...) |
-| **Authenticates to** | BFF API (validates JWT) | Azure resources (SQL, Cosmos, Blob, Search, OpenAI) |
+| **Authenticates to** | BFF API (validates JWT) | Azure resources (Cosmos DB, Blob, Search, OpenAI) |
 | **Token issuer** | Entra ID (`login.microsoftonline.com`) | AKS OIDC issuer → Azure AD |
 | **Token type** | JWT access token (sent as Bearer header) | Managed identity token (obtained via `DefaultAzureCredential()`) |
-| **Purpose** | Data scoping — "show me only *my* orders" | Resource access — "let this pod connect to Azure SQL" |
+| **Purpose** | Data scoping — "show me only *my* orders" | Resource access — "let this pod connect to Cosmos DB" |
 | **Without it** | Anyone could see all customer data | Services would need hardcoded passwords/API keys |
 
 Both flows are required. They operate on **orthogonal axes** — user auth controls *whose data* is returned, while workload identity controls *which Azure resources* a service can reach. Removing either one breaks the system.
@@ -48,14 +48,14 @@ A single customer request touches both flows:
 ③ BFF validates the JWT signature → extracts her unique ID (oid claim) →
   passes it as X-Customer-Entra-Id header to the CRM API
 ④ CRM API pod uses Workload Identity (id-crm-api) to get an Azure AD token
-⑤ CRM API connects to Azure SQL using that managed identity token (no password needed)
-⑥ CRM API queries: SELECT * FROM Orders WHERE entra_id = '<emma-oid>'
+⑥ CRM API connects to Cosmos DB using that managed identity token (no password needed)
+⑦ CRM API queries: SELECT * FROM c WHERE c.entra_id = '<emma-oid>' (in Customers container)
 ⑦ Only Emma's orders are returned — scoped by user auth, accessed by workload identity
 ```
 
 Step ③ uses **user authentication** (Entra ID) — it determines *whose* data to query.
 Steps ④–⑤ use **service authentication** (Workload Identity) — they determine *how* the CRM API
-connects to Azure SQL without any stored credentials.
+connects to Cosmos DB without any stored credentials.
 
 ```text
 User auth (Entra ID)        → controls WHAT data (row-level: entra_id filter)
@@ -100,11 +100,11 @@ The app registration defines one role that controls who can access the applicati
 | --- | --- | --- | --- |
 | Customer | `Customer` | All registered customers | View own data, chat with agents, create support tickets for own orders |
 
-The `Customer` role gates access to the application itself (if you don't have this role, you can't use the app at all). However, within the app, data access is controlled by **identity** — the system uses each customer's unique Entra ID (`entra_id` column in the Customers table) to filter data, so Emma can only see Emma's orders regardless of her role.
+The `Customer` role gates access to the application itself (if you don't have this role, you can't use the app at all). However, within the app, data access is controlled by **identity** — the system uses each customer's unique Entra ID (`entra_id` field in the Customers container) to filter data, so Emma can only see Emma's orders regardless of her role.
 
 ### Test Users
 
-Terraform creates 5 customer test users in Entra ID, matching the pre-seeded customers in Azure SQL:
+Terraform creates 5 customer test users in Entra ID, matching the pre-seeded customers in Cosmos DB:
 
 | User | UPN | Customer ID | Loyalty | Scenario |
 | --- | --- | --- | --- | --- |
@@ -114,7 +114,7 @@ Terraform creates 5 customer test users in Entra ID, matching the pre-seeded cus
 | David Park | `david.park@{domain}` | 104 | Silver | 4 — Damaged item |
 | Lisa Torres | `lisa.torres@{domain}` | 105 | Bronze | 5 — Product recommendation |
 
-Passwords follow the pattern `Contoso-<Animal>-<4digits>!#` and are stored in Key Vault as `CUSTOMER-{NAME}-PASSWORD`. Each user's Entra object ID is linked to their customer record in the SQL Customers table (via the `entra_id` column) during deployment.
+Passwords follow the pattern `Contoso-<Animal>-<4digits>!#` and are stored in Key Vault as `CUSTOMER-{NAME}-PASSWORD`. Each user's Entra object ID is linked to their customer record in the Cosmos DB Customers container (via the `entra_id` field) during deployment.
 
 ## User Authorization
 
@@ -133,8 +133,8 @@ The BFF (Backend for Frontend) is the only publicly accessible API. It validates
 
 The CRM API is internal (only reachable from inside the Kubernetes cluster, not from the internet). It trusts that the BFF has already validated the user's token. It reads the `X-Customer-Entra-Id` header to know which customer is making the request:
 
-- **All SQL queries include** `WHERE entra_id = '<value from header>'` → customers can only see their own data
-- **New customer auto-provisioning** → if a user signs in but no matching `entra_id` exists in the Customers table, the CRM API creates a new customer record automatically
+- **All queries are scoped to the authenticated customer's entra_id** → customers can only see their own data
+- **New customer auto-provisioning** → if a user signs in but no matching `entra_id` exists in the Customers container, the CRM API creates a new customer record automatically
 - **Support ticket creation** → any authenticated customer can create support tickets, but only for their own orders
 
 ### Agent Layer
@@ -147,11 +147,11 @@ Agents receive customer context from the Orchestrator via `X-Customer-Entra-Id` 
 
 ## Service Authentication (Workload Identity)
 
-This section covers how backend services (running as containers in Kubernetes) authenticate to Azure resources like SQL Database, Cosmos DB, and Blob Storage — without any hardcoded passwords.
+This section covers how backend services (running as containers in Kubernetes) authenticate to Azure resources like Cosmos DB, Blob Storage, and AI Search — without any hardcoded passwords.
 
 ### The problem Workload Identity solves
 
-The CRM API needs to connect to Azure SQL Database. Traditionally, you'd put a database password in an environment variable or config file. This is risky — passwords can leak through logs, crash dumps, or source control. Workload Identity eliminates passwords entirely: each service gets an Azure-managed identity, and Azure handles the token exchange automatically.
+The CRM API needs to connect to Cosmos DB. Traditionally, you'd put a database password in an environment variable or config file. This is risky — passwords can leak through logs, crash dumps, or source control. Workload Identity eliminates passwords entirely: each service gets an Azure-managed identity, and Azure handles the token exchange automatically.
 
 ### How services authenticate to Azure
 
@@ -160,7 +160,7 @@ Each service runs in AKS (Azure Kubernetes Service) with its own **managed ident
 ```text
 What Terraform sets up (one-time, during deployment):
   ① Creates a managed identity in Azure AD (e.g., "id-crm-api")
-  ② Grants that identity specific permissions (e.g., "can access Azure SQL")
+  ③ Grants that identity specific permissions (e.g., "can access Cosmos DB")
   ③ Creates a trust rule: "if a token comes from THIS AKS cluster for
      THIS Kubernetes service account, it can use THIS identity"
   ④ Creates a Kubernetes service account in the cluster, labeled with
@@ -173,7 +173,7 @@ What happens at runtime (every time a pod starts):
   ⑦ Azure AD verifies: is this token from a trusted cluster? Is it
      for the correct service account in the correct namespace?
   ⑧ Azure AD issues an access token for the managed identity
-  ⑨ The pod uses that token to call Azure SQL, Blob Storage, etc.
+  ⑨ The pod uses that token to call Cosmos DB, Blob Storage, etc.
      (no password, no API key — just identity-based access)
 ```
 
@@ -184,7 +184,7 @@ The developer experience is simple: call `DefaultAzureCredential()` and it works
 | Identity | Service | Purpose |
 | --- | --- | --- |
 | `id-bff` | BFF API | Read Blob Storage (image proxy), read/write Cosmos DB (conversations), read Key Vault |
-| `id-crm-api` | CRM API | Access Azure SQL, read Key Vault |
+| `id-crm-api` | CRM API | Access Cosmos DB (CRM), read Key Vault |
 | `id-crm-mcp` | CRM MCP Server | Read Key Vault |
 | `id-know-mcp` | Knowledge MCP Server | Read AI Search index, read Key Vault |
 | `id-crm-agt` | CRM Agent | Call Azure OpenAI, read Key Vault |
@@ -196,18 +196,18 @@ The developer experience is simple: call `DefaultAzureCredential()` and it works
 
 Each identity is granted **only** the permissions it needs (least privilege). This table shows which identity can access which resource:
 
-| Identity | Key Vault Secrets User | SQL Access | OpenAI User | Cosmos DB Data Owner | Search Index Reader | Blob Data Reader | ACR Pull |
+| Identity | Key Vault Secrets User | Cosmos DB CRM Data Owner | OpenAI User | Cosmos DB Agents Data Owner | Search Index Reader | Blob Data Reader | ACR Pull |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `id-bff` | ✓ | | | ✓ | | ✓ | |
 | `id-crm-api` | ✓ | ✓ | | | | | |
-| `id-crm-mcp` | ✓ | | | | | | |
+| `id-crm-mcp` | ✓ | ✓ | | | | | |
 | `id-know-mcp` | ✓ | | | | ✓ | | |
 | `id-crm-agt` | ✓ | | ✓ | | | | |
 | `id-prod-agt` | ✓ | | ✓ | | | | |
 | `id-orch` | ✓ | | ✓ | | | | |
 | `id-kubelet` | | | | | | | ✓ |
 
-Each identity has **only** the permissions it needs. For example, the CRM API can access SQL and Key Vault but cannot call Azure OpenAI — only the agent identities can do that. If one service is compromised, the blast radius is limited to its specific permissions.
+Each identity has **only** the permissions it needs. For example, the CRM API can access Cosmos DB (CRM) and Key Vault but cannot call Azure OpenAI — only the agent identities can do that. If one service is compromised, the blast radius is limited to its specific permissions.
 
 ### Workload Identity Federation
 
@@ -284,8 +284,8 @@ Every data-plane Azure resource uses a **default deny** firewall with two contro
 | **Storage Account** | Deny | `bypass = ["AzureServices"]` | `pe-st-*` (blob) | ✓ |
 | **Key Vault** | Deny (when IPs configured) | `bypass = "AzureServices"` | `pe-kv-*` (vault) | ✓ |
 | **ACR** | Allow (public) | `network_rule_bypass_option = "AzureServices"` | `pe-acr-*` (registry) | — |
-| **Azure SQL** | Deny (when no deployer IP) | `AllowAzureServices` firewall rule (`0.0.0.0`) | `pe-sql-*` (sqlServer) | ✓ |
-| **Cosmos DB** | Allow (public, IP-filtered) | `0.0.0.0` in `ip_range_filter` | `pe-cosmos-*` (Sql) | ✓ |
+| **Cosmos DB** (CRM) | Allow (public, IP-filtered) | `0.0.0.0` in `ip_range_filter` | `pe-cosmos-crm-*` (Sql) | ✓ |
+| **Cosmos DB** (Agents) | Allow (public, IP-filtered) | `0.0.0.0` in `ip_range_filter` | `pe-cosmos-*` (Sql) | ✓ |
 | **Azure OpenAI** | Deny | Trusted services (implicit via managed identity + RBAC) | `pe-aif-*` (account) | ✓ |
 | **AI Search** | IP-restricted | No bypass parameter available | `pe-srch-*` (searchService) | ✓ |
 
@@ -310,8 +310,8 @@ All secrets, credentials, and identity client IDs are stored in Azure Key Vault:
 | Category | Secrets |
 | --- | --- |
 | Azure OpenAI | Endpoint, API key, deployment names |
-| Azure SQL | Server FQDN, database name, admin login, admin password |
-| Cosmos DB | Endpoint, key, database name |
+| Cosmos DB (CRM) | Endpoint, key, database name |
+| Cosmos DB (Agents) | Endpoint, key, database name |
 | Blob Storage | Endpoint, account name, container, key |
 | AI Search | Endpoint, admin key, index name |
 | Entra ID | BFF client ID, tenant ID, hostname (no client secret — the Blazor app is a browser-based SPA) |

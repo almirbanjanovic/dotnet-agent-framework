@@ -6,11 +6,13 @@
     <RootNamespace>seed_data</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AzureCosmosDisableNewtonsoftJsonCheck>true</AzureCosmosDisableNewtonsoftJsonCheck>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Azure SQL Database -->
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.1" />
+    <!-- Azure Cosmos DB -->
+    <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.46.1" />
+    <PackageReference Include="Azure.Identity" Version="1.14.2" />
 
     <!-- Configuration -->
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.3" />

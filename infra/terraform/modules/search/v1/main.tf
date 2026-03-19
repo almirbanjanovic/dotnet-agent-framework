@@ -33,7 +33,7 @@ resource "azurerm_search_service" "this" {
 # Search Index (data plane via AzAPI)
 # -----------------------------------------------------------------------------
 resource "azapi_resource" "search_index" {
-  type      = "Microsoft.Search/searchServices/indexes@2024-11-01"
+  type      = "Microsoft.Search/searchServices/indexes@2025-05-01"
   name      = var.index_name
   parent_id = azurerm_search_service.this.id
 
@@ -148,7 +148,7 @@ resource "azapi_resource" "search_index" {
 # Data Source — Blob Storage (data plane via AzAPI)
 # -----------------------------------------------------------------------------
 resource "azapi_resource" "search_data_source" {
-  type      = "Microsoft.Search/searchServices/dataSources@2024-11-01"
+  type      = "Microsoft.Search/searchServices/dataSources@2025-05-01"
   name      = "blob-sharepoint-docs"
   parent_id = azurerm_search_service.this.id
 
@@ -171,7 +171,7 @@ resource "azapi_resource" "search_data_source" {
 # Skillset — Text Split + Azure OpenAI Embedding (data plane via AzAPI)
 # -----------------------------------------------------------------------------
 resource "azapi_resource" "search_skillset" {
-  type      = "Microsoft.Search/searchServices/skillsets@2024-11-01"
+  type      = "Microsoft.Search/searchServices/skillsets@2025-05-01"
   name      = "vectorize-skillset"
   parent_id = azurerm_search_service.this.id
 
@@ -263,7 +263,7 @@ resource "azapi_resource" "search_skillset" {
 # Retrieve Admin Keys (primary_key is write-only in AzureRM 4.63+)
 # -----------------------------------------------------------------------------
 data "azapi_resource_action" "list_admin_keys" {
-  type        = "Microsoft.Search/searchServices@2024-11-01"
+  type        = "Microsoft.Search/searchServices@2025-05-01"
   resource_id = azurerm_search_service.this.id
   action      = "listAdminKeys"
 

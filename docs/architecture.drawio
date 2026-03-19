@@ -1,6 +1,6 @@
 <mxfile host="65bd71144e">
     <diagram id="architecture" name="Architecture">
-        <mxGraphModel dx="1442" dy="1065" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2200" pageHeight="1600" math="0" shadow="0">
+        <mxGraphModel dx="2183" dy="651" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2200" pageHeight="1600" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -109,7 +109,7 @@
                     <mxGeometry x="430" y="59.99666666666667" width="68" height="68" as="geometry"/>
                 </mxCell>
                 <mxCell id="data-crm" value="contoso-crm/&#xa;(CSV exports)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#999999;fontSize=11;fontStyle=2;" parent="1" vertex="1">
-                    <mxGeometry x="830" y="1450" width="150" height="42" as="geometry"/>
+                    <mxGeometry x="830" y="1366" width="150" height="42" as="geometry"/>
                 </mxCell>
                 <mxCell id="data-sp" value="contoso-sharepoint/&#xa;(PDF documents)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#999999;fontSize=11;fontStyle=2;" parent="1" vertex="1">
                     <mxGeometry x="1400" y="1320" width="160" height="42" as="geometry"/>
@@ -126,18 +126,18 @@
                         <mxPoint x="2060" y="1154.0526315789473" as="targetPoint"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="logic-app" value="Logic App&lt;div&gt;(api-key bridge)&lt;/div&gt;" style="image;aspect=fixed;html=1;points=[];align=left;fontSize=11;image=img/lib/azure2/integration/Logic_Apps.svg;labelPosition=right;verticalLabelPosition=middle;verticalAlign=middle;" vertex="1" parent="1">
+                <mxCell id="logic-app" value="Logic App&lt;div&gt;(api-key bridge)&lt;/div&gt;" style="image;aspect=fixed;html=1;points=[];align=left;fontSize=11;image=img/lib/azure2/integration/Logic_Apps.svg;labelPosition=right;verticalLabelPosition=middle;verticalAlign=middle;" parent="1" vertex="1">
                     <mxGeometry x="1920" y="910" width="65" height="65" as="geometry"/>
                 </mxCell>
-                <mxCell id="e-eventgrid-logicapp" value="Webhook" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#d6604d;fontSize=9;fontColor=#d6604d;dashed=1;" edge="1" parent="1" source="42" target="logic-app">
+                <mxCell id="e-eventgrid-logicapp" value="Webhook" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#d6604d;fontSize=9;fontColor=#d6604d;dashed=1;" parent="1" source="42" target="logic-app" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e-logicapp-search" value="Run indexer&lt;div&gt;(api-key header)&lt;/div&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#d6604d;fontSize=9;fontColor=#d6604d;dashed=1;" edge="1" parent="1" source="logic-app" target="2">
+                <mxCell id="e-logicapp-search" value="Run indexer&lt;div&gt;(api-key header)&lt;/div&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#d6604d;fontSize=9;fontColor=#d6604d;dashed=1;" parent="1" source="logic-app" target="2" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e-seed-crm" value="&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;Seed&lt;/font&gt;&lt;div&gt;&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;(Deploy Script)&lt;/font&gt;&lt;/div&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#999999;fontSize=9;fontColor=#999999;dashed=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" parent="1" source="data-crm" target="7" edge="1">
+                <mxCell id="e-seed-crm" value="&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;Seed&lt;/font&gt;&lt;div&gt;&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;(Deploy Script)&lt;/font&gt;&lt;/div&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#999999;fontSize=9;fontColor=#999999;dashed=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" parent="1" source="data-crm" edge="1">
                     <mxGeometry relative="1" as="geometry">
-                        <mxPoint x="1000" y="1350" as="targetPoint"/>
+                        <mxPoint x="905" y="1260.0000000000002" as="targetPoint"/>
                     </mxGeometry>
                 </mxCell>
                 <mxCell id="e-seed-sp" value="&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;Upload PDFs&lt;br&gt;(Terraform)&lt;/font&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#999999;fontSize=9;fontColor=#999999;dashed=1;" parent="1" source="data-sp" edge="1">
@@ -192,19 +192,7 @@
                     <mxGeometry x="1920" y="742.38" width="68" height="49.120000000000005" as="geometry"/>
                 </mxCell>
                 <mxCell id="4" value="Cosmos DB - Agents&lt;br&gt;(Session State)" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/databases/Azure_Cosmos_DB.svg;" parent="1" vertex="1">
-                    <mxGeometry x="450" y="1205" width="64" height="64" as="geometry"/>
-                </mxCell>
-                <mxCell id="41" value="" style="group" parent="1" vertex="1" connectable="0">
-                    <mxGeometry x="820" y="1130" width="150" height="214" as="geometry"/>
-                </mxCell>
-                <mxCell id="7" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="41" vertex="1">
-                    <mxGeometry x="20" y="34" width="130" height="180" as="geometry"/>
-                </mxCell>
-                <mxCell id="6" value="SQL Server" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/databases/SQL_Server.svg;" parent="41" vertex="1">
-                    <mxGeometry width="68" height="68" as="geometry"/>
-                </mxCell>
-                <mxCell id="8" value="SQL Database&lt;br&gt;(Operational)" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/databases/SQL_Database.svg;" parent="41" vertex="1">
-                    <mxGeometry x="68" y="110" width="36" height="48" as="geometry"/>
+                    <mxGeometry x="450" y="1155" width="64" height="64" as="geometry"/>
                 </mxCell>
                 <mxCell id="42" value="&amp;nbsp; Event Grid" style="image;aspect=fixed;html=1;points=[];align=left;fontSize=12;image=img/lib/azure2/integration/Event_Grid_Domains.svg;labelPosition=right;verticalLabelPosition=middle;verticalAlign=middle;" parent="1" vertex="1">
                     <mxGeometry x="1920" y="1080" width="67" height="60" as="geometry"/>
@@ -212,13 +200,14 @@
                 <mxCell id="43" value="Storage Account&lt;div&gt;(Images, Documents)&lt;/div&gt;" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/storage/Storage_Accounts.svg;labelPosition=center;verticalLabelPosition=top;verticalAlign=bottom;" parent="1" vertex="1">
                     <mxGeometry x="1590" y="1161" width="65" height="52" as="geometry"/>
                 </mxCell>
-                <mxCell id="45" style="edgeStyle=orthogonalEdgeStyle;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" parent="1" source="10" target="7" edge="1">
+                <mxCell id="45" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" parent="1" source="10" target="97" edge="1">
                     <mxGeometry relative="1" as="geometry">
                         <Array as="points">
                             <mxPoint x="550" y="678"/>
                             <mxPoint x="550" y="1090"/>
                             <mxPoint x="905" y="1090"/>
                         </Array>
+                        <mxPoint x="905" y="1164.0000000000002" as="targetPoint"/>
                     </mxGeometry>
                 </mxCell>
                 <mxCell id="65" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=0.944;exitY=-0.007;exitDx=0;exitDy=0;exitPerimeter=0;" parent="1" source="3" edge="1">
@@ -249,19 +238,19 @@
                 <mxCell id="74" value="Managed Identities" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/identity/Entra_Managed_Identities.svg;" parent="1" vertex="1">
                     <mxGeometry x="1930" y="567" width="68" height="60.440000000000005" as="geometry"/>
                 </mxCell>
-                <mxCell id="entra-id" value="Entra ID&lt;div&gt;(App Reg + Users)&lt;/div&gt;" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/identity/Azure_Active_Directory.svg;labelPosition=center;verticalLabelPosition=top;verticalAlign=bottom;" vertex="1" parent="1">
+                <mxCell id="entra-id" value="Entra ID&lt;div&gt;(App Reg + Users)&lt;/div&gt;" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/identity/Azure_Active_Directory.svg;labelPosition=center;verticalLabelPosition=top;verticalAlign=bottom;" parent="1" vertex="1">
                     <mxGeometry x="180" y="200" width="68" height="68" as="geometry"/>
                 </mxCell>
-                <mxCell id="e-user-entra" value="PKCE login" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#666666;fontSize=9;fontColor=#666666;" edge="1" parent="1" source="user" target="entra-id">
+                <mxCell id="e-user-entra" value="PKCE login" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#666666;fontSize=9;fontColor=#666666;" parent="1" source="user" target="entra-id" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e-entra-bff" value="JWT token" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#666666;fontSize=9;fontColor=#666666;dashed=1;" edge="1" parent="1" source="entra-id" target="bff">
+                <mxCell id="e-entra-bff" value="JWT token" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#666666;fontSize=9;fontColor=#666666;dashed=1;" parent="1" source="entra-id" target="bff" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="log-analytics" value="Log Analytics" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/analytics/Log_Analytics_Workspaces.svg;labelPosition=center;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1">
-                    <mxGeometry x="250" y="1130" width="68" height="68" as="geometry"/>
+                <mxCell id="log-analytics" value="Log Analytics" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/analytics/Log_Analytics_Workspaces.svg;labelPosition=center;verticalLabelPosition=bottom;verticalAlign=top;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="1153" width="68" height="68" as="geometry"/>
                 </mxCell>
-                <mxCell id="e-aks-logs" value="Monitoring" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#666666;fontSize=9;fontColor=#666666;dashed=1;dashPattern=5 2;" edge="1" parent="1" source="62" target="log-analytics">
+                <mxCell id="e-aks-logs" value="Monitoring" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#666666;fontSize=9;fontColor=#666666;dashed=1;dashPattern=5 2;" parent="1" source="62" target="log-analytics" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
                 <mxCell id="85" style="edgeStyle=orthogonalEdgeStyle;html=1;entryX=-0.02;entryY=0.602;entryDx=0;entryDy=0;entryPerimeter=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" parent="1" source="mcp-knowledge" target="2" edge="1">
@@ -308,6 +297,9 @@
                     <mxGeometry x="0.3323" y="2" relative="1" as="geometry">
                         <mxPoint as="offset"/>
                     </mxGeometry>
+                </mxCell>
+                <mxCell id="97" value="Cosmos DB - CRM&lt;br&gt;(Operational)" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/databases/Azure_Cosmos_DB.svg;" vertex="1" parent="1">
+                    <mxGeometry x="860" y="1155" width="64" height="64" as="geometry"/>
                 </mxCell>
             </root>
         </mxGraphModel>

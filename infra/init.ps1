@@ -423,8 +423,7 @@ $envVars = [ordered]@{
     EMBEDDING_CAPACITY                = "10"
     COSMOS_AGENTS_DATABASE_NAME       = "agents"
     COSMOS_AGENT_STATE_CONTAINER_NAME = "workshop_agent_state_store"
-    SQL_DATABASE_NAME                 = "contoso-outdoors"
-    SQL_ADMIN_LOGIN                   = "sqladmin"
+    COSMOS_CRM_DATABASE_NAME          = "contoso-crm"
     SEARCH_SKU                        = "basic"
     SEARCH_INDEX_NAME                 = "knowledge-documents"
     CREATE_ACR                        = "true"
@@ -604,9 +603,8 @@ embedding_capacity           = 10
 cosmos_agents_database_name       = "agents"
 cosmos_agent_state_container_name = "workshop_agent_state_store"
 
-# Azure SQL Database (CRM operational data)
-sql_database_name = "contoso-outdoors"
-sql_admin_login   = "sqladmin"
+# Cosmos DB (CRM operational data)
+cosmos_crm_database_name = "contoso-crm"
 
 # AI Search
 search_sku        = "basic"

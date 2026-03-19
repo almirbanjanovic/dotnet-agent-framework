@@ -38,9 +38,7 @@ env:
   # Cosmos DB
   TF_VAR_cosmos_agents_database_name: ${{ vars.COSMOS_AGENTS_DATABASE_NAME }}
   TF_VAR_cosmos_agent_state_container_name: ${{ vars.COSMOS_AGENT_STATE_CONTAINER_NAME }}
-  # Azure SQL Database
-  TF_VAR_sql_database_name: ${{ vars.SQL_DATABASE_NAME }}
-  TF_VAR_sql_admin_login: ${{ vars.SQL_ADMIN_LOGIN }}
+  TF_VAR_cosmos_crm_database_name: ${{ vars.COSMOS_CRM_DATABASE_NAME }}
   # Storage
   # AI Search
   TF_VAR_search_sku: ${{ vars.SEARCH_SKU }}

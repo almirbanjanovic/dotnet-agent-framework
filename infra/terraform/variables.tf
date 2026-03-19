@@ -101,19 +101,13 @@ variable "cosmos_agent_state_container_name" {
 }
 
 # ---------------------------------------------------------------
-# Azure SQL Database (CRM operational data)
+# Cosmos DB (CRM operational data)
 # ---------------------------------------------------------------
 
-variable "sql_database_name" {
-  description = "Name of the Azure SQL database for CRM data"
+variable "cosmos_crm_database_name" {
+  description = "Database name for the CRM Cosmos DB account"
   type        = string
-  default     = "contoso-outdoors"
-}
-
-variable "sql_admin_login" {
-  description = "SQL Server administrator login name"
-  type        = string
-  default     = "sqladmin"
+  default     = "contoso-crm"
 }
 
 # ---------------------------------------------------------------

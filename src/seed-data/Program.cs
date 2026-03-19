@@ -1,4 +1,5 @@
-using Microsoft.Data.SqlClient;
+using Microsoft.Azure.Cosmos;
+using Azure.Identity;
 using Microsoft.Extensions.Configuration;
 using seed_data;
 
@@ -10,23 +11,12 @@ var configuration = new ConfigurationBuilder()
     .AddEnvironmentVariables()
     .Build();
 
-// Azure SQL Database (CRM operational data)
-var sqlServerFqdn = configuration["SQL_SERVER_FQDN"]
-    ?? throw new InvalidOperationException("SQL_SERVER_FQDN is not set.");
-var sqlDatabaseName = configuration["SQL_DATABASE_NAME"]
-    ?? throw new InvalidOperationException("SQL_DATABASE_NAME is not set.");
-var sqlAccessToken = configuration["SQL_ACCESS_TOKEN"];
-
-string connectionString;
-if (!string.IsNullOrEmpty(sqlAccessToken))
-{
-    // Token-based auth (used when running inside AKS to reach private SQL endpoint)
-    connectionString = $"Server={sqlServerFqdn};Database={sqlDatabaseName};Encrypt=True;TrustServerCertificate=False;";
-}
-else
-{
-    connectionString = $"Server={sqlServerFqdn};Database={sqlDatabaseName};Authentication=Active Directory Default;Encrypt=True;TrustServerCertificate=False;";
-}
+// Cosmos DB (CRM operational data)
+var cosmosEndpoint = configuration["COSMOSDB_CRM_ENDPOINT"]
+    ?? throw new InvalidOperationException("COSMOSDB_CRM_ENDPOINT is not set.");
+var cosmosKey = configuration["COSMOSDB_CRM_KEY"];
+var databaseName = configuration["COSMOSDB_CRM_DATABASE"]
+    ?? throw new InvalidOperationException("COSMOSDB_CRM_DATABASE is not set.");
 
 // ---------------------------------------------------------------------------
 // Resolve data folder paths
@@ -41,47 +31,77 @@ if (string.IsNullOrEmpty(crmFolder))
 }
 
 Console.WriteLine("═══════════════════════════════════════════════════════════");
-Console.WriteLine("  Contoso Outdoors — SQL Database Seed Tool");
+Console.WriteLine("  Contoso Outdoors — Cosmos DB Seed Tool");
 Console.WriteLine("═══════════════════════════════════════════════════════════");
 Console.WriteLine();
-Console.WriteLine($"  SQL Server:    {sqlServerFqdn}");
-Console.WriteLine($"  Database:      {sqlDatabaseName}");
+Console.WriteLine($"  Cosmos DB:     {cosmosEndpoint}");
+Console.WriteLine($"  Database:      {databaseName}");
 Console.WriteLine($"  CRM data:      {crmFolder}");
 Console.WriteLine();
 
 // ---------------------------------------------------------------------------
-// Verify connectivity
+// Create Cosmos DB client
 // ---------------------------------------------------------------------------
+CosmosClient cosmosClient;
 try
 {
-    await using var testConnection = new SqlConnection(connectionString);
-    if (!string.IsNullOrEmpty(sqlAccessToken))
-        testConnection.AccessToken = sqlAccessToken;
-    await testConnection.OpenAsync();
-    Console.WriteLine($"  ✓ Connected to SQL database '{sqlDatabaseName}'");
+    var cosmosOptions = new CosmosClientOptions
+    {
+        UseSystemTextJsonSerializerWithOptions = new System.Text.Json.JsonSerializerOptions(),
+    };
+
+    if (!string.IsNullOrEmpty(cosmosKey))
+    {
+        cosmosClient = new CosmosClient(cosmosEndpoint, cosmosKey, cosmosOptions);
+    }
+    else
+    {
+        cosmosClient = new CosmosClient(cosmosEndpoint, new DefaultAzureCredential(), cosmosOptions);
+    }
+
+    var db = cosmosClient.GetDatabase(databaseName);
+    await db.ReadAsync();
+    Console.WriteLine($"  ✓ Connected to Cosmos DB database '{databaseName}'");
 }
-catch (SqlException ex)
+catch (Exception ex)
 {
-    Console.WriteLine($"  ✗ Failed to connect to SQL Database: {ex.Message}");
-    Console.WriteLine("    Make sure the database exists and the server/credentials are correct.");
+    Console.WriteLine($"  ✗ Failed to connect to Cosmos DB: {ex.Message}");
+    Console.WriteLine("    Make sure the account/database exists and credentials are correct.");
     return;
 }
 
 Console.WriteLine();
 
 // ---------------------------------------------------------------------------
-// Seed structured data (CRM → SQL tables)
+// Seed structured data (CRM → Cosmos DB containers)
 // ---------------------------------------------------------------------------
 Console.WriteLine("───────────────────────────────────────────────────────────");
-Console.WriteLine("  Seeding structured data (CRM → SQL tables)");
+Console.WriteLine("  Seeding structured data (CRM → Cosmos DB containers)");
 Console.WriteLine("───────────────────────────────────────────────────────────");
 Console.WriteLine();
-Console.WriteLine("  Creates tables (if not exists) and upserts customer,");
-Console.WriteLine("  order, and product data from CSV files into Azure SQL.");
-Console.WriteLine("  Agents query this data using standard SQL via MCP tools.");
+Console.WriteLine("  Creates containers (if not exist) and upserts customer,");
+Console.WriteLine("  order, and product data from CSV files into Cosmos DB.");
+Console.WriteLine("  Agents query this data via MCP tools.");
 Console.WriteLine();
 
-await CrmSeeder.SeedAsync(connectionString, crmFolder, sqlAccessToken);
+await CrmSeeder.SeedAsync(cosmosClient, databaseName, crmFolder);
+
+// ---------------------------------------------------------------------------
+// Link Entra user IDs to Customers (optional — Phase 7)
+// ---------------------------------------------------------------------------
+// ENTRA_MAPPING is a semicolon-separated list of "customer_id=entra_oid" pairs
+// e.g. "101=abc-123;102=def-456"
+var entraMapping = configuration["ENTRA_MAPPING"];
+if (!string.IsNullOrEmpty(entraMapping))
+{
+    Console.WriteLine();
+    Console.WriteLine("───────────────────────────────────────────────────────────");
+    Console.WriteLine("  Linking Entra user IDs to Customers");
+    Console.WriteLine("───────────────────────────────────────────────────────────");
+    Console.WriteLine();
+
+    await CrmSeeder.LinkEntraIdsAsync(cosmosClient, databaseName, entraMapping);
+}
 
 Console.WriteLine();
 Console.WriteLine("═══════════════════════════════════════════════════════════");

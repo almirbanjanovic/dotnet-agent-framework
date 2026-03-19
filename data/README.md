@@ -2,7 +2,7 @@
 
 This folder contains simulated enterprise data sources for the Contoso Outdoors agent framework. The data represents what you'd find in a real company's systems — a product/order database, a document library, and a product image store.
 
-> **This data is provisioned automatically during `terraform apply`.** Product images and SharePoint PDFs are uploaded to Azure Blob Storage. CRM data is seeded into Azure SQL Database via the seed tool (`src/seed-data/`). SharePoint PDFs are indexed by Azure AI Search via integrated vectorization — no manual vectorization step needed.
+> **This data is provisioned automatically during `terraform apply`.** Product images and SharePoint PDFs are uploaded to Azure Blob Storage. CRM data is seeded into Cosmos DB via the seed tool (`src/seed-data/`). SharePoint PDFs are indexed by Azure AI Search via integrated vectorization — no manual vectorization step needed.
 
 ## What is RAG?
 
@@ -65,14 +65,14 @@ User: "What is your return policy?"
 ┌─────────────┼───────────────────────────────┼──────────────────────┐
 │             │                               │                      │
 │  ┌──────────▼───────────┐    ┌──────────────▼────────────────┐     │
-│  │  Azure SQL Database  │    │  Azure AI Search (Basic)      │     │
-│  │  (Serverless)        │    │  Index: knowledge-documents   │     │
-│  │  Customers, Orders,  │    │  Skillset: split + embed      │     │
-│  │  Products, etc.      │    │  Indexer: blob → index        │     │
-│  │  ← SQL queries       │    │  ← Hybrid search (RAG)       │     │
+│  │  Cosmos DB - CRM         │    │  Azure AI Search (Basic)      │     │
+│  │  (Session)               │    │  Index: knowledge-documents   │     │
+│  │  Customers, Orders,      │    │  Skillset: split + embed      │     │
+│  │  Products, etc.           │    │  Indexer: blob → index        │     │
+│  │  ← NoSQL queries         │    │  ← Hybrid search (RAG)       │     │
 │  └──────────────────────┘    └───────────────────────────────┘     │
 │                                                                    │
-│  ┌──────────────────────┐    Cosmos DB (1 account)               │
+│  ┌──────────────────────┐    Cosmos DB — Agents                    │
 │  │  Agents Account      │  ← conversation memory (runtime only)   │
 │  │  (Eventual)          │                                          │
 │  │  Agent State Store   │                                          │
@@ -89,9 +89,9 @@ User: "What is your return policy?"
 
 ## Data flow
 
-### Structured data (Store Data → Azure SQL Database)
+### Structured data (Store Data → Cosmos DB)
 
-`contoso-crm/` simulates a store data export — customer records, orders, products, etc. as CSV files. The seed tool parses these and upserts them into **Azure SQL Database** tables with proper types, primary keys, and foreign keys. Agents query this data using tools with standard SQL queries (e.g., "find all orders for customer 101"). CRM seeding runs automatically during `terraform apply` via a `null_resource` with `local-exec`.
+`contoso-crm/` simulates a store data export — customer records, orders, products, etc. as CSV files. The seed tool parses these and upserts them into **Cosmos DB** containers as JSON documents. Agents query this data using tools with NoSQL queries (e.g., "find all orders for customer 101"). CRM seeding runs automatically during `terraform apply` via a `null_resource` with `local-exec`.
 
 ### Unstructured data (SharePoint → Azure AI Search)
 
@@ -149,15 +149,15 @@ contoso-sharepoint/**/*.pdf
         └──► Index in knowledge-documents
 ```
 
-**3. CRM data → Azure SQL Database (Terraform local-exec → seed tool)**
+**3. CRM data → Cosmos DB (Terraform local-exec → seed tool)**
 
 ```
-contoso-crm/customers.csv      ──parse CSV──►  Azure SQL / Customers table
-contoso-crm/orders.csv         ──parse CSV──►  Azure SQL / Orders table
+contoso-crm/customers.csv      ──parse CSV──►  Cosmos DB / Customers container
+contoso-crm/orders.csv         ──parse CSV──►  Cosmos DB / Orders container
 ...etc for all 6 CSV files
 ```
 
-Each CSV row becomes a SQL row. The seed tool creates tables with proper types, primary keys, and foreign keys, then upserts via MERGE statements. The seed runs automatically via `null_resource.seed_crm` and only re-runs when CSV data changes (tracked via file hash).
+Each CSV row becomes a JSON document. The seed tool creates containers with proper partition keys, then upserts documents. The seed runs automatically via `null_resource.seed_crm` and only re-runs when CSV data changes (tracked via file hash).
 
 ## Folder structure
 
@@ -198,12 +198,12 @@ The `.txt` files are the editable source content. The `.pdf` files are uploaded 
 
 | Source | Destination | How |
 |--------|-------------|-----|
-| `contoso-crm/customers.csv` | Azure SQL / Customers | Seed tool (local-exec) |
-| `contoso-crm/orders.csv` | Azure SQL / Orders | Seed tool (local-exec) |
-| `contoso-crm/order-items.csv` | Azure SQL / OrderItems | Seed tool (local-exec) |
-| `contoso-crm/products.csv` | Azure SQL / Products | Seed tool (local-exec) |
-| `contoso-crm/promotions.csv` | Azure SQL / Promotions | Seed tool (local-exec) |
-| `contoso-crm/support-tickets.csv` | Azure SQL / SupportTickets | Seed tool (local-exec) |
+| `contoso-crm/customers.csv` | Cosmos DB / Customers | Seed tool (local-exec) |
+| `contoso-crm/orders.csv` | Cosmos DB / Orders | Seed tool (local-exec) |
+| `contoso-crm/order-items.csv` | Cosmos DB / OrderItems | Seed tool (local-exec) |
+| `contoso-crm/products.csv` | Cosmos DB / Products | Seed tool (local-exec) |
+| `contoso-crm/promotions.csv` | Cosmos DB / Promotions | Seed tool (local-exec) |
+| `contoso-crm/support-tickets.csv` | Cosmos DB / SupportTickets | Seed tool (local-exec) |
 | `contoso-sharepoint/**/*.pdf` | Azure AI Search / `knowledge-documents` index | Terraform blob upload → AI Search indexer |
 | `contoso-images/*.png` | Azure Blob Storage / `product-images` container | Terraform blob upload |
 | (runtime) | Cosmos DB Agents / conversations (`/sessionId`) | BFF (conversation history) |

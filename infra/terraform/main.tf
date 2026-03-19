@@ -46,22 +46,46 @@ module "foundry" {
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
-# Azure SQL Database — Operational (CRM structured data)
+# Cosmos DB — CRM (operational structured data)
 #--------------------------------------------------------------------------------------------------------------------------------
 
-module "sql" {
-  source = "./modules/sql/v1"
+module "cosmosdb_crm" {
+  source = "./modules/cosmosdb/v1"
 
-  base_name             = var.base_name
-  environment           = var.environment
-  location              = var.location
-  resource_group_name   = var.resource_group_name
-  database_name         = var.sql_database_name
-  admin_login           = var.sql_admin_login
-  tenant_id             = data.azurerm_client_config.current.tenant_id
-  entra_admin_object_id = data.azurerm_client_config.current.object_id
-  deployer_ip           = local.deployer_ip
-  tags                  = var.tags
+  name_prefix         = "${var.base_name}-crm-${var.environment}"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  database_name       = var.cosmos_crm_database_name
+  consistency_level   = "Session"
+  allowed_ips         = [local.deployer_ip]
+  tags                = var.tags
+
+  containers = {
+    customers = {
+      name                = "Customers"
+      partition_key_paths = ["/id"]
+    }
+    orders = {
+      name                = "Orders"
+      partition_key_paths = ["/customer_id"]
+    }
+    order_items = {
+      name                = "OrderItems"
+      partition_key_paths = ["/order_id"]
+    }
+    products = {
+      name                = "Products"
+      partition_key_paths = ["/id"]
+    }
+    promotions = {
+      name                = "Promotions"
+      partition_key_paths = ["/id"]
+    }
+    support_tickets = {
+      name                = "SupportTickets"
+      partition_key_paths = ["/customer_id"]
+    }
+  }
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -328,6 +352,24 @@ module "rbac_cosmosdb_agents" {
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
+# RBAC - Cosmos DB (Data Owner) — 1 account (CRM)
+#--------------------------------------------------------------------------------------------------------------------------------
+
+module "rbac_cosmosdb_crm" {
+  source = "./modules/rbac/cosmosdb/v1"
+
+  resource_group_name   = var.resource_group_name
+  cosmosdb_account_id   = module.cosmosdb_crm.account_id
+  cosmosdb_account_name = module.cosmosdb_crm.account_name
+
+  principal_ids = {
+    bff     = module.identity.identities["bff"].principal_id
+    crm_api = module.identity.identities["crm_api"].principal_id
+    crm_mcp = module.identity.identities["crm_mcp"].principal_id
+  }
+}
+
+#--------------------------------------------------------------------------------------------------------------------------------
 # RBAC - Storage (Blob Data Reader)
 #--------------------------------------------------------------------------------------------------------------------------------
 
@@ -392,7 +434,7 @@ module "rbac_search" {
 #--------------------------------------------------------------------------------------------------------------------------------
 
 resource "azapi_resource" "search_indexer" {
-  type      = "Microsoft.Search/searchServices/indexers@2024-11-01"
+  type      = "Microsoft.Search/searchServices/indexers@2025-05-01"
   name      = "blob-indexer"
   parent_id = module.search.id
 
@@ -550,8 +592,9 @@ module "keyvault_secrets" {
     "COSMOSDB-AGENTS-ENDPOINT"          = module.cosmosdb_agents.endpoint
     "COSMOSDB-AGENTS-KEY"               = nonsensitive(module.cosmosdb_agents.primary_key)
     "COSMOSDB-AGENTS-DATABASE"          = module.cosmosdb_agents.database_name
-    "SQL-SERVER-FQDN"                   = module.sql.server_fqdn
-    "SQL-DATABASE-NAME"                 = module.sql.database_name
+    "COSMOSDB-CRM-ENDPOINT"             = module.cosmosdb_crm.endpoint
+    "COSMOSDB-CRM-KEY"                  = nonsensitive(module.cosmosdb_crm.primary_key)
+    "COSMOSDB-CRM-DATABASE"             = module.cosmosdb_crm.database_name
     "STORAGE-IMAGES-ENDPOINT"           = module.storage_images.primary_blob_endpoint
     "STORAGE-IMAGES-ACCOUNT-NAME"       = module.storage_images.name
     "STORAGE-IMAGES-CONTAINER"          = module.storage_images.container_names["images"]
@@ -580,7 +623,7 @@ module "keyvault_secrets" {
     "CUSTOMER-DAVID-PASSWORD" = nonsensitive(module.entra.test_user_passwords["david"])
     "CUSTOMER-LISA-PASSWORD"  = nonsensitive(module.entra.test_user_passwords["lisa"])
 
-    # Customer Entra object IDs (used by deploy script to link Entra users to SQL Customers table)
+    # Customer Entra object IDs (used by deploy script to link Entra users to Cosmos DB Customers container)
     "CUSTOMER-EMMA-ENTRA-OID"  = module.entra.test_user_object_ids["emma"]
     "CUSTOMER-JAMES-ENTRA-OID" = module.entra.test_user_object_ids["james"]
     "CUSTOMER-SARAH-ENTRA-OID" = module.entra.test_user_object_ids["sarah"]
@@ -592,7 +635,7 @@ module "keyvault_secrets" {
     module.rbac_keyvault,
     module.foundry,
     module.cosmosdb_agents,
-    module.sql,
+    module.cosmosdb_crm,
     module.storage_images,
     module.search,
     module.identity,
@@ -644,13 +687,12 @@ module "private_dns_zones" {
   tags                = var.tags
 
   zones = {
-    sql              = "privatelink.database.windows.net"
     cognitiveservices = "privatelink.cognitiveservices.azure.com"
-    cosmosdb         = "privatelink.documents.azure.com"
-    search           = "privatelink.search.windows.net"
-    blob             = "privatelink.blob.core.windows.net"
-    keyvault         = "privatelink.vaultcore.azure.net"
-    acr              = "privatelink.azurecr.io"
+    cosmosdb          = "privatelink.documents.azure.com"
+    search            = "privatelink.search.windows.net"
+    blob              = "privatelink.blob.core.windows.net"
+    keyvault          = "privatelink.vaultcore.azure.net"
+    acr               = "privatelink.azurecr.io"
   }
 
   depends_on = [module.vnet]
@@ -660,32 +702,32 @@ module "private_dns_zones" {
 # Private Endpoints
 #--------------------------------------------------------------------------------------------------------------------------------
 
-module "pe_sql" {
+module "pe_cosmosdb_crm" {
   source = "./modules/private-endpoint/v1"
 
-  name               = "pe-sql-${local.name_base}-${var.location}"
-  location           = var.location
+  name                = "pe-cosmos-crm-${local.name_base}-${var.location}"
+  location            = var.location
   resource_group_name = var.resource_group_name
-  subnet_id          = module.vnet.private_endpoints_subnet_id
-  target_resource_id = module.sql.server_id
-  subresource_names  = ["sqlServer"]
-  dns_zone_id        = module.private_dns_zones.zone_ids["sql"]
-  tags               = var.tags
+  subnet_id           = module.vnet.private_endpoints_subnet_id
+  target_resource_id  = module.cosmosdb_crm.account_id
+  subresource_names   = ["Sql"]
+  dns_zone_id         = module.private_dns_zones.zone_ids["cosmosdb"]
+  tags                = var.tags
 
-  depends_on = [module.sql, module.private_dns_zones]
+  depends_on = [module.cosmosdb_crm, module.private_dns_zones]
 }
 
 module "pe_foundry" {
   source = "./modules/private-endpoint/v1"
 
-  name               = "pe-aif-${local.name_base}-${var.location}"
-  location           = var.location
+  name                = "pe-aif-${local.name_base}-${var.location}"
+  location            = var.location
   resource_group_name = var.resource_group_name
-  subnet_id          = module.vnet.private_endpoints_subnet_id
-  target_resource_id = module.foundry.account_id
-  subresource_names  = ["account"]
-  dns_zone_id        = module.private_dns_zones.zone_ids["cognitiveservices"]
-  tags               = var.tags
+  subnet_id           = module.vnet.private_endpoints_subnet_id
+  target_resource_id  = module.foundry.account_id
+  subresource_names   = ["account"]
+  dns_zone_id         = module.private_dns_zones.zone_ids["cognitiveservices"]
+  tags                = var.tags
 
   depends_on = [module.foundry, module.private_dns_zones]
 }
@@ -693,14 +735,14 @@ module "pe_foundry" {
 module "pe_cosmosdb" {
   source = "./modules/private-endpoint/v1"
 
-  name               = "pe-cosmos-${local.name_base}-${var.location}"
-  location           = var.location
+  name                = "pe-cosmos-${local.name_base}-${var.location}"
+  location            = var.location
   resource_group_name = var.resource_group_name
-  subnet_id          = module.vnet.private_endpoints_subnet_id
-  target_resource_id = module.cosmosdb_agents.account_id
-  subresource_names  = ["Sql"]
-  dns_zone_id        = module.private_dns_zones.zone_ids["cosmosdb"]
-  tags               = var.tags
+  subnet_id           = module.vnet.private_endpoints_subnet_id
+  target_resource_id  = module.cosmosdb_agents.account_id
+  subresource_names   = ["Sql"]
+  dns_zone_id         = module.private_dns_zones.zone_ids["cosmosdb"]
+  tags                = var.tags
 
   depends_on = [module.cosmosdb_agents, module.private_dns_zones]
 }
@@ -708,14 +750,14 @@ module "pe_cosmosdb" {
 module "pe_search" {
   source = "./modules/private-endpoint/v1"
 
-  name               = "pe-srch-${local.name_base}-${var.location}"
-  location           = var.location
+  name                = "pe-srch-${local.name_base}-${var.location}"
+  location            = var.location
   resource_group_name = var.resource_group_name
-  subnet_id          = module.vnet.private_endpoints_subnet_id
-  target_resource_id = module.search.id
-  subresource_names  = ["searchService"]
-  dns_zone_id        = module.private_dns_zones.zone_ids["search"]
-  tags               = var.tags
+  subnet_id           = module.vnet.private_endpoints_subnet_id
+  target_resource_id  = module.search.id
+  subresource_names   = ["searchService"]
+  dns_zone_id         = module.private_dns_zones.zone_ids["search"]
+  tags                = var.tags
 
   depends_on = [module.search, module.private_dns_zones]
 }
@@ -723,14 +765,14 @@ module "pe_search" {
 module "pe_storage" {
   source = "./modules/private-endpoint/v1"
 
-  name               = "pe-st-${local.name_base}-${var.location}"
-  location           = var.location
+  name                = "pe-st-${local.name_base}-${var.location}"
+  location            = var.location
   resource_group_name = var.resource_group_name
-  subnet_id          = module.vnet.private_endpoints_subnet_id
-  target_resource_id = module.storage_images.id
-  subresource_names  = ["blob"]
-  dns_zone_id        = module.private_dns_zones.zone_ids["blob"]
-  tags               = var.tags
+  subnet_id           = module.vnet.private_endpoints_subnet_id
+  target_resource_id  = module.storage_images.id
+  subresource_names   = ["blob"]
+  dns_zone_id         = module.private_dns_zones.zone_ids["blob"]
+  tags                = var.tags
 
   depends_on = [module.storage_images, module.private_dns_zones]
 }
@@ -738,14 +780,14 @@ module "pe_storage" {
 module "pe_keyvault" {
   source = "./modules/private-endpoint/v1"
 
-  name               = "pe-kv-${local.name_base}-${var.location}"
-  location           = var.location
+  name                = "pe-kv-${local.name_base}-${var.location}"
+  location            = var.location
   resource_group_name = var.resource_group_name
-  subnet_id          = module.vnet.private_endpoints_subnet_id
-  target_resource_id = module.keyvault.id
-  subresource_names  = ["vault"]
-  dns_zone_id        = module.private_dns_zones.zone_ids["keyvault"]
-  tags               = var.tags
+  subnet_id           = module.vnet.private_endpoints_subnet_id
+  target_resource_id  = module.keyvault.id
+  subresource_names   = ["vault"]
+  dns_zone_id         = module.private_dns_zones.zone_ids["keyvault"]
+  tags                = var.tags
 
   depends_on = [module.keyvault, module.private_dns_zones]
 }
@@ -753,14 +795,14 @@ module "pe_keyvault" {
 module "pe_acr" {
   source = "./modules/private-endpoint/v1"
 
-  name               = "pe-acr-${local.name_base}-${var.location}"
-  location           = var.location
+  name                = "pe-acr-${local.name_base}-${var.location}"
+  location            = var.location
   resource_group_name = var.resource_group_name
-  subnet_id          = module.vnet.private_endpoints_subnet_id
-  target_resource_id = module.acr.id
-  subresource_names  = ["registry"]
-  dns_zone_id        = module.private_dns_zones.zone_ids["acr"]
-  tags               = var.tags
+  subnet_id           = module.vnet.private_endpoints_subnet_id
+  target_resource_id  = module.acr.id
+  subresource_names   = ["registry"]
+  dns_zone_id         = module.private_dns_zones.zone_ids["acr"]
+  tags                = var.tags
 
   depends_on = [module.acr, module.private_dns_zones]
 }

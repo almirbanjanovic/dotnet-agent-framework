@@ -12,8 +12,7 @@ This lab stands up the full Azure environment, validates connectivity, and seeds
 | Resource | Purpose |
 | ---------- | --------- |
 | **Azure AI Foundry** | AI Services account with chat model (gpt-4.1) and embedding model (text-embedding-ada-002) |
-| **Azure SQL Database** | Operational CRM data (Serverless tier — customers, orders, products, etc.) |
-| **Cosmos DB** (×1 account) | Agents (state persistence) |
+| **Cosmos DB** (×2 accounts) | CRM (operational data) + Agents (state persistence) |
 | **Azure AI Search** | Knowledge base search — indexes PDFs via integrated vectorization |
 | **Event Grid** | Triggers AI Search indexer on new PDF blob uploads (via Logic App intermediary) |
 | **Storage Account** | Product images + SharePoint documents blob storage — uploaded automatically during `terraform apply` |
@@ -28,12 +27,12 @@ The deploy script provisions all infrastructure and seeds data in a single run:
 
 | What | How |
 | ------ | ----- |
-| Azure SQL Database, Cosmos DB (agents), AI Search, Event Grid, Storage, AKS, ACR, Key Vault | Terraform resources (phases 1–5) |
+| Cosmos DB (CRM + agents), AI Search, Event Grid, Storage, AKS, ACR, Key Vault | Terraform resources (phases 1–5) |
 | Product images (`.png`) → `product-images` blob container | `azurerm_storage_blob` (during terraform apply) |
 | SharePoint PDFs (`.pdf`) → `sharepoint-docs` blob container | `azurerm_storage_blob` (during terraform apply) |
 | PDF text extraction, chunking, embedding → AI Search index | AI Search indexer (triggered by Event Grid on blob upload, plus 5-min schedule fallback) |
-| CRM data (CSV) → Azure SQL Database tables | Deploy script phase 6 (runs `dotnet run` for seed-data) |
-| Entra user IDs → SQL Customers table | Deploy script phase 7 (reads object IDs from Key Vault, updates SQL) |
+| CRM data (CSV) → Cosmos DB containers | Deploy script phase 6 (runs `dotnet run` for seed-data) |
+| Entra user IDs → Cosmos DB Customers container | Deploy script phase 7 (reads object IDs from Key Vault, updates Cosmos DB) |
 
 ### Option A — Terminal
 
@@ -59,8 +58,8 @@ The script performs 7 phases with a confirmation gate between each:
 | **3** | `terraform validate` to check configuration syntax |
 | **4** | `terraform plan` to preview all changes |
 | **5** | `terraform apply` to provision resources and upload blobs |
-| **6** | Seed CRM data — reads SQL credentials from Key Vault, runs `dotnet run` for seed-data tool |
-| **7** | Link Entra users to Customers — reads Entra object IDs from Key Vault, updates `entra_id` in SQL |
+| **6** | Seed CRM data — reads Cosmos DB credentials from Key Vault, runs `dotnet run` for seed-data tool |
+| **7** | Link Entra users to Customers — reads Entra object IDs from Key Vault, updates `entra_id` in Cosmos DB |
 
 Before Phase 1, the script runs a **pre-flight check** that purges soft-deleted Key Vaults and Cognitive Services accounts from previous runs. Azure retains these in a soft-deleted state which blocks re-creation with the same name. Key Vault purges use `--no-wait` since they can take several minutes.
 
@@ -144,7 +143,7 @@ After completing all steps, verify:
 - [ ] Infrastructure resources are visible in the Azure portal (or `terraform output` shows all endpoints)
 - [ ] `src/appsettings.json` has 20 non-empty values
 - [ ] `simple-agent` returns a joke from Azure OpenAI
-- [ ] Azure SQL Database has 6 tables with data (Customers, Orders, etc.)
+- [ ] Cosmos DB CRM account has 6 containers with data (Customers, Orders, etc.)
 - [ ] Azure AI Search index has vectorized document chunks (check indexer status in Azure portal)
 - [ ] Azure Blob Storage `product-images` container has 15 `.png` files
 - [ ] Azure Blob Storage `sharepoint-docs` container has 12 `.pdf` files
