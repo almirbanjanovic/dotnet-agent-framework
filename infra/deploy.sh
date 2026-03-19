@@ -48,28 +48,77 @@ banner() {
 
 phase() {
     local num="$1" title="$2"
-    local art1="" art2="" art3=""
+    local w=59
+    local border=$(printf '=%.0s' $(seq 1 $w))
+
+    # Build art lines based on phase number
+    local lines=()
     case "$num" in
-        0) art1="    🤖  ╔═══╗"; art2="        ║ SP║  Agent Identity"; art3="        ╚═══╝" ;;
-        1) art1="    🔓  ┌───┐"; art2="        │🔥│  Firewalls";      art3="        └───┘" ;;
-        2) art1="    📦  ┌───┐"; art2="        │TF │  Terraform Init"; art3="        └───┘" ;;
-        3) art1="    ✅  ┌───┐"; art2="        │ ✓ │  Validate";       art3="        └───┘" ;;
-        4) art1="    📋  ┌───┐"; art2="        │ Δ │  Plan";           art3="        └───┘" ;;
-        5) art1="    🚀  ┌───┐"; art2="        │▶▶▶│  Apply";          art3="        └───┘" ;;
-        6) art1="    💾  ┌───┐"; art2="        │CSV│  Seed Data";      art3="        └───┘" ;;
-        7) art1="    🔗  ┌───┐"; art2="        │⟷ │  Link Users";     art3="        └───┘" ;;
+        0) lines=(
+            "                                                           "
+            "       .---.     Phase 0                                   "
+            "      / SP  \\    Agent Identity Service Principal          "
+            "      \\____/                                               "
+            "                                                           "
+        ) ;;
+        1) lines=(
+            "                                                           "
+            "      +-----+   Phase 1                                    "
+            "      | F W |   Open Resource Firewalls                    "
+            "      +-----+                                              "
+            "                                                           "
+        ) ;;
+        2) lines=(
+            "                                                           "
+            "      +-----+   Phase 2                                    "
+            "      | T F |   Terraform Init                             "
+            "      +-----+                                              "
+            "                                                           "
+        ) ;;
+        3) lines=(
+            "                                                           "
+            "      +-----+   Phase 3                                    "
+            "      |  *  |   Terraform Validate                         "
+            "      +-----+                                              "
+            "                                                           "
+        ) ;;
+        4) lines=(
+            "                                                           "
+            "      +-----+   Phase 4                                    "
+            "      | <+> |   Terraform Plan                             "
+            "      +-----+                                              "
+            "                                                           "
+        ) ;;
+        5) lines=(
+            "                                                           "
+            "      +-----+   Phase 5                                    "
+            "      | >>> |   Terraform Apply                            "
+            "      +-----+                                              "
+            "                                                           "
+        ) ;;
+        6) lines=(
+            "                                                           "
+            "      +-----+   Phase 6                                    "
+            "      | DB  |   Seed CRM Data                              "
+            "      +-----+                                              "
+            "                                                           "
+        ) ;;
+        7) lines=(
+            "                                                           "
+            "      +-----+   Phase 7                                    "
+            "      | <-> |   Link Entra Users to Customers              "
+            "      +-----+                                              "
+            "                                                           "
+        ) ;;
     esac
 
     echo ""
-    echo -e "  ${C}╔═════════════════════════════════════════════════════════╗${W}"
-    if [[ -n "$art1" ]]; then
-        printf "  ${C}║${W}  %-55s${C}║${W}\n" "$art1"
-        printf "  ${C}║${W}  %-55s${C}║${W}\n" "$art2"
-        printf "  ${C}║${W}  %-55s${C}║${W}\n" "$art3"
-        echo -e "  ${C}╠═════════════════════════════════════════════════════════╣${W}"
-    fi
-    printf "  ${C}║${W}  ${C}Phase %d — %-47s${C}║${W}\n" "$num" "$title"
-    echo -e "  ${C}╚═════════════════════════════════════════════════════════╝${W}"
+    echo -e "  ${C}+${border}+${W}"
+    for line in "${lines[@]}"; do
+        echo -e "  ${C}|${W}${line}${C}|${W}"
+    done
+    echo -e "  ${C}+${border}+${W}"
+    echo ""
 }
 
 step()  { echo -e "  → $1"; }

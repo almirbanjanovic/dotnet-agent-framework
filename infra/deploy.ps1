@@ -46,32 +46,81 @@ function Write-Banner {
 
 function Write-Phase {
     param([int]$Number, [string]$Title)
-    
-    # Phase-specific ASCII art icons
-    $art = switch ($Number) {
-        0 { @("    🤖  ╔═══╗", "        ║ SP║  Agent Identity", "        ╚═══╝") }
-        1 { @("    🔓  ┌───┐", "        │🔥│  Firewalls", "        └───┘") }
-        2 { @("    📦  ┌───┐", "        │TF │  Terraform Init", "        └───┘") }
-        3 { @("    ✅  ┌───┐", "        │ ✓ │  Validate", "        └───┘") }
-        4 { @("    📋  ┌───┐", "        │ Δ │  Plan", "        └───┘") }
-        5 { @("    🚀  ┌───┐", "        │▶▶▶│  Apply", "        └───┘") }
-        6 { @("    💾  ┌───┐", "        │CSV│  Seed Data", "        └───┘") }
-        7 { @("    🔗  ┌───┐", "        │⟷ │  Link Users", "        └───┘") }
+
+    $w = 59  # outer box width (between + signs)
+
+    # Phase-specific art lines (each exactly 3 lines, manually padded to $w chars visual width)
+    $lines = switch ($Number) {
+        0 { @(
+            "                                                           ",
+            "       .---.     Phase 0                                   ",
+            "      / SP  \    Agent Identity Service Principal          ",
+            "      \____/                                               ",
+            "                                                           "
+        )}
+        1 { @(
+            "                                                           ",
+            "      +-----+   Phase 1                                    ",
+            "      | F W |   Open Resource Firewalls                    ",
+            "      +-----+                                              ",
+            "                                                           "
+        )}
+        2 { @(
+            "                                                           ",
+            "      +-----+   Phase 2                                    ",
+            "      | T F |   Terraform Init                             ",
+            "      +-----+                                              ",
+            "                                                           "
+        )}
+        3 { @(
+            "                                                           ",
+            "      +-----+   Phase 3                                    ",
+            "      |  *  |   Terraform Validate                         ",
+            "      +-----+                                              ",
+            "                                                           "
+        )}
+        4 { @(
+            "                                                           ",
+            "      +-----+   Phase 4                                    ",
+            "      | <+> |   Terraform Plan                             ",
+            "      +-----+                                              ",
+            "                                                           "
+        )}
+        5 { @(
+            "                                                           ",
+            "      +-----+   Phase 5                                    ",
+            "      | >>> |   Terraform Apply                            ",
+            "      +-----+                                              ",
+            "                                                           "
+        )}
+        6 { @(
+            "                                                           ",
+            "      +-----+   Phase 6                                    ",
+            "      | DB  |   Seed CRM Data                              ",
+            "      +-----+                                              ",
+            "                                                           "
+        )}
+        7 { @(
+            "                                                           ",
+            "      +-----+   Phase 7                                    ",
+            "      | <-> |   Link Entra Users to Customers              ",
+            "      +-----+                                              ",
+            "                                                           "
+        )}
         default { @() }
     }
 
+    $border = '=' * $w
+
     Write-Host ""
-    Write-Host "  ╔═════════════════════════════════════════════════════════╗" -ForegroundColor DarkCyan
-    foreach ($line in $art) {
-        Write-Host "  ║  " -ForegroundColor DarkCyan -NoNewline
-        Write-Host "$($line.PadRight(55))" -NoNewline
-        Write-Host "║" -ForegroundColor DarkCyan
+    Write-Host "  +$border+" -ForegroundColor DarkCyan
+    foreach ($line in $lines) {
+        Write-Host "  |" -ForegroundColor DarkCyan -NoNewline
+        Write-Host $line -NoNewline
+        Write-Host "|" -ForegroundColor DarkCyan
     }
-    Write-Host "  ╠═════════════════════════════════════════════════════════╣" -ForegroundColor DarkCyan
-    Write-Host "  ║  " -ForegroundColor DarkCyan -NoNewline
-    Write-Host "Phase $Number — $($Title.PadRight(47))" -ForegroundColor Cyan -NoNewline
-    Write-Host "║" -ForegroundColor DarkCyan
-    Write-Host "  ╚═════════════════════════════════════════════════════════╝" -ForegroundColor DarkCyan
+    Write-Host "  +$border+" -ForegroundColor DarkCyan
+    Write-Host ""
 }
 
 function Write-Step  { param([string]$Message) Write-Host "  → $Message" -ForegroundColor White }
