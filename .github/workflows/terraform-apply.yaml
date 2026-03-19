@@ -114,38 +114,6 @@ jobs:
         ARM_USE_OIDC: true
         ARM_USE_AZUREAD: true
 
-    - name: Import existing Entra users into state (idempotent)
-      run: |
-        cd "${{ vars.TERRAFORM_WORKING_DIRECTORY }}"
-        DOMAIN=$(az rest --method GET --url "https://graph.microsoft.com/v1.0/domains" \
-          --query "value[?isDefault].id" -o tsv 2>/dev/null || true)
-
-        declare -A USERS=(
-          ["emma"]="emma.wilson"
-          ["james"]="james.chen"
-          ["sarah"]="sarah.miller"
-          ["david"]="david.park"
-          ["lisa"]="lisa.torres"
-        )
-
-        for key in "${!USERS[@]}"; do
-          UPN="${USERS[$key]}@${DOMAIN}"
-          IN_STATE=$(terraform state list "module.entra.azuread_user.test[\"$key\"]" 2>/dev/null || true)
-          if [ -z "$IN_STATE" ]; then
-            OID=$(az ad user show --id "$UPN" --query id -o tsv 2>/dev/null || true)
-            if [ -n "$OID" ]; then
-              echo "Importing $UPN → state"
-              terraform import "module.entra.azuread_user.test[\"$key\"]" "$OID" 2>/dev/null || true
-            fi
-          fi
-        done
-      env:
-        ARM_CLIENT_ID: ${{ secrets.azureClientId }}
-        ARM_TENANT_ID: ${{ secrets.azureTenantId }}
-        ARM_SUBSCRIPTION_ID: ${{ secrets.azureSubscriptionId }}
-        ARM_USE_OIDC: true
-        ARM_USE_AZUREAD: true
-
     - name: Download the plan
       uses: actions/download-artifact@v4
       with:

@@ -624,39 +624,6 @@ try {
     Pop-Location
 }
 
-# ── Import existing Entra users into state (silent unless needed) ─────────────
-$domain = az ad signed-in-user show --query userPrincipalName -o tsv 2>$null | ForEach-Object { $_ -replace '^[^@]+@', '' }
-$userMap = @{
-    emma  = "emma.wilson"
-    james = "james.chen"
-    sarah = "sarah.miller"
-    david = "david.park"
-    lisa  = "lisa.torres"
-}
-
-$imported = 0
-Push-Location $TerraformDir
-try {
-    foreach ($key in $userMap.Keys) {
-        $upn = "$($userMap[$key])@$domain"
-        $inState = terraform state list "module.entra.azuread_user.test[`"$key`"]" 2>$null
-        if (-not $inState) {
-            $oid = az ad user show --id $upn --query id -o tsv 2>$null
-            if ($oid) {
-                if ($imported -eq 0) { Write-Step "Importing existing Entra users into Terraform state..." }
-                Write-Host "    ✓ $upn" -ForegroundColor DarkGray
-                terraform import "module.entra.azuread_user.test[`"$key`"]" $oid 2>$null | Out-Null
-                $imported++
-            }
-        }
-    }
-    if ($imported -gt 0) {
-        Write-Done "$imported user(s) imported into state"
-    }
-} finally {
-    Pop-Location
-}
-
 Write-PhaseSummary -Number 2 -NextPhase "Phase 3 — terraform validate (check configuration syntax)" -Items ([ordered]@{
     "Backend" = "azurerm ($StorageAccount/tfstate/$Environment.tfstate)"
     "Status"  = "Initialized"

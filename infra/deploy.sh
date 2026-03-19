@@ -607,32 +607,6 @@ step "Initializing Terraform with backend config"
 pushd "$TERRAFORM_DIR" >/dev/null
 terraform init -upgrade -reconfigure -backend-config=backend.hcl
 done_ "Terraform initialized"
-
-# ── Import existing Entra users into state (idempotent) ──────────────────────
-step "Importing existing Entra users into Terraform state (if needed)"
-DOMAIN=$(az rest --method GET --url "https://graph.microsoft.com/v1.0/domains" \
-  --query "value[?isDefault].id" -o tsv 2>/dev/null || true)
-
-declare -A USER_MAP=(
-    ["emma"]="emma.wilson"
-    ["james"]="james.chen"
-    ["sarah"]="sarah.miller"
-    ["david"]="david.park"
-    ["lisa"]="lisa.torres"
-)
-
-for key in "${!USER_MAP[@]}"; do
-    UPN="${USER_MAP[$key]}@${DOMAIN}"
-    IN_STATE=$(terraform state list "module.entra.azuread_user.test[\"$key\"]" 2>/dev/null || true)
-    if [[ -z "$IN_STATE" ]]; then
-        OID=$(az ad user show --id "$UPN" --query id -o tsv 2>/dev/null || true)
-        if [[ -n "$OID" ]]; then
-            echo -e "    ${D}Importing $UPN → state${W}"
-            terraform import "module.entra.azuread_user.test[\"$key\"]" "$OID" 2>/dev/null || true
-        fi
-    fi
-done
-done_ "Entra users synced with state"
 popd >/dev/null
 
 phase_summary 2 \
