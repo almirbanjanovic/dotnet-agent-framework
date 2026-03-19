@@ -232,6 +232,11 @@ if [[ -n "$SP_CLIENT_ID" ]]; then
     az ad app permission admin-consent --id "$SP_CLIENT_ID" 2>/dev/null || true
     done_ "Admin consent applied"
 
+    # Wait for consent to propagate (Graph API needs time to sync permissions)
+    if [[ -z "$EXISTING_GRANT" ]]; then
+        wait_progress 60 "Consent propagation"
+    fi
+
     # ── Step 3: Create temporary client secret ───────────────────────────────
     step "Creating temporary client secret (expires in 1 hour)..."
 
