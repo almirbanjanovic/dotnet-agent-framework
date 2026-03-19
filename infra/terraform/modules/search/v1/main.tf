@@ -35,7 +35,7 @@ resource "azurerm_search_service" "this" {
 resource "azapi_resource" "search_index" {
   type      = "Microsoft.Search/searchServices/indexes@2024-07-01"
   name      = var.index_name
-  parent_id = "https://${azurerm_search_service.this.name}.search.windows.net"
+  parent_id = azurerm_search_service.this.id
 
   body = {
     properties = {
@@ -150,7 +150,7 @@ resource "azapi_resource" "search_index" {
 resource "azapi_resource" "search_data_source" {
   type      = "Microsoft.Search/searchServices/dataSources@2024-07-01"
   name      = "blob-sharepoint-docs"
-  parent_id = "https://${azurerm_search_service.this.name}.search.windows.net"
+  parent_id = azurerm_search_service.this.id
 
   body = {
     properties = {
@@ -173,7 +173,7 @@ resource "azapi_resource" "search_data_source" {
 resource "azapi_resource" "search_skillset" {
   type      = "Microsoft.Search/searchServices/skillsets@2024-07-01"
   name      = "vectorize-skillset"
-  parent_id = "https://${azurerm_search_service.this.name}.search.windows.net"
+  parent_id = azurerm_search_service.this.id
 
   body = {
     properties = {

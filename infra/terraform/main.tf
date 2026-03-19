@@ -454,7 +454,7 @@ module "rbac_search" {
 resource "azapi_resource" "search_indexer" {
   type      = "Microsoft.Search/searchServices/indexers@2024-07-01"
   name      = "blob-indexer"
-  parent_id = module.search.endpoint
+  parent_id = module.search.id
 
   body = {
     properties = {
