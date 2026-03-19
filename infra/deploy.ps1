@@ -47,79 +47,77 @@ function Write-Banner {
 function Write-Phase {
     param([int]$Number, [string]$Title)
 
-    $w = 59  # outer box width (between + signs)
+    $w = 59  # inner width between ║ chars
 
-    # Phase-specific art lines (each exactly 3 lines, manually padded to $w chars visual width)
-    $lines = switch ($Number) {
+    # Phase-specific description lines (each padded to exactly $w chars)
+    $desc = switch ($Number) {
         0 { @(
-            "                                                           ",
-            "       .---.     Phase 0                                   ",
-            "      / SP  \    Agent Identity Service Principal          ",
-            "      \____/                                               ",
-            "                                                           "
+            "   The Entra Agent ID API needs app-only tokens.            ",
+            "   CLI tokens include Directory.AccessAsUser.All            ",
+            "   which the Agent ID API blocks. A service principal       ",
+            "   is created for Terraform's msgraph provider.             "
         )}
         1 { @(
-            "                                                           ",
-            "      +-----+   Phase 1                                    ",
-            "      | F W |   Open Resource Firewalls                    ",
-            "      +-----+                                              ",
-            "                                                           "
+            "   All Azure resources have network firewalls (deny all).   ",
+            "   Your IP must be allowlisted so Terraform can reach       ",
+            "   them. Firewalls close automatically when done.           "
         )}
         2 { @(
-            "                                                           ",
-            "      +-----+   Phase 2                                    ",
-            "      | T F |   Terraform Init                             ",
-            "      +-----+                                              ",
-            "                                                           "
+            "   Connects Terraform to the remote state backend           ",
+            "   (Azure Storage). Also imports existing Entra test        ",
+            "   users into state to prevent recreation conflicts.        "
         )}
         3 { @(
-            "                                                           ",
-            "      +-----+   Phase 3                                    ",
-            "      |  *  |   Terraform Validate                         ",
-            "      +-----+                                              ",
-            "                                                           "
+            "   Checks all .tf files for syntax errors before            ",
+            "   creating the execution plan.                             "
         )}
         4 { @(
-            "                                                           ",
-            "      +-----+   Phase 4                                    ",
-            "      | <+> |   Terraform Plan                             ",
-            "      +-----+                                              ",
-            "                                                           "
+            "   Previews what resources will be created, changed,        ",
+            "   or destroyed. No changes are applied yet.                "
         )}
         5 { @(
-            "                                                           ",
-            "      +-----+   Phase 5                                    ",
-            "      | >>> |   Terraform Apply                            ",
-            "      +-----+                                              ",
-            "                                                           "
+            "   Provisions all Azure resources: AI Foundry, Cosmos DB,   ",
+            "   AKS, ACR, Key Vault, Storage, AI Search, VNet,          ",
+            "   Private Endpoints, RBAC, and blob uploads.               "
         )}
         6 { @(
-            "                                                           ",
-            "      +-----+   Phase 6                                    ",
-            "      | DB  |   Seed CRM Data                              ",
-            "      +-----+                                              ",
-            "                                                           "
+            "   Runs the seed-data tool inside an AKS pod using          ",
+            "   workload identity (RBAC, no keys). Upserts customers,   ",
+            "   orders, products, promotions, tickets from CSV.          "
         )}
         7 { @(
-            "                                                           ",
-            "      +-----+   Phase 7                                    ",
-            "      | <-> |   Link Entra Users to Customers              ",
-            "      +-----+                                              ",
-            "                                                           "
+            "   Reads each test user's Entra object ID from Key Vault   ",
+            "   and writes it to the Customer document in Cosmos DB.     ",
+            "   This links 'Emma Wilson' in Entra = customer 101.       "
         )}
         default { @() }
     }
 
-    $border = '=' * $w
+    $border = '═' * $w
 
     Write-Host ""
-    Write-Host "  +$border+" -ForegroundColor DarkCyan
-    foreach ($line in $lines) {
-        Write-Host "  |" -ForegroundColor DarkCyan -NoNewline
-        Write-Host $line -NoNewline
-        Write-Host "|" -ForegroundColor DarkCyan
+    Write-Host "  ╔$border╗" -ForegroundColor DarkCyan
+
+    # Phase title (centered-ish)
+    $titleLine = "Phase $Number — $Title"
+    $pad = [Math]::Max(0, [Math]::Floor(($w - $titleLine.Length) / 2))
+    $titlePadded = (' ' * $pad) + $titleLine
+    Write-Host "  ║" -ForegroundColor DarkCyan -NoNewline
+    Write-Host "$($titlePadded.PadRight($w))" -ForegroundColor Cyan -NoNewline
+    Write-Host "║" -ForegroundColor DarkCyan
+
+    if ($desc.Count -gt 0) {
+        Write-Host "  ╠$border╣" -ForegroundColor DarkCyan
+        Write-Host "  ║$(' ' * $w)║" -ForegroundColor DarkCyan
+        foreach ($line in $desc) {
+            Write-Host "  ║" -ForegroundColor DarkCyan -NoNewline
+            Write-Host $line -ForegroundColor DarkGray -NoNewline
+            Write-Host "║" -ForegroundColor DarkCyan
+        }
+        Write-Host "  ║$(' ' * $w)║" -ForegroundColor DarkCyan
     }
-    Write-Host "  +$border+" -ForegroundColor DarkCyan
+
+    Write-Host "  ╚$border╝" -ForegroundColor DarkCyan
     Write-Host ""
 }
 
@@ -381,12 +379,7 @@ $env:HAMILTON_DISABLE_CAE = "true"
 # ═══════════════════════════════════════════════════════════════════════════════
 
 Write-Phase -Number 0 -Title "Agent Identity — Service Principal"
-Write-Info "The Entra Agent ID API requires app-only tokens (client credentials)."
-Write-Info "Azure CLI tokens include Directory.AccessAsUser.All, which is blocked."
-Write-Info "This phase creates a service principal for Terraform's msgraph provider."
-Write-Info ""
-Write-Info "  az login token ──▶ Directory.AccessAsUser.All ──▶ ❌ Agent ID API"
-Write-Info "  SP app-only    ──▶ AgentIdentity.* perms only ──▶ ✅ Agent ID API"
+
 
 $TenantId = az account show --query tenantId -o tsv
 $SubscriptionId = az account show --query id -o tsv
@@ -595,9 +588,6 @@ if ($softDeletedKv) {
 # ═══════════════════════════════════════════════════════════════════════════════
 
 Write-Phase -Number 1 -Title "Open resource firewalls"
-Write-Info "All Azure resources have network firewalls (Deny by default)."
-Write-Info "Your IP must be allowlisted so Terraform can reach them."
-Write-Info "Firewalls are removed again at the end (see cleanup)."
 
 Write-Step "Adding deployer IP to all resource firewalls"
 
@@ -618,8 +608,6 @@ Write-PhaseSummary -Number 1 -NextPhase "Phase 2 — terraform init (configure b
 # ═══════════════════════════════════════════════════════════════════════════════
 
 Write-Phase -Number 2 -Title "terraform init"
-Write-Info "Connects Terraform to the remote state backend (Azure Storage)."
-Write-Info "Also imports existing Entra test users to prevent conflicts."
 
 Write-Step "Initializing Terraform with backend config"
 
@@ -672,7 +660,6 @@ Write-PhaseSummary -Number 2 -NextPhase "Phase 3 — terraform validate (check c
 # ═══════════════════════════════════════════════════════════════════════════════
 
 Write-Phase -Number 3 -Title "terraform validate"
-Write-Info "Checks all .tf files for syntax errors before planning."
 
 Write-Step "Validating Terraform configuration"
 
@@ -694,8 +681,6 @@ Write-PhaseSummary -Number 3 -NextPhase "Phase 4 — terraform plan (preview inf
 # ═══════════════════════════════════════════════════════════════════════════════
 
 Write-Phase -Number 4 -Title "terraform plan"
-Write-Info "Previews what resources will be created, changed, or destroyed."
-Write-Info "No changes are applied yet — review the plan before continuing."
 
 Write-Step "Planning infrastructure changes"
 
@@ -718,9 +703,6 @@ Write-PhaseSummary -Number 4 -NextPhase "Phase 5 — terraform apply (provision 
 # ═══════════════════════════════════════════════════════════════════════════════
 
 Write-Phase -Number 5 -Title "terraform apply"
-Write-Info "Provisions all Azure resources: AI Foundry, Cosmos DB, AKS, ACR,"
-Write-Info "Key Vault, Storage, AI Search, VNet, Private Endpoints, RBAC."
-Write-Info "Also uploads product images and SharePoint PDFs to blob storage."
 
 Write-Step "Applying infrastructure changes"
 Write-Host "    Resources: AI Foundry, Cosmos DB, AI Search, AKS, ACR, Key Vault, Storage" -ForegroundColor DarkGray
@@ -818,9 +800,6 @@ Write-PhaseSummary -Number 5 -NextPhase "Phase 6 — Seed CRM data into Cosmos D
 # ═══════════════════════════════════════════════════════════════════════════════
 
 Write-Phase -Number 6 -Title "Seed CRM data"
-Write-Info "Runs the seed-data tool inside an AKS pod (workload identity)."
-Write-Info "Upserts customers, orders, products, promotions, and tickets"
-Write-Info "from CSV files into Cosmos DB containers."
 
 Write-Step "Resolving infrastructure endpoints"
 $KvName = az keyvault list --resource-group $ResourceGroup --query "[0].name" -o tsv
@@ -879,9 +858,6 @@ Write-PhaseSummary -Number 6 -NextPhase "Phase 7 — Link Entra users to Custome
 # ═══════════════════════════════════════════════════════════════════════════════
 
 Write-Phase -Number 7 -Title "Link Entra users to Customers"
-Write-Info "Reads each test user's Entra object ID from Key Vault and"
-Write-Info "writes it to the corresponding Customer document in Cosmos DB."
-Write-Info "This is how the app knows 'Emma Wilson' in Entra = customer 101."
 
 Write-Step "Building Entra mapping from Key Vault"
 
