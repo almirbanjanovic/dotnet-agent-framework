@@ -31,14 +31,18 @@ resource "msgraph_resource" "blueprint" {
     signInAudience = "AzureADMyOrg"
   }
 
-  # sponsors and owners are set via separate Graph API calls if needed.
-  # Including them as @odata.bind in the body causes plan drift on every run
-  # because Graph returns expanded objects on GET, not bind URIs.
-
   response_export_values = {
     appId       = "appId"
     id          = "id"
     displayName = "displayName"
+  }
+
+  # Prevent plan drift: Graph API returns owners/sponsors @odata.bind on GET
+  # even though we don't set them. The provider stores the full response in
+  # state, which differs from our body on every plan. ignore_changes on body
+  # allows the initial create to work but prevents subsequent update cycles.
+  lifecycle {
+    ignore_changes = [body]
   }
 }
 
@@ -60,6 +64,10 @@ resource "msgraph_resource" "blueprint_principal" {
     appId = "appId"
     id    = "id"
   }
+
+  lifecycle {
+    ignore_changes = [body]
+  }
 }
 
 # -----------------------------------------------------------------------------
@@ -76,5 +84,9 @@ resource "msgraph_resource" "fic" {
     audiences = ["api://AzureADTokenExchange"]
     issuer    = var.aks_oidc_issuer_url
     subject   = "system:serviceaccount:${each.value.namespace}:${each.value.service_account}"
+  }
+
+  lifecycle {
+    ignore_changes = [body]
   }
 }
