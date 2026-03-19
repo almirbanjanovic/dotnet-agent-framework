@@ -6,18 +6,18 @@ How to decide who handles what.
 
 | Work Type | Route To | Examples |
 |-----------|----------|----------|
-| Architecture & design | Tyrion | System design, cross-component integration, scope decisions |
-| Backend APIs & BFF | Arya | CRM API, BFF API, endpoints, data access, Cosmos DB |
-| MCP servers & tools | Arya | CRM MCP, Knowledge MCP, tool definitions |
-| AI agents | Arya | CRM Agent, Product Agent, Orchestrator Agent |
-| Frontend & UI | Sansa | Blazor WASM, MudBlazor, chat panel, MSAL auth, SignalR |
-| Code review | Tyrion | Review PRs, check quality, suggest improvements |
-| Testing | Varys | Write tests, find edge cases, verify fixes |
-| Infrastructure | Bran | Terraform, AKS, Helm, Docker, identities, RBAC |
-| CI/CD & deployment | Bran | GitHub Actions, deploy scripts, container registry |
-| Scope & priorities | Tyrion | What to build next, trade-offs, decisions |
+| Architecture & design | Stewie | System design, cross-component integration, scope decisions |
+| Backend APIs & BFF | Brian | CRM API, BFF API, endpoints, data access, Cosmos DB |
+| MCP servers & tools | Brian | CRM MCP, Knowledge MCP, tool definitions |
+| AI agents | Brian | CRM Agent, Product Agent, Orchestrator Agent |
+| Frontend & UI | Lois | Blazor WASM, MudBlazor, chat panel, MSAL auth, SignalR |
+| Code review | Stewie | Review PRs, check quality, suggest improvements |
+| Testing | Peter | Write tests, find edge cases, verify fixes |
+| Infrastructure | Joe | Terraform, AKS, Helm, Docker, identities, RBAC |
+| CI/CD & deployment | Joe | GitHub Actions, deploy scripts, container registry |
+| Scope & priorities | Stewie | What to build next, trade-offs, decisions |
 | Async issue work (bugs, tests, small features) | @copilot 🤖 | Well-defined tasks matching capability profile |
-| Session logging | Scribe | Automatic — never needs routing |
+| Session logging | Cleveland | Automatic — never needs routing |
 
 ## Issue Routing
 

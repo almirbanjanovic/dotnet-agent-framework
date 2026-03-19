@@ -16,7 +16,7 @@
 - **`dotnet test` result:** Build succeeds (exit 0), zero tests discovered, zero tests run.
 - **Only testable logic today:** `CrmSeeder.cs` in seed-data — CSV parsing (`ParseCsv`, `ParseCsvLine`), type conversion (`ConvertValue`), Cosmos DB seeding (`SeedAsync`), Entra ID linking (`LinkEntraIdsAsync`). ~218 lines with multiple edge-case-rich code paths and zero test coverage.
 - **Coverage: 0%.** When components land, CRM API and BFF API should be first priorities (WebApplicationFactory integration tests). Orchestrator routing logic is the next critical path.
-- **Full analysis written to:** `.squad/decisions/inbox/varys-test-analysis.md`
+- **Full analysis written to:** `.squad/decisions/inbox/peter-test-analysis.md`
 
 ### 2026-03-19 — Cross-Team Finding: Full Codebase Analysis Complete
 

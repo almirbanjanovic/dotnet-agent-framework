@@ -26,7 +26,7 @@
 - `src/product-agent/` — Product specialist agent
 - `src/orchestrator-agent/` — Intent classification + routing
 - `src/bff-api/` — JWT validation, CRM proxy, image proxy, chat, Cosmos DB conversation persistence
-- `src/blazor-ui/` — Blazor WASM SPA (Sansa's domain)
+- `src/blazor-ui/` — Blazor WASM SPA (Lois's domain)
 
 **Cosmos DB containers (CRM)**:
 - `Customers` (PK: /id) — 10 customers, loyalty tiers Bronze/Silver/Gold/Platinum

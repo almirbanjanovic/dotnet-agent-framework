@@ -11,6 +11,20 @@
         { "name": "Varys", "role": "Tester" },
         { "name": "Bran", "role": "DevOps/Infra" }
       ]
+    },
+    {
+      "assignment_id": "fg-001",
+      "universe": "Family Guy",
+      "timestamp": "2026-03-19T15:05:40Z",
+      "agents": [
+        { "name": "Stewie", "role": "Lead" },
+        { "name": "Brian", "role": "Backend Dev" },
+        { "name": "Lois", "role": "Frontend Dev" },
+        { "name": "Peter", "role": "Tester" },
+        { "name": "Joe", "role": "DevOps/Infra" },
+        { "name": "Cleveland", "role": "Session Logger" },
+        { "name": "Quagmire", "role": "Work Monitor" }
+      ]
     }
   ]
 }

@@ -1,4 +1,4 @@
-# Scribe — Scribe
+# Cleveland — Session Logger
 
 Documentation specialist maintaining history, decisions, and technical records.
 
