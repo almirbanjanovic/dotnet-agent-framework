@@ -23,23 +23,41 @@ infra/
     └── modules/
         ├── acr/               # Azure Container Registry
         │   └── v1/
+        ├── agc/               # App Gateway for Containers + Frontend
+        │   └── v1/
+        ├── agent-identity/    # Agent Identity Blueprints (Entra Agent ID)
+        │   └── v1/
         ├── aks/               # AKS cluster + Log Analytics
         │   └── v1/
-        ├── cosmosdb/          # Cosmos DB account, database, containers
+        ├── cosmosdb/          # Cosmos DB account, database, containers (RBAC-only, key auth disabled)
         │   └── v1/
-        ├── foundry/           # AI Services account + chat & embedding models
+        ├── entra/             # Entra app registration, Customer role, test users
+        │   └── v1/
+        ├── foundry/           # AI Services account + chat & embedding models (key auth disabled)
         │   └── v1/
         ├── identity/          # User-assigned managed identities
         │   └── v1/
-        ├── keyvault/          # Azure Key Vault
+        ├── keyvault/          # Azure Key Vault (RBAC authorization)
         │   └── v1/
         ├── keyvault-secrets/  # Key Vault secret writer
+        │   └── v1/
+        ├── knowledge-source/  # AI Search Knowledge Source (auto-generates index, data source, skillset, indexer)
+        │   └── v1/
+        ├── private-dns-zones/ # Private DNS zones for private endpoints
+        │   └── v1/
+        ├── private-endpoint/  # Private endpoint (reusable, one call per resource)
         │   └── v1/
         ├── search/            # Azure AI Search service (Standard tier, semantic ranker)
         │   └── v1/
         ├── storage/           # Azure Storage Account + blob containers (control plane)
         │   └── v1/
         ├── storage-uploads/   # Blob file uploads (data plane, separate ordering)
+        │   └── v1/
+        ├── tls-cert/          # Self-signed TLS certificate in Key Vault
+        │   └── v1/
+        ├── vnet/              # Virtual Network + 4 subnets (AKS system, AKS workload, AGC, private endpoints)
+        │   └── v1/
+        ├── workload-identity/ # Federated identity credentials (AKS OIDC → managed identity)
         │   └── v1/
         │
         └── rbac/
@@ -51,7 +69,9 @@ infra/
             │   └── v1/
             ├── foundry/       # Cognitive Services OpenAI User
             │   └── v1/
-            ├── keyvault/      # Key Vault Secrets Officer + User
+            ├── keyvault/      # Key Vault Secrets Officer + User + Certificates Officer
+            │   └── v1/
+            ├── search/        # Search Index Data Reader
             │   └── v1/
             └── storage/       # Storage Blob Data Reader
                 └── v1/
@@ -69,7 +89,6 @@ After `terraform apply`, the following outputs are displayed:
 | Output | Description |
 | --- | --- |
 | `openai_endpoint` | Azure OpenAI endpoint URL |
-| `openai_api_key` | API key (dev/learning convenience) |
 | `openai_deployment_name` | Chat model deployment name |
 | `embedding_deployment_name` | Embedding model deployment name |
 | `cosmosdb_crm_endpoint` | CRM Cosmos DB endpoint |
@@ -106,9 +125,9 @@ After `terraform apply`, the following outputs are displayed:
 | `entra_test_user_upns` | Test user login emails |
 | `tls_cert_secret_id` | TLS cert Key Vault secret ID |
 
-All secrets (OpenAI endpoint/key, Cosmos DB endpoint/key, deployment names) are automatically written to Key Vault by Terraform. See [Lab 1 Step 2](../docs/lab-1.md#step-2--configure-app-settings) for pulling them into local config.
+All secrets (OpenAI endpoint, Cosmos DB endpoint, deployment names) are automatically written to Key Vault by Terraform. See [Lab 1 Step 2](../docs/lab-1.md#step-2--configure-app-settings) for pulling them into local config.
 
-> **Note:** API key and Cosmos DB key outputs are for learning/dev convenience. Do not expose sensitive values via Terraform outputs in production.
+> **Note:** All resources use identity-based (RBAC) authentication. Key-based auth is disabled on Cosmos DB and AI Foundry. No API keys or database keys are stored in Key Vault or exposed in Terraform outputs.
 
 ## Recent infrastructure additions
 
@@ -123,7 +142,7 @@ The following resources were added to support the full application architecture 
 | **`workload-identity/v1/`** | Federated credentials binding each identity to AKS OIDC issuer + K8s service accounts |
 | **`entra/v1/`** | Entra app registration, Customer app role, 5 customer test users with random passwords, role assignments |
 | **`tls-cert/v1/`** | Self-signed TLS certificate in Key Vault for AGC TLS termination |
-| **`vnet/v1/`** | Virtual Network with 3 subnets (AKS system, AKS workload, AGC) |
+| **`vnet/v1/`** | Virtual Network with 4 subnets (AKS system, AKS workload, AGC, private endpoints) |
 | **`agc/v1/`** | App Gateway for Containers + Frontend + Subnet Association |
 | **Knowledge Source (`knowledge-source/v1/`)** | Creates AI Search Knowledge Source via REST API — auto-generates index, data source, skillset, indexer |
 | **Cosmos DB `conversations`** | New container (partition key: `/sessionId`) for BFF-owned chat history |

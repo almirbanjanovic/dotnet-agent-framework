@@ -554,7 +554,6 @@ Write-Step "Resolving infrastructure endpoints"
 $KvName = az keyvault list --resource-group $ResourceGroup --query "[0].name" -o tsv
 if (-not $KvName) { throw "No Key Vault found in $ResourceGroup" }
 $CosmosEndpoint = az keyvault secret show --vault-name $KvName --name "COSMOSDB-CRM-ENDPOINT" --query value -o tsv
-$CosmosKey      = az keyvault secret show --vault-name $KvName --name "COSMOSDB-CRM-KEY" --query value -o tsv
 $CosmosDb       = az keyvault secret show --vault-name $KvName --name "COSMOSDB-CRM-DATABASE" --query value -o tsv
 $AksName = az aks list --resource-group $ResourceGroup --query "[0].name" -o tsv
 if (-not $AksName) { throw "No AKS cluster found in $ResourceGroup" }
@@ -578,8 +577,9 @@ $K8sNamespace = "contoso"
 $PodName = "seed-data-runner"
 $CrmDataDir = Join-Path (Split-Path $ScriptDir) "data" "contoso-crm"
 
-# Create temporary pod
-kubectl run $PodName --image=mcr.microsoft.com/dotnet/runtime-deps:9.0 --restart=Never --namespace=$K8sNamespace --command -- sleep 600 2>&1 | Out-Null
+# Create temporary pod with sa-crm-api workload identity (RBAC-based auth to Cosmos DB)
+$PodOverrides = '{"metadata":{"labels":{"azure.workload.identity/use":"true"}},"spec":{"serviceAccountName":"sa-crm-api"}}'
+kubectl run $PodName --image=mcr.microsoft.com/dotnet/runtime-deps:9.0 --restart=Never --namespace=$K8sNamespace --overrides=$PodOverrides --command -- sleep 600 2>&1 | Out-Null
 kubectl wait --for=condition=Ready pod/$PodName --namespace=$K8sNamespace --timeout=120s 2>&1 | Out-Null
 
 try {
@@ -589,9 +589,9 @@ try {
     kubectl cp $CrmDataDir "${K8sNamespace}/${PodName}:/data/contoso-crm" 2>&1 | Out-Null
     kubectl exec $PodName --namespace=$K8sNamespace -- chmod +x /app/seed-data 2>&1 | Out-Null
 
-    # Run seed-data with Cosmos DB connection
+    # Run seed-data with Cosmos DB connection (uses workload identity — no key needed)
     kubectl exec $PodName --namespace=$K8sNamespace -- `
-        /bin/sh -c "COSMOSDB_CRM_ENDPOINT='$CosmosEndpoint' COSMOSDB_CRM_KEY='$CosmosKey' COSMOSDB_CRM_DATABASE='$CosmosDb' CRM_DATA_PATH='/data/contoso-crm' /app/seed-data"
+        /bin/sh -c "COSMOSDB_CRM_ENDPOINT='$CosmosEndpoint' COSMOSDB_CRM_DATABASE='$CosmosDb' CRM_DATA_PATH='/data/contoso-crm' /app/seed-data"
     if ($LASTEXITCODE -ne 0) { Write-Fail "seed-data failed"; exit 1 }
     Write-Done "CRM data seeded"
 } finally {
@@ -631,7 +631,8 @@ $EntraMapping = $EntraPairs -join ";"
 
 # Reuse the seed-data pod pattern to run entra linking inside the cluster
 $PodName7 = "entra-linker"
-kubectl run $PodName7 --image=mcr.microsoft.com/dotnet/runtime-deps:9.0 --restart=Never --namespace=$K8sNamespace --command -- sleep 300 2>&1 | Out-Null
+$PodOverrides7 = '{"metadata":{"labels":{"azure.workload.identity/use":"true"}},"spec":{"serviceAccountName":"sa-crm-api"}}'
+kubectl run $PodName7 --image=mcr.microsoft.com/dotnet/runtime-deps:9.0 --restart=Never --namespace=$K8sNamespace --overrides=$PodOverrides7 --command -- sleep 300 2>&1 | Out-Null
 kubectl wait --for=condition=Ready pod/$PodName7 --namespace=$K8sNamespace --timeout=120s 2>&1 | Out-Null
 
 try {
@@ -640,7 +641,7 @@ try {
     kubectl exec $PodName7 --namespace=$K8sNamespace -- chmod +x /app/seed-data 2>&1 | Out-Null
 
     kubectl exec $PodName7 --namespace=$K8sNamespace -- `
-        /bin/sh -c "COSMOSDB_CRM_ENDPOINT='$CosmosEndpoint' COSMOSDB_CRM_KEY='$CosmosKey' COSMOSDB_CRM_DATABASE='$CosmosDb' CRM_DATA_PATH='/dev/null' ENTRA_MAPPING='$EntraMapping' /app/seed-data"
+        /bin/sh -c "COSMOSDB_CRM_ENDPOINT='$CosmosEndpoint' COSMOSDB_CRM_DATABASE='$CosmosDb' CRM_DATA_PATH='/dev/null' ENTRA_MAPPING='$EntraMapping' /app/seed-data"
     if ($LASTEXITCODE -ne 0) { Write-Fail "entra linking failed"; exit 1 }
     Write-Done "Entra users linked to Customers"
 } finally {

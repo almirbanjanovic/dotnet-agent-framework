@@ -1,7 +1,2 @@
-terraform {
-  required_providers {
-    azapi = {
-      source = "azure/azapi"
-    }
-  }
-}
+# No child-module provider requirements.
+# Uses azurerm inherited from root.

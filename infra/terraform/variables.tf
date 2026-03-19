@@ -117,7 +117,7 @@ variable "cosmos_crm_database_name" {
 variable "search_sku" {
   description = "Azure AI Search SKU (free, basic, standard)"
   type        = string
-  default     = "basic"
+  default     = "standard"
 }
 
 variable "search_index_name" {

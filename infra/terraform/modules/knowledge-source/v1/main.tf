@@ -39,6 +39,10 @@ resource "terraform_data" "this" {
 
   provisioner "local-exec" {
     interpreter = ["pwsh", "-Command"]
+    # SECURITY NOTE: nonsensitive() is required because Terraform does not support
+    # passing sensitive values into provisioner environment blocks. The API key is
+    # used only at Terraform provisioning time (not stored for runtime use) and is
+    # passed via environment variable (not command-line argument) to minimize exposure.
     environment = {
       SEARCH_ENDPOINT = var.search_endpoint
       SEARCH_API_KEY  = nonsensitive(var.search_api_key)

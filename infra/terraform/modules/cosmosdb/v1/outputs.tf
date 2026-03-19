@@ -13,12 +13,6 @@ output "endpoint" {
   value       = azurerm_cosmosdb_account.this.endpoint
 }
 
-output "primary_key" {
-  description = "Cosmos DB primary access key"
-  value       = data.azapi_resource_action.list_keys.output.primaryMasterKey
-  sensitive   = true
-}
-
 output "database_name" {
   description = "Cosmos DB SQL database name"
   value       = azurerm_cosmosdb_sql_database.this.name

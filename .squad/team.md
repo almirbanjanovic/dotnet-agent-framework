@@ -20,6 +20,10 @@
 | Scribe | Session Logger | `.squad/agents/scribe/charter.md` | 📋 Active |
 | Ralph | Work Monitor | — | 🔄 Monitor |
 
+## Model Preference
+
+All squad members use **claude-opus-4.6** (Claude Opus 4.6, 1M context, internal only). No exceptions — this is a session-wide and persistent override.
+
 ## Project Context
 
 - **Owner:** Almir Banjanovic

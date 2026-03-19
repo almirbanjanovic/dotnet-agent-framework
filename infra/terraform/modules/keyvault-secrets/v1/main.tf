@@ -4,7 +4,10 @@
 # =============================================================================
 
 resource "azurerm_key_vault_secret" "this" {
-  for_each = var.secrets
+  # nonsensitive() on the whole map is safe here — only the KEYS are used for
+  # resource addressing (for_each). The secret VALUES remain sensitive via the
+  # provider (azurerm_key_vault_secret marks value as sensitive internally).
+  for_each = nonsensitive(var.secrets)
 
   name         = each.key
   value        = each.value

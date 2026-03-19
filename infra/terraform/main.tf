@@ -562,16 +562,13 @@ module "keyvault_secrets" {
     "AZURE-OPENAI-DEPLOYMENT-NAME"      = module.foundry.deployment_name
     "AZURE-OPENAI-EMBEDDING-DEPLOYMENT" = module.foundry.embedding_deployment_name
     "COSMOSDB-AGENTS-ENDPOINT"          = module.cosmosdb_agents.endpoint
-    "COSMOSDB-AGENTS-KEY"               = nonsensitive(module.cosmosdb_agents.primary_key)
     "COSMOSDB-AGENTS-DATABASE"          = module.cosmosdb_agents.database_name
     "COSMOSDB-CRM-ENDPOINT"             = module.cosmosdb_crm.endpoint
-    "COSMOSDB-CRM-KEY"                  = nonsensitive(module.cosmosdb_crm.primary_key)
     "COSMOSDB-CRM-DATABASE"             = module.cosmosdb_crm.database_name
     "STORAGE-IMAGES-ENDPOINT"           = module.storage_images.primary_blob_endpoint
     "STORAGE-IMAGES-ACCOUNT-NAME"       = module.storage_images.name
     "STORAGE-IMAGES-CONTAINER"          = module.storage_images.container_names["images"]
     "SEARCH-ENDPOINT"                   = module.search.endpoint
-    "SEARCH-ADMIN-KEY"                  = nonsensitive(module.search.primary_key)
     "SEARCH-INDEX-NAME"                 = module.knowledge_source.index_name
 
     # Workload identity client IDs (used by Helm at deploy time)

@@ -10,7 +10,7 @@ output "account_name" {
 
 output "endpoint" {
   description = "Azure OpenAI endpoint URL"
-  value       = "https://${azurerm_cognitive_account.this.custom_subdomain_name}.openai.azure.com/"
+  value       = azurerm_cognitive_account.this.endpoint
 }
 
 output "deployment_name" {

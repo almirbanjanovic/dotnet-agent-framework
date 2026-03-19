@@ -21,8 +21,9 @@
 # -----------------------------------------------------------------------------
 
 resource "msgraph_resource" "blueprint" {
-  for_each = var.agents
-  type     = "microsoft.graph.applications@beta"
+  for_each    = var.agents
+  url         = "applications"
+  api_version = "beta"
 
   body = {
     "@odata.type"         = "#Microsoft.Graph.AgentIdentityBlueprint"
@@ -31,6 +32,12 @@ resource "msgraph_resource" "blueprint" {
     "sponsors@odata.bind" = ["https://graph.microsoft.com/v1.0/users/${var.sponsor_object_id}"]
     "owners@odata.bind"   = ["https://graph.microsoft.com/v1.0/users/${var.owner_object_id}"]
   }
+
+  response_export_values = {
+    appId       = "appId"
+    id          = "id"
+    displayName = "displayName"
+  }
 }
 
 # -----------------------------------------------------------------------------
@@ -38,12 +45,18 @@ resource "msgraph_resource" "blueprint" {
 # -----------------------------------------------------------------------------
 
 resource "msgraph_resource" "blueprint_principal" {
-  for_each = var.agents
-  type     = "microsoft.graph.serviceprincipals@beta"
+  for_each    = var.agents
+  url         = "servicePrincipals"
+  api_version = "beta"
 
   body = {
     "@odata.type" = "#Microsoft.Graph.AgentIdentityBlueprintPrincipal"
     appId         = msgraph_resource.blueprint[each.key].output.appId
+  }
+
+  response_export_values = {
+    appId = "appId"
+    id    = "id"
   }
 }
 
@@ -52,8 +65,9 @@ resource "msgraph_resource" "blueprint_principal" {
 # -----------------------------------------------------------------------------
 
 resource "msgraph_resource" "fic" {
-  for_each = var.agents
-  type     = "microsoft.graph.applications/${msgraph_resource.blueprint[each.key].output.id}/federatedIdentityCredentials@beta"
+  for_each    = var.agents
+  url         = "applications/${msgraph_resource.blueprint[each.key].output.id}/federatedIdentityCredentials"
+  api_version = "beta"
 
   body = {
     name      = "aks-${replace(each.key, "_", "-")}"
