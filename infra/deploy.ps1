@@ -135,8 +135,9 @@ function Add-DeployerFirewallRules {
     # Key Vault
     Write-Host "    ⠋ Key Vaults" -ForegroundColor DarkGray -NoNewline
     $kvNames = az keyvault list --resource-group $ResourceGroup --query "[].name" -o tsv 2>$null
-    $kvCount = ($kvNames -split "`n" | Where-Object { $_ }).Count
-    foreach ($kv in ($kvNames -split "`n" | Where-Object { $_ })) {
+    $kvItems = @($kvNames -split "`n" | Where-Object { $_ })
+    $kvCount = $kvItems.Count
+    foreach ($kv in $kvItems) {
         az keyvault network-rule add --name $kv.Trim() --ip-address "$DeployerIp/32" 2>$null | Out-Null
     }
     Write-Host "`r    ✓ Key Vaults ($kvCount)" -ForegroundColor Green
@@ -144,8 +145,9 @@ function Add-DeployerFirewallRules {
     # Storage accounts
     Write-Host "    ⠋ Storage accounts" -ForegroundColor DarkGray -NoNewline
     $stNames = az storage account list --resource-group $ResourceGroup --query "[].name" -o tsv 2>$null
-    $stCount = ($stNames -split "`n" | Where-Object { $_ }).Count
-    foreach ($st in ($stNames -split "`n" | Where-Object { $_ })) {
+    $stItems = @($stNames -split "`n" | Where-Object { $_ })
+    $stCount = $stItems.Count
+    foreach ($st in $stItems) {
         az storage account network-rule add --resource-group $ResourceGroup --account-name $st.Trim() --ip-address $DeployerIp 2>$null | Out-Null
     }
     Write-Host "`r    ✓ Storage accounts ($stCount)" -ForegroundColor Green
@@ -153,8 +155,9 @@ function Add-DeployerFirewallRules {
     # Cosmos DB
     Write-Host "    ⠋ Cosmos DB" -ForegroundColor DarkGray -NoNewline
     $cosmosNames = az cosmosdb list --resource-group $ResourceGroup --query "[].name" -o tsv 2>$null
-    $cosmosCount = ($cosmosNames -split "`n" | Where-Object { $_ }).Count
-    foreach ($c in ($cosmosNames -split "`n" | Where-Object { $_ })) {
+    $cosmosItems = @($cosmosNames -split "`n" | Where-Object { $_ })
+    $cosmosCount = $cosmosItems.Count
+    foreach ($c in $cosmosItems) {
         $c = $c.Trim()
         $existing = az cosmosdb show --name $c --resource-group $ResourceGroup --query "ipRules[].ipAddressOrRange" -o tsv 2>$null
         $alreadyPresent = ($existing -split "`n" | Where-Object { $_.Trim() -eq $DeployerIp })
@@ -169,8 +172,9 @@ function Add-DeployerFirewallRules {
     # Cognitive Services
     Write-Host "    ⠋ Cognitive Services" -ForegroundColor DarkGray -NoNewline
     $cogNames = az cognitiveservices account list --resource-group $ResourceGroup --query "[].name" -o tsv 2>$null
-    $cogCount = ($cogNames -split "`n" | Where-Object { $_ }).Count
-    foreach ($cog in ($cogNames -split "`n" | Where-Object { $_ })) {
+    $cogItems = @($cogNames -split "`n" | Where-Object { $_ })
+    $cogCount = $cogItems.Count
+    foreach ($cog in $cogItems) {
         az cognitiveservices account network-rule add --resource-group $ResourceGroup --name $cog.Trim() --ip-address "$DeployerIp/32" 2>$null | Out-Null
     }
     Write-Host "`r    ✓ Cognitive Services ($cogCount)    " -ForegroundColor Green
@@ -178,8 +182,9 @@ function Add-DeployerFirewallRules {
     # AI Search
     Write-Host "    ⠋ AI Search" -ForegroundColor DarkGray -NoNewline
     $searchNames = az search service list --resource-group $ResourceGroup --query "[].name" -o tsv 2>$null
-    $searchCount = ($searchNames -split "`n" | Where-Object { $_ }).Count
-    foreach ($s in ($searchNames -split "`n" | Where-Object { $_ })) {
+    $searchItems = @($searchNames -split "`n" | Where-Object { $_ })
+    $searchCount = $searchItems.Count
+    foreach ($s in $searchItems) {
         $s = $s.Trim()
         $currentIps = az search service show --name $s --resource-group $ResourceGroup --query "networkRuleSet.ipRules[].value" -o tsv 2>$null
         $alreadyPresent = ($currentIps -split "`n" | Where-Object { $_.Trim() -eq $DeployerIp })
