@@ -772,8 +772,6 @@ Write-PhaseSummary -Number 5 -NextPhase "Phase 6 — Seed CRM data into Cosmos D
 })
 
 # Wait for Cosmos DB RBAC to propagate (new role assignments need time)
-Write-Wait -Seconds 30 -Message "RBAC propagation (Cosmos DB Data Owner)"
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 6 — Seed CRM data
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -785,7 +783,26 @@ $KvName = az keyvault list --resource-group $ResourceGroup --query "[0].name" -o
 if (-not $KvName) { throw "No Key Vault found in $ResourceGroup" }
 $CosmosEndpoint = az keyvault secret show --vault-name $KvName --name "COSMOSDB-CRM-ENDPOINT" --query value -o tsv
 $CosmosDb       = az keyvault secret show --vault-name $KvName --name "COSMOSDB-CRM-DATABASE" --query value -o tsv
+$CosmosAccountName = ($CosmosEndpoint -replace 'https://', '' -replace '\.documents\.azure\.com.*', '')
 Write-Done "Cosmos DB: $CosmosEndpoint ($CosmosDb)"
+
+# Verify deployer has Cosmos DB RBAC before attempting seed
+Write-Step "Verifying Cosmos DB RBAC access..."
+$maxRetries = 12
+$retryDelay = 5
+for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
+    $testResult = az cosmosdb sql database show --account-name $CosmosAccountName --resource-group $ResourceGroup --name $CosmosDb -o tsv 2>$null
+    if ($LASTEXITCODE -eq 0 -and $testResult) {
+        Write-Done "RBAC verified (attempt $attempt)"
+        break
+    }
+    if ($attempt -eq $maxRetries) {
+        Write-Fail "Cosmos DB RBAC not active after $($maxRetries * $retryDelay)s — seed-data will likely fail"
+    } else {
+        Write-Host "`r    Waiting for RBAC... (attempt $attempt/$maxRetries)" -NoNewline -ForegroundColor DarkGray
+        Start-Sleep -Seconds $retryDelay
+    }
+}
 
 Write-Step "Running seed-data (dotnet run -- uses DefaultAzureCredential)"
 $SeedDataDir = Join-Path (Split-Path $ScriptDir) "src" "seed-data"
