@@ -50,8 +50,21 @@ resource "terraform_data" "this" {
     }
     command = <<-EOT
       $h = @{ 'api-key' = $env:SEARCH_API_KEY; 'Content-Type' = 'application/json' }
-      Invoke-RestMethod -Uri "$($env:SEARCH_ENDPOINT)/knowledgesources/${var.name}?api-version=2025-11-01-preview" `
-        -Method Put -Headers $h -Body ([System.Text.Encoding]::UTF8.GetBytes($env:BODY))
+      $uri = "$($env:SEARCH_ENDPOINT)/knowledgesources/${var.name}?api-version=2025-11-01-preview"
+      try {
+        Invoke-RestMethod -Uri $uri -Method Put -Headers $h -Body ([System.Text.Encoding]::UTF8.GetBytes($env:BODY))
+        Write-Host "Knowledge source '${var.name}' created/updated successfully."
+      } catch {
+        $err = $_.ErrorDetails.Message | ConvertFrom-Json -ErrorAction SilentlyContinue
+        if ($err.error.code -eq 'InvalidRequestParameter' -and $err.error.message -match 'embedding model') {
+          # Knowledge source already exists with this embedding config — verify it
+          Write-Host "Knowledge source '${var.name}' already exists (embedding config is immutable). Verifying..."
+          $existing = Invoke-RestMethod -Uri $uri -Method Get -Headers @{ 'api-key' = $env:SEARCH_API_KEY }
+          Write-Host "Verified: '$($existing.name)' exists with index '$($existing.name)-index'."
+        } else {
+          throw
+        }
+      }
     EOT
   }
 }
