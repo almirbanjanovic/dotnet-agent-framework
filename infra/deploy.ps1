@@ -386,6 +386,13 @@ Write-Host ""
 az account clear 2>$null
 az login | Out-Null
 
+# Ensure we're on the correct tenant — if the user has multiple tenants
+# (e.g., corp + personal), az login may land on the wrong one.
+# Read the tenant from the current subscription and export AZURE_TENANT_ID
+# so DefaultAzureCredential in dotnet apps uses the same tenant.
+$env:AZURE_TENANT_ID = az account show --query tenantId -o tsv
+Write-Done "Signed in (tenant: $($env:AZURE_TENANT_ID))"
+
 # Disable Continuous Access Evaluation for Terraform — the Go SDKs acquires
 # their own tokens which get CAE-challenged by aggressive org policies.
 # ARM_DISABLE_CAE / AZURE_DISABLE_CAE → azurerm + azapi providers

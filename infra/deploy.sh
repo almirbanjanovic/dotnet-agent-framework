@@ -230,6 +230,10 @@ echo ""
 az account clear 2>/dev/null
 az login >/dev/null
 
+# Ensure we're on the correct tenant and export for DefaultAzureCredential
+export AZURE_TENANT_ID=$(az account show --query tenantId -o tsv)
+done_ "Signed in (tenant: $AZURE_TENANT_ID)"
+
 # Disable Continuous Access Evaluation for Terraform — the Go SDKs acquires
 # their own tokens which get CAE-challenged by aggressive org policies.
 # ARM_DISABLE_CAE / AZURE_DISABLE_CAE → azurerm + azapi providers
