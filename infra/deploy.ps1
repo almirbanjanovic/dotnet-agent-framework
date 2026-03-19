@@ -276,8 +276,10 @@ if ($SpClientId) {
     }
 
     # Create a temporary client secret (valid 1 hour)
-    $SecretJson = az ad app credential reset --id "$SpClientId" --years 0 --end-date ((Get-Date).AddHours(1).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")) --query password -o tsv 2>$null
-    if ($SecretJson) {
+    $EndDate = (Get-Date).AddHours(1).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+    $SecretOutput = az ad app credential reset --id "$SpClientId" --years 0 --end-date $EndDate -o json 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        $SecretJson = ($SecretOutput | ConvertFrom-Json).password
         $env:ARM_CLIENT_ID = $SpClientId
         $env:ARM_CLIENT_SECRET = $SecretJson
         $env:ARM_TENANT_ID = $TenantId
@@ -285,6 +287,7 @@ if ($SpClientId) {
         Write-Done "Temporary client secret created for msgraph provider"
     } else {
         Write-Host "    ⚠ Could not create client secret — Agent Identity may fail" -ForegroundColor Yellow
+        Write-Host "    $SecretOutput" -ForegroundColor DarkGray
     }
 } else {
     Write-Host "    ⚠ SP '$SpAppName' not found — run init.ps1 first for Agent Identity support" -ForegroundColor Yellow
