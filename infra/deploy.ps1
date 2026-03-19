@@ -351,17 +351,33 @@ if (-not $SpClientId) {
     }
 }
 
-# ── Step 2: Grant Graph API permission ───────────────────────────────────────
+# ── Step 2: Grant Graph API permissions for Agent Identity ───────────────────
 if ($SpClientId) {
-    Write-Step "Ensuring Application.ReadWrite.All (Graph API) permission..."
+    Write-Step "Ensuring Agent Identity permissions (Graph API)..."
 
-    $AppRwAllId = "1bfefb4e-e0b5-418b-a88f-73c46d2cc8e9"
-    $existingGrant = az ad app permission list --id "$SpClientId" --query "[?resourceAppId=='00000003-0000-0000-c000-000000000000'].resourceAccess[?id=='$AppRwAllId'].id" -o tsv 2>$null
-    if (-not $existingGrant) {
-        az ad app permission add --id "$SpClientId" --api "00000003-0000-0000-c000-000000000000" --api-permissions "${AppRwAllId}=Role" 2>$null | Out-Null
-        Write-Done "Permission added"
-    } else {
-        Write-Done "Permission already exists"
+    # Permissions needed for Agent Identity Blueprint operations
+    $requiredPerms = @{
+        "Application.ReadWrite.All"                     = "1bfefb4e-e0b5-418b-a88f-73c46d2cc8e9"
+        "AgentIdentityBlueprint.Create"                 = "ea4b2453-ad2d-4d94-9155-10d5d9493ce9"
+        "AgentIdentityBlueprint.ReadWrite.All"          = "7fddd33b-d884-4ec0-8696-72cff90ff825"
+        "AgentIdentityBlueprint.AddRemoveCreds.All"     = "0510736e-bdfb-4b37-9a1f-89b4a074763a"
+        "AgentIdentityBlueprintPrincipal.Create"        = "8959696d-d07e-4916-9b1e-3ba9ce459161"
+        "AgentIdentityBlueprintPrincipal.ReadWrite.All" = "3bc933bc-8b4d-4cb6-ac49-b73774299250"
+    }
+
+    $newPermsAdded = $false
+    $existingPerms = az ad app permission list --id "$SpClientId" --query "[?resourceAppId=='00000003-0000-0000-c000-000000000000'].resourceAccess[].id" -o tsv 2>$null
+
+    foreach ($perm in $requiredPerms.GetEnumerator()) {
+        $alreadyGranted = $existingPerms -match $perm.Value
+        if (-not $alreadyGranted) {
+            az ad app permission add --id "$SpClientId" --api "00000003-0000-0000-c000-000000000000" --api-permissions "$($perm.Value)=Role" 2>$null | Out-Null
+            Write-Done "$($perm.Key) added"
+            $newPermsAdded = $true
+        }
+    }
+    if (-not $newPermsAdded) {
+        Write-Done "All permissions already exist"
     }
 
     Write-Step "Applying admin consent..."
@@ -369,8 +385,8 @@ if ($SpClientId) {
     Write-Done "Admin consent applied"
 
     # Graph API needs time to propagate permissions.
-    # First grant: 60s. Subsequent runs: 10s (consent exists, just needs token refresh).
-    $waitSecs = if (-not $existingGrant) { 60 } else { 10 }
+    # First grant: 60s. Subsequent runs: 10s.
+    $waitSecs = if ($newPermsAdded) { 60 } else { 10 }
     Write-Wait -Seconds $waitSecs -Message "Consent propagation"
 
     # ── Step 3: Create temporary client secret ───────────────────────────────

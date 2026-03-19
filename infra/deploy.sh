@@ -213,19 +213,35 @@ fi
 
 # ── Step 2: Grant Graph API permission ───────────────────────────────────────
 if [[ -n "$SP_CLIENT_ID" ]]; then
-    step "Ensuring Application.ReadWrite.All (Graph API) permission..."
+    step "Ensuring Agent Identity permissions (Graph API)..."
 
-    APP_RW_ALL_ID="1bfefb4e-e0b5-418b-a88f-73c46d2cc8e9"
-    EXISTING_GRANT=$(az ad app permission list --id "$SP_CLIENT_ID" \
-        --query "[?resourceAppId=='00000003-0000-0000-c000-000000000000'].resourceAccess[?id=='$APP_RW_ALL_ID'].id" \
+    # Permissions needed for Agent Identity Blueprint operations
+    declare -A REQUIRED_PERMS=(
+        ["Application.ReadWrite.All"]="1bfefb4e-e0b5-418b-a88f-73c46d2cc8e9"
+        ["AgentIdentityBlueprint.Create"]="ea4b2453-ad2d-4d94-9155-10d5d9493ce9"
+        ["AgentIdentityBlueprint.ReadWrite.All"]="7fddd33b-d884-4ec0-8696-72cff90ff825"
+        ["AgentIdentityBlueprint.AddRemoveCreds.All"]="0510736e-bdfb-4b37-9a1f-89b4a074763a"
+        ["AgentIdentityBlueprintPrincipal.Create"]="8959696d-d07e-4916-9b1e-3ba9ce459161"
+        ["AgentIdentityBlueprintPrincipal.ReadWrite.All"]="3bc933bc-8b4d-4cb6-ac49-b73774299250"
+    )
+
+    NEW_PERMS_ADDED=false
+    EXISTING_PERMS=$(az ad app permission list --id "$SP_CLIENT_ID" \
+        --query "[?resourceAppId=='00000003-0000-0000-c000-000000000000'].resourceAccess[].id" \
         -o tsv 2>/dev/null || true)
-    if [[ -z "$EXISTING_GRANT" ]]; then
-        az ad app permission add --id "$SP_CLIENT_ID" \
-            --api "00000003-0000-0000-c000-000000000000" \
-            --api-permissions "${APP_RW_ALL_ID}=Role" 2>/dev/null || true
-        done_ "Permission added"
-    else
-        done_ "Permission already exists"
+
+    for PERM_NAME in "${!REQUIRED_PERMS[@]}"; do
+        PERM_ID="${REQUIRED_PERMS[$PERM_NAME]}"
+        if ! echo "$EXISTING_PERMS" | grep -qF "$PERM_ID"; then
+            az ad app permission add --id "$SP_CLIENT_ID" \
+                --api "00000003-0000-0000-c000-000000000000" \
+                --api-permissions "${PERM_ID}=Role" 2>/dev/null || true
+            done_ "$PERM_NAME added"
+            NEW_PERMS_ADDED=true
+        fi
+    done
+    if ! $NEW_PERMS_ADDED; then
+        done_ "All permissions already exist"
     fi
 
     step "Applying admin consent..."
@@ -233,8 +249,8 @@ if [[ -n "$SP_CLIENT_ID" ]]; then
     done_ "Admin consent applied"
 
     # Graph API needs time to propagate permissions.
-    # First grant: 60s. Subsequent runs: 10s (consent exists, just needs token refresh).
-    if [[ -z "$EXISTING_GRANT" ]]; then
+    # First grant: 60s. Subsequent runs: 10s.
+    if $NEW_PERMS_ADDED; then
         wait_progress 60 "Consent propagation"
     else
         wait_progress 10 "Consent propagation"
