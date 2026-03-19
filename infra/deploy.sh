@@ -214,8 +214,8 @@ cleanup_deployer_ip() {
       az search service update --name "$s" --resource-group "$RG" --ip-rules "$RULES" 2>/dev/null || true
     done
 
-    echo -e "  ${Y}━━ Locking down state storage ━━${W}"
-    az storage account update --name "$STORAGE_ACCOUNT" --resource-group "$RESOURCE_GROUP" --public-network-access Disabled >/dev/null 2>&1 || true
+    echo -e "  ${Y}━━ Removing deployer IP from state storage ━━${W}"
+    az storage account network-rule remove --account-name "$STORAGE_ACCOUNT" --resource-group "$RESOURCE_GROUP" --ip-address "$DEPLOYER_IP" >/dev/null 2>&1 || true
     echo -e "  ${G}━━ Cleanup complete ━━${W}"
 }
 trap cleanup_deployer_ip EXIT
@@ -261,21 +261,21 @@ fi
 
 phase 1 "Unlock state storage"
 
-step "Enabling public access on $STORAGE_ACCOUNT"
+step "Adding deployer IP to $STORAGE_ACCOUNT firewall"
 
-az storage account update \
-    --name "$STORAGE_ACCOUNT" \
+az storage account network-rule add \
+    --account-name "$STORAGE_ACCOUNT" \
     --resource-group "$RESOURCE_GROUP" \
-    --public-network-access Enabled >/dev/null
+    --ip-address "$DEPLOYER_IP" >/dev/null
 
-echo -e "    ${D}Waiting 30s for access change to propagate...${W}"
+echo -e "    ${D}Waiting 30s for firewall change to propagate...${W}"
 sleep 30
-done_ "Public access enabled on $STORAGE_ACCOUNT"
+done_ "Deployer IP added to $STORAGE_ACCOUNT"
 
 phase_summary 1 \
     "Phase 2 — terraform init (configure backend)" \
     "Storage account" "$STORAGE_ACCOUNT" \
-    "Public access"   "Enabled"
+    "Deployer IP"     "$DEPLOYER_IP"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 2 — terraform init

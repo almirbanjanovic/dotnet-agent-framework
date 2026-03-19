@@ -261,20 +261,20 @@ if ($softDeletedKv) {
 
 Write-Phase -Number 1 -Title "Unlock state storage"
 
-Write-Step "Enabling public access on $StorageAccount"
+Write-Step "Adding deployer IP to $StorageAccount firewall"
 
-az storage account update `
-    --name $StorageAccount `
+az storage account network-rule add `
+    --account-name $StorageAccount `
     --resource-group $ResourceGroup `
-    --public-network-access Enabled | Out-Null
+    --ip-address $DeployerIp 2>$null | Out-Null
 
-Write-Host "    Waiting 30s for access change to propagate..." -ForegroundColor DarkGray
+Write-Host "    Waiting 30s for firewall change to propagate..." -ForegroundColor DarkGray
 Start-Sleep -Seconds 30
-Write-Done "Public access enabled on $StorageAccount"
+Write-Done "Deployer IP added to $StorageAccount"
 
 Write-PhaseSummary -Number 1 -NextPhase "Phase 2 — terraform init (configure backend)" -Items ([ordered]@{
     "Storage account" = $StorageAccount
-    "Public access"   = "Enabled"
+    "Deployer IP"     = $DeployerIp
 })
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -606,7 +606,7 @@ Write-Host ""
     # ═══════════════════════════════════════════════════════════════════════════
     Remove-DeployerFirewallRules -ResourceGroup $ResourceGroup -DeployerIp $DeployerIp
 
-    Write-Step "Disabling public access on $StorageAccount"
-    az storage account update --name $StorageAccount --resource-group $ResourceGroup --public-network-access Disabled 2>$null | Out-Null
-    Write-Done "Public access disabled on $StorageAccount"
+    Write-Step "Removing deployer IP from $StorageAccount firewall"
+    az storage account network-rule remove --account-name $StorageAccount --resource-group $ResourceGroup --ip-address $DeployerIp 2>$null | Out-Null
+    Write-Done "Deployer IP removed from $StorageAccount"
 }

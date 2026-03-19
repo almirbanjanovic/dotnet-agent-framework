@@ -99,15 +99,14 @@ jobs:
       run: terraform fmt -check
       continue-on-error: true  
     
-    - name: Enable public access for backend storage account
+    - name: Add deployer IP to backend storage firewall
       run: |
-        az storage account update \
-        --name "${{ vars.STORAGE_ACCOUNT }}" \
-        --resource-group "${{ vars.RESOURCE_GROUP }}" \
-        --public-network-access Enabled
+        az storage account network-rule add \
+          --account-name "${{ vars.STORAGE_ACCOUNT }}" \
+          --resource-group "${{ vars.RESOURCE_GROUP }}" \
+          --ip-address "${{ steps.deployer.outputs.ip }}"
 
-        # Wait for 30 seconds
-        echo "Enabling public network access and waiting for 30 seconds."
+        echo "Waiting 30 seconds for firewall change to propagate."
         sleep 30
 
 

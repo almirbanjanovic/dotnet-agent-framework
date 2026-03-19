@@ -83,9 +83,9 @@ jobs:
 
           echo "Deployer IP removed from all firewalls"
 
-      - name: Disable public access for backend storage account
+      - name: Remove deployer IP from backend storage firewall
         run: |
-          az storage account update \
-            --name "${{ vars.STORAGE_ACCOUNT }}" \
+          az storage account network-rule remove \
+            --account-name "${{ vars.STORAGE_ACCOUNT }}" \
             --resource-group "${{ vars.RESOURCE_GROUP }}" \
-            --public-network-access Disabled
+            --ip-address "${{ inputs.deployer_ip }}" 2>/dev/null || true
