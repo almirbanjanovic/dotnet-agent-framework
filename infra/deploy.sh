@@ -216,9 +216,16 @@ if [[ -n "$SP_CLIENT_ID" ]]; then
     step "Creating temporary client secret (expires in 1 hour)..."
 
     END_DATE=$(date -u -d "+1 hour" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v+1H '+%Y-%m-%dT%H:%M:%SZ')
-    SP_TEMP_SECRET=$(az ad app credential reset --id "$SP_CLIENT_ID" --years 0 \
-        --end-date "$END_DATE" --query password -o tsv 2>/dev/null || true)
-    if [[ -n "$SP_TEMP_SECRET" ]]; then
+    CRED_NAME="terraform-deploy-$(date '+%Y%m%d-%H%M%S')"
+    CRED_BODY=$(cat <<ENDJSON
+{"passwordCredential":{"displayName":"$CRED_NAME","endDateTime":"$END_DATE"}}
+ENDJSON
+)
+    CRED_RESULT=$(az rest --method POST \
+        --url "https://graph.microsoft.com/v1.0/applications(appId='$SP_CLIENT_ID')/addPassword" \
+        --body "$CRED_BODY" -o json 2>/dev/null || true)
+    if [[ -n "$CRED_RESULT" ]]; then
+        SP_TEMP_SECRET=$(echo "$CRED_RESULT" | jq -r '.secretText')
         export TF_VAR_msgraph_client_id="$SP_CLIENT_ID"
         export TF_VAR_msgraph_client_secret="$SP_TEMP_SECRET"
         export TF_VAR_msgraph_tenant_id="$TENANT_ID"
@@ -406,9 +413,13 @@ cleanup_deployer_ip() {
     # Remove the temporary client secret created for the msgraph provider
     if [[ -n "$SP_CLIENT_ID" && -n "$SP_TEMP_SECRET" ]]; then
         echo -e "  ${D}Cleaning up temporary client secret...${W}"
-        CLEANUP_END=$(date -u -d "+1 minute" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v+1M '+%Y-%m-%dT%H:%M:%SZ')
-        az ad app credential reset --id "$SP_CLIENT_ID" --years 0 --end-date "$CLEANUP_END" 2>/dev/null || true
+        # List and remove all credentials with our naming pattern
+        for KEY_ID in $(az ad app credential list --id "$SP_CLIENT_ID" \
+            --query "[?starts_with(displayName, 'terraform-deploy-')].keyId" -o tsv 2>/dev/null); do
+            az ad app credential delete --id "$SP_CLIENT_ID" --key-id "$KEY_ID" 2>/dev/null || true
+        done
         unset TF_VAR_msgraph_client_secret
+        echo -e "  ${D}✓ Temporary secrets removed${W}"
     fi
 }
 trap cleanup_deployer_ip EXIT

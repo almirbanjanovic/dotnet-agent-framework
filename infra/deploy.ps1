@@ -329,10 +329,17 @@ if ($SpClientId) {
     Write-Step "Creating temporary client secret (expires in 1 hour)..."
 
     $EndDate = (Get-Date).AddHours(1).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-    $SecretJson = az ad app credential reset --id "$SpClientId" --years 0 --end-date $EndDate --query password -o tsv 2>$null
-    if ($LASTEXITCODE -eq 0 -and $SecretJson) {
+    $CredBody = @{
+        passwordCredential = @{
+            displayName = "terraform-deploy-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+            endDateTime = $EndDate
+        }
+    } | ConvertTo-Json -Depth 3
+    $CredResult = az rest --method POST --url "https://graph.microsoft.com/v1.0/applications(appId='$SpClientId')/addPassword" --body $CredBody -o json 2>$null
+    if ($LASTEXITCODE -eq 0 -and $CredResult) {
+        $SecretValue = ($CredResult | ConvertFrom-Json).secretText
         $env:TF_VAR_msgraph_client_id = $SpClientId
-        $env:TF_VAR_msgraph_client_secret = $SecretJson
+        $env:TF_VAR_msgraph_client_secret = $SecretValue
         $env:TF_VAR_msgraph_tenant_id = $TenantId
         Write-Done "Temporary secret created (expires: $EndDate)"
 
@@ -797,7 +804,12 @@ Write-Host ""
     # Remove the temporary client secret created for the msgraph provider
     if ($SpClientId -and $env:TF_VAR_msgraph_client_secret) {
         Write-Host "  Cleaning up temporary client secret..." -ForegroundColor DarkGray
-        az ad app credential reset --id "$SpClientId" --years 0 --end-date ((Get-Date).AddMinutes(1).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")) 2>$null | Out-Null
+        # List and remove all credentials with our naming pattern
+        $creds = az ad app credential list --id "$SpClientId" --query "[?starts_with(displayName, 'terraform-deploy-')].keyId" -o tsv 2>$null
+        foreach ($keyId in ($creds -split "`n" | Where-Object { $_ })) {
+            az ad app credential delete --id "$SpClientId" --key-id $keyId.Trim() 2>$null | Out-Null
+        }
         $env:TF_VAR_msgraph_client_secret = ""
+        Write-Host "  ✓ Temporary secrets removed" -ForegroundColor DarkGray
     }
 }
