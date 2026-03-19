@@ -127,45 +127,74 @@ export ARM_DISABLE_CAE=true
 export AZURE_DISABLE_CAE=true
 export HAMILTON_DISABLE_CAE=true
 
-# ── Set up client credentials for msgraph provider ───────────────────────────
-# The Entra Agent ID API rejects delegated tokens containing Directory.AccessAsUser.All,
-# which is baked into the Azure CLI's first-party app and cannot be removed.
-# Solution: use a service principal with Application.ReadWrite.All (app permission)
-# and a temporary client secret. Works with both GitHub Actions SP (from init) or
-# a dedicated terraform-msgraph SP (created automatically for local-only mode).
+# ═══════════════════════════════════════════════════════════════════════════════
+# Agent Identity — Service Principal Setup
+#
+# WHY: The Entra Agent ID API requires app-only tokens (client credentials).
+#      Azure CLI's delegated tokens always include Directory.AccessAsUser.All,
+#      which the Agent ID API explicitly blocks. This section creates a
+#      service principal that Terraform's msgraph provider uses instead.
+#
+#      ┌──────────────┐     delegated token      ┌─────────────────┐
+#      │   Azure CLI  │ ──────────────────────── │  Agent ID API   │
+#      │  (az login)  │  includes Directory.*    │   ❌ REJECTED   │
+#      └──────────────┘                          └─────────────────┘
+#
+#      ┌──────────────┐     app-only token       ┌─────────────────┐
+#      │  Service     │ ──────────────────────── │  Agent ID API   │
+#      │  Principal   │  Application.ReadWrite.  │   ✅ ACCEPTED   │
+#      └──────────────┘  All (no Directory.*)    └─────────────────┘
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+echo ""
+echo -e "  ${D}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${W}"
+echo -e "  \033[35mAgent Identity — Service Principal Setup${W}"
+echo -e "  ${D}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${W}"
+echo ""
+echo -e "    ${D}The Entra Agent ID API requires app-only tokens.${W}"
+echo -e "    ${D}Azure CLI tokens are rejected (Directory.AccessAsUser.All).${W}"
+echo -e "    ${D}Setting up a service principal for Terraform's msgraph provider...${W}"
+echo ""
+
 TENANT_ID=$(az account show --query tenantId -o tsv)
 SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+
+# ── Step 1: Find or create service principal ─────────────────────────────────
 REPO_NAME=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null || echo "dotnet-agent-framework")
 SP_TEMP_SECRET=""
 
-# Try GitHub Actions SP first, then dedicated SP
+step "Looking for existing service principal..."
+
 SP_CLIENT_ID=""
 SP_APP_NAME=""
 for name in "github-actions-${REPO_NAME}" "terraform-msgraph-${REPO_NAME}"; do
     SP_CLIENT_ID=$(az ad app list --display-name "$name" --query "[0].appId" -o tsv 2>/dev/null || true)
     if [[ -n "$SP_CLIENT_ID" ]]; then
         SP_APP_NAME="$name"
+        done_ "Found: $SP_APP_NAME ($SP_CLIENT_ID)"
         break
     fi
 done
 
-# If no SP exists, create a dedicated one for msgraph authentication
 if [[ -z "$SP_CLIENT_ID" ]]; then
     SP_APP_NAME="terraform-msgraph-${REPO_NAME}"
-    step "Creating app registration '$SP_APP_NAME' for Agent Identity"
+    echo -e "    ${D}No existing SP found. Creating '$SP_APP_NAME'...${W}"
     SP_CLIENT_ID=$(az ad app create --display-name "$SP_APP_NAME" --query appId -o tsv 2>/dev/null || true)
     if [[ -n "$SP_CLIENT_ID" ]]; then
         az ad sp create --id "$SP_CLIENT_ID" 2>/dev/null || true
-        done_ "Created $SP_APP_NAME ($SP_CLIENT_ID)"
+        done_ "Created: $SP_APP_NAME ($SP_CLIENT_ID)"
     else
-        echo -e "    ${Y}⚠ Could not create app registration — Agent Identity will fail${W}"
+        echo -e "    ${R}✗ Could not create app registration${W}"
+        echo -e "      ${R}Agent Identity blueprints will not be created.${W}"
+        echo -e "      ${D}Other resources will deploy normally.${W}"
     fi
 fi
 
+# ── Step 2: Grant Graph API permission ───────────────────────────────────────
 if [[ -n "$SP_CLIENT_ID" ]]; then
-    step "Configuring client credentials for Agent Identity (msgraph provider)"
+    step "Ensuring Application.ReadWrite.All (Graph API) permission..."
 
-    # Grant Application.ReadWrite.All app permission if not already granted
     APP_RW_ALL_ID="1bfefb4e-e0b5-418b-a88f-73c46d2cc8e9"
     EXISTING_GRANT=$(az ad app permission list --id "$SP_CLIENT_ID" \
         --query "[?resourceAppId=='00000003-0000-0000-c000-000000000000'].resourceAccess[?id=='$APP_RW_ALL_ID'].id" \
@@ -174,13 +203,18 @@ if [[ -n "$SP_CLIENT_ID" ]]; then
         az ad app permission add --id "$SP_CLIENT_ID" \
             --api "00000003-0000-0000-c000-000000000000" \
             --api-permissions "${APP_RW_ALL_ID}=Role" 2>/dev/null || true
-        az ad app permission admin-consent --id "$SP_CLIENT_ID" 2>/dev/null || true
-        done_ "Granted Application.ReadWrite.All to $SP_APP_NAME"
+        done_ "Permission added"
     else
-        az ad app permission admin-consent --id "$SP_CLIENT_ID" 2>/dev/null || true
+        done_ "Permission already exists"
     fi
 
-    # Create a temporary client secret (valid 1 hour)
+    step "Applying admin consent..."
+    az ad app permission admin-consent --id "$SP_CLIENT_ID" 2>/dev/null || true
+    done_ "Admin consent applied"
+
+    # ── Step 3: Create temporary client secret ───────────────────────────────
+    step "Creating temporary client secret (expires in 1 hour)..."
+
     END_DATE=$(date -u -d "+1 hour" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v+1H '+%Y-%m-%dT%H:%M:%SZ')
     SP_TEMP_SECRET=$(az ad app credential reset --id "$SP_CLIENT_ID" --years 0 \
         --end-date "$END_DATE" --query password -o tsv 2>/dev/null || true)
@@ -188,9 +222,25 @@ if [[ -n "$SP_CLIENT_ID" ]]; then
         export TF_VAR_msgraph_client_id="$SP_CLIENT_ID"
         export TF_VAR_msgraph_client_secret="$SP_TEMP_SECRET"
         export TF_VAR_msgraph_tenant_id="$TENANT_ID"
-        done_ "Temporary client secret created ($SP_APP_NAME)"
+        done_ "Temporary secret created (expires: $END_DATE)"
+
+        echo ""
+        echo -e "    ${G}┌─────────────────────────────────────────────────────┐${W}"
+        echo -e "    ${G}│  Agent Identity ready                               │${W}"
+        echo -e "    ${G}│                                                     │${W}"
+        echo -e "    ${G}│${W}  SP:      $SP_APP_NAME"
+        echo -e "    ${G}│${W}  Tenant:  $TENANT_ID"
+        echo -e "    ${G}│${W}  Expires: $END_DATE"
+        echo -e "    ${G}│                                                     │${W}"
+        echo -e "    ${G}│${W}  Terraform's msgraph provider will use this SP to"
+        echo -e "    ${G}│${W}  create Agent Identity Blueprints in Entra."
+        echo -e "    ${G}│${W}  Secret is cleaned up when deploy finishes."
+        echo -e "    ${G}└─────────────────────────────────────────────────────┘${W}"
+        echo ""
     else
-        echo -e "    ${Y}⚠ Could not create client secret — Agent Identity may fail${W}"
+        echo -e "    ${R}✗ Could not create client secret${W}"
+        echo -e "      ${R}Agent Identity blueprints will not be created.${W}"
+        echo -e "      ${D}Other resources will deploy normally.${W}"
     fi
 fi
 

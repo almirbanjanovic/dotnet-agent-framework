@@ -244,65 +244,115 @@ $env:ARM_DISABLE_CAE = "true"
 $env:AZURE_DISABLE_CAE = "true"
 $env:HAMILTON_DISABLE_CAE = "true"
 
-# ── Set up client credentials for msgraph provider ───────────────────────────
-# The Entra Agent ID API rejects delegated tokens containing Directory.AccessAsUser.All,
-# which is baked into the Azure CLI's first-party app and cannot be removed.
-# Solution: use a service principal with Application.ReadWrite.All (app permission)
-# and a temporary client secret. Works with both GitHub Actions SP (from init) or
-# a dedicated terraform-msgraph SP (created automatically for local-only mode).
+# ═══════════════════════════════════════════════════════════════════════════════
+# Agent Identity — Service Principal Setup
+#
+# WHY: The Entra Agent ID API requires app-only tokens (client credentials).
+#      Azure CLI's delegated tokens always include Directory.AccessAsUser.All,
+#      which the Agent ID API explicitly blocks. This section creates a
+#      service principal that Terraform's msgraph provider uses instead.
+#
+#      ┌──────────────┐     delegated token      ┌─────────────────┐
+#      │   Azure CLI  │ ──────────────────────── │  Agent ID API   │
+#      │  (az login)  │  includes Directory.*    │   ❌ REJECTED   │
+#      └──────────────┘                          └─────────────────┘
+#
+#      ┌──────────────┐     app-only token       ┌─────────────────┐
+#      │  Service     │ ──────────────────────── │  Agent ID API   │
+#      │  Principal   │  Application.ReadWrite.  │   ✅ ACCEPTED   │
+#      └──────────────┘  All (no Directory.*)    └─────────────────┘
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+Write-Host ""
+Write-Host "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+Write-Host "  Agent Identity — Service Principal Setup" -ForegroundColor Magenta
+Write-Host "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+Write-Host ""
+Write-Host "    The Entra Agent ID API requires app-only tokens." -ForegroundColor DarkGray
+Write-Host "    Azure CLI tokens are rejected (Directory.AccessAsUser.All)." -ForegroundColor DarkGray
+Write-Host "    Setting up a service principal for Terraform's msgraph provider..." -ForegroundColor DarkGray
+Write-Host ""
+
 $TenantId = az account show --query tenantId -o tsv
 $SubscriptionId = az account show --query id -o tsv
 
-# Try GitHub Actions SP first, then dedicated SP, then create one
+# ── Step 1: Find or create service principal ─────────────────────────────────
 $RepoName = (Split-Path -Leaf (git rev-parse --show-toplevel 2>$null)) 2>$null
 if (-not $RepoName) { $RepoName = "dotnet-agent-framework" }
 
+Write-Step "Looking for existing service principal..."
+
 $SpClientId = $null
+$SpAppName = $null
 foreach ($name in @("github-actions-$RepoName", "terraform-msgraph-$RepoName")) {
     $SpClientId = az ad app list --display-name $name --query "[0].appId" -o tsv 2>$null
     if ($SpClientId) {
         $SpAppName = $name
+        Write-Done "Found: $SpAppName ($SpClientId)"
         break
     }
 }
 
-# If no SP exists, create a dedicated one for msgraph authentication
 if (-not $SpClientId) {
     $SpAppName = "terraform-msgraph-$RepoName"
-    Write-Step "Creating app registration '$SpAppName' for Agent Identity"
+    Write-Host "    No existing SP found. Creating '$SpAppName'..." -ForegroundColor DarkGray
     $SpClientId = az ad app create --display-name "$SpAppName" --query appId -o tsv 2>$null
     if ($SpClientId) {
         az ad sp create --id "$SpClientId" 2>$null | Out-Null
-        Write-Done "Created $SpAppName ($SpClientId)"
+        Write-Done "Created: $SpAppName ($SpClientId)"
     } else {
-        Write-Host "    ⚠ Could not create app registration — Agent Identity will fail" -ForegroundColor Yellow
+        Write-Host "    ✗ Could not create app registration" -ForegroundColor Red
+        Write-Host "      Agent Identity blueprints will not be created." -ForegroundColor Red
+        Write-Host "      Other resources will deploy normally." -ForegroundColor DarkGray
     }
 }
 
+# ── Step 2: Grant Graph API permission ───────────────────────────────────────
 if ($SpClientId) {
-    Write-Step "Configuring client credentials for Agent Identity (msgraph provider)"
+    Write-Step "Ensuring Application.ReadWrite.All (Graph API) permission..."
 
-    # Grant Application.ReadWrite.All app permission if not already granted
-    $AppRwAllId = "1bfefb4e-e0b5-418b-a88f-73c46d2cc8e9" # Application.ReadWrite.All app role ID
+    $AppRwAllId = "1bfefb4e-e0b5-418b-a88f-73c46d2cc8e9"
     $existingGrant = az ad app permission list --id "$SpClientId" --query "[?resourceAppId=='00000003-0000-0000-c000-000000000000'].resourceAccess[?id=='$AppRwAllId'].id" -o tsv 2>$null
     if (-not $existingGrant) {
         az ad app permission add --id "$SpClientId" --api "00000003-0000-0000-c000-000000000000" --api-permissions "${AppRwAllId}=Role" 2>$null | Out-Null
-        az ad app permission admin-consent --id "$SpClientId" 2>$null | Out-Null
-        Write-Done "Granted Application.ReadWrite.All to $SpAppName"
+        Write-Done "Permission added"
     } else {
-        az ad app permission admin-consent --id "$SpClientId" 2>$null | Out-Null
+        Write-Done "Permission already exists"
     }
 
-    # Create a temporary client secret (valid 1 hour)
+    Write-Step "Applying admin consent..."
+    az ad app permission admin-consent --id "$SpClientId" 2>$null | Out-Null
+    Write-Done "Admin consent applied"
+
+    # ── Step 3: Create temporary client secret ───────────────────────────────
+    Write-Step "Creating temporary client secret (expires in 1 hour)..."
+
     $EndDate = (Get-Date).AddHours(1).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
     $SecretJson = az ad app credential reset --id "$SpClientId" --years 0 --end-date $EndDate --query password -o tsv 2>$null
     if ($LASTEXITCODE -eq 0 -and $SecretJson) {
         $env:TF_VAR_msgraph_client_id = $SpClientId
         $env:TF_VAR_msgraph_client_secret = $SecretJson
         $env:TF_VAR_msgraph_tenant_id = $TenantId
-        Write-Done "Temporary client secret created ($SpAppName)"
+        Write-Done "Temporary secret created (expires: $EndDate)"
+
+        Write-Host ""
+        Write-Host "    ┌─────────────────────────────────────────────────────┐" -ForegroundColor Green
+        Write-Host "    │  Agent Identity ready                               │" -ForegroundColor Green
+        Write-Host "    │                                                     │" -ForegroundColor Green
+        Write-Host "    │  SP:      $SpAppName" -ForegroundColor Green
+        Write-Host "    │  Tenant:  $TenantId" -ForegroundColor Green
+        Write-Host "    │  Expires: $EndDate" -ForegroundColor Green
+        Write-Host "    │                                                     │" -ForegroundColor Green
+        Write-Host "    │  Terraform's msgraph provider will use this SP to   │" -ForegroundColor Green
+        Write-Host "    │  create Agent Identity Blueprints in Entra.         │" -ForegroundColor Green
+        Write-Host "    │  Secret is cleaned up when deploy finishes.         │" -ForegroundColor Green
+        Write-Host "    └─────────────────────────────────────────────────────┘" -ForegroundColor Green
+        Write-Host ""
     } else {
-        Write-Host "    ⚠ Could not create client secret — Agent Identity may fail" -ForegroundColor Yellow
+        Write-Host "    ✗ Could not create client secret" -ForegroundColor Red
+        Write-Host "      Agent Identity blueprints will not be created." -ForegroundColor Red
+        Write-Host "      Other resources will deploy normally." -ForegroundColor DarkGray
     }
 }
 
