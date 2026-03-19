@@ -247,16 +247,37 @@ $env:HAMILTON_DISABLE_CAE = "true"
 # ── Set up client credentials for msgraph provider ───────────────────────────
 # The Entra Agent ID API rejects delegated tokens containing Directory.AccessAsUser.All,
 # which is baked into the Azure CLI's first-party app and cannot be removed.
-# Solution: create a temporary client secret on the GitHub Actions SP, grant it
-# Application.ReadWrite.All (app permission), and export as env vars so the
-# msgraph provider uses client credentials (app-only token) instead.
+# Solution: use a service principal with Application.ReadWrite.All (app permission)
+# and a temporary client secret. Works with both GitHub Actions SP (from init) or
+# a dedicated terraform-msgraph SP (created automatically for local-only mode).
 $TenantId = az account show --query tenantId -o tsv
 $SubscriptionId = az account show --query id -o tsv
-$BaseName = Read-HclValue -FilePath "$TerraformDir\$($TfVarsFiles[0].BaseName).tfvars" -Key "base_name"
+
+# Try GitHub Actions SP first, then dedicated SP, then create one
 $RepoName = (Split-Path -Leaf (git rev-parse --show-toplevel 2>$null)) 2>$null
 if (-not $RepoName) { $RepoName = "dotnet-agent-framework" }
-$SpAppName = "github-actions-$RepoName"
-$SpClientId = az ad app list --display-name "$SpAppName" --query "[0].appId" -o tsv 2>$null
+
+$SpClientId = $null
+foreach ($name in @("github-actions-$RepoName", "terraform-msgraph-$RepoName")) {
+    $SpClientId = az ad app list --display-name $name --query "[0].appId" -o tsv 2>$null
+    if ($SpClientId) {
+        $SpAppName = $name
+        break
+    }
+}
+
+# If no SP exists, create a dedicated one for msgraph authentication
+if (-not $SpClientId) {
+    $SpAppName = "terraform-msgraph-$RepoName"
+    Write-Step "Creating app registration '$SpAppName' for Agent Identity"
+    $SpClientId = az ad app create --display-name "$SpAppName" --query appId -o tsv 2>$null
+    if ($SpClientId) {
+        az ad sp create --id "$SpClientId" 2>$null | Out-Null
+        Write-Done "Created $SpAppName ($SpClientId)"
+    } else {
+        Write-Host "    ⚠ Could not create app registration — Agent Identity will fail" -ForegroundColor Yellow
+    }
+}
 
 if ($SpClientId) {
     Write-Step "Configuring client credentials for Agent Identity (msgraph provider)"
@@ -269,7 +290,6 @@ if ($SpClientId) {
         az ad app permission admin-consent --id "$SpClientId" 2>$null | Out-Null
         Write-Done "Granted Application.ReadWrite.All to $SpAppName"
     } else {
-        # Ensure admin consent is applied
         az ad app permission admin-consent --id "$SpClientId" 2>$null | Out-Null
     }
 
@@ -280,13 +300,10 @@ if ($SpClientId) {
         $env:TF_VAR_msgraph_client_id = $SpClientId
         $env:TF_VAR_msgraph_client_secret = $SecretJson
         $env:TF_VAR_msgraph_tenant_id = $TenantId
-        Write-Done "Temporary client secret created for msgraph provider (client_id=$SpClientId)"
+        Write-Done "Temporary client secret created ($SpAppName)"
     } else {
         Write-Host "    ⚠ Could not create client secret — Agent Identity may fail" -ForegroundColor Yellow
-        Write-Host "    Exit code: $LASTEXITCODE | Secret length: $($SecretJson.Length)" -ForegroundColor DarkGray
     }
-} else {
-    Write-Host "    ⚠ SP '$SpAppName' not found — run init.ps1 first for Agent Identity support" -ForegroundColor Yellow
 }
 
 if ($TfVarsFiles.Count -eq 1) {
