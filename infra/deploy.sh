@@ -4,8 +4,8 @@ set -euo pipefail
 # ═══════════════════════════════════════════════════════════════════════════════
 # .NET Agent Framework — Lab 1 Deploy
 #
-# Mirrors the CI/CD workflow: unlocks state storage, runs terraform
-# init/validate/plan/apply, then shows next steps.
+# Mirrors the CI/CD workflow: opens resource firewalls, runs terraform
+# init/validate/plan/apply, seeds data, then locks firewalls again.
 #
 # Usage:  ./deploy.sh
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -31,13 +31,14 @@ banner() {
     echo -e "  ${C}║   .NET Agent Framework — Lab 1 Deploy                 ║${W}"
     echo -e "  ${C}║                                                       ║${W}"
     echo -e "  ${C}║   This script deploys all Azure infrastructure:       ║${W}"
-    echo -e "  ${C}║     1. Unlock state storage                           ║${W}"
+    echo -e "  ${C}║     1. Open resource firewalls                        ║${W}"
     echo -e "  ${C}║     2. terraform init                                 ║${W}"
     echo -e "  ${C}║     3. terraform validate                             ║${W}"
     echo -e "  ${C}║     4. terraform plan                                 ║${W}"
     echo -e "  ${C}║     5. terraform apply                                ║${W}"
     echo -e "  ${C}║     6. Seed CRM data                                  ║${W}"
     echo -e "  ${C}║     7. Link Entra users to Customers                  ║${W}"
+    echo -e "  ${C}║     *  Close resource firewalls (always)              ║${W}"
     echo -e "  ${C}║                                                       ║${W}"
     echo -e "  ${C}╚═══════════════════════════════════════════════════════╝${W}"
     echo -e ""
@@ -111,8 +112,17 @@ az config set core.login_experience_v2=off 2>/dev/null
 az config set core.enable_broker_on_windows=false 2>/dev/null
 echo -e "    ${D}Signing in to Azure — select the correct account in the browser.${W}"
 echo ""
-# Request Graph scope upfront to avoid stale-token errors during Key Vault reads.
+# Clear stale MSAL token cache to prevent CAE 'TokenCreatedWithOutdatedPolicies' errors.
+az account clear 2>/dev/null
 az login --scope https://graph.microsoft.com/.default >/dev/null
+
+# Disable Continuous Access Evaluation for Terraform — the Go SDKs acquires
+# their own tokens which get CAE-challenged by aggressive org policies.
+# ARM_DISABLE_CAE / AZURE_DISABLE_CAE → azurerm + azapi providers
+# HAMILTON_DISABLE_CAE → azuread provider (uses manicminer/hamilton SDK)
+export ARM_DISABLE_CAE=true
+export AZURE_DISABLE_CAE=true
+export HAMILTON_DISABLE_CAE=true
 
 if [[ ${#tfvars_files[@]} -eq 1 ]]; then
     ENVIRONMENT="${tfvars_files[0]%.tfvars}"
@@ -311,26 +321,23 @@ else
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# PHASE 1 — Unlock state storage
+# PHASE 1 — Open resource firewalls
 # ═══════════════════════════════════════════════════════════════════════════════
 
-phase 1 "Unlock state storage"
+phase 1 "Open resource firewalls"
 
-step "Adding deployer IP to $STORAGE_ACCOUNT firewall"
+step "Adding deployer IP to all resource firewalls"
 
-az storage account network-rule add \
-    --account-name "$STORAGE_ACCOUNT" \
-    --resource-group "$RESOURCE_GROUP" \
-    --ip-address "$DEPLOYER_IP" >/dev/null
+add_deployer_firewall_rules "$RESOURCE_GROUP" "$DEPLOYER_IP"
 
-echo -e "    ${D}Waiting 30s for firewall change to propagate...${W}"
+echo -e "    ${D}Waiting 30s for firewall changes to propagate...${W}"
 sleep 30
-done_ "State storage unlocked"
+done_ "All firewalls open"
 
 phase_summary 1 \
     "Phase 2 — terraform init (configure backend)" \
-    "Storage account" "$STORAGE_ACCOUNT" \
-    "Deployer IP"     "$DEPLOYER_IP"
+    "Deployer IP" "$DEPLOYER_IP" \
+    "Status"      "All firewalls open"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 2 — terraform init
@@ -399,14 +406,6 @@ phase_summary 3 \
 
 phase 4 "terraform plan"
 
-step "Preparing for plan (firewall rules + token refresh)"
-add_deployer_firewall_rules "$RESOURCE_GROUP" "$DEPLOYER_IP"
-echo -e "    ${D}Waiting 30s for firewall changes to propagate...${W}"
-sleep 30
-az account get-access-token --resource https://management.azure.com >/dev/null 2>&1 || true
-az account get-access-token --resource https://graph.microsoft.com >/dev/null 2>&1 || true
-done_ "Firewalls open, tokens refreshed"
-
 step "Planning infrastructure changes"
 
 pushd "$TERRAFORM_DIR" >/dev/null
@@ -424,9 +423,6 @@ phase_summary 4 \
 # ═══════════════════════════════════════════════════════════════════════════════
 
 phase 5 "terraform apply"
-
-az account get-access-token --resource https://management.azure.com >/dev/null 2>&1 || true
-az account get-access-token --resource https://graph.microsoft.com >/dev/null 2>&1 || true
 
 step "Applying infrastructure changes"
 echo -e "    ${D}Resources: AI Foundry, Cosmos DB, AI Search, AKS, ACR, Key Vault, Storage${W}"
