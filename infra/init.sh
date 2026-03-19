@@ -445,7 +445,7 @@ declare -A ENV_VARS=(
     [COSMOS_AGENTS_DATABASE_NAME]="agents"
     [COSMOS_AGENT_STATE_CONTAINER_NAME]="workshop_agent_state_store"
     [COSMOS_CRM_DATABASE_NAME]="contoso-crm"
-    [SEARCH_SKU]="basic"
+    [SEARCH_SKU]="standard"
     [SEARCH_INDEX_NAME]="knowledge-documents"
     [CREATE_ACR]="true"
     [ACR_SKU]="Premium"
@@ -633,7 +633,7 @@ cosmos_agent_state_container_name = "workshop_agent_state_store"
 cosmos_crm_database_name = "contoso-crm"
 
 # AI Search
-search_sku        = "basic"
+search_sku        = "standard"
 search_index_name = "knowledge-documents"
 
 # ACR

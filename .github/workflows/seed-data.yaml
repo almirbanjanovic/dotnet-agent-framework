@@ -30,7 +30,7 @@ jobs:
 
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Login to Azure using OIDC
         uses: azure/login@v2
@@ -57,13 +57,13 @@ jobs:
           done
 
           # Cosmos DB
-          for c in $(az cosmosdb list --resource-group \"$RG\" --query \"[].name\" -o tsv 2>/dev/null); do
-            EXISTING=$(az cosmosdb show --name \"$c\" --resource-group \"$RG\" --query \"ipRules[].ipAddressOrRange\" -o tsv 2>/dev/null || true)
-            CURRENT_IPS=$(echo \"$EXISTING\" | paste -sd, - 2>/dev/null || true)
-            if [ -n \"$CURRENT_IPS\" ]; then
-              az cosmosdb update --name \"$c\" --resource-group \"$RG\" --ip-range-filter \"${CURRENT_IPS},${DEPLOYER_IP}\" 2>/dev/null || true
+          for c in $(az cosmosdb list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
+            EXISTING=$(az cosmosdb show --name "$c" --resource-group "$RG" --query "ipRules[].ipAddressOrRange" -o tsv 2>/dev/null || true)
+            CURRENT_IPS=$(echo "$EXISTING" | paste -sd, - 2>/dev/null || true)
+            if [ -n "$CURRENT_IPS" ]; then
+              az cosmosdb update --name "$c" --resource-group "$RG" --ip-range-filter "${CURRENT_IPS},${DEPLOYER_IP}" 2>/dev/null || true
             else
-              az cosmosdb update --name \"$c\" --resource-group \"$RG\" --ip-range-filter \"$DEPLOYER_IP\" 2>/dev/null || true
+              az cosmosdb update --name "$c" --resource-group "$RG" --ip-range-filter "$DEPLOYER_IP" 2>/dev/null || true
             fi
           done
 
@@ -83,15 +83,24 @@ jobs:
           KV="${{ steps.keyvault.outputs.name }}"
           echo "endpoint=$(az keyvault secret show --vault-name "$KV" --name COSMOSDB-CRM-ENDPOINT --query value -o tsv)" >> "$GITHUB_OUTPUT"
           echo "database=$(az keyvault secret show --vault-name "$KV" --name COSMOSDB-CRM-DATABASE --query value -o tsv)" >> "$GITHUB_OUTPUT"
-          KEY=$(az keyvault secret show --vault-name "$KV" --name COSMOSDB-CRM-KEY --query value -o tsv)
-          echo "::add-mask::$KEY"
-          echo "key=$KEY" >> "$GITHUB_OUTPUT"
 
-      - name: Seed CRM data
+      - name: Grant OIDC SP Cosmos DB data-plane access
+        run: |
+          SP_OID=$(az ad sp show --id "${{ secrets.azureClientId }}" --query id -o tsv)
+          RG="${{ vars.RESOURCE_GROUP }}"
+          for ACCT in $(az cosmosdb list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
+            az cosmosdb sql role assignment create \
+              --account-name "$ACCT" \
+              --resource-group "$RG" \
+              --role-definition-id "00000000-0000-0000-0000-000000000001" \
+              --principal-id "$SP_OID" \
+              --scope "/" 2>/dev/null || true
+          done
+
+      - name: Seed CRM data (uses DefaultAzureCredential — no key needed)
         run: dotnet run --project src/seed-data
         env:
           COSMOSDB_CRM_ENDPOINT: ${{ steps.cosmos.outputs.endpoint }}
-          COSMOSDB_CRM_KEY: ${{ steps.cosmos.outputs.key }}
           COSMOSDB_CRM_DATABASE: ${{ steps.cosmos.outputs.database }}
 
       - name: Link Entra users to Customers
@@ -122,6 +131,5 @@ jobs:
           ENTRA_MAPPING="$ENTRA_PAIRS" dotnet run --project src/seed-data
         env:
           COSMOSDB_CRM_ENDPOINT: ${{ steps.cosmos.outputs.endpoint }}
-          COSMOSDB_CRM_KEY: ${{ steps.cosmos.outputs.key }}
           COSMOSDB_CRM_DATABASE: ${{ steps.cosmos.outputs.database }}
           CRM_DATA_PATH: /dev/null
