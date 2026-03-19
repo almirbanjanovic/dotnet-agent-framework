@@ -771,6 +771,9 @@ Write-PhaseSummary -Number 5 -NextPhase "Phase 6 — Seed CRM data into Cosmos D
     "Status" = "Applied successfully"
 })
 
+# Wait for Cosmos DB RBAC to propagate (new role assignments need time)
+Write-Wait -Seconds 30 -Message "RBAC propagation (Cosmos DB Data Owner)"
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 6 — Seed CRM data
 # ═══════════════════════════════════════════════════════════════════════════════

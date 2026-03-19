@@ -743,6 +743,9 @@ phase_summary 5 \
     "Phase 6 — Seed CRM data into Cosmos DB" \
     "Status" "Applied successfully"
 
+# Wait for Cosmos DB RBAC to propagate (new role assignments need time)
+wait_progress 30 "RBAC propagation (Cosmos DB Data Owner)"
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 6 — Seed CRM data
 # ═══════════════════════════════════════════════════════════════════════════════
