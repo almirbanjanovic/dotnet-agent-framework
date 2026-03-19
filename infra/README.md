@@ -118,7 +118,9 @@ The following resources were added to support the full application architecture 
 
 | Addition | Details |
 | --- | --- |
-| **8 managed identities** | `id-bff`, `id-crm-api`, `id-crm-mcp`, `id-know-mcp`, `id-crm-agent`, `id-prod-agent`, `id-orch-agent`, `id-kubelet` |
+| **5 managed identities** | `id-bff`, `id-crm-api`, `id-crm-mcp`, `id-know-mcp`, `id-kubelet` |
+| **3 agent identities** | `Contoso CRM Agent`, `Contoso Product Agent`, `Contoso Orchestrator Agent` (Entra Agent ID blueprints + instances) |
+| **`agent-identity/v1/`** | Agent Identity Blueprints + Agent Identity service principals + FIC for AKS workload identity |
 | **`rbac/search/v1/`** | Search Index Data Reader for `id-know-mcp` |
 | **`workload-identity/v1/`** | Federated credentials binding each identity to AKS OIDC issuer + K8s service accounts |
 | **`entra/v1/`** | Entra app registration, Customer app role, 5 customer test users with random passwords, role assignments |

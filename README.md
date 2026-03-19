@@ -85,9 +85,9 @@ Path 3 — Product image:
 | crm-api | ClusterIP | `id-crm-api` | Cosmos DB (CRM) |
 | crm-mcp | ClusterIP | `id-crm-mcp` | CRM API |
 | knowledge-mcp | ClusterIP | `id-know-mcp` | AI Search |
-| crm-agent | ClusterIP | `id-crm-agt` | CRM MCP, Knowledge MCP, Azure OpenAI |
-| product-agent | ClusterIP | `id-prod-agt` | CRM MCP, Knowledge MCP, Azure OpenAI |
-| orchestrator-agent | ClusterIP | `id-orch` | CRM Agent, Product Agent, Azure OpenAI |
+| crm-agent | ClusterIP | Contoso CRM Agent (agent identity) | CRM MCP, Knowledge MCP, Azure OpenAI |
+| product-agent | ClusterIP | Contoso Product Agent (agent identity) | CRM MCP, Knowledge MCP, Azure OpenAI |
+| orchestrator-agent | ClusterIP | Contoso Orchestrator Agent (agent identity) | CRM Agent, Product Agent, Azure OpenAI |
 
 ### Data flow
 

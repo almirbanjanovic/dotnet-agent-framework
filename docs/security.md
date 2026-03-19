@@ -155,16 +155,18 @@ This section covers how backend services (running as containers in Kubernetes) a
 
 ### The problem Workload Identity solves
 
-The CRM API needs to connect to Cosmos DB. Traditionally, you'd put a database password in an environment variable or config file. This is risky — passwords can leak through logs, crash dumps, or source control. Workload Identity eliminates passwords entirely: each service gets an Azure-managed identity, and Azure handles the token exchange automatically.
+The CRM API needs to connect to Cosmos DB. Traditionally, you'd put a database password in an environment variable or config file. This is risky — passwords can leak through logs, crash dumps, or source control. Workload Identity eliminates passwords entirely: each service gets an Azure identity (managed identity for non-agent services, agent identity for agents), and Azure handles the token exchange automatically.
 
 ### How services authenticate to Azure
 
-Each service runs in AKS (Azure Kubernetes Service) with its own **managed identity** (an Azure-managed identity that represents the service, not a human). Here's how it works:
+Each service runs in AKS (Azure Kubernetes Service) with its own identity. Non-agent services use **managed identities**; agents use **agent identities** from the [Entra Agent ID platform](#agent-identity-platform-entra-agent-id). Both use the same workload identity federation mechanism — the only difference is the identity type. Here's how it works:
 
 ```text
 What Terraform sets up (one-time, during deployment):
-  ① Creates a managed identity in Azure AD (e.g., "id-crm-api")
-  ③ Grants that identity specific permissions (e.g., "can access Cosmos DB")
+  ① Creates an identity:
+     - Non-agent services: managed identity (e.g., "id-crm-api")
+     - Agents: agent identity blueprint + instance (e.g., "Contoso CRM Agent")
+  ② Grants that identity specific permissions (e.g., "can access Cosmos DB")
   ③ Creates a trust rule: "if a token comes from THIS AKS cluster for
      THIS Kubernetes service account, it can use THIS identity"
   ④ Creates a Kubernetes service account in the cluster, labeled with
@@ -176,12 +178,12 @@ What happens at runtime (every time a pod starts):
      of code that reads the injected token
   ⑦ Azure AD verifies: is this token from a trusted cluster? Is it
      for the correct service account in the correct namespace?
-  ⑧ Azure AD issues an access token for the managed identity
-  ⑨ The pod uses that token to call Cosmos DB, Blob Storage, etc.
+  ⑧ Azure AD issues an access token for the identity
+  ⑨ The pod uses that token to call Cosmos DB, Azure OpenAI, etc.
      (no password, no API key — just identity-based access)
 ```
 
-The developer experience is simple: call `DefaultAzureCredential()` and it works. All the complexity is handled by the infrastructure.
+The developer experience is simple: call `DefaultAzureCredential()` and it works — whether the backing identity is a managed identity or an agent identity. All the complexity is handled by the infrastructure.
 
 ### Managed Identities (Non-Agent Services)
 
@@ -257,9 +259,9 @@ The federation is a **three-way lock** — all three conditions must be true:
 
 1. The token must come from **this specific AKS cluster** (verified by the cluster's OIDC issuer URL)
 2. The token must be for **this specific service account in this specific namespace** (e.g., `sa-bff` in `contoso`)
-3. Only then does Azure AD issue a token for **this specific managed identity** (e.g., `id-bff`)
+3. Only then does Azure AD issue a token for **this specific identity** (e.g., `id-bff` for non-agent services, or `Contoso CRM Agent` for agents)
 
-This means: a pod running as `sa-bff` cannot use `id-crm-api`'s identity. A pod in a different namespace cannot use any of these identities. Even if someone deploys a rogue pod in the same cluster, it can't access Azure resources unless it matches an exact service account + namespace + identity combination.
+This means: a pod running as `sa-bff` cannot use `id-crm-api`'s identity. A pod in a different namespace cannot use any of these identities. Even if someone deploys a rogue pod in the same cluster, it can't access Azure resources unless it matches an exact service account + namespace + identity combination. This applies equally to managed identities and agent identities.
 
 ### Kubernetes Service Accounts
 
