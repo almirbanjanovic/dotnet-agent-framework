@@ -97,3 +97,9 @@
 ### 2026-03-19 — Cross-Team Finding: Full Codebase Analysis Complete
 
 **Team Update (from all 5 agents):** Architecture is fully specced and infrastructure is provisioned, but **zero application code exists yet.** This is the intended state at end of Phase 1 (infrastructure/tooling complete). All 5 agents confirm: Dockerfiles and Helm charts are the next gate before AKS deployment. Infrastructure itself is production-grade (dual identity model, network isolation, RBAC). No fundamental re-design of Terraform modules needed. All decisions merged into `.squad/decisions.md` with full team consensus. All agents aligned on critical path: containerization, then application build in dependency order.
+
+### 2025-07-25 — Infrastructure Cleanup: .gitignore + EventGrid Removal
+
+**`.gitignore` hardened:** Added a `# Terraform` section with 11 patterns (`*.tfstate`, `*.tfstate.*`, `.terraform/`, `.terraform.lock.hcl`, `override.tf`, `override.tf.json`, `*_override.tf`, `*_override.tf.json`, `*.tfvars`, `*.tfvars.json`, `backend.hcl`). These prevent accidental commits of state files, local overrides, variable files with secrets, and backend configs. Existing patterns were preserved.
+
+**EventGrid module deleted:** Removed `infra/terraform/modules/eventgrid/` (v1/ with main.tf, variables.tf, outputs.tf). The module was never instantiated in main.tf and had a security concern — it passed AI Search admin API keys as plaintext into a Logic App HTTP action body. Grep confirmed zero references outside the module directory itself. Module count drops from 21 to 20.

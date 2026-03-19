@@ -73,3 +73,26 @@ get_all_customers, get_customer_detail, get_customer_orders, get_order_detail, g
 ### 2026-03-19 — Cross-Team Finding: Full Codebase Analysis Complete
 
 **Team Update (from all 5 agents):** Architecture is fully specced and infrastructure is provisioned, but **zero application code exists yet.** This is the intended state at end of Phase 1 (infrastructure/tooling complete). All 5 agents confirm the critical path: CRM API is the foundation — all downstream components depend on it. No fundamental re-design needed. All decisions merged into `.squad/decisions.md` with consensus on next steps.
+
+### 2026-03-19 — .NET Build Foundation Established
+
+**What:** Created the centralized build foundation before any new projects are added. Four deliverables:
+
+1. **`Directory.Build.props`** (repo root) — Centralizes `TargetFramework=net9.0`, `LangVersion=latest`, `Nullable=enable`, `ImplicitUsings=enable`, `TreatWarningsAsErrors=true`. All 3 existing .csproj files cleaned of redundant properties — they now contain only `OutputType`, `RootNamespace`, project-specific properties, and package references. Every future project inherits these automatically.
+
+2. **`global.json`** (repo root) — Pins SDK to `9.0.100` with `rollForward: latestFeature`. Ensures consistent builds across machines and CI.
+
+3. **`.editorconfig`** (repo root) — Comprehensive .NET code style: file-scoped namespaces (warning), `var` for apparent types, PascalCase public members, `_camelCase` private fields, camelCase params/locals, expression-bodied members, pattern matching, using directives outside namespace with System first. Enforces naming conventions at warning level.
+
+4. **NuGet package updates** (all 3 projects):
+   - `Azure.Identity`: 1.13.2/1.14.2 → **1.19.0** (all projects)
+   - `Azure.Security.KeyVault.Secrets`: 4.7.0 → **4.9.0** (config-sync)
+   - `Microsoft.Azure.Cosmos`: 3.46.1 → **3.57.1** (seed-data)
+   - `Microsoft.Extensions.Configuration.*`: 10.0.3 → **10.0.5** (seed-data, simple-agent)
+   - `Microsoft.Extensions.AI.OpenAI`: 10.3.0 → **10.4.1** (simple-agent)
+   - `Azure.AI.OpenAI`: stayed at **2.1.0** (already latest stable)
+   - `Microsoft.Agents.AI/AI.OpenAI`: left at **1.0.0-rc2** (pre-release, do not touch)
+
+**Build result:** `dotnet build dotnet-agent-framework.sln` — 0 errors, 0 warnings with `TreatWarningsAsErrors=true`.
+
+**Why this matters:** Every new project (CRM API, MCP servers, agents, BFF) automatically inherits the centralized build properties. No copy-paste of TargetFramework/Nullable/ImplicitUsings. Warnings-as-errors catches issues at compile time. Consistent code style from day one.
