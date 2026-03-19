@@ -33,9 +33,9 @@ resource "azurerm_search_service" "this" {
 # Search Index (data plane via AzAPI)
 # -----------------------------------------------------------------------------
 resource "azapi_resource" "search_index" {
-  type      = "Microsoft.Search/searchServices/indexes@2025-05-01"
+  type      = "Microsoft.Search/searchServices/indexes@2024-07-01"
   name      = var.index_name
-  parent_id = azurerm_search_service.this.id
+  parent_id = "https://${azurerm_search_service.this.name}.search.windows.net"
 
   body = {
     properties = {
@@ -148,9 +148,9 @@ resource "azapi_resource" "search_index" {
 # Data Source — Blob Storage (data plane via AzAPI)
 # -----------------------------------------------------------------------------
 resource "azapi_resource" "search_data_source" {
-  type      = "Microsoft.Search/searchServices/dataSources@2025-05-01"
+  type      = "Microsoft.Search/searchServices/dataSources@2024-07-01"
   name      = "blob-sharepoint-docs"
-  parent_id = azurerm_search_service.this.id
+  parent_id = "https://${azurerm_search_service.this.name}.search.windows.net"
 
   body = {
     properties = {
@@ -171,9 +171,9 @@ resource "azapi_resource" "search_data_source" {
 # Skillset — Text Split + Azure OpenAI Embedding (data plane via AzAPI)
 # -----------------------------------------------------------------------------
 resource "azapi_resource" "search_skillset" {
-  type      = "Microsoft.Search/searchServices/skillsets@2025-05-01"
+  type      = "Microsoft.Search/searchServices/skillsets@2024-07-01"
   name      = "vectorize-skillset"
-  parent_id = azurerm_search_service.this.id
+  parent_id = "https://${azurerm_search_service.this.name}.search.windows.net"
 
   body = {
     properties = {
