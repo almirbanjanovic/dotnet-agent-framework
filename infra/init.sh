@@ -497,13 +497,13 @@ if ! az storage account show --resource-group "$RESOURCE_GROUP" --name "$STORAGE
         --resource-group "$RESOURCE_GROUP" --name "$STORAGE_ACCOUNT" \
         --sku "Standard_LRS" --encryption-services blob \
         --min-tls-version "TLS1_2" --location "$LOCATION" \
-        --public-network-access Enabled >/dev/null
+        --default-action Deny >/dev/null
     echo "    Waiting ${WAIT_TIME}s for storage account..."
     sleep $WAIT_TIME
     done_ "Created $STORAGE_ACCOUNT"
 else
     skip_ "$STORAGE_ACCOUNT already exists"
-    az storage account update --name "$STORAGE_ACCOUNT" --resource-group "$RESOURCE_GROUP" --public-network-access Enabled >/dev/null
+    az storage account update --name "$STORAGE_ACCOUNT" --resource-group "$RESOURCE_GROUP" --default-action Deny -o none 2>/dev/null
     sleep $WAIT_TIME
 fi
 
@@ -516,8 +516,8 @@ else
 fi
 
 step "Locking down state storage"
-az storage account update --name "$STORAGE_ACCOUNT" --resource-group "$RESOURCE_GROUP" --public-network-access Disabled >/dev/null
-done_ "Public access disabled"
+az storage account update --name "$STORAGE_ACCOUNT" --resource-group "$RESOURCE_GROUP" --default-action Deny -o none 2>/dev/null
+done_ "Default network action set to Deny"
 
 # ── RBAC: Contributor scoped to resource group (least privilege) ─────────────
 if ! $LOCAL_ONLY && [[ -n "$APP_CLIENT_ID" ]]; then

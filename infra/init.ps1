@@ -475,13 +475,13 @@ if ($LASTEXITCODE -ne 0) {
         --resource-group $ResourceGroup --name $StorageAccount `
         --sku "Standard_LRS" --encryption-services blob `
         --min-tls-version "TLS1_2" --location $Location `
-        --public-network-access Enabled | Out-Null
+        --default-action Deny | Out-Null
     Write-Host "    Waiting ${WaitTime}s for storage account..."
     Start-Sleep -Seconds $WaitTime
     Write-Done "Created $StorageAccount"
 } else {
     Write-Skip "$StorageAccount already exists"
-    az storage account update --name $StorageAccount --resource-group $ResourceGroup --public-network-access Enabled | Out-Null
+    az storage account update --name $StorageAccount --resource-group $ResourceGroup --default-action Deny -o none 2>$null
     Start-Sleep -Seconds $WaitTime
 }
 
@@ -495,8 +495,8 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Step "Locking down state storage"
-az storage account update --name $StorageAccount --resource-group $ResourceGroup --public-network-access Disabled | Out-Null
-Write-Done "Public access disabled"
+az storage account update --name $StorageAccount --resource-group $ResourceGroup --default-action Deny -o none 2>$null
+Write-Done "Default network action set to Deny"
 
 # ── RBAC: Contributor scoped to resource group (least privilege) ───────────
 if (-not $LocalOnly -and $AppClientId) {
