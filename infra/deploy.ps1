@@ -24,30 +24,55 @@ $TerraformDir = "$ScriptDir\terraform"
 # ── Helpers ──────────────────────────────────────────────────────────────────
 function Write-Banner {
     Write-Host ""
-    Write-Host "  ╔═══════════════════════════════════════════════════════╗" -ForegroundColor DarkCyan
-    Write-Host "  ║                                                       ║" -ForegroundColor DarkCyan
-    Write-Host "  ║   .NET Agent Framework — Lab 1 Deploy                 ║" -ForegroundColor DarkCyan
-    Write-Host "  ║                                                       ║" -ForegroundColor DarkCyan
-    Write-Host "  ║   This script deploys all Azure infrastructure:       ║" -ForegroundColor DarkCyan
-    Write-Host "  ║     1. Open resource firewalls                        ║" -ForegroundColor DarkCyan
-    Write-Host "  ║     2. terraform init                                 ║" -ForegroundColor DarkCyan
-    Write-Host "  ║     3. terraform validate                             ║" -ForegroundColor DarkCyan
-    Write-Host "  ║     4. terraform plan                                 ║" -ForegroundColor DarkCyan
-    Write-Host "  ║     5. terraform apply                                ║" -ForegroundColor DarkCyan
-    Write-Host "  ║     6. Seed CRM data                                  ║" -ForegroundColor DarkCyan
-    Write-Host "  ║     7. Link Entra users to Customers                  ║" -ForegroundColor DarkCyan
-    Write-Host "  ║     *  Close resource firewalls (always)              ║" -ForegroundColor DarkCyan
-    Write-Host "  ║                                                       ║" -ForegroundColor DarkCyan
-    Write-Host "  ╚═══════════════════════════════════════════════════════╝" -ForegroundColor DarkCyan
+    Write-Host "  ╔═══════════════════════════════════════════════════════════╗" -ForegroundColor DarkCyan
+    Write-Host "  ║                                                           ║" -ForegroundColor DarkCyan
+    Write-Host "  ║   .NET Agent Framework — Lab 1 Deploy                     ║" -ForegroundColor DarkCyan
+    Write-Host "  ║                                                           ║" -ForegroundColor DarkCyan
+    Write-Host "  ║   This script deploys all Azure infrastructure:           ║" -ForegroundColor DarkCyan
+    Write-Host "  ║                                                           ║" -ForegroundColor DarkCyan
+    Write-Host "  ║     0. Agent Identity SP (msgraph provider credentials)   ║" -ForegroundColor DarkCyan
+    Write-Host "  ║     1. Open resource firewalls (deployer IP allowlist)    ║" -ForegroundColor DarkCyan
+    Write-Host "  ║     2. terraform init (backend + Entra user import)       ║" -ForegroundColor DarkCyan
+    Write-Host "  ║     3. terraform validate (syntax check)                  ║" -ForegroundColor DarkCyan
+    Write-Host "  ║     4. terraform plan (preview changes)                   ║" -ForegroundColor DarkCyan
+    Write-Host "  ║     5. terraform apply (provision resources)              ║" -ForegroundColor DarkCyan
+    Write-Host "  ║     6. Seed CRM data (CSV → Cosmos DB via AKS pod)        ║" -ForegroundColor DarkCyan
+    Write-Host "  ║     7. Link Entra users → Customers (identity mapping)    ║" -ForegroundColor DarkCyan
+    Write-Host "  ║     *  Close resource firewalls (always runs on exit)     ║" -ForegroundColor DarkCyan
+    Write-Host "  ║                                                           ║" -ForegroundColor DarkCyan
+    Write-Host "  ╚═══════════════════════════════════════════════════════════╝" -ForegroundColor DarkCyan
     Write-Host ""
 }
 
 function Write-Phase {
     param([int]$Number, [string]$Title)
+    
+    # Phase-specific ASCII art icons
+    $art = switch ($Number) {
+        0 { @("    🤖  ╔═══╗", "        ║ SP║  Agent Identity", "        ╚═══╝") }
+        1 { @("    🔓  ┌───┐", "        │🔥│  Firewalls", "        └───┘") }
+        2 { @("    📦  ┌───┐", "        │TF │  Terraform Init", "        └───┘") }
+        3 { @("    ✅  ┌───┐", "        │ ✓ │  Validate", "        └───┘") }
+        4 { @("    📋  ┌───┐", "        │ Δ │  Plan", "        └───┘") }
+        5 { @("    🚀  ┌───┐", "        │▶▶▶│  Apply", "        └───┘") }
+        6 { @("    💾  ┌───┐", "        │CSV│  Seed Data", "        └───┘") }
+        7 { @("    🔗  ┌───┐", "        │⟷ │  Link Users", "        └───┘") }
+        default { @() }
+    }
+
     Write-Host ""
-    Write-Host "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
-    Write-Host "  Phase $Number — $Title" -ForegroundColor Cyan
-    Write-Host "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+    Write-Host "  ╔═════════════════════════════════════════════════════════╗" -ForegroundColor DarkCyan
+    foreach ($line in $art) {
+        Write-Host "  ║  " -ForegroundColor DarkCyan -NoNewline
+        Write-Host "$($line.PadRight(55))" -NoNewline
+        Write-Host "║" -ForegroundColor DarkCyan
+    }
+    Write-Host "  ╠═════════════════════════════════════════════════════════╣" -ForegroundColor DarkCyan
+    Write-Host "  ║  " -ForegroundColor DarkCyan -NoNewline
+    Write-Host "Phase $Number — $($Title.PadRight(47))" -ForegroundColor Cyan -NoNewline
+    Write-Host "║" -ForegroundColor DarkCyan
+    Write-Host "  ╚═════════════════════════════════════════════════════════╝" -ForegroundColor DarkCyan
+}
 }
 
 function Write-Step  { param([string]$Message) Write-Host "  → $Message" -ForegroundColor White }
@@ -307,15 +332,13 @@ $env:HAMILTON_DISABLE_CAE = "true"
 #
 # ═══════════════════════════════════════════════════════════════════════════════
 
-Write-Host ""
-Write-Host "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
-Write-Host "  Agent Identity — Service Principal Setup" -ForegroundColor Magenta
-Write-Host "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
-Write-Host ""
-Write-Host "    The Entra Agent ID API requires app-only tokens." -ForegroundColor DarkGray
-Write-Host "    Azure CLI tokens are rejected (Directory.AccessAsUser.All)." -ForegroundColor DarkGray
-Write-Host "    Setting up a service principal for Terraform's msgraph provider..." -ForegroundColor DarkGray
-Write-Host ""
+Write-Phase -Number 0 -Title "Agent Identity — Service Principal"
+Write-Info "The Entra Agent ID API requires app-only tokens (client credentials)."
+Write-Info "Azure CLI tokens include Directory.AccessAsUser.All, which is blocked."
+Write-Info "This phase creates a service principal for Terraform's msgraph provider."
+Write-Info ""
+Write-Info "  az login token ──▶ Directory.AccessAsUser.All ──▶ ❌ Agent ID API"
+Write-Info "  SP app-only    ──▶ AgentIdentity.* perms only ──▶ ✅ Agent ID API"
 
 $TenantId = az account show --query tenantId -o tsv
 $SubscriptionId = az account show --query id -o tsv

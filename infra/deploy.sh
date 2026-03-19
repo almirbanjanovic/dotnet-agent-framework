@@ -26,29 +26,50 @@ az() {
 
 banner() {
     echo -e ""
-    echo -e "  ${C}╔═══════════════════════════════════════════════════════╗${W}"
-    echo -e "  ${C}║                                                       ║${W}"
-    echo -e "  ${C}║   .NET Agent Framework — Lab 1 Deploy                 ║${W}"
-    echo -e "  ${C}║                                                       ║${W}"
-    echo -e "  ${C}║   This script deploys all Azure infrastructure:       ║${W}"
-    echo -e "  ${C}║     1. Open resource firewalls                        ║${W}"
-    echo -e "  ${C}║     2. terraform init                                 ║${W}"
-    echo -e "  ${C}║     3. terraform validate                             ║${W}"
-    echo -e "  ${C}║     4. terraform plan                                 ║${W}"
-    echo -e "  ${C}║     5. terraform apply                                ║${W}"
-    echo -e "  ${C}║     6. Seed CRM data                                  ║${W}"
-    echo -e "  ${C}║     7. Link Entra users to Customers                  ║${W}"
-    echo -e "  ${C}║     *  Close resource firewalls (always)              ║${W}"
-    echo -e "  ${C}║                                                       ║${W}"
-    echo -e "  ${C}╚═══════════════════════════════════════════════════════╝${W}"
+    echo -e "  ${C}╔═══════════════════════════════════════════════════════════╗${W}"
+    echo -e "  ${C}║                                                           ║${W}"
+    echo -e "  ${C}║   .NET Agent Framework — Lab 1 Deploy                     ║${W}"
+    echo -e "  ${C}║                                                           ║${W}"
+    echo -e "  ${C}║   This script deploys all Azure infrastructure:           ║${W}"
+    echo -e "  ${C}║                                                           ║${W}"
+    echo -e "  ${C}║     0. Agent Identity SP (msgraph provider credentials)   ║${W}"
+    echo -e "  ${C}║     1. Open resource firewalls (deployer IP allowlist)     ║${W}"
+    echo -e "  ${C}║     2. terraform init (backend + Entra user import)       ║${W}"
+    echo -e "  ${C}║     3. terraform validate (syntax check)                  ║${W}"
+    echo -e "  ${C}║     4. terraform plan (preview changes)                   ║${W}"
+    echo -e "  ${C}║     5. terraform apply (provision resources)              ║${W}"
+    echo -e "  ${C}║     6. Seed CRM data (CSV → Cosmos DB via AKS pod)       ║${W}"
+    echo -e "  ${C}║     7. Link Entra users → Customers (identity mapping)   ║${W}"
+    echo -e "  ${C}║     *  Close resource firewalls (always runs on exit)     ║${W}"
+    echo -e "  ${C}║                                                           ║${W}"
+    echo -e "  ${C}╚═══════════════════════════════════════════════════════════╝${W}"
     echo -e ""
 }
 
 phase() {
-    echo -e ""
-    echo -e "  ${D}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${W}"
-    echo -e "  ${C}Phase $1 — $2${W}"
-    echo -e "  ${D}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${W}"
+    local num="$1" title="$2"
+    local art1="" art2="" art3=""
+    case "$num" in
+        0) art1="    🤖  ╔═══╗"; art2="        ║ SP║  Agent Identity"; art3="        ╚═══╝" ;;
+        1) art1="    🔓  ┌───┐"; art2="        │🔥│  Firewalls";      art3="        └───┘" ;;
+        2) art1="    📦  ┌───┐"; art2="        │TF │  Terraform Init"; art3="        └───┘" ;;
+        3) art1="    ✅  ┌───┐"; art2="        │ ✓ │  Validate";       art3="        └───┘" ;;
+        4) art1="    📋  ┌───┐"; art2="        │ Δ │  Plan";           art3="        └───┘" ;;
+        5) art1="    🚀  ┌───┐"; art2="        │▶▶▶│  Apply";          art3="        └───┘" ;;
+        6) art1="    💾  ┌───┐"; art2="        │CSV│  Seed Data";      art3="        └───┘" ;;
+        7) art1="    🔗  ┌───┐"; art2="        │⟷ │  Link Users";     art3="        └───┘" ;;
+    esac
+
+    echo ""
+    echo -e "  ${C}╔═════════════════════════════════════════════════════════╗${W}"
+    if [[ -n "$art1" ]]; then
+        printf "  ${C}║${W}  %-55s${C}║${W}\n" "$art1"
+        printf "  ${C}║${W}  %-55s${C}║${W}\n" "$art2"
+        printf "  ${C}║${W}  %-55s${C}║${W}\n" "$art3"
+        echo -e "  ${C}╠═════════════════════════════════════════════════════════╣${W}"
+    fi
+    printf "  ${C}║${W}  ${C}Phase %d — %-47s${C}║${W}\n" "$num" "$title"
+    echo -e "  ${C}╚═════════════════════════════════════════════════════════╝${W}"
 }
 
 step()  { echo -e "  → $1"; }
@@ -167,15 +188,13 @@ export HAMILTON_DISABLE_CAE=true
 #
 # ═══════════════════════════════════════════════════════════════════════════════
 
-echo ""
-echo -e "  ${D}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${W}"
-echo -e "  \033[35mAgent Identity — Service Principal Setup${W}"
-echo -e "  ${D}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${W}"
-echo ""
-echo -e "    ${D}The Entra Agent ID API requires app-only tokens.${W}"
-echo -e "    ${D}Azure CLI tokens are rejected (Directory.AccessAsUser.All).${W}"
-echo -e "    ${D}Setting up a service principal for Terraform's msgraph provider...${W}"
-echo ""
+phase 0 "Agent Identity — Service Principal"
+info_ "The Entra Agent ID API requires app-only tokens (client credentials)."
+info_ "Azure CLI tokens include Directory.AccessAsUser.All, which is blocked."
+info_ "This phase creates a service principal for Terraform's msgraph provider."
+info_ ""
+info_ "  az login token ──▶ Directory.AccessAsUser.All ──▶ ❌ Agent ID API"
+info_ "  SP app-only    ──▶ AgentIdentity.* perms only ──▶ ✅ Agent ID API"
 
 TENANT_ID=$(az account show --query tenantId -o tsv)
 SUBSCRIPTION_ID=$(az account show --query id -o tsv)
