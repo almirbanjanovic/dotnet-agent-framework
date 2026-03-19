@@ -10,7 +10,7 @@
     2. Creates Entra app registration with OIDC for GitHub Actions + Contributor RBAC
     3. Creates GitHub environment, secrets, and variables
     4. Creates Azure resource group, storage account, blob container (Terraform state)
-    5. Generates terraform.tfvars and backend.hcl
+    5. Generates <env>.tfvars and backend.hcl
 
 .EXAMPLE
     ./init.ps1
@@ -39,7 +39,7 @@ function Write-Banner {
     Write-Host "  ║     2. Entra app + OIDC + RBAC                        ║" -ForegroundColor DarkCyan
     Write-Host "  ║     3. GitHub environment, secrets, variables         ║" -ForegroundColor DarkCyan
     Write-Host "  ║     4. Azure backend (RG, storage, container)         ║" -ForegroundColor DarkCyan
-    Write-Host "  ║     5. Config files (terraform.tfvars, backend.hcl)   ║" -ForegroundColor DarkCyan
+    Write-Host "  ║     5. Config files (<env>.tfvars, backend.hcl)       ║" -ForegroundColor DarkCyan
     Write-Host "  ║                                                       ║" -ForegroundColor DarkCyan
     Write-Host "  ╚═══════════════════════════════════════════════════════╝" -ForegroundColor DarkCyan
     Write-Host ""
@@ -562,7 +562,7 @@ if ($deployerOid) {
     $phase4Items["KV RBAC"] = "Manual assignment required"
 }
 
-Write-PhaseSummary -Number 4 -NextPhase "Phase 5 — Generate terraform.tfvars and backend.hcl configuration files" -Items $phase4Items
+Write-PhaseSummary -Number 4 -NextPhase "Phase 5 — Generate $GitHubEnv.tfvars and backend.hcl configuration files" -Items $phase4Items
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 5 — Generate config files

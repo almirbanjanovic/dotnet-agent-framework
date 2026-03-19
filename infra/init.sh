@@ -38,7 +38,7 @@ banner() {
     echo -e "  ${C}║     2. Entra app + OIDC + RBAC                        ║${W}"
     echo -e "  ${C}║     3. GitHub environment, secrets, variables         ║${W}"
     echo -e "  ${C}║     4. Azure backend (RG, storage, container)         ║${W}"
-    echo -e "  ${C}║     5. Config files (terraform.tfvars, backend.hcl)   ║${W}"
+    echo -e "  ${C}║     5. Config files (<env>.tfvars, backend.hcl)       ║${W}"
     echo -e "  ${C}║                                                       ║${W}"
     echo -e "  ${C}╚═══════════════════════════════════════════════════════╝${W}"
     echo -e ""
@@ -581,7 +581,7 @@ else
 fi
 
 phase_summary 4 \
-    "Phase 5 — Generate terraform.tfvars and backend.hcl configuration files" \
+    "Phase 5 — Generate ${GITHUB_ENV}.tfvars and backend.hcl configuration files" \
     "Resource group"   "$RESOURCE_GROUP" \
     "Storage account"  "$STORAGE_ACCOUNT" \
     "Container"        "$CONTAINER_NAME" \
