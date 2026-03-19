@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.Json;
 using Microsoft.Azure.Cosmos;
 
 namespace seed_data;
@@ -11,7 +10,7 @@ namespace seed_data;
 public static class CrmSeeder
 {
     // Maps CSV filename (without extension) to container name and partition key path
-    private static readonly Dictionary<string, ContainerDef> ContainerMap = new()
+    private static readonly Dictionary<string, ContainerDef> _containerMap = new()
     {
         ["customers"]       = new("Customers",      "/id"),
         ["orders"]          = new("Orders",          "/customer_id"),
@@ -22,17 +21,17 @@ public static class CrmSeeder
     };
 
     // Fields that should be stored as numbers
-    private static readonly HashSet<string> IntFields = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> _intFields = new(StringComparer.OrdinalIgnoreCase)
     {
         "order_id", "quantity", "discount_percent"
     };
 
-    private static readonly HashSet<string> DecimalFields = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> _decimalFields = new(StringComparer.OrdinalIgnoreCase)
     {
         "total_amount", "unit_price", "price", "rating", "weight_kg"
     };
 
-    private static readonly HashSet<string> BoolFields = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> _boolFields = new(StringComparer.OrdinalIgnoreCase)
     {
         "in_stock", "active"
     };
@@ -51,7 +50,7 @@ public static class CrmSeeder
         var database = cosmosClient.GetDatabase(databaseName);
 
         // Ensure containers exist
-        foreach (var (_, containerDef) in ContainerMap)
+        foreach (var (_, containerDef) in _containerMap)
         {
             await database.CreateContainerIfNotExistsAsync(containerDef.ContainerName, containerDef.PartitionKeyPath);
         }
@@ -70,7 +69,7 @@ public static class CrmSeeder
                 continue;
             }
 
-            if (!ContainerMap.TryGetValue(fileName, out var containerDef))
+            if (!_containerMap.TryGetValue(fileName, out var containerDef))
             {
                 Console.WriteLine($"  ⚠ Skipping {fileName}.csv — no container mapping defined");
                 continue;
@@ -115,7 +114,7 @@ public static class CrmSeeder
         Console.WriteLine("  Verifying seeded data...\n");
 
         bool allPassed = true;
-        foreach (var containerDef in ContainerMap.Values)
+        foreach (var containerDef in _containerMap.Values)
         {
             var container = database.GetContainer(containerDef.ContainerName);
             var query = new QueryDefinition("SELECT VALUE COUNT(1) FROM c");
@@ -203,13 +202,13 @@ public static class CrmSeeder
     {
         if (string.IsNullOrEmpty(value)) return null;
 
-        if (BoolFields.Contains(fieldName))
+        if (_boolFields.Contains(fieldName))
             return value.Equals("true", StringComparison.OrdinalIgnoreCase);
 
-        if (IntFields.Contains(fieldName))
+        if (_intFields.Contains(fieldName))
             return int.TryParse(value, CultureInfo.InvariantCulture, out var i) ? i : value;
 
-        if (DecimalFields.Contains(fieldName))
+        if (_decimalFields.Contains(fieldName))
             return double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : value;
 
         return value;
