@@ -60,6 +60,7 @@ catch (Exception ex)
     Console.WriteLine($"  ✗ Failed to connect to Cosmos DB: {ex.Message}");
     Console.WriteLine("    Make sure the account/database exists and credentials are correct.");
     Environment.Exit(1);
+    return; // unreachable, but satisfies compiler's definite assignment analysis
 }
 
 Console.WriteLine();
