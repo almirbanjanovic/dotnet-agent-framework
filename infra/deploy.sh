@@ -113,8 +113,11 @@ az config set core.enable_broker_on_windows=false 2>/dev/null
 echo -e "    ${D}Signing in to Azure — select the correct account in the browser.${W}"
 echo ""
 # Clear stale MSAL token cache to prevent CAE 'TokenCreatedWithOutdatedPolicies' errors.
+# Do NOT use --scope https://graph.microsoft.com/.default — it acquires a broad
+# delegated token including Directory.AccessAsUser.All, which the Entra Agent ID
+# API explicitly rejects. Let the msgraph provider acquire its own scoped tokens.
 az account clear 2>/dev/null
-az login --scope https://graph.microsoft.com/.default >/dev/null
+az login >/dev/null
 
 # Disable Continuous Access Evaluation for Terraform — the Go SDKs acquires
 # their own tokens which get CAE-challenged by aggressive org policies.
