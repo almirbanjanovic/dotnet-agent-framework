@@ -31,18 +31,17 @@ resource "msgraph_resource" "blueprint" {
     signInAudience = "AzureADMyOrg"
   }
 
+  # Only read back the properties we care about. Without this, Graph API
+  # returns owners@odata.bind and sponsors@odata.bind on GET, which aren't
+  # in our body — causing a plan diff and RBAC churn on every run.
+  read_query_parameters = {
+    "$select" = ["id", "appId", "displayName", "signInAudience"]
+  }
+
   response_export_values = {
     appId       = "appId"
     id          = "id"
     displayName = "displayName"
-  }
-
-  # Prevent plan drift: Graph API returns owners/sponsors @odata.bind on GET
-  # even though we don't set them. The provider stores the full response in
-  # state, which differs from our body on every plan. ignore_changes on body
-  # allows the initial create to work but prevents subsequent update cycles.
-  lifecycle {
-    ignore_changes = [body]
   }
 }
 
@@ -60,13 +59,13 @@ resource "msgraph_resource" "blueprint_principal" {
     appId         = msgraph_resource.blueprint[each.key].output.appId
   }
 
+  read_query_parameters = {
+    "$select" = ["id", "appId", "displayName"]
+  }
+
   response_export_values = {
     appId = "appId"
     id    = "id"
-  }
-
-  lifecycle {
-    ignore_changes = [body]
   }
 }
 
@@ -84,9 +83,5 @@ resource "msgraph_resource" "fic" {
     audiences = ["api://AzureADTokenExchange"]
     issuer    = var.aks_oidc_issuer_url
     subject   = "system:serviceaccount:${each.value.namespace}:${each.value.service_account}"
-  }
-
-  lifecycle {
-    ignore_changes = [body]
   }
 }
