@@ -14,7 +14,6 @@ var configuration = new ConfigurationBuilder()
 // Cosmos DB (CRM operational data)
 var cosmosEndpoint = configuration["COSMOSDB_CRM_ENDPOINT"]
     ?? throw new InvalidOperationException("COSMOSDB_CRM_ENDPOINT is not set.");
-var cosmosKey = configuration["COSMOSDB_CRM_KEY"];
 var databaseName = configuration["COSMOSDB_CRM_DATABASE"]
     ?? throw new InvalidOperationException("COSMOSDB_CRM_DATABASE is not set.");
 
@@ -50,14 +49,7 @@ try
         UseSystemTextJsonSerializerWithOptions = new System.Text.Json.JsonSerializerOptions(),
     };
 
-    if (!string.IsNullOrEmpty(cosmosKey))
-    {
-        cosmosClient = new CosmosClient(cosmosEndpoint, cosmosKey, cosmosOptions);
-    }
-    else
-    {
-        cosmosClient = new CosmosClient(cosmosEndpoint, new DefaultAzureCredential(), cosmosOptions);
-    }
+    cosmosClient = new CosmosClient(cosmosEndpoint, new DefaultAzureCredential(), cosmosOptions);
 
     var db = cosmosClient.GetDatabase(databaseName);
     await db.ReadAsync();

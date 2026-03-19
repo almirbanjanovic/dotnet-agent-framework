@@ -100,7 +100,7 @@ Expected output:
   ✓ AZURE-OPENAI-ENDPOINT → AZURE_OPENAI_ENDPOINT
   ✓ AZURE-OPENAI-DEPLOYMENT-NAME → AZURE_OPENAI_DEPLOYMENT_NAME
   ...
-  Wrote 18/18 secrets to .../src/appsettings.json
+  Wrote 15/15 secrets to .../src/appsettings.json
 
 ═══════════════════════════════════════════════════════════
   Done! Apps can now read from appsettings.json.
@@ -140,7 +140,7 @@ If you see an error, check:
 After completing all steps, verify:
 
 - [ ] Infrastructure resources are visible in the Azure portal (or `terraform output` shows all endpoints)
-- [ ] `src/appsettings.json` has 18 non-empty values
+- [ ] `src/appsettings.json` has 15 non-empty values
 - [ ] `simple-agent` returns a joke from Azure OpenAI
 - [ ] Cosmos DB CRM account has 6 containers with data (Customers, Orders, etc.)
 - [ ] Azure AI Search index has vectorized document chunks (check indexer status in Azure portal)
