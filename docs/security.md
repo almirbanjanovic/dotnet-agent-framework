@@ -225,9 +225,9 @@ Each identity is granted **only** the permissions it needs (least privilege). Th
 | `id-crm-api` | Managed | ✓ | ✓ | | | | | |
 | `id-crm-mcp` | Managed | ✓ | ✓ | | | | | |
 | `id-know-mcp` | Managed | ✓ | | | | ✓ | | |
-| Contoso CRM Agent | Agent | ✓ | | ✓ | | | | |
-| Contoso Product Agent | Agent | ✓ | | ✓ | | | | |
-| Contoso Orchestrator Agent | Agent | ✓ | | ✓ | | | | |
+| Contoso CRM Agent | Agent | ✓ | | ✓ | ✓ | | | |
+| Contoso Product Agent | Agent | ✓ | | ✓ | ✓ | | | |
+| Contoso Orchestrator Agent | Agent | ✓ | | ✓ | ✓ | | | |
 | `id-kubelet` | Managed | | | | | | | ✓ |
 
 Each identity has **only** the permissions it needs. For example, the CRM API can access Cosmos DB (CRM) and Key Vault but cannot call Azure OpenAI — only the agent identities can do that. If one service is compromised, the blast radius is limited to its specific permissions. Agent identities receive the same RBAC roles as the managed identities they replaced — the difference is in how they're represented in Entra (as agent objects, not generic managed identities).
@@ -284,6 +284,18 @@ Manifests are in `infra/terraform/manifests/` and applied via `kubectl_manifest`
 ## Agent Identity Platform (Entra Agent ID)
 
 The Contoso Outdoors framework uses [Microsoft Entra Agent ID](https://learn.microsoft.com/en-us/entra/agent-id/identity-platform/what-is-agent-id) to give AI agents first-class identities in the directory. This is a deliberate architectural choice — agents are not generic services, and their identities should reflect that.
+
+> **Infrastructure: Entra Agent ID Platform**
+>
+> Agent identities are provisioned using the Microsoft Graph beta API via the `microsoft/msgraph` Terraform provider. During infrastructure deployment:
+> - **Agent Identity Blueprints** and **Blueprint Principals** are created via Terraform (`modules/agent-identity/v1`)
+> - **Agent Identity instances** are created at runtime by the blueprint service (per [Microsoft documentation](https://learn.microsoft.com/en-us/entra/agent-id/identity-platform/what-is-agent-id-platform))
+>
+> **Prerequisites:**
+> - Microsoft 365 Copilot license (required for Entra Agent ID)
+> - Frontier program enrollment with Microsoft
+>
+> For more details, see [Entra Agent ID Platform documentation](https://learn.microsoft.com/en-us/entra/agent-id/identity-platform/what-is-agent-id-platform).
 
 ### Blueprint → Agent Identity hierarchy
 
