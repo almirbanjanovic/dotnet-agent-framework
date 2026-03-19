@@ -48,7 +48,7 @@ chmod +x deploy.sh
 ./deploy.sh
 ```
 
-The script performs 9 phases with a confirmation gate between each:
+The script performs 7 phases with a confirmation gate between each:
 
 | Phase | What it does |
 | :-----: | ------------- |
@@ -59,8 +59,6 @@ The script performs 9 phases with a confirmation gate between each:
 | **5** | `terraform apply` to provision resources and upload blobs |
 | **6** | Seed CRM data — runs seed-data tool inside AKS pod with workload identity (RBAC-based, no keys) |
 | **7** | Link Entra users to Customers — reads Entra object IDs from Key Vault, updates `entra_id` in Cosmos DB |
-| **8** | Config sync — pulls secrets from Key Vault into `src/appsettings.json` (runs while firewalls are open) |
-| **9** | Validate — runs `simple-agent` to verify Azure OpenAI connectivity (runs while firewalls are open) |
 
 Before Phase 1, the script runs a **pre-flight check** that purges soft-deleted Key Vaults and Cognitive Services accounts from previous runs. Azure retains these in a soft-deleted state which blocks re-creation with the same name. Key Vault purges use `--no-wait` since they can take several minutes.
 
@@ -79,14 +77,93 @@ If `terraform apply` fails, the script runs a **post-failure diagnostic** that l
 
 All Terraform variables are read from the GitHub environment variables that `init` configured in Lab 0.
 
-## Step 2 — Verify results
+## Step 2 — Configure app settings
 
-Steps 2 and 3 are now automated as part of the deploy script (Phases 8 and 9):
+The **config-sync** tool pulls secrets from Key Vault into `src/appsettings.json` so all projects can use them locally. Since the deploy script closes resource firewalls when it finishes, you need to temporarily open the Key Vault firewall first.
 
-- **Phase 8 (Config Sync)** — The deploy script automatically pulls secrets from Key Vault into `src/appsettings.json` while firewalls are open. You'll see the sync output during the deploy.
-- **Phase 9 (Validate)** — The deploy script automatically runs `simple-agent` to verify Azure OpenAI connectivity while firewalls are open.
+Get your deployer IP and Key Vault name:
 
-> **Running manually:** If you need to re-run config-sync or simple-agent after deployment, you must first open the resource firewalls (add your IP to Key Vault and Cognitive Services network rules), since the deploy script closes all firewalls when it finishes.
+```bash
+DEPLOYER_IP=$(curl -s https://api.ipify.org)
+RG="<your-resource-group>"   # e.g. rg-dotnetagent-dev-eastus2
+KV=$(az keyvault list --resource-group "$RG" --query "[0].name" -o tsv)
+```
+
+Open Key Vault firewall, run config-sync, then close it:
+
+```bash
+# Open
+az keyvault network-rule add --name "$KV" --ip-address "$DEPLOYER_IP/32"
+sleep 15
+
+# Sync
+cd src/config-sync
+dotnet run -- $(az keyvault show --name "$KV" --query properties.vaultUri -o tsv)
+
+# Close
+az keyvault network-rule remove --name "$KV" --ip-address "$DEPLOYER_IP/32"
+```
+
+Expected output:
+
+```text
+═══════════════════════════════════════════════════════════
+  Config Sync — Key Vault → appsettings.json
+═══════════════════════════════════════════════════════════
+
+  Key Vault: <your-keyvault-uri>
+  Auth:      DefaultAzureCredential (az login)
+
+  ✓ AZURE-OPENAI-ENDPOINT → AZURE_OPENAI_ENDPOINT
+  ✓ AZURE-OPENAI-DEPLOYMENT-NAME → AZURE_OPENAI_DEPLOYMENT_NAME
+  ...
+  Wrote 15/15 secrets to .../src/appsettings.json
+
+═══════════════════════════════════════════════════════════
+  Done! Apps can now read from appsettings.json.
+═══════════════════════════════════════════════════════════
+```
+
+## Step 3 — Validate infrastructure
+
+The **simple-agent** project creates a minimal AI agent that calls Azure OpenAI. This confirms your endpoint, deployment, and credentials are all working. Since Azure OpenAI (Cognitive Services) has a firewall, you need to temporarily open it.
+
+```bash
+COG=$(az cognitiveservices account list --resource-group "$RG" --query "[0].name" -o tsv)
+```
+
+Open the AI Services firewall, run simple-agent, then close it:
+
+```bash
+# Open
+az cognitiveservices account network-rule add --resource-group "$RG" --name "$COG" --ip-address "$DEPLOYER_IP/32"
+sleep 15
+
+# Validate
+cd src/simple-agent
+dotnet run
+
+# Close
+az cognitiveservices account network-rule remove --resource-group "$RG" --name "$COG" --ip-address "$DEPLOYER_IP/32"
+```
+
+Expected output (the joke will differ on each run — it's AI-generated):
+
+```text
+Using Azure OpenAI endpoint: https://<your-openai-endpoint>/
+Deployment name: gpt-4.1
+
+Agent response:
+ Why did the developer break up with the cloud?
+ Because the relationship had too many issues... and none of them were resolved!
+```
+
+If you see an error, check:
+
+- `az login` is authenticated
+- `az login` is authenticated with an account that has the **Cognitive Services OpenAI User** role on the AI Services account
+- `src/appsettings.json` has non-empty values for `AZURE_OPENAI_ENDPOINT` and `AZURE_OPENAI_DEPLOYMENT_NAME`
+- The AI Services deployment exists in the Azure portal
 
 ## Verification checklist
 

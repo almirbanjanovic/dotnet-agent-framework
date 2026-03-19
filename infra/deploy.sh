@@ -38,8 +38,6 @@ banner() {
     echo -e "  ${C}║     5. terraform apply                                ║${W}"
     echo -e "  ${C}║     6. Seed CRM data                                  ║${W}"
     echo -e "  ${C}║     7. Link Entra users to Customers                  ║${W}"
-    echo -e "  ${C}║     8. Config sync (Key Vault → appsettings.json)     ║${W}"
-    echo -e "  ${C}║     9. Validate (simple-agent → Azure OpenAI)         ║${W}"
     echo -e "  ${C}║     *  Close resource firewalls (always)              ║${W}"
     echo -e "  ${C}║                                                       ║${W}"
     echo -e "  ${C}╚═══════════════════════════════════════════════════════╝${W}"
@@ -679,45 +677,6 @@ kubectl delete pod "$POD_NAME7" --namespace="$K8S_NAMESPACE" --force --grace-per
 # ── Read Key Vault URI ───────────────────────────────────────────────────────
 KEYVAULT_URI=$(az keyvault show --name "$KV_NAME" --query properties.vaultUri -o tsv 2>/dev/null || true)
 
-phase_summary 7 \
-    "Phase 8 — Sync Key Vault secrets to appsettings.json" \
-    "Status" "Entra users linked to Customers"
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# PHASE 8 — Config Sync (Key Vault → appsettings.json)
-# Runs while firewalls are still open so config-sync can reach Key Vault.
-# ═══════════════════════════════════════════════════════════════════════════════
-
-phase 8 "Config Sync (Key Vault → appsettings.json)"
-
-CONFIG_SYNC_DIR="$(dirname "$SCRIPT_DIR")/src/config-sync"
-
-step "Running config-sync to pull secrets from Key Vault"
-pushd "$CONFIG_SYNC_DIR" >/dev/null
-dotnet run -- "$KEYVAULT_URI"
-done_ "appsettings.json updated"
-popd >/dev/null
-
-phase_summary 8 \
-    "Phase 9 — Validate with simple-agent" \
-    "Key Vault" "$KEYVAULT_URI" \
-    "Status" "appsettings.json updated"
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# PHASE 9 — Simple Agent Validation
-# Runs while firewalls are still open so simple-agent can reach Azure OpenAI.
-# ═══════════════════════════════════════════════════════════════════════════════
-
-phase 9 "Validate with simple-agent"
-
-SIMPLE_AGENT_DIR="$(dirname "$SCRIPT_DIR")/src/simple-agent"
-
-step "Running simple-agent to verify Azure OpenAI connectivity"
-pushd "$SIMPLE_AGENT_DIR" >/dev/null
-dotnet run
-done_ "Azure OpenAI validated"
-popd >/dev/null
-
 # ── Final summary ────────────────────────────────────────────────────────────
 echo ""
 echo -e "  ${G}╔═══════════════════════════════════════════════════════╗${W}"
@@ -730,11 +689,9 @@ if [[ -n "$KEYVAULT_URI" ]]; then
     echo -e "  ${G}║${W}  Key Vault URI:  $KEYVAULT_URI"
 fi
 echo -e "  ${G}║${W}"
-echo -e "  ${G}║  All steps completed:                                 ${W}"
-echo -e "  ${G}║    ✓ Infrastructure deployed (Terraform)              ${W}"
-echo -e "  ${G}║    ✓ CRM data seeded (Cosmos DB)                      ${W}"
-echo -e "  ${G}║    ✓ Entra users linked to Customers                  ${W}"
-echo -e "  ${G}║    ✓ appsettings.json synced from Key Vault            ${W}"
-echo -e "  ${G}║    ✓ Azure OpenAI validated (simple-agent)             ${W}"
+echo -e "  ${G}║  Next steps (see Lab 1, Steps 2–3):                   ${W}"
+echo -e "  ${G}║    1. cd src/config-sync                               ${W}"
+echo -e "  ${G}║    2. dotnet run -- ${KEYVAULT_URI}${W}"
+echo -e "  ${G}║    3. cd ../simple-agent && dotnet run                 ${W}"
 echo -e "  ${G}╚═══════════════════════════════════════════════════════╝${W}"
 echo ""
