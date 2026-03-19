@@ -26,7 +26,10 @@ resource "msgraph_resource" "blueprint" {
   api_version = "beta"
 
   body = {
-    "@odata.type"  = "#Microsoft.Graph.AgentIdentityBlueprint"
+    # Use lowercase @odata.type to match what Graph API returns on GET.
+    # PascalCase (#Microsoft.Graph...) causes drift because the API
+    # normalizes it to lowercase (#microsoft.graph...) in responses.
+    "@odata.type"  = "#microsoft.graph.agentIdentityBlueprint"
     displayName    = each.value.blueprint_display_name
     signInAudience = "AzureADMyOrg"
   }
@@ -55,7 +58,7 @@ resource "msgraph_resource" "blueprint_principal" {
   api_version = "beta"
 
   body = {
-    "@odata.type" = "#Microsoft.Graph.AgentIdentityBlueprintPrincipal"
+    "@odata.type" = "#microsoft.graph.agentIdentityBlueprintPrincipal"
     appId         = msgraph_resource.blueprint[each.key].output.appId
   }
 
