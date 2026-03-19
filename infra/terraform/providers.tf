@@ -85,7 +85,12 @@ provider "azapi" {
 provider "azuread" {
 }
 
+# msgraph provider: use_cli = false avoids the Azure CLI's delegated token
+# which includes Directory.AccessAsUser.All (a first-party Microsoft permission
+# on the Azure CLI app). The Agent ID API explicitly blocks that permission.
+# Instead, authenticate via client credentials (service principal) or OIDC.
 provider "msgraph" {
+  use_cli = false
 }
 
 # kubectl provider is configured dynamically using AKS cluster credentials.

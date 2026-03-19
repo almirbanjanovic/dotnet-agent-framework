@@ -48,7 +48,7 @@ chmod +x deploy.sh
 ./deploy.sh
 ```
 
-The script performs 7 phases with a confirmation gate between each:
+The script performs 9 phases with a confirmation gate between each:
 
 | Phase | What it does |
 | :-----: | ------------- |
@@ -57,8 +57,10 @@ The script performs 7 phases with a confirmation gate between each:
 | **3** | `terraform validate` to check configuration syntax |
 | **4** | `terraform plan` to preview all changes |
 | **5** | `terraform apply` to provision resources and upload blobs |
-| **6** | Seed CRM data — reads Cosmos DB credentials from Key Vault, runs `dotnet run` for seed-data tool |
+| **6** | Seed CRM data — runs seed-data tool inside AKS pod with workload identity (RBAC-based, no keys) |
 | **7** | Link Entra users to Customers — reads Entra object IDs from Key Vault, updates `entra_id` in Cosmos DB |
+| **8** | Config sync — pulls secrets from Key Vault into `src/appsettings.json` (runs while firewalls are open) |
+| **9** | Validate — runs `simple-agent` to verify Azure OpenAI connectivity (runs while firewalls are open) |
 
 Before Phase 1, the script runs a **pre-flight check** that purges soft-deleted Key Vaults and Cognitive Services accounts from previous runs. Azure retains these in a soft-deleted state which blocks re-creation with the same name. Key Vault purges use `--no-wait` since they can take several minutes.
 
@@ -77,63 +79,14 @@ If `terraform apply` fails, the script runs a **post-failure diagnostic** that l
 
 All Terraform variables are read from the GitHub environment variables that `init` configured in Lab 0.
 
-## Step 2 — Configure app settings
+## Step 2 — Verify results
 
-The **config-sync** tool pulls secrets from Key Vault into `src/appsettings.json` so all projects can use them locally. The Key Vault URI is shown in the deploy script's final summary.
+Steps 2 and 3 are now automated as part of the deploy script (Phases 8 and 9):
 
-```bash
-cd src/config-sync
-dotnet restore
-dotnet run -- <your-keyvault-uri>
-```
+- **Phase 8 (Config Sync)** — The deploy script automatically pulls secrets from Key Vault into `src/appsettings.json` while firewalls are open. You'll see the sync output during the deploy.
+- **Phase 9 (Validate)** — The deploy script automatically runs `simple-agent` to verify Azure OpenAI connectivity while firewalls are open.
 
-Expected output:
-
-```text
-═══════════════════════════════════════════════════════════
-  Config Sync — Key Vault → appsettings.json
-═══════════════════════════════════════════════════════════
-
-  Key Vault: <your-keyvault-uri>
-  Auth:      DefaultAzureCredential (az login)
-
-  ✓ AZURE-OPENAI-ENDPOINT → AZURE_OPENAI_ENDPOINT
-  ✓ AZURE-OPENAI-DEPLOYMENT-NAME → AZURE_OPENAI_DEPLOYMENT_NAME
-  ...
-  Wrote 15/15 secrets to .../src/appsettings.json
-
-═══════════════════════════════════════════════════════════
-  Done! Apps can now read from appsettings.json.
-═══════════════════════════════════════════════════════════
-```
-
-## Step 3 — Validate infrastructure
-
-The **simple-agent** project creates a minimal AI agent that calls Azure OpenAI. This confirms your endpoint, deployment, and credentials are all working.
-
-```bash
-cd src/simple-agent
-dotnet restore
-dotnet run
-```
-
-Expected output (the joke will differ on each run — it's AI-generated):
-
-```text
-Using Azure OpenAI endpoint: https://<your-openai-endpoint>/
-Deployment name: gpt-4.1
-
-Agent response:
- Why did the developer break up with the cloud?
- Because the relationship had too many issues... and none of them were resolved!
-```
-
-If you see an error, check:
-
-- `az login` is authenticated
-- `az login` is authenticated with an account that has the **Cognitive Services OpenAI User** role on the AI Services account
-- `src/appsettings.json` has non-empty values for `AZURE_OPENAI_ENDPOINT` and `AZURE_OPENAI_DEPLOYMENT_NAME`
-- The AI Services deployment exists in the Azure portal
+> **Running manually:** If you need to re-run config-sync or simple-agent after deployment, you must first open the resource firewalls (add your IP to Key Vault and Cognitive Services network rules), since the deploy script closes all firewalls when it finishes.
 
 ## Verification checklist
 

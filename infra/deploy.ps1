@@ -36,6 +36,8 @@ function Write-Banner {
     Write-Host "  ║     5. terraform apply                                ║" -ForegroundColor DarkCyan
     Write-Host "  ║     6. Seed CRM data                                  ║" -ForegroundColor DarkCyan
     Write-Host "  ║     7. Link Entra users to Customers                  ║" -ForegroundColor DarkCyan
+    Write-Host "  ║     8. Config sync (Key Vault → appsettings.json)     ║" -ForegroundColor DarkCyan
+    Write-Host "  ║     9. Validate (simple-agent → Azure OpenAI)         ║" -ForegroundColor DarkCyan
     Write-Host "  ║     *  Close resource firewalls (always)              ║" -ForegroundColor DarkCyan
     Write-Host "  ║                                                       ║" -ForegroundColor DarkCyan
     Write-Host "  ╚═══════════════════════════════════════════════════════╝" -ForegroundColor DarkCyan
@@ -654,6 +656,53 @@ try {
 # ── Read Key Vault URI ────────────────────────────────────────────────────────
 $KeyVaultUri = (az keyvault show --name $KvName --query properties.vaultUri -o tsv 2>$null)
 
+Write-PhaseSummary -Number 7 -NextPhase "Phase 8 — Sync Key Vault secrets to appsettings.json" -Items ([ordered]@{
+    "Status" = "Entra users linked to Customers"
+})
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 8 — Config Sync (Key Vault → appsettings.json)
+# Runs while firewalls are still open so config-sync can reach Key Vault.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+Write-Phase -Number 8 -Title "Config Sync (Key Vault → appsettings.json)"
+
+$ConfigSyncDir = Join-Path (Split-Path $ScriptDir) "src" "config-sync"
+
+Write-Step "Running config-sync to pull secrets from Key Vault"
+Push-Location $ConfigSyncDir
+try {
+    dotnet run -- $KeyVaultUri
+    if ($LASTEXITCODE -ne 0) { Write-Fail "config-sync failed"; exit 1 }
+    Write-Done "appsettings.json updated"
+} finally {
+    Pop-Location
+}
+
+Write-PhaseSummary -Number 8 -NextPhase "Phase 9 — Validate with simple-agent" -Items ([ordered]@{
+    "Key Vault" = $KeyVaultUri
+    "Status"    = "appsettings.json updated"
+})
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 9 — Simple Agent Validation
+# Runs while firewalls are still open so simple-agent can reach Azure OpenAI.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+Write-Phase -Number 9 -Title "Validate with simple-agent"
+
+$SimpleAgentDir = Join-Path (Split-Path $ScriptDir) "src" "simple-agent"
+
+Write-Step "Running simple-agent to verify Azure OpenAI connectivity"
+Push-Location $SimpleAgentDir
+try {
+    dotnet run
+    if ($LASTEXITCODE -ne 0) { Write-Fail "simple-agent failed — check Azure OpenAI configuration"; exit 1 }
+    Write-Done "Azure OpenAI validated"
+} finally {
+    Pop-Location
+}
+
 # ── Final summary ────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "  ╔═══════════════════════════════════════════════════════╗" -ForegroundColor Green
@@ -666,10 +715,12 @@ if ($KeyVaultUri) {
     Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Key Vault URI:  $KeyVaultUri"
 }
 Write-Host "  ║" -ForegroundColor Green
-Write-Host "  ║  Next steps:                                          " -ForegroundColor Green
-Write-Host "  ║    1. cd src/config-sync                               " -ForegroundColor Green
-Write-Host "  ║    2. dotnet run -- $KeyVaultUri" -ForegroundColor Green
-Write-Host "  ║    3. cd ../simple-agent && dotnet run                 " -ForegroundColor Green
+Write-Host "  ║  All steps completed:                                 " -ForegroundColor Green
+Write-Host "  ║    ✓ Infrastructure deployed (Terraform)              " -ForegroundColor Green
+Write-Host "  ║    ✓ CRM data seeded (Cosmos DB)                      " -ForegroundColor Green
+Write-Host "  ║    ✓ Entra users linked to Customers                  " -ForegroundColor Green
+Write-Host "  ║    ✓ appsettings.json synced from Key Vault            " -ForegroundColor Green
+Write-Host "  ║    ✓ Azure OpenAI validated (simple-agent)             " -ForegroundColor Green
 Write-Host "  ╚═══════════════════════════════════════════════════════╝" -ForegroundColor Green
 Write-Host ""
 
