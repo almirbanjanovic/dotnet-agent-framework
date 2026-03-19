@@ -272,6 +272,25 @@ Only the Blazor WASM UI (static files — HTML, CSS, JS, no secrets) and BFF API
 
 A self-signed TLS certificate is stored in Key Vault and referenced by the Gateway API TLS configuration. The certificate's CN and SAN match the App Gateway for Containers frontend FQDN.
 
+### Azure Resource Firewalls
+
+Every data-plane Azure resource uses a **default deny** firewall with two controlled access paths:
+
+1. **Private endpoints** — AKS pods reach all resources through private endpoints on the `snet-private-endpoints` subnet (same VNet). Private DNS zones resolve service FQDNs to private IPs so traffic never leaves the VNet.
+2. **Azure services bypass** — Azure-to-Azure platform traffic (e.g., AI Search indexer reading Blob Storage, Event Grid triggering Logic App) is explicitly allowed through each resource's firewall.
+
+| Resource | Firewall Default | Azure Services Bypass | Private Endpoint | Deployer IP Exception |
+| --- | --- | --- | --- | --- |
+| **Storage Account** | Deny | `bypass = ["AzureServices"]` | `pe-st-*` (blob) | ✓ |
+| **Key Vault** | Deny (when IPs configured) | `bypass = "AzureServices"` | `pe-kv-*` (vault) | ✓ |
+| **ACR** | Allow (public) | `network_rule_bypass_option = "AzureServices"` | `pe-acr-*` (registry) | — |
+| **Azure SQL** | Deny (when no deployer IP) | `AllowAzureServices` firewall rule (`0.0.0.0`) | `pe-sql-*` (sqlServer) | ✓ |
+| **Cosmos DB** | Allow (public, IP-filtered) | `0.0.0.0` in `ip_range_filter` | `pe-cosmos-*` (Sql) | ✓ |
+| **Azure OpenAI** | Deny | Trusted services (implicit via managed identity + RBAC) | `pe-aif-*` (account) | ✓ |
+| **AI Search** | IP-restricted | No bypass parameter available | `pe-srch-*` (searchService) | ✓ |
+
+The **deployer IP exception** is the public IP of the machine running `terraform apply`. It is added automatically during deployment and allows Terraform to reach service endpoints for provisioning. These rules can be removed post-deployment when all runtime access flows through private endpoints.
+
 ## Image Security
 
 Product images are stored in a **private** Blob Storage container. The browser never gets a direct URL to Azure Storage (which would bypass authentication):

@@ -70,6 +70,17 @@ resource "azurerm_mssql_database" "this" {
 }
 
 # -----------------------------------------------------------------------------
+# Firewall — Allow Azure services and resources to access this server
+# The special 0.0.0.0 range enables access from all Azure services.
+# -----------------------------------------------------------------------------
+resource "azurerm_mssql_firewall_rule" "allow_azure_services" {
+  name             = "AllowAzureServices"
+  server_id        = azurerm_mssql_server.this.id
+  start_ip_address = "0.0.0.0"
+  end_ip_address   = "0.0.0.0"
+}
+
+# -----------------------------------------------------------------------------
 # Firewall — Allow deployer IP for provisioning
 # -----------------------------------------------------------------------------
 resource "azurerm_mssql_firewall_rule" "deployer" {

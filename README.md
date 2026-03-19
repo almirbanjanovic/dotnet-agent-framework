@@ -163,17 +163,24 @@ docs/
   architecture.drawio             → Editable architecture diagram (draw.io)
   lab-0.md                        → Lab 0: Bootstrap (Terraform backend, Entra, CI/CD)
   lab-1.md                        → Lab 1: Infrastructure, Validation & Data Seeding
+  security.md                     → Security architecture (auth, RBAC, network)
 
 infra/
   init.ps1 / init.sh              → One-time bootstrap scripts
-  deploy.ps1 / deploy.sh          → Deployment scripts
-  terraform/                      → Terraform IaC (12 modules, versioned)
+  deploy.ps1 / deploy.sh          → Deployment scripts (7 phases)
+  terraform/                      → Terraform IaC (20 modules, versioned)
+    modules/                      → acr, agc, aks, cosmosdb, entra, eventgrid,
+                                    foundry, identity, keyvault, keyvault-secrets,
+                                    private-dns-zones, private-endpoint, rbac,
+                                    search, sql, storage, storage-uploads,
+                                    tls-cert, vnet, workload-identity
+    manifests/                    → Kubernetes namespace + service account templates
 
 src/
   appsettings.json                → Shared config (gitignored, populated by config-sync)
   config-sync/                    → Tool: Key Vault → appsettings.json
-  seed-data/                      → Tool: CSV → Azure SQL (runs via terraform apply)
-  simple-agent/                   → Lab 1 validation (Azure OpenAI connectivity)
+  seed-data/                      → Tool: CSV → Azure SQL (runs during deploy phase 6)
+  simple-agent/                   → Lab 1 validation (Azure OpenAI connectivity test)
 
   crm-api/                        → Domain API: all SQL data (11 endpoints)
   crm-api.tests/
@@ -193,12 +200,10 @@ src/
   orchestrator-agent/             → Intent classifier + specialist routing
   orchestrator-agent.tests/
 
-  blazor-ui/                       → Blazor WebAssembly SPA (MudBlazor + MSAL + SignalR)
+  blazor-ui/                      → Blazor WebAssembly SPA (MudBlazor + MSAL + SignalR)
 
-  bff-api/                         → BFF API (.NET): JWT validation, proxy, chat, image proxy
+  bff-api/                        → BFF API (.NET): JWT validation, proxy, chat, image proxy
   bff-api.tests/
-
-Each service contains its own helm/ folder with Chart.yaml, values.yaml, and templates/.
 ```
 
 ## Prerequisites

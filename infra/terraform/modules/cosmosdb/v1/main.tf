@@ -38,7 +38,7 @@ resource "azurerm_cosmosdb_account" "this" {
 
   local_authentication_disabled = false
   public_network_access_enabled = var.public_network_access_enabled
-  ip_range_filter               = var.allowed_ips
+  ip_range_filter               = concat(["0.0.0.0"], var.allowed_ips)
 
   tags = var.tags
 
