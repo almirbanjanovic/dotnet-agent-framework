@@ -1,5 +1,5 @@
-﻿using System.ClientModel;
-using Azure.AI.OpenAI;
+﻿using Azure.AI.OpenAI;
+using Azure.Identity;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.Configuration;
 using OpenAI.Chat;
@@ -14,14 +14,13 @@ var configuration = new ConfigurationBuilder()
 
 var endpoint = configuration["AZURE_OPENAI_ENDPOINT"] ?? throw new InvalidOperationException("AZURE_OPENAI_ENDPOINT is not set.");
 var deploymentName = configuration["AZURE_OPENAI_DEPLOYMENT_NAME"] ?? throw new InvalidOperationException("AZURE_OPENAI_DEPLOYMENT_NAME is not set.");
-var apiKey = configuration["AZURE_OPENAI_API_KEY"] ?? throw new InvalidOperationException("AZURE_OPENAI_API_KEY is not set.");
 
 Console.WriteLine($"Using Azure OpenAI endpoint: {endpoint}");
 Console.WriteLine($"Deployment name: {deploymentName}");
 
 AIAgent agent = new AzureOpenAIClient(
     new Uri(endpoint),
-    new ApiKeyCredential(apiKey))
+    new DefaultAzureCredential())
     .GetChatClient(deploymentName)
     .AsAIAgent(instructions: "You are a helpful and funny assistant who tells short jokes.", name: "Joker");
 

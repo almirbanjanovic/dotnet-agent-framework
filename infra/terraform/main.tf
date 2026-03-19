@@ -586,7 +586,6 @@ module "keyvault_secrets" {
 
   secrets = {
     "AZURE-OPENAI-ENDPOINT"             = module.foundry.endpoint
-    "AZURE-OPENAI-API-KEY"              = nonsensitive(module.foundry.primary_key)
     "AZURE-OPENAI-DEPLOYMENT-NAME"      = module.foundry.deployment_name
     "AZURE-OPENAI-EMBEDDING-DEPLOYMENT" = module.foundry.embedding_deployment_name
     "COSMOSDB-AGENTS-ENDPOINT"          = module.cosmosdb_agents.endpoint
