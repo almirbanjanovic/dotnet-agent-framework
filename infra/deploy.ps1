@@ -89,9 +89,16 @@ function Write-Phase {
             "Authenticates via az login (RBAC, no keys)."
         )}
         7 { @(
-            "Reads each test user Entra object ID from Key",
-            "Vault and writes it to the Customer document",
-            "in Cosmos DB. Links Entra identity to customer."
+            "Customers are Cosmos DB documents with an entra_id",
+            "field. Test users (Emma, James, etc.) are Entra ID",
+            "accounts created by Terraform. This phase reads",
+            "each user's Entra object ID from Key Vault and",
+            "writes it to their Customer document. Without this",
+            "link, the app can't map 'who logged in' (Entra) to",
+            "'whose data to show' (Cosmos DB). Example:",
+            "",
+            "  Emma Wilson (Entra OID) --> Customer 101 (Cosmos DB)",
+            "  Login JWT oid claim    --> entra_id field filter"
         )}
         default { @() }
     }

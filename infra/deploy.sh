@@ -803,6 +803,17 @@ phase_summary 6 \
 # ═══════════════════════════════════════════════════════════════════════════════
 
 phase 7 "Link Entra users to Customers"
+info_ ""
+info_ "Customers are Cosmos DB documents with an entra_id field."
+info_ "Test users (Emma, James, etc.) are Entra ID accounts created"
+info_ "by Terraform. This phase reads each user's Entra object ID"
+info_ "from Key Vault and writes it to their Customer document."
+info_ "Without this link, the app can't map 'who logged in' (Entra)"
+info_ "to 'whose data to show' (Cosmos DB). Example:"
+info_ ""
+info_ "  Emma Wilson (Entra OID) --> Customer 101 (Cosmos DB)"
+info_ "  Login JWT oid claim    --> entra_id field filter"
+info_ ""
 
 step "Reading Entra object IDs from Key Vault"
 
