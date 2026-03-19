@@ -47,77 +47,81 @@ function Write-Banner {
 function Write-Phase {
     param([int]$Number, [string]$Title)
 
-    $w = 59  # inner width between ║ chars
+    $w = 60  # inner width between | chars
 
-    # Phase-specific description lines (each padded to exactly $w chars)
+    # Phase-specific description lines (padded dynamically — no manual spacing needed)
     $desc = switch ($Number) {
         0 { @(
-            "   The Entra Agent ID API needs app-only tokens.            ",
-            "   CLI tokens include Directory.AccessAsUser.All            ",
-            "   which the Agent ID API blocks. A service principal       ",
-            "   is created for Terraform's msgraph provider.             "
+            "The Entra Agent ID API needs app-only tokens.",
+            "CLI tokens include Directory.AccessAsUser.All",
+            "which the Agent ID API blocks. A service",
+            "principal is created for the msgraph provider."
         )}
         1 { @(
-            "   All Azure resources have network firewalls (deny all).   ",
-            "   Your IP must be allowlisted so Terraform can reach       ",
-            "   them. Firewalls close automatically when done.           "
+            "All Azure resources have network firewalls",
+            "(deny by default). Your IP must be allowlisted",
+            "so Terraform can reach them. Firewalls close",
+            "automatically when the script finishes."
         )}
         2 { @(
-            "   Connects Terraform to the remote state backend           ",
-            "   (Azure Storage). Also imports existing Entra test        ",
-            "   users into state to prevent recreation conflicts.        "
+            "Connects Terraform to the remote state backend",
+            "(Azure Storage). Also imports existing Entra",
+            "test users to prevent recreation conflicts."
         )}
         3 { @(
-            "   Checks all .tf files for syntax errors before            ",
-            "   creating the execution plan.                             "
+            "Checks all .tf files for syntax errors",
+            "before creating the execution plan."
         )}
         4 { @(
-            "   Previews what resources will be created, changed,        ",
-            "   or destroyed. No changes are applied yet.                "
+            "Previews what resources will be created,",
+            "changed, or destroyed. No changes applied yet."
         )}
         5 { @(
-            "   Provisions all Azure resources: AI Foundry, Cosmos DB,   ",
-            "   AKS, ACR, Key Vault, Storage, AI Search, VNet,          ",
-            "   Private Endpoints, RBAC, and blob uploads.               "
+            "Provisions all Azure resources: AI Foundry,",
+            "Cosmos DB, AKS, ACR, Key Vault, Storage,",
+            "AI Search, VNet, Private Endpoints, RBAC.",
+            "Also uploads images and PDFs to blob storage."
         )}
         6 { @(
-            "   Runs the seed-data tool inside an AKS pod using          ",
-            "   workload identity (RBAC, no keys). Upserts customers,   ",
-            "   orders, products, promotions, tickets from CSV.          "
+            "Runs seed-data inside an AKS pod using workload",
+            "identity (RBAC, no keys). Upserts customers,",
+            "orders, products, promotions, tickets from CSV."
         )}
         7 { @(
-            "   Reads each test user's Entra object ID from Key Vault   ",
-            "   and writes it to the Customer document in Cosmos DB.     ",
-            "   This links 'Emma Wilson' in Entra = customer 101.       "
+            "Reads each test user Entra object ID from Key",
+            "Vault and writes it to the Customer document",
+            "in Cosmos DB. Links Entra identity to customer."
         )}
         default { @() }
     }
 
-    $border = '═' * $w
+    $border = '=' * $w
+    $spaces = ' ' * $w
 
     Write-Host ""
-    Write-Host "  ╔$border╗" -ForegroundColor DarkCyan
+    Write-Host "  +$border+" -ForegroundColor DarkCyan
 
-    # Phase title (centered-ish)
-    $titleLine = "Phase $Number — $Title"
+    # Phase title (centered)
+    $titleLine = "Phase $Number -- $Title"
     $pad = [Math]::Max(0, [Math]::Floor(($w - $titleLine.Length) / 2))
-    $titlePadded = (' ' * $pad) + $titleLine
-    Write-Host "  ║" -ForegroundColor DarkCyan -NoNewline
-    Write-Host "$($titlePadded.PadRight($w))" -ForegroundColor Cyan -NoNewline
-    Write-Host "║" -ForegroundColor DarkCyan
+    $titlePadded = ((' ' * $pad) + $titleLine).PadRight($w)
+    Write-Host "  |" -ForegroundColor DarkCyan -NoNewline
+    Write-Host $titlePadded -ForegroundColor Cyan -NoNewline
+    Write-Host "|" -ForegroundColor DarkCyan
 
     if ($desc.Count -gt 0) {
-        Write-Host "  ╠$border╣" -ForegroundColor DarkCyan
-        Write-Host "  ║$(' ' * $w)║" -ForegroundColor DarkCyan
+        Write-Host "  +$('-' * $w)+" -ForegroundColor DarkCyan
+        Write-Host "  |$spaces|" -ForegroundColor DarkCyan
         foreach ($line in $desc) {
-            Write-Host "  ║" -ForegroundColor DarkCyan -NoNewline
-            Write-Host $line -ForegroundColor DarkGray -NoNewline
-            Write-Host "║" -ForegroundColor DarkCyan
+            $padded = "   $line".PadRight($w)
+            Write-Host "  |" -ForegroundColor DarkCyan -NoNewline
+            Write-Host $padded -ForegroundColor DarkGray -NoNewline
+            Write-Host "|" -ForegroundColor DarkCyan
         }
-        Write-Host "  ║$(' ' * $w)║" -ForegroundColor DarkCyan
+        Write-Host "  |$spaces|" -ForegroundColor DarkCyan
     }
 
-    Write-Host "  ╚$border╝" -ForegroundColor DarkCyan
+    Write-Host "  +$border+" -ForegroundColor DarkCyan
     Write-Host ""
 }
 
