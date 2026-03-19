@@ -99,10 +99,9 @@ Expected output:
   Auth:      DefaultAzureCredential (az login)
 
   ✓ AZURE-OPENAI-ENDPOINT → AZURE_OPENAI_ENDPOINT
-  ✓ AZURE-OPENAI-API-KEY → AZURE_OPENAI_API_KEY
   ✓ AZURE-OPENAI-DEPLOYMENT-NAME → AZURE_OPENAI_DEPLOYMENT_NAME
   ...
-  Wrote 20/20 secrets to .../src/appsettings.json
+  Wrote 19/19 secrets to .../src/appsettings.json
 
 ═══════════════════════════════════════════════════════════
   Done! Apps can now read from appsettings.json.
@@ -111,7 +110,7 @@ Expected output:
 
 ## Step 3 — Validate infrastructure
 
-The **simple-agent** project creates a minimal AI agent that calls Azure OpenAI. This confirms your endpoint, deployment, and API key are all working.
+The **simple-agent** project creates a minimal AI agent that calls Azure OpenAI. This confirms your endpoint, deployment, and credentials are all working.
 
 ```bash
 cd src/simple-agent
@@ -133,7 +132,8 @@ Agent response:
 If you see an error, check:
 
 - `az login` is authenticated
-- `src/appsettings.json` has non-empty values for `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT_NAME`, and `AZURE_OPENAI_API_KEY`
+- `az login` is authenticated with an account that has the **Cognitive Services OpenAI User** role on the AI Services account
+- `src/appsettings.json` has non-empty values for `AZURE_OPENAI_ENDPOINT` and `AZURE_OPENAI_DEPLOYMENT_NAME`
 - The AI Services deployment exists in the Azure portal
 
 ## Verification checklist
@@ -141,7 +141,7 @@ If you see an error, check:
 After completing all steps, verify:
 
 - [ ] Infrastructure resources are visible in the Azure portal (or `terraform output` shows all endpoints)
-- [ ] `src/appsettings.json` has 20 non-empty values
+- [ ] `src/appsettings.json` has 19 non-empty values
 - [ ] `simple-agent` returns a joke from Azure OpenAI
 - [ ] Cosmos DB CRM account has 6 containers with data (Customers, Orders, etc.)
 - [ ] Azure AI Search index has vectorized document chunks (check indexer status in Azure portal)
