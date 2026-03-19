@@ -31,13 +31,13 @@ function Write-Banner {
     Write-Host "  ║   This script deploys all Azure infrastructure:           ║" -ForegroundColor DarkCyan
     Write-Host "  ║                                                           ║" -ForegroundColor DarkCyan
     Write-Host "  ║     0. Agent Identity SP (msgraph provider credentials)   ║" -ForegroundColor DarkCyan
-    Write-Host "  ║     1. Open resource firewalls (deployer IP allowlist)     ║" -ForegroundColor DarkCyan
+    Write-Host "  ║     1. Open resource firewalls (deployer IP allowlist)    ║" -ForegroundColor DarkCyan
     Write-Host "  ║     2. terraform init (backend + Entra user import)       ║" -ForegroundColor DarkCyan
     Write-Host "  ║     3. terraform validate (syntax check)                  ║" -ForegroundColor DarkCyan
     Write-Host "  ║     4. terraform plan (preview changes)                   ║" -ForegroundColor DarkCyan
     Write-Host "  ║     5. terraform apply (provision resources)              ║" -ForegroundColor DarkCyan
-    Write-Host "  ║     6. Seed CRM data (CSV -> Cosmos DB via AKS pod)      ║" -ForegroundColor DarkCyan
-    Write-Host "  ║     7. Link Entra users -> Customers (identity mapping)  ║" -ForegroundColor DarkCyan
+    Write-Host "  ║     6. Seed CRM data (CSV -> Cosmos DB via AKS pod)       ║" -ForegroundColor DarkCyan
+    Write-Host "  ║     7. Link Entra users -> Customers (identity mapping)   ║" -ForegroundColor DarkCyan
     Write-Host "  ║     *  Close resource firewalls (always runs on exit)     ║" -ForegroundColor DarkCyan
     Write-Host "  ║                                                           ║" -ForegroundColor DarkCyan
     Write-Host "  ╚═══════════════════════════════════════════════════════════╝" -ForegroundColor DarkCyan
