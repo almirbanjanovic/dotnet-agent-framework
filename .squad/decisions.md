@@ -22,6 +22,8 @@
 
 ### Backend & Data
 
+**Decision (Brian):** .NET Build Foundation established. Directory.Build.props centralizes TargetFramework, LangVersion, Nullable, ImplicitUsings, and TreatWarningsAsErrors. global.json pins SDK to 9.0.100. .editorconfig enforces .NET coding conventions. TreatWarningsAsErrors=true is global. All 5 developers' new projects automatically inherit correct settings. Build verified clean.
+
 **Decision (Brian):** Configuration strategy for local dev is sound (Key Vault → appsettings.json via config-sync). Acceptable trade-off that all 8 containers see all secrets locally — this is a workshop framework, not production. In AKS, Helm values naturally scope per chart.
 
 **Decision (Brian):** No API versioning strategy is defined. Recommend URL prefix versioning (`/api/v1/`) from the start so CRM MCP tools and other consumers are prepared for schema changes.
@@ -64,7 +66,7 @@
 
 **Decision (Joe):** K8s security posture is incomplete. Add: NetworkPolicy rules for pod-to-pod isolation, PodSecurityStandards (restricted profile), and OPA/Gatekeeper for admission control.
 
-**Decision (Joe):** EventGrid module is defined but not integrated into main.tf. Decision: wire it in when knowledge source auto-indexing refresh is needed, or remove to reduce configuration noise.
+**Decision (Joe):** EventGrid module removed. Module defined auto-indexing via blob trigger but was never instantiated in main.tf. Security anti-pattern: passed AI Search admin API key as plaintext in Logic App action. If auto-indexing is needed later, re-implement with managed identity auth. Module count: 21 → 20. No infrastructure impact (never deployed).
 
 **Decision (Joe):** Deployment pipeline (deploy.ps1/sh) is well-designed with safety guardrails (firewall bracketing, policy diagnostics, soft-delete purge). No changes needed.
 
