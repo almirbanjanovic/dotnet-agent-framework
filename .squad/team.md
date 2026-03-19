@@ -17,8 +17,8 @@
 | Lois | Frontend Dev | `.squad/agents/lois/charter.md` | ⚛️ Active |
 | Peter | Tester | `.squad/agents/peter/charter.md` | 🧪 Active |
 | Joe | DevOps/Infra | `.squad/agents/joe/charter.md` | ⚙️ Active |
-| Cleveland | Session Logger | `.squad/agents/cleveland/charter.md` | 📋 Active |
-| Quagmire | Work Monitor | — | 🔄 Monitor |
+| Scribe | Session Logger | `.squad/agents/scribe/charter.md` | 📋 Active |
+| Ralph | Work Monitor | — | 🔄 Monitor |
 
 ## Project Context
 

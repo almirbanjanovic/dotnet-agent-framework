@@ -17,7 +17,7 @@ How to decide who handles what.
 | CI/CD & deployment | Joe | GitHub Actions, deploy scripts, container registry |
 | Scope & priorities | Stewie | What to build next, trade-offs, decisions |
 | Async issue work (bugs, tests, small features) | @copilot 🤖 | Well-defined tasks matching capability profile |
-| Session logging | Cleveland | Automatic — never needs routing |
+| Session logging | Scribe | Automatic — never needs routing |
 
 ## Issue Routing
 

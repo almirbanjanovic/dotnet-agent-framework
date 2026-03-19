@@ -29,9 +29,9 @@ Each component is fully independent — own models, own Dockerfile, own Helm cha
 
 Each agent runs in its own container with its own [Entra agent identity](https://learn.microsoft.com/en-us/entra/agent-id/identity-platform/agent-identities) and least-privilege RBAC. Agent identities are created from Agent Identity Blueprints — reusable templates that enable Conditional Access, governance, and centralized management across agent instances. Non-agent services (BFF, CRM API, MCP servers) use standard managed identities. This dual approach provides blast radius isolation, independent scaling, independent deployment, clear auditability in Azure activity logs, and agent-specific governance in Entra.
 
-#### 2. One SQL database → one CRM Domain API
+#### 2. One Cosmos DB database → one CRM Domain API
 
-All six SQL tables (Customers, Orders, OrderItems, Products, Promotions, SupportTickets) are served by a single CRM API. Both the BFF (via HTTP proxy) and agents (via CRM MCP tools) consume the same endpoints. The CRM API earns its existence — 11 endpoints with JOINs, filtering, write operations, and identity-scoped authorization.
+All six Cosmos DB containers (Customers, Orders, OrderItems, Products, Promotions, SupportTickets) are served by a single CRM API. Both the BFF (via HTTP proxy) and agents (via CRM MCP tools) consume the same endpoints. The CRM API earns its existence — 11 endpoints with JOINs, filtering, write operations, and identity-scoped authorization.
 
 #### 3. MCP Servers are thin protocol adapters
 

@@ -85,3 +85,17 @@
 - All meaningful changes require team consensus
 - Document architectural decisions here
 - Keep history focused on work, decisions focused on direction
+### 2026-03-19T16:15: User directive
+**By:** Almir Banjanovic (via Copilot)
+**What:** Every squad member must use Claude Opus 4.6 (1M context) (`claude-opus-4.6-1m`) as the default model. This overrides the standard model selection hierarchy (Layer 1 — User Override).
+**Why:** User request — captured for team memory
+# Decision: Agent Identity v2 via msgraph
+
+## Context
+The Entra Agent ID platform requires Graph beta types for Agent Identity Blueprints and Blueprint Principals, which the AzureAD provider cannot create. The existing v1 module used regular Entra app registrations/service principals that do not represent the specialized Agent Identity objects. Cosmos DB RBAC for the agents was also missing, leaving only the BFF principal assigned.
+
+## Decision
+Move agent identity provisioning to a new `agent-identity/v2` module built on the `microsoft/msgraph` provider and Graph beta endpoints. The lifecycle is: create Agent Identity Blueprint → create Blueprint Principal → runtime Agent Identity instances are created by the blueprint service (not Terraform). Bind the blueprint to AKS service accounts via federated identity credentials for workload identity. Update Cosmos DB RBAC to include CRM, Product, and Orchestrator agent principals alongside the BFF.
+
+## Consequences
+Terraform now provisions the correct Entra Agent ID objects, aligning with the platform requirements and enabling runtime agent identity creation. AKS workload identities remain secretless and use OIDC token exchange through FICs. Cosmos DB access is corrected for all agents, reducing authorization gaps.
