@@ -13,12 +13,6 @@ output "endpoint" {
   value       = "https://${azurerm_cognitive_account.this.custom_subdomain_name}.openai.azure.com/"
 }
 
-output "primary_key" {
-  description = "Primary access key"
-  value       = azurerm_cognitive_account.this.primary_access_key
-  sensitive   = true
-}
-
 output "deployment_name" {
   description = "Name of the deployed chat model"
   value       = azurerm_cognitive_deployment.this.name

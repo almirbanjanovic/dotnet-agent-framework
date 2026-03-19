@@ -52,3 +52,9 @@ variable "entra_admin_object_id" {
   type        = string
 }
 
+variable "deployer_ip" {
+  description = "Deployer public IP address for firewall exception (empty string to disable)"
+  type        = string
+  default     = ""
+}
+

@@ -11,12 +11,18 @@ on:
         required: true
       azureSubscriptionId:
         required: true
+    outputs:
+      deployer_ip:
+        description: "Deployer public IP for firewall cleanup"
+        value: ${{ jobs.seed-data.outputs.deployer_ip }}
 
 jobs:
   seed-data:
     name: Seed CRM Data
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
+    outputs:
+      deployer_ip: ${{ steps.deployer.outputs.ip }}
 
     defaults:
       run:
@@ -38,6 +44,27 @@ jobs:
         with:
           dotnet-version: '9.0.x'
 
+      - name: Add deployer IP to resource firewalls
+        id: deployer
+        run: |
+          DEPLOYER_IP=$(curl -s --max-time 10 https://api.ipify.org)
+          echo "ip=$DEPLOYER_IP" >> "$GITHUB_OUTPUT"
+          RG="${{ vars.RESOURCE_GROUP }}"
+
+          # Key Vault
+          for kv in $(az keyvault list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
+            az keyvault network-rule add --name "$kv" --ip-address "$DEPLOYER_IP/32" 2>/dev/null || true
+          done
+
+          # SQL Server
+          for sql in $(az sql server list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
+            az sql server update --name "$sql" --resource-group "$RG" --enable-public-network true 2>/dev/null || true
+            az sql server firewall-rule create --server "$sql" --resource-group "$RG" --name AllowDeployer \
+              --start-ip-address "$DEPLOYER_IP" --end-ip-address "$DEPLOYER_IP" 2>/dev/null || true
+          done
+
+          echo "Deployer IP $DEPLOYER_IP added to firewalls"
+
       - name: Discover Key Vault name
         id: keyvault
         run: |
@@ -46,32 +73,33 @@ jobs:
             --query "[0].name" -o tsv)
           echo "name=$KV_NAME" >> "$GITHUB_OUTPUT"
 
-      - name: Read SQL secrets from Key Vault
+      - name: Read SQL connection info from Key Vault
         id: sql
         run: |
           KV="${{ steps.keyvault.outputs.name }}"
           echo "server=$(az keyvault secret show --vault-name "$KV" --name SQL-SERVER-FQDN --query value -o tsv)" >> "$GITHUB_OUTPUT"
           echo "database=$(az keyvault secret show --vault-name "$KV" --name SQL-DATABASE-NAME --query value -o tsv)" >> "$GITHUB_OUTPUT"
-          echo "login=$(az keyvault secret show --vault-name "$KV" --name SQL-ADMIN-LOGIN --query value -o tsv)" >> "$GITHUB_OUTPUT"
-          PASSWORD=$(az keyvault secret show --vault-name "$KV" --name SQL-ADMIN-PASSWORD --query value -o tsv)
-          echo "::add-mask::$PASSWORD"
-          echo "password=$PASSWORD" >> "$GITHUB_OUTPUT"
+
+      - name: Get SQL access token
+        id: sqltoken
+        run: |
+          TOKEN=$(az account get-access-token --resource https://database.windows.net/ --query accessToken -o tsv)
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
 
       - name: Seed CRM data
         run: dotnet run --project src/seed-data
         env:
           SQL_SERVER_FQDN: ${{ steps.sql.outputs.server }}
           SQL_DATABASE_NAME: ${{ steps.sql.outputs.database }}
-          SQL_ADMIN_LOGIN: ${{ steps.sql.outputs.login }}
-          SQL_ADMIN_PASSWORD: ${{ steps.sql.outputs.password }}
+          SQL_ACCESS_TOKEN: ${{ steps.sqltoken.outputs.token }}
 
       - name: Link Entra users to Customers table
         run: |
           KV="${{ steps.keyvault.outputs.name }}"
           SERVER="${{ steps.sql.outputs.server }}"
           DB="${{ steps.sql.outputs.database }}"
-          LOGIN="${{ steps.sql.outputs.login }}"
-          PASSWORD="${{ steps.sql.outputs.password }}"
+          TOKEN="${{ steps.sqltoken.outputs.token }}"
 
           declare -A CUSTOMERS=(
             ["101"]="CUSTOMER-EMMA-ENTRA-OID"
@@ -83,13 +111,12 @@ jobs:
 
           for CID in "${!CUSTOMERS[@]}"; do
             SECRET_NAME="${CUSTOMERS[$CID]}"
-            OID=$(az keyvault secret show --vault-name "$KV" --name "$SECRET_NAME" --query value -o tsv)
+            OID=$(az keyvault secret show --vault-name "$KV" --name "$SECRET_NAME" --query value -o tsv 2>/dev/null || true)
             if [ -n "$OID" ]; then
-              # Escape single quotes in values to prevent SQL injection
-              SAFE_OID="${OID//\'/\'\'}" 
-              SAFE_CID="${CID//\'/\'\'}" 
-              sqlcmd -S "tcp:${SERVER},1433" -d "$DB" -U "$LOGIN" -P "$PASSWORD" \
-                -Q "UPDATE Customers SET entra_id = '${SAFE_OID}' WHERE id = '${SAFE_CID}'" -C
+              SAFE_OID="${OID//\'/\'\'}"
+              SAFE_CID="${CID//\'/\'\'}"
+              sqlcmd -S "tcp:${SERVER},1433" -d "$DB" --authentication-method=ActiveDirectoryAccessToken -P "$TOKEN" \
+                -Q "UPDATE Customers SET entra_id = '${SAFE_OID}' WHERE id = '${SAFE_CID}'" -C 2>/dev/null || true
               echo "Linked customer $CID → ${OID:0:8}..."
             else
               echo "Warning: Could not read $SECRET_NAME from Key Vault"

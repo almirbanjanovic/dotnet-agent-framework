@@ -22,3 +22,8 @@ output "agc_subnet_id" {
   description = "Subnet ID for App Gateway for Containers"
   value       = azurerm_subnet.agc.id
 }
+
+output "private_endpoints_subnet_id" {
+  description = "Subnet ID for private endpoints"
+  value       = azurerm_subnet.private_endpoints.id
+}

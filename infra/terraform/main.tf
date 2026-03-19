@@ -4,10 +4,16 @@
 
 data "azurerm_client_config" "current" {}
 
+# Deployer public IP — used for firewall exceptions during provisioning
+data "http" "deployer_ip" {
+  url = "https://api.ipify.org"
+}
+
 locals {
   # Each module composes: {prefix}-{base_name}-{environment}-{location}
   # These two values are passed separately to every module.
-  name_base = "${var.base_name}-${var.environment}"
+  name_base   = "${var.base_name}-${var.environment}"
+  deployer_ip = chomp(data.http.deployer_ip.response_body)
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -35,7 +41,8 @@ module "foundry" {
   embedding_sku_name          = var.embedding_sku_name
   embedding_capacity          = var.embedding_capacity
 
-  tags = var.tags
+  allowed_ips = [local.deployer_ip]
+  tags        = var.tags
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -53,6 +60,7 @@ module "sql" {
   admin_login           = var.sql_admin_login
   tenant_id             = data.azurerm_client_config.current.tenant_id
   entra_admin_object_id = data.azurerm_client_config.current.object_id
+  deployer_ip           = local.deployer_ip
   tags                  = var.tags
 }
 
@@ -68,6 +76,7 @@ module "cosmosdb_agents" {
   resource_group_name = var.resource_group_name
   database_name       = var.cosmos_agents_database_name
   consistency_level   = "Eventual"
+  allowed_ips         = [local.deployer_ip]
   tags                = var.tags
 
   containers = {
@@ -199,6 +208,7 @@ module "storage_images" {
   environment         = var.environment
   resource_group_name = var.resource_group_name
   location            = var.location
+  allowed_ips         = [local.deployer_ip]
   tags                = var.tags
 
   containers = {
@@ -256,7 +266,8 @@ module "search" {
   openai_embedding_deployment = module.foundry.embedding_deployment_name != null ? module.foundry.embedding_deployment_name : var.embedding_model_name
   openai_embedding_model      = var.embedding_model_name
 
-  tags = var.tags
+  allowed_ips = [local.deployer_ip]
+  tags        = var.tags
 
   depends_on = [module.storage_images]
 }
@@ -381,7 +392,7 @@ module "rbac_search" {
 #--------------------------------------------------------------------------------------------------------------------------------
 
 resource "azapi_resource" "search_indexer" {
-  type      = "Microsoft.Search/searchServices/indexers@2025-05-01"
+  type      = "Microsoft.Search/searchServices/indexers@2024-11-01"
   name      = "blob-indexer"
   parent_id = module.search.id
 
@@ -486,6 +497,7 @@ module "keyvault" {
   location            = var.location
   resource_group_name = var.resource_group_name
   tenant_id           = data.azurerm_client_config.current.tenant_id
+  allowed_ips         = ["${local.deployer_ip}/32"]
   tags                = var.tags
 }
 
@@ -514,6 +526,11 @@ module "rbac_keyvault" {
     prod_agent = module.identity.identities["prod_agent"].principal_id
     orch_agent = module.identity.identities["orch_agent"].principal_id
   }
+
+  # Certificates Officer: the deployer needs to create TLS certificates
+  certificate_officer_principal_ids = {
+    deployer = data.azurerm_client_config.current.object_id
+  }
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -527,21 +544,19 @@ module "keyvault_secrets" {
 
   secrets = {
     "AZURE-OPENAI-ENDPOINT"             = module.foundry.endpoint
-    "AZURE-OPENAI-API-KEY"              = module.foundry.primary_key
+    "AZURE-OPENAI-API-KEY"              = "disabled-by-policy-use-managed-identity"
     "AZURE-OPENAI-DEPLOYMENT-NAME"      = module.foundry.deployment_name
     "AZURE-OPENAI-EMBEDDING-DEPLOYMENT" = module.foundry.embedding_deployment_name != null ? module.foundry.embedding_deployment_name : ""
     "COSMOSDB-AGENTS-ENDPOINT"          = module.cosmosdb_agents.endpoint
-    "COSMOSDB-AGENTS-KEY"               = module.cosmosdb_agents.primary_key
+    "COSMOSDB-AGENTS-KEY"               = nonsensitive(module.cosmosdb_agents.primary_key)
     "COSMOSDB-AGENTS-DATABASE"          = module.cosmosdb_agents.database_name
     "SQL-SERVER-FQDN"                   = module.sql.server_fqdn
     "SQL-DATABASE-NAME"                 = module.sql.database_name
-    "SQL-ADMIN-LOGIN"                   = module.sql.admin_login
-    "SQL-ADMIN-PASSWORD"                = module.sql.admin_password
     "STORAGE-IMAGES-ENDPOINT"           = module.storage_images.primary_blob_endpoint
     "STORAGE-IMAGES-ACCOUNT-NAME"       = module.storage_images.name
     "STORAGE-IMAGES-CONTAINER"          = module.storage_images.container_names["images"]
     "SEARCH-ENDPOINT"                   = module.search.endpoint
-    "SEARCH-ADMIN-KEY"                  = module.search.primary_key
+    "SEARCH-ADMIN-KEY"                  = nonsensitive(module.search.primary_key)
     "SEARCH-INDEX-NAME"                 = module.search.index_name
 
     # Workload identity client IDs (used by Helm at deploy time)
@@ -559,11 +574,11 @@ module "keyvault_secrets" {
     "ENTRA-BFF-HOSTNAME"  = module.agc.frontend_fqdn
 
     # Customer passwords (for lab use)
-    "CUSTOMER-EMMA-PASSWORD"  = module.entra.test_user_passwords["emma"]
-    "CUSTOMER-JAMES-PASSWORD" = module.entra.test_user_passwords["james"]
-    "CUSTOMER-SARAH-PASSWORD" = module.entra.test_user_passwords["sarah"]
-    "CUSTOMER-DAVID-PASSWORD" = module.entra.test_user_passwords["david"]
-    "CUSTOMER-LISA-PASSWORD"  = module.entra.test_user_passwords["lisa"]
+    "CUSTOMER-EMMA-PASSWORD"  = nonsensitive(module.entra.test_user_passwords["emma"])
+    "CUSTOMER-JAMES-PASSWORD" = nonsensitive(module.entra.test_user_passwords["james"])
+    "CUSTOMER-SARAH-PASSWORD" = nonsensitive(module.entra.test_user_passwords["sarah"])
+    "CUSTOMER-DAVID-PASSWORD" = nonsensitive(module.entra.test_user_passwords["david"])
+    "CUSTOMER-LISA-PASSWORD"  = nonsensitive(module.entra.test_user_passwords["lisa"])
 
     # Customer Entra object IDs (used by deploy script to link Entra users to SQL Customers table)
     "CUSTOMER-EMMA-ENTRA-OID"  = module.entra.test_user_object_ids["emma"]
@@ -573,7 +588,17 @@ module "keyvault_secrets" {
     "CUSTOMER-LISA-ENTRA-OID"  = module.entra.test_user_object_ids["lisa"]
   }
 
-  depends_on = [module.rbac_keyvault]
+  depends_on = [
+    module.rbac_keyvault,
+    module.foundry,
+    module.cosmosdb_agents,
+    module.sql,
+    module.storage_images,
+    module.search,
+    module.identity,
+    module.entra,
+    module.agc,
+  ]
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -605,4 +630,137 @@ module "tls_cert" {
   dns_names    = [module.agc.frontend_fqdn]
 
   depends_on = [module.rbac_keyvault]
+}
+
+#--------------------------------------------------------------------------------------------------------------------------------
+# Private DNS Zones (shared across all private endpoints)
+#--------------------------------------------------------------------------------------------------------------------------------
+
+module "private_dns_zones" {
+  source = "./modules/private-dns-zones/v1"
+
+  resource_group_name = var.resource_group_name
+  vnet_id             = module.vnet.vnet_id
+  tags                = var.tags
+
+  zones = {
+    sql              = "privatelink.database.windows.net"
+    cognitiveservices = "privatelink.cognitiveservices.azure.com"
+    cosmosdb         = "privatelink.documents.azure.com"
+    search           = "privatelink.search.windows.net"
+    blob             = "privatelink.blob.core.windows.net"
+    keyvault         = "privatelink.vaultcore.azure.net"
+    acr              = "privatelink.azurecr.io"
+  }
+
+  depends_on = [module.vnet]
+}
+
+#--------------------------------------------------------------------------------------------------------------------------------
+# Private Endpoints
+#--------------------------------------------------------------------------------------------------------------------------------
+
+module "pe_sql" {
+  source = "./modules/private-endpoint/v1"
+
+  name               = "pe-sql-${local.name_base}-${var.location}"
+  location           = var.location
+  resource_group_name = var.resource_group_name
+  subnet_id          = module.vnet.private_endpoints_subnet_id
+  target_resource_id = module.sql.server_id
+  subresource_names  = ["sqlServer"]
+  dns_zone_id        = module.private_dns_zones.zone_ids["sql"]
+  tags               = var.tags
+
+  depends_on = [module.sql, module.private_dns_zones]
+}
+
+module "pe_foundry" {
+  source = "./modules/private-endpoint/v1"
+
+  name               = "pe-aif-${local.name_base}-${var.location}"
+  location           = var.location
+  resource_group_name = var.resource_group_name
+  subnet_id          = module.vnet.private_endpoints_subnet_id
+  target_resource_id = module.foundry.account_id
+  subresource_names  = ["account"]
+  dns_zone_id        = module.private_dns_zones.zone_ids["cognitiveservices"]
+  tags               = var.tags
+
+  depends_on = [module.foundry, module.private_dns_zones]
+}
+
+module "pe_cosmosdb" {
+  source = "./modules/private-endpoint/v1"
+
+  name               = "pe-cosmos-${local.name_base}-${var.location}"
+  location           = var.location
+  resource_group_name = var.resource_group_name
+  subnet_id          = module.vnet.private_endpoints_subnet_id
+  target_resource_id = module.cosmosdb_agents.account_id
+  subresource_names  = ["Sql"]
+  dns_zone_id        = module.private_dns_zones.zone_ids["cosmosdb"]
+  tags               = var.tags
+
+  depends_on = [module.cosmosdb_agents, module.private_dns_zones]
+}
+
+module "pe_search" {
+  source = "./modules/private-endpoint/v1"
+
+  name               = "pe-srch-${local.name_base}-${var.location}"
+  location           = var.location
+  resource_group_name = var.resource_group_name
+  subnet_id          = module.vnet.private_endpoints_subnet_id
+  target_resource_id = module.search.id
+  subresource_names  = ["searchService"]
+  dns_zone_id        = module.private_dns_zones.zone_ids["search"]
+  tags               = var.tags
+
+  depends_on = [module.search, module.private_dns_zones]
+}
+
+module "pe_storage" {
+  source = "./modules/private-endpoint/v1"
+
+  name               = "pe-st-${local.name_base}-${var.location}"
+  location           = var.location
+  resource_group_name = var.resource_group_name
+  subnet_id          = module.vnet.private_endpoints_subnet_id
+  target_resource_id = module.storage_images.id
+  subresource_names  = ["blob"]
+  dns_zone_id        = module.private_dns_zones.zone_ids["blob"]
+  tags               = var.tags
+
+  depends_on = [module.storage_images, module.private_dns_zones]
+}
+
+module "pe_keyvault" {
+  source = "./modules/private-endpoint/v1"
+
+  name               = "pe-kv-${local.name_base}-${var.location}"
+  location           = var.location
+  resource_group_name = var.resource_group_name
+  subnet_id          = module.vnet.private_endpoints_subnet_id
+  target_resource_id = module.keyvault.id
+  subresource_names  = ["vault"]
+  dns_zone_id        = module.private_dns_zones.zone_ids["keyvault"]
+  tags               = var.tags
+
+  depends_on = [module.keyvault, module.private_dns_zones]
+}
+
+module "pe_acr" {
+  source = "./modules/private-endpoint/v1"
+
+  name               = "pe-acr-${local.name_base}-${var.location}"
+  location           = var.location
+  resource_group_name = var.resource_group_name
+  subnet_id          = module.vnet.private_endpoints_subnet_id
+  target_resource_id = module.acr.id
+  subresource_names  = ["registry"]
+  dns_zone_id        = module.private_dns_zones.zone_ids["acr"]
+  tags               = var.tags
+
+  depends_on = [module.acr, module.private_dns_zones]
 }

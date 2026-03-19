@@ -42,6 +42,12 @@ variable "agc_subnet_cidr" {
   default     = "10.0.2.0/24"
 }
 
+variable "private_endpoints_subnet_cidr" {
+  description = "Subnet CIDR for private endpoints"
+  type        = string
+  default     = "10.0.3.0/24"
+}
+
 variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)

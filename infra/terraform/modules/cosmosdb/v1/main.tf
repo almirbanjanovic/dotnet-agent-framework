@@ -38,6 +38,7 @@ resource "azurerm_cosmosdb_account" "this" {
 
   local_authentication_disabled = false
   public_network_access_enabled = var.public_network_access_enabled
+  ip_range_filter               = var.allowed_ips
 
   tags = var.tags
 
@@ -89,4 +90,15 @@ resource "azurerm_cosmosdb_sql_container" "this" {
       }
     }
   }
+}
+
+# -----------------------------------------------------------------------------
+# Retrieve Account Keys (primary_key is write-only in AzureRM 4.63+)
+# -----------------------------------------------------------------------------
+data "azapi_resource_action" "list_keys" {
+  type        = "Microsoft.DocumentDB/databaseAccounts@2024-11-15"
+  resource_id = azurerm_cosmosdb_account.this.id
+  action      = "listKeys"
+
+  response_export_values = ["primaryMasterKey"]
 }

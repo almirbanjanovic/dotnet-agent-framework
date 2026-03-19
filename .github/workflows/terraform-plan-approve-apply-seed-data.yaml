@@ -29,10 +29,23 @@ jobs:
       azureTenantId: ${{ secrets.AZURE_TENANT_ID }}
       azureSubscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+  cleanup-after-plan:
+    name: Cleanup After Plan
+    needs: [terraform-plan]
+    if: always()
+    uses: ./.github/workflows/cleanup-deployer-ip.yaml
+    with:
+      environment: ${{ inputs.environment }}
+      deployer_ip: ${{ needs.terraform-plan.outputs.deployer_ip }}
+    secrets:
+      azureClientId: ${{ secrets.AZURE_CLIENT_ID }}
+      azureTenantId: ${{ secrets.AZURE_TENANT_ID }}
+      azureSubscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
   
   manual-approval:
     name: Manual Approval
-    needs: [terraform-plan]
+    needs: [terraform-plan, cleanup-after-plan]
     runs-on: ubuntu-latest
     steps:
       - uses: trstringer/manual-approval@v1
@@ -66,12 +79,38 @@ jobs:
       azureTenantId: ${{ secrets.AZURE_TENANT_ID }}
       azureSubscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+  cleanup-after-apply:
+    name: Cleanup After Apply
+    needs: [terraform-apply]
+    if: always()
+    uses: ./.github/workflows/cleanup-deployer-ip.yaml
+    with:
+      environment: ${{ inputs.environment }}
+      deployer_ip: ${{ needs.terraform-apply.outputs.deployer_ip }}
+    secrets:
+      azureClientId: ${{ secrets.AZURE_CLIENT_ID }}
+      azureTenantId: ${{ secrets.AZURE_TENANT_ID }}
+      azureSubscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
   seed-data:
     name: Seed CRM Data
-    needs: [terraform-apply]
+    needs: [cleanup-after-apply]
     uses: ./.github/workflows/seed-data.yaml
     with:
       environment: ${{ inputs.environment }}
+    secrets:
+      azureClientId: ${{ secrets.AZURE_CLIENT_ID }}
+      azureTenantId: ${{ secrets.AZURE_TENANT_ID }}
+      azureSubscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  cleanup-after-seed:
+    name: Cleanup After Seed Data
+    needs: [seed-data]
+    if: always()
+    uses: ./.github/workflows/cleanup-deployer-ip.yaml
+    with:
+      environment: ${{ inputs.environment }}
+      deployer_ip: ${{ needs.seed-data.outputs.deployer_ip }}
     secrets:
       azureClientId: ${{ secrets.AZURE_CLIENT_ID }}
       azureTenantId: ${{ secrets.AZURE_TENANT_ID }}

@@ -15,7 +15,7 @@ output "endpoint" {
 
 output "primary_key" {
   description = "Cosmos DB primary access key"
-  value       = azurerm_cosmosdb_account.this.primary_key
+  value       = data.azapi_resource_action.list_keys.output.primaryMasterKey
   sensitive   = true
 }
 

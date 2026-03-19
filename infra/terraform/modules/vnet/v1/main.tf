@@ -43,3 +43,10 @@ resource "azurerm_subnet" "agc" {
     }
   }
 }
+
+resource "azurerm_subnet" "private_endpoints" {
+  name                 = "snet-private-endpoints"
+  resource_group_name  = var.resource_group_name
+  virtual_network_name = azurerm_virtual_network.this.name
+  address_prefixes     = [var.private_endpoints_subnet_cidr]
+}

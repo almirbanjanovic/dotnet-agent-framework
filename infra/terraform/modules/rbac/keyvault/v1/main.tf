@@ -21,3 +21,12 @@ resource "azurerm_role_assignment" "secrets_user" {
   role_definition_name = "Key Vault Secrets User"
   principal_id         = each.value
 }
+
+# Certificates Officer — allows creating/managing certificates (for TLS cert generation)
+resource "azurerm_role_assignment" "certificates_officer" {
+  for_each = var.certificate_officer_principal_ids
+
+  scope                = var.keyvault_id
+  role_definition_name = "Key Vault Certificates Officer"
+  principal_id         = each.value
+}

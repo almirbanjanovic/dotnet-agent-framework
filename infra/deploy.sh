@@ -161,6 +161,65 @@ echo -e "    Storage account: ${C}${STORAGE_ACCOUNT}${W}"
 echo -e "    Location:        ${C}${LOCATION}${W}"
 echo ""
 
+# ── Get deployer IP ──────────────────────────────────────────────────────────
+DEPLOYER_IP=$(curl -s --max-time 10 https://api.ipify.org)
+echo -e "    Deployer IP:     ${C}${DEPLOYER_IP}${W}"
+echo ""
+
+# ── Cleanup: ALWAYS remove deployer IP from all firewalls (even on error) ────
+cleanup_deployer_ip() {
+    echo ""
+    echo -e "  ${Y}━━ Removing deployer IP $DEPLOYER_IP from all firewalls (always runs) ━━${W}"
+
+    RG="$RESOURCE_GROUP"
+    IP="$DEPLOYER_IP"
+
+    # Key Vault
+    for kv in $(az keyvault list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
+      az keyvault network-rule remove --name "$kv" --ip-address "$IP/32" 2>/dev/null || true
+    done
+
+    # Storage accounts
+    for st in $(az storage account list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
+      az storage account network-rule remove --resource-group "$RG" --account-name "$st" --ip-address "$IP" 2>/dev/null || true
+    done
+
+    # Cosmos DB
+    for c in $(az cosmosdb list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
+      EXISTING=$(az cosmosdb show --name "$c" --resource-group "$RG" --query "ipRules[].ipAddressOrRange" -o tsv 2>/dev/null || true)
+      FILTERED=$(echo "$EXISTING" | grep -v "^${IP}$" | paste -sd, - 2>/dev/null || true)
+      az cosmosdb update --name "$c" --resource-group "$RG" --ip-range-filter "$FILTERED" 2>/dev/null || true
+    done
+
+    # SQL Server
+    for sql in $(az sql server list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
+      az sql server firewall-rule delete --server "$sql" --resource-group "$RG" --name AllowDeployer -y 2>/dev/null || true
+      az sql server update --name "$sql" --resource-group "$RG" --enable-public-network false 2>/dev/null || true
+    done
+
+    # Cognitive Services
+    for cog in $(az cognitiveservices account list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
+      az cognitiveservices account network-rule remove --resource-group "$RG" --name "$cog" --ip-address "$IP/32" 2>/dev/null || true
+    done
+
+    # AI Search
+    for s in $(az search service list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
+      CURRENT=$(az search service show --name "$s" --resource-group "$RG" --query "networkRuleSet.ipRules[].value" -o tsv 2>/dev/null || true)
+      FILTERED=$(echo "$CURRENT" | grep -v "^${IP}$" || true)
+      if [ -n "$FILTERED" ]; then
+        RULES=$(echo "$FILTERED" | jq -Rn '[inputs | {value: .}]')
+      else
+        RULES="[]"
+      fi
+      az search service update --name "$s" --resource-group "$RG" --ip-rules "$RULES" 2>/dev/null || true
+    done
+
+    echo -e "  ${Y}━━ Locking down state storage ━━${W}"
+    az storage account update --name "$STORAGE_ACCOUNT" --resource-group "$RESOURCE_GROUP" --public-network-access Disabled >/dev/null 2>&1 || true
+    echo -e "  ${G}━━ Cleanup complete ━━${W}"
+}
+trap cleanup_deployer_ip EXIT
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # PRE-FLIGHT — Purge soft-deleted resources from previous runs
 # Azure keeps deleted Key Vaults, Cognitive Services, and other resources in a
@@ -406,25 +465,55 @@ KV_NAME=$(az keyvault list --resource-group "$RESOURCE_GROUP" --query "[0].name"
 if [[ -z "$KV_NAME" ]]; then echo "No Key Vault found in $RESOURCE_GROUP"; exit 1; fi
 done_ "Key Vault: $KV_NAME"
 
-step "Reading SQL credentials from Key Vault"
+step "Reading SQL connection info from Key Vault"
 SQL_FQDN=$(az keyvault secret show --vault-name "$KV_NAME" --name "SQL-SERVER-FQDN" --query value -o tsv)
 SQL_DB=$(az keyvault secret show --vault-name "$KV_NAME" --name "SQL-DATABASE-NAME" --query value -o tsv)
-SQL_LOGIN=$(az keyvault secret show --vault-name "$KV_NAME" --name "SQL-ADMIN-LOGIN" --query value -o tsv)
-SQL_PASS=$(az keyvault secret show --vault-name "$KV_NAME" --name "SQL-ADMIN-PASSWORD" --query value -o tsv)
 done_ "SQL Server: $SQL_FQDN / $SQL_DB"
 
-step "Running seed-data tool"
+step "Getting AKS credentials (SQL is behind a private endpoint)"
+AKS_NAME=$(az aks list --resource-group "$RESOURCE_GROUP" --query "[0].name" -o tsv)
+if [[ -z "$AKS_NAME" ]]; then echo "No AKS cluster found in $RESOURCE_GROUP"; exit 1; fi
+az aks get-credentials --resource-group "$RESOURCE_GROUP" --name "$AKS_NAME" --overwrite-existing >/dev/null
+done_ "AKS: $AKS_NAME"
 
+step "Getting SQL access token"
+SQL_TOKEN=$(az account get-access-token --resource https://database.windows.net/ --query accessToken -o tsv)
+if [[ -z "$SQL_TOKEN" ]]; then echo "Failed to get SQL access token"; exit 1; fi
+done_ "Token acquired"
+
+step "Publishing seed-data tool for Linux"
 SEED_DATA_DIR="$(dirname "$SCRIPT_DIR")/src/seed-data"
+PUBLISH_DIR="$SEED_DATA_DIR/bin/publish"
 pushd "$SEED_DATA_DIR" >/dev/null
-export SQL_SERVER_FQDN="$SQL_FQDN"
-export SQL_DATABASE_NAME="$SQL_DB"
-export SQL_ADMIN_LOGIN="$SQL_LOGIN"
-export SQL_ADMIN_PASSWORD="$SQL_PASS"
-dotnet run
-done_ "CRM data seeded"
-unset SQL_SERVER_FQDN SQL_DATABASE_NAME SQL_ADMIN_LOGIN SQL_ADMIN_PASSWORD
+dotnet publish -c Release -r linux-x64 --self-contained -o "$PUBLISH_DIR" >/dev/null 2>&1
+done_ "Published to $PUBLISH_DIR"
 popd >/dev/null
+
+step "Running seed-data inside AKS cluster"
+K8S_NAMESPACE="contoso"
+POD_NAME="seed-data-runner"
+CRM_DATA_DIR="$(dirname "$SCRIPT_DIR")/data/contoso-crm"
+
+kubectl run "$POD_NAME" --image=mcr.microsoft.com/dotnet/runtime-deps:9.0 --restart=Never --namespace="$K8S_NAMESPACE" --command -- sleep 600 >/dev/null 2>&1
+kubectl wait --for=condition=Ready "pod/$POD_NAME" --namespace="$K8S_NAMESPACE" --timeout=120s >/dev/null 2>&1
+done_ "Pod $POD_NAME ready"
+
+cleanup_seed_pod() {
+    kubectl delete pod "$POD_NAME" --namespace="$K8S_NAMESPACE" --force --grace-period=0 >/dev/null 2>&1 || true
+}
+# Pod cleanup handled inline below (trap EXIT reserved for deployer IP cleanup)
+
+kubectl exec "$POD_NAME" --namespace="$K8S_NAMESPACE" -- mkdir -p /app /data/contoso-crm >/dev/null 2>&1
+kubectl cp "$PUBLISH_DIR" "${K8S_NAMESPACE}/${POD_NAME}:/app" >/dev/null 2>&1
+kubectl cp "$CRM_DATA_DIR" "${K8S_NAMESPACE}/${POD_NAME}:/data/contoso-crm" >/dev/null 2>&1
+kubectl exec "$POD_NAME" --namespace="$K8S_NAMESPACE" -- chmod +x /app/seed-data >/dev/null 2>&1
+
+kubectl exec "$POD_NAME" --namespace="$K8S_NAMESPACE" -- \
+    /bin/sh -c "SQL_SERVER_FQDN='$SQL_FQDN' SQL_DATABASE_NAME='$SQL_DB' SQL_ACCESS_TOKEN='$SQL_TOKEN' CRM_DATA_PATH='/data/contoso-crm' /app/seed-data"
+done_ "CRM data seeded"
+
+kubectl delete pod "$POD_NAME" --namespace="$K8S_NAMESPACE" --force --grace-period=0 >/dev/null 2>&1 || true
+# (trap - EXIT removed — deployer IP cleanup trap handles all cleanup)
 
 phase_summary 6 \
     "Phase 7 \u2014 Link Entra users to Customers table" \
@@ -454,14 +543,24 @@ declare -A CUSTOMER_NAMES=(
     ["105"]="Lisa Torres"
 )
 
+step "Running SQL updates via AKS pod (private endpoint)"
+POD_NAME7="sql-entra-linker"
+kubectl run "$POD_NAME7" --image=mcr.microsoft.com/mssql-tools:latest --restart=Never --namespace="$K8S_NAMESPACE" --command -- sleep 300 >/dev/null 2>&1
+kubectl wait --for=condition=Ready "pod/$POD_NAME7" --namespace="$K8S_NAMESPACE" --timeout=120s >/dev/null 2>&1
+
+cleanup_linker_pod() {
+    kubectl delete pod "$POD_NAME7" --namespace="$K8S_NAMESPACE" --force --grace-period=0 >/dev/null 2>&1 || true
+}
+# Pod cleanup handled inline below (trap EXIT reserved for deployer IP cleanup)
+
 for CID in "${!CUSTOMER_MAPPING[@]}"; do
     SECRET_NAME="${CUSTOMER_MAPPING[$CID]}"
     OID=$(az keyvault secret show --vault-name "$KV_NAME" --name "$SECRET_NAME" --query value -o tsv 2>/dev/null || true)
     if [[ -n "$OID" ]]; then
-        # Escape single quotes in values to prevent SQL injection
-        SAFE_OID="${OID//\'/\'\'}" 
-        SAFE_CID="${CID//\'/\'\'}" 
-        sqlcmd -S "tcp:${SQL_FQDN},1433" -d "$SQL_DB" -U "$SQL_LOGIN" -P "$SQL_PASS" \
+        SAFE_OID="${OID//\'/\'\'}"
+        SAFE_CID="${CID//\'/\'\'}"
+        kubectl exec "$POD_NAME7" --namespace="$K8S_NAMESPACE" -- \
+            /opt/mssql-tools/bin/sqlcmd -S "tcp:${SQL_FQDN},1433" -d "$SQL_DB" -P "$SQL_TOKEN" -U "integratedauth" -G \
             -Q "UPDATE Customers SET entra_id = '${SAFE_OID}' WHERE id = '${SAFE_CID}'" -C 2>/dev/null || true
         done_ "${CUSTOMER_NAMES[$CID]} (ID $CID) \u2192 ${OID:0:8}..."
     else
@@ -469,13 +568,7 @@ for CID in "${!CUSTOMER_MAPPING[@]}"; do
     fi
 done
 
-# \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
-# Lock state storage
-# \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
-
-step "Disabling public access on $STORAGE_ACCOUNT"
-az storage account update --name "$STORAGE_ACCOUNT" --resource-group "$RESOURCE_GROUP" --public-network-access Disabled >/dev/null
-done_ "Public access disabled on $STORAGE_ACCOUNT"
+kubectl delete pod "$POD_NAME7" --namespace="$K8S_NAMESPACE" --force --grace-period=0 >/dev/null 2>&1 || true
 
 # ── Read Key Vault URI ───────────────────────────────────────────────────────
 KEYVAULT_URI=$(az keyvault show --name "$KV_NAME" --query properties.vaultUri -o tsv 2>/dev/null || true)

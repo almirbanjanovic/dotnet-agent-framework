@@ -95,6 +95,59 @@ function Read-HclValue {
     return $null
 }
 
+function Remove-DeployerFirewallRules {
+    param([string]$ResourceGroup, [string]$DeployerIp)
+    Write-Host ""
+    Write-Host "  ━━ Removing deployer IP $DeployerIp from all firewalls (always runs) ━━" -ForegroundColor Yellow
+
+    # Key Vault
+    $kvNames = az keyvault list --resource-group $ResourceGroup --query "[].name" -o tsv 2>$null
+    foreach ($kv in ($kvNames -split "`n" | Where-Object { $_ })) {
+        az keyvault network-rule remove --name $kv.Trim() --ip-address "$DeployerIp/32" 2>$null | Out-Null
+    }
+
+    # Storage accounts
+    $stNames = az storage account list --resource-group $ResourceGroup --query "[].name" -o tsv 2>$null
+    foreach ($st in ($stNames -split "`n" | Where-Object { $_ })) {
+        az storage account network-rule remove --resource-group $ResourceGroup --account-name $st.Trim() --ip-address $DeployerIp 2>$null | Out-Null
+    }
+
+    # Cosmos DB
+    $cosmosNames = az cosmosdb list --resource-group $ResourceGroup --query "[].name" -o tsv 2>$null
+    foreach ($c in ($cosmosNames -split "`n" | Where-Object { $_ })) {
+        $c = $c.Trim()
+        $existing = az cosmosdb show --name $c --resource-group $ResourceGroup --query "ipRules[].ipAddressOrRange" -o tsv 2>$null
+        $filtered = ($existing -split "`n" | Where-Object { $_ -and $_.Trim() -ne $DeployerIp }) -join ","
+        az cosmosdb update --name $c --resource-group $ResourceGroup --ip-range-filter $filtered 2>$null | Out-Null
+    }
+
+    # SQL Server
+    $sqlNames = az sql server list --resource-group $ResourceGroup --query "[].name" -o tsv 2>$null
+    foreach ($sql in ($sqlNames -split "`n" | Where-Object { $_ })) {
+        $sql = $sql.Trim()
+        az sql server firewall-rule delete --server $sql --resource-group $ResourceGroup --name AllowDeployer -y 2>$null | Out-Null
+        az sql server update --name $sql --resource-group $ResourceGroup --enable-public-network false 2>$null | Out-Null
+    }
+
+    # Cognitive Services
+    $cogNames = az cognitiveservices account list --resource-group $ResourceGroup --query "[].name" -o tsv 2>$null
+    foreach ($cog in ($cogNames -split "`n" | Where-Object { $_ })) {
+        az cognitiveservices account network-rule remove --resource-group $ResourceGroup --name $cog.Trim() --ip-address "$DeployerIp/32" 2>$null | Out-Null
+    }
+
+    # AI Search
+    $searchNames = az search service list --resource-group $ResourceGroup --query "[].name" -o tsv 2>$null
+    foreach ($s in ($searchNames -split "`n" | Where-Object { $_ })) {
+        $s = $s.Trim()
+        $currentIps = az search service show --name $s --resource-group $ResourceGroup --query "networkRuleSet.ipRules[].value" -o tsv 2>$null
+        $filtered = @($currentIps -split "`n" | Where-Object { $_ -and $_.Trim() -ne $DeployerIp })
+        $ipRules = if ($filtered.Count -gt 0) { ($filtered | ForEach-Object { @{value=$_.Trim()} } | ConvertTo-Json -Compress) } else { "[]" }
+        az search service update --name $s --resource-group $ResourceGroup --ip-rules $ipRules 2>$null | Out-Null
+    }
+
+    Write-Host "  ━━ Deployer IP removed from all firewalls ━━" -ForegroundColor Green
+}
+
 # ── Select environment ───────────────────────────────────────────────────────────
 
 $TfVarsFiles = @(Get-ChildItem -Path $TerraformDir -Filter "*.tfvars" | Where-Object { $_.Name -ne 'example.tfvars' })
@@ -157,6 +210,13 @@ Write-Host "    Resource group:  " -NoNewLine; Write-Host "$ResourceGroup" -Fore
 Write-Host "    Storage account: " -NoNewLine; Write-Host "$StorageAccount" -ForegroundColor Cyan
 Write-Host "    Location:        " -NoNewLine; Write-Host "$Location" -ForegroundColor Cyan
 Write-Host ""
+
+# ── Get deployer IP ──────────────────────────────────────────────────────────
+$DeployerIp = (Invoke-RestMethod -Uri "https://api.ipify.org" -TimeoutSec 10).Trim()
+Write-Host "    Deployer IP:     " -NoNewLine; Write-Host "$DeployerIp" -ForegroundColor Cyan
+Write-Host ""
+
+try {
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PRE-FLIGHT — Purge soft-deleted resources from previous runs
@@ -420,28 +480,58 @@ $KvName = az keyvault list --resource-group $ResourceGroup --query "[0].name" -o
 if (-not $KvName) { throw "No Key Vault found in $ResourceGroup" }
 Write-Done "Key Vault: $KvName"
 
-Write-Step "Reading SQL credentials from Key Vault"
+Write-Step "Reading SQL connection info from Key Vault"
 $SqlFqdn  = az keyvault secret show --vault-name $KvName --name "SQL-SERVER-FQDN" --query value -o tsv
 $SqlDb    = az keyvault secret show --vault-name $KvName --name "SQL-DATABASE-NAME" --query value -o tsv
-$SqlLogin = az keyvault secret show --vault-name $KvName --name "SQL-ADMIN-LOGIN" --query value -o tsv
-$SqlPass  = az keyvault secret show --vault-name $KvName --name "SQL-ADMIN-PASSWORD" --query value -o tsv
 Write-Done "SQL Server: $SqlFqdn / $SqlDb"
 
-Write-Step "Running seed-data tool"
+Write-Step "Getting AKS credentials (SQL is behind a private endpoint)"
+$AksName = az aks list --resource-group $ResourceGroup --query "[0].name" -o tsv
+if (-not $AksName) { throw "No AKS cluster found in $ResourceGroup" }
+az aks get-credentials --resource-group $ResourceGroup --name $AksName --overwrite-existing | Out-Null
+Write-Done "AKS: $AksName"
 
+Write-Step "Getting SQL access token"
+$SqlToken = az account get-access-token --resource https://database.windows.net/ --query accessToken -o tsv
+if (-not $SqlToken) { throw "Failed to get SQL access token" }
+Write-Done "Token acquired"
+
+Write-Step "Publishing seed-data tool for Linux"
 $SeedDataDir = Join-Path (Split-Path $ScriptDir) "src" "seed-data"
+$PublishDir   = Join-Path $SeedDataDir "bin" "publish"
 Push-Location $SeedDataDir
 try {
-    $env:SQL_SERVER_FQDN    = $SqlFqdn
-    $env:SQL_DATABASE_NAME  = $SqlDb
-    $env:SQL_ADMIN_LOGIN    = $SqlLogin
-    $env:SQL_ADMIN_PASSWORD = $SqlPass
-    dotnet run
+    dotnet publish -c Release -r linux-x64 --self-contained -o $PublishDir 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed" }
+    Write-Done "Published to $PublishDir"
+} finally {
+    Pop-Location
+}
+
+Write-Step "Running seed-data inside AKS cluster"
+$K8sNamespace = "contoso"
+$PodName = "seed-data-runner"
+$CrmDataDir = Join-Path (Split-Path $ScriptDir) "data" "contoso-crm"
+
+# Create temporary pod
+kubectl run $PodName --image=mcr.microsoft.com/dotnet/runtime-deps:9.0 --restart=Never --namespace=$K8sNamespace --command -- sleep 600 2>&1 | Out-Null
+kubectl wait --for=condition=Ready pod/$PodName --namespace=$K8sNamespace --timeout=120s 2>&1 | Out-Null
+Write-Done "Pod $PodName ready"
+
+try {
+    # Copy published app and CRM data
+    kubectl exec $PodName --namespace=$K8sNamespace -- mkdir -p /app /data/contoso-crm 2>&1 | Out-Null
+    kubectl cp $PublishDir "${K8sNamespace}/${PodName}:/app" 2>&1 | Out-Null
+    kubectl cp $CrmDataDir "${K8sNamespace}/${PodName}:/data/contoso-crm" 2>&1 | Out-Null
+    kubectl exec $PodName --namespace=$K8sNamespace -- chmod +x /app/seed-data 2>&1 | Out-Null
+
+    # Run seed-data with access token
+    kubectl exec $PodName --namespace=$K8sNamespace -- `
+        /bin/sh -c "SQL_SERVER_FQDN='$SqlFqdn' SQL_DATABASE_NAME='$SqlDb' SQL_ACCESS_TOKEN='$SqlToken' CRM_DATA_PATH='/data/contoso-crm' /app/seed-data"
     if ($LASTEXITCODE -ne 0) { throw "seed-data failed" }
     Write-Done "CRM data seeded"
 } finally {
-    Remove-Item Env:\SQL_SERVER_FQDN, Env:\SQL_DATABASE_NAME, Env:\SQL_ADMIN_LOGIN, Env:\SQL_ADMIN_PASSWORD -ErrorAction SilentlyContinue
-    Pop-Location
+    kubectl delete pod $PodName --namespace=$K8sNamespace --force --grace-period=0 2>&1 | Out-Null
 }
 
 Write-PhaseSummary -Number 6 -NextPhase "Phase 7 — Link Entra users to Customers table" -Items ([ordered]@{
@@ -464,30 +554,28 @@ $CustomerMapping = @(
     @{ CustomerId = "105"; SecretName = "CUSTOMER-LISA-ENTRA-OID";  Name = "Lisa Torres" }
 )
 
-$ConnStr = "Server=tcp:${SqlFqdn},1433;Database=${SqlDb};User ID=${SqlLogin};Password=${SqlPass};Encrypt=True;TrustServerCertificate=False;"
+Write-Step "Running SQL updates via AKS pod (private endpoint)"
+$PodName7 = "sql-entra-linker"
+kubectl run $PodName7 --image=mcr.microsoft.com/mssql-tools:latest --restart=Never --namespace=$K8sNamespace --command -- sleep 300 2>&1 | Out-Null
+kubectl wait --for=condition=Ready pod/$PodName7 --namespace=$K8sNamespace --timeout=120s 2>&1 | Out-Null
 
-foreach ($mapping in $CustomerMapping) {
-    $oid = az keyvault secret show --vault-name $KvName --name $mapping.SecretName --query value -o tsv
-    if ($oid) {
-        $sql = "UPDATE Customers SET entra_id = @oid WHERE id = @cid"
-        Invoke-Sqlcmd -ConnectionString $ConnStr -Query $sql -Variable "oid=$oid", "cid=$($mapping.CustomerId)" -ErrorAction SilentlyContinue 2>$null
-        if (-not $?) {
-            # Fallback: use sqlcmd command-line tool with parameterized query
-            sqlcmd -S "tcp:${SqlFqdn},1433" -d $SqlDb -U $SqlLogin -P $SqlPass -Q "UPDATE Customers SET entra_id = '$(($oid -replace "'", "''"))' WHERE id = '$(($mapping.CustomerId -replace "'", "''"))'" 2>$null
+try {
+    foreach ($mapping in $CustomerMapping) {
+        $oid = az keyvault secret show --vault-name $KvName --name $mapping.SecretName --query value -o tsv
+        if ($oid) {
+            $safeOid = $oid -replace "'", "''"
+            $safeCid = $mapping.CustomerId -replace "'", "''"
+            $sqlCmd = "UPDATE Customers SET entra_id = '${safeOid}' WHERE id = '${safeCid}'"
+            kubectl exec $PodName7 --namespace=$K8sNamespace -- `
+                /opt/mssql-tools/bin/sqlcmd -S "tcp:${SqlFqdn},1433" -d $SqlDb -P "$SqlToken" -U "integratedauth" -G -Q $sqlCmd 2>&1 | Out-Null
+            Write-Done "$($mapping.Name) (ID $($mapping.CustomerId)) → $($oid.Substring(0,8))..."
+        } else {
+            Write-Host "    ⚠ Could not read $($mapping.SecretName) from Key Vault" -ForegroundColor Yellow
         }
-        Write-Done "$($mapping.Name) (ID $($mapping.CustomerId)) → $($oid.Substring(0,8))..."
-    } else {
-        Write-Host "    ⚠ Could not read $($mapping.SecretName) from Key Vault" -ForegroundColor Yellow
     }
+} finally {
+    kubectl delete pod $PodName7 --namespace=$K8sNamespace --force --grace-period=0 2>&1 | Out-Null
 }
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Lock state storage
-# ═══════════════════════════════════════════════════════════════════════════════
-
-Write-Step "Disabling public access on $StorageAccount"
-az storage account update --name $StorageAccount --resource-group $ResourceGroup --public-network-access Disabled | Out-Null
-Write-Done "Public access disabled on $StorageAccount"
 
 # ── Read Key Vault URI ────────────────────────────────────────────────────────
 $KeyVaultUri = (az keyvault show --name $KvName --query properties.vaultUri -o tsv 2>$null)
@@ -510,3 +598,15 @@ Write-Host "  ║    2. dotnet run -- $KeyVaultUri" -ForegroundColor Green
 Write-Host "  ║    3. cd ../simple-agent && dotnet run                 " -ForegroundColor Green
 Write-Host "  ╚═══════════════════════════════════════════════════════╝" -ForegroundColor Green
 Write-Host ""
+
+} finally {
+    # ═══════════════════════════════════════════════════════════════════════════
+    # ALWAYS: Remove deployer IP from all firewalls + lock state storage
+    # This block runs even if the deploy fails or is interrupted.
+    # ═══════════════════════════════════════════════════════════════════════════
+    Remove-DeployerFirewallRules -ResourceGroup $ResourceGroup -DeployerIp $DeployerIp
+
+    Write-Step "Disabling public access on $StorageAccount"
+    az storage account update --name $StorageAccount --resource-group $ResourceGroup --public-network-access Disabled 2>$null | Out-Null
+    Write-Done "Public access disabled on $StorageAccount"
+}

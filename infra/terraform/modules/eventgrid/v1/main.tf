@@ -74,7 +74,7 @@ resource "azurerm_logic_app_action_http" "run_indexer" {
   name         = "Run_Search_Indexer"
   logic_app_id = azurerm_logic_app_workflow.indexer_trigger.id
   method       = "POST"
-  uri          = "https://${var.search_service_name}.search.windows.net/indexers/${var.search_indexer_name}/run?api-version=2025-05-01"
+  uri          = "https://${var.search_service_name}.search.windows.net/indexers/${var.search_indexer_name}/run?api-version=2024-11-01"
 
   headers = {
     "api-key"      = var.search_api_key

@@ -538,12 +538,33 @@ else
     RBAC_STATUS="Contributor on $RESOURCE_GROUP"
 fi
 
+# ── RBAC: Key Vault data-plane roles for deployer (current user) ─────────────
+step "Granting Key Vault data-plane roles to deployer"
+DEPLOYER_OID=$(az ad signed-in-user show --query id -o tsv 2>/dev/null || true)
+KV_RBAC_STATUS="Manual assignment required"
+if [[ -n "$DEPLOYER_OID" ]]; then
+    RG_SCOPE="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP"
+    for ROLE in "Key Vault Secrets Officer" "Key Vault Certificates Officer"; do
+        EXISTS=$(az role assignment list --assignee "$DEPLOYER_OID" --role "$ROLE" --scope "$RG_SCOPE" --query "[0].id" -o tsv 2>/dev/null || true)
+        if [[ -n "$EXISTS" ]]; then
+            skip_ "$ROLE already assigned"
+        else
+            az role assignment create --assignee-object-id "$DEPLOYER_OID" --assignee-principal-type User --role "$ROLE" --scope "$RG_SCOPE" >/dev/null
+            done_ "$ROLE granted on $RESOURCE_GROUP"
+        fi
+    done
+    KV_RBAC_STATUS="Secrets Officer + Certificates Officer"
+else
+    echo -e "    ${Y}\u26a0 Could not determine deployer identity \u2014 assign Key Vault roles manually${W}"
+fi
+
 phase_summary 4 \
     "Phase 5 — Generate terraform.tfvars and backend.hcl configuration files" \
     "Resource group"  "$RESOURCE_GROUP" \
     "Storage account" "$STORAGE_ACCOUNT" \
     "Container"       "$CONTAINER_NAME" \
     "RBAC"            "$RBAC_STATUS" \
+    "KV RBAC"         "$KV_RBAC_STATUS" \
     "Public access"   "Disabled"
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -26,6 +26,12 @@ resource "azurerm_storage_account" "this" {
 
   tags = var.tags
 
+  network_rules {
+    default_action = "Deny"
+    ip_rules       = var.allowed_ips
+    bypass         = ["AzureServices"]
+  }
+
   lifecycle {
     ignore_changes = [tags]
   }

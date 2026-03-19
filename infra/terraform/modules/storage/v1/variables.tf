@@ -57,3 +57,9 @@ variable "tags" {
   default     = {}
 }
 
+variable "allowed_ips" {
+  description = "List of IP addresses allowed through the firewall (deployer IP)"
+  type        = list(string)
+  default     = []
+}
+

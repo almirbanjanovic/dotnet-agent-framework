@@ -10,11 +10,6 @@ output "openai_endpoint" {
   value       = module.foundry.endpoint
 }
 
-output "openai_api_key" {
-  description = "Azure OpenAI API key"
-  value       = nonsensitive(module.foundry.primary_key)
-}
-
 output "openai_deployment_name" {
   description = "Chat model deployment name"
   value       = module.foundry.deployment_name

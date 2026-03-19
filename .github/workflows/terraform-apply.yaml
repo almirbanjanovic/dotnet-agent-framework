@@ -11,6 +11,10 @@ on:
         required: true
       azureSubscriptionId:
         required: true
+    outputs:
+      deployer_ip:
+        description: "Deployer public IP for firewall cleanup"
+        value: ${{ jobs.terraform-apply.outputs.deployer_ip }}
 
 env:
   TF_VAR_tags: ${{ vars.TAGS }}
@@ -58,6 +62,8 @@ jobs:
     name: Terraform Apply
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment}}
+    outputs:
+      deployer_ip: ${{ steps.deployer.outputs.ip }}
 
     defaults:
         run:
@@ -77,6 +83,13 @@ jobs:
 
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
+
+    - name: Get deployer IP
+      id: deployer
+      run: |
+        DEPLOYER_IP=$(curl -s --max-time 10 https://api.ipify.org)
+        echo "ip=$DEPLOYER_IP" >> "$GITHUB_OUTPUT"
+        echo "Deployer IP: $DEPLOYER_IP"
 
     - name: Enable public access for backend storage account
       run: |
@@ -173,6 +186,15 @@ jobs:
             IS_INITIATIVE=$(echo "$POLICY_DEF_ID" | grep -c 'policySetDefinitions' || true)
             ASSIGN_EFFECT=$(az policy assignment show --name "$(echo "$ASSIGN_ID" | awk -F'/' '{print $NF}')" \
               --query "parameters.effect.value" -o tsv 2>/dev/null || true)
+
+            if [ "$IS_INITIATIVE" -gt 0 ]; then
+              MEMBER_DEFS=$(az policy set-definition show --name "$DEF_NAME" \
+                --query "policyDefinitions[].policyDefinitionId" -o tsv 2>/dev/null || true)
+              while IFS= read -r MEMBER_DEF_ID; do
+                [ -z "$MEMBER_DEF_ID" ] && continue
+                M_NAME=$(echo "$MEMBER_DEF_ID" | awk -F'/' '{print $NF}')
+                M_EFFECT=$(az policy definition show --name "$M_NAME" \
+                  --query "policyRule.then.effect" -o tsv 2>/dev/null || true)
                 if [[ "$M_EFFECT" == *"parameters"* ]]; then
                   if [ -n "$ASSIGN_EFFECT" ]; then
                     M_EFFECT="$ASSIGN_EFFECT"
@@ -211,11 +233,3 @@ jobs:
         echo ""
         echo "Fix your Terraform config to comply with the above policies, then re-run."
         echo "::endgroup::"
-
-    - name: Disable public access for backend storage account
-      if: always()
-      run: |
-        az storage account update \
-        --name "${{ vars.STORAGE_ACCOUNT }}" \
-        --resource-group "${{ vars.RESOURCE_GROUP }}" \
-        --public-network-access Disabled

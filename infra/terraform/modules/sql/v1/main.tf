@@ -32,12 +32,13 @@ resource "azurerm_mssql_server" "this" {
   administrator_login_password = random_password.sql_admin.result
 
   minimum_tls_version           = "1.2"
-  public_network_access_enabled = true
+  public_network_access_enabled = var.deployer_ip != "" ? true : false
 
   azuread_administrator {
-    login_username = var.entra_admin_login
-    object_id      = var.entra_admin_object_id
-    tenant_id      = var.tenant_id
+    login_username              = var.entra_admin_login
+    object_id                   = var.entra_admin_object_id
+    tenant_id                   = var.tenant_id
+    azuread_authentication_only = true
   }
 
   tags = var.tags
@@ -69,12 +70,13 @@ resource "azurerm_mssql_database" "this" {
 }
 
 # -----------------------------------------------------------------------------
-# Firewall — Allow Azure services
+# Firewall — Allow deployer IP for provisioning
 # -----------------------------------------------------------------------------
-resource "azurerm_mssql_firewall_rule" "allow_azure" {
-  name             = "AllowAzureServices"
+resource "azurerm_mssql_firewall_rule" "deployer" {
+  count            = var.deployer_ip != "" ? 1 : 0
+  name             = "AllowDeployer"
   server_id        = azurerm_mssql_server.this.id
-  start_ip_address = "0.0.0.0"
-  end_ip_address   = "0.0.0.0"
+  start_ip_address = var.deployer_ip
+  end_ip_address   = var.deployer_ip
 }
 

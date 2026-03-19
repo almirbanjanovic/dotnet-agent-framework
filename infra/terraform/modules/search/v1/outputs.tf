@@ -15,7 +15,7 @@ output "endpoint" {
 
 output "primary_key" {
   description = "Azure AI Search primary admin key"
-  value       = azurerm_search_service.this.primary_key
+  value       = data.azapi_resource_action.list_admin_keys.output.primaryKey
   sensitive   = true
 }
 

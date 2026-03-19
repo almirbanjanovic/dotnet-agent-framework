@@ -47,3 +47,9 @@ variable "public_network_access_enabled" {
   default     = true
 }
 
+variable "allowed_ips" {
+  description = "List of IP CIDRs allowed through the firewall (deployer IP)"
+  type        = list(string)
+  default     = []
+}
+

@@ -518,6 +518,28 @@ $phase4Items = [ordered]@{
     "Public access"   = "Disabled"
 }
 if (-not $LocalOnly) { $phase4Items["RBAC"] = "Contributor on $ResourceGroup" } else { $phase4Items["RBAC"] = "Skipped (local-only mode)" }
+
+# ── RBAC: Key Vault data-plane roles for deployer (current user) ─────────────
+Write-Step "Granting Key Vault data-plane roles to deployer"
+$deployerOid = az ad signed-in-user show --query id -o tsv 2>$null
+if ($deployerOid) {
+    $rgScope = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup"
+    $kvRoles = @("Key Vault Secrets Officer", "Key Vault Certificates Officer")
+    foreach ($role in $kvRoles) {
+        $exists = az role assignment list --assignee $deployerOid --role $role --scope $rgScope --query "[0].id" -o tsv 2>$null
+        if ($exists) {
+            Write-Skip "$role already assigned"
+        } else {
+            az role assignment create --assignee-object-id $deployerOid --assignee-principal-type User --role $role --scope $rgScope 2>$null | Out-Null
+            Write-Done "$role granted on $ResourceGroup"
+        }
+    }
+    $phase4Items["KV RBAC"] = "Secrets Officer + Certificates Officer"
+} else {
+    Write-Host "    ⚠ Could not determine deployer identity — assign Key Vault roles manually" -ForegroundColor Yellow
+    $phase4Items["KV RBAC"] = "Manual assignment required"
+}
+
 Write-PhaseSummary -Number 4 -NextPhase "Phase 5 — Generate terraform.tfvars and backend.hcl configuration files" -Items $phase4Items
 
 # ═══════════════════════════════════════════════════════════════════════════════

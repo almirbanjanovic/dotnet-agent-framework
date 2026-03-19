@@ -1,0 +1,91 @@
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      deployer_ip:
+        required: true
+        type: string
+    secrets:
+      azureClientId:
+        required: true
+      azureTenantId:
+        required: true
+      azureSubscriptionId:
+        required: true
+
+jobs:
+  cleanup:
+    name: Remove Deployer IP from Firewalls
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Login to Azure using OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.azureClientId }}
+          tenant-id: ${{ secrets.azureTenantId }}
+          subscription-id: ${{ secrets.azureSubscriptionId }}
+
+      - name: Remove deployer IP from all resource firewalls
+        run: |
+          RG="${{ vars.RESOURCE_GROUP }}"
+          IP="${{ inputs.deployer_ip }}"
+          echo "Removing deployer IP $IP from all firewalls in $RG"
+
+          # Key Vault
+          for kv in $(az keyvault list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
+            az keyvault network-rule remove --name "$kv" --ip-address "$IP/32" 2>/dev/null || true
+            echo "  ✓ Key Vault: $kv"
+          done
+
+          # Storage accounts
+          for st in $(az storage account list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
+            az storage account network-rule remove --resource-group "$RG" --account-name "$st" --ip-address "$IP" 2>/dev/null || true
+            echo "  ✓ Storage: $st"
+          done
+
+          # Cosmos DB
+          for c in $(az cosmosdb list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
+            EXISTING=$(az cosmosdb show --name "$c" --resource-group "$RG" --query "ipRules[].ipAddressOrRange" -o tsv 2>/dev/null || true)
+            FILTERED=$(echo "$EXISTING" | grep -v "^${IP}$" | paste -sd, - 2>/dev/null || true)
+            az cosmosdb update --name "$c" --resource-group "$RG" --ip-range-filter "$FILTERED" 2>/dev/null || true
+            echo "  ✓ Cosmos DB: $c"
+          done
+
+          # SQL Server
+          for sql in $(az sql server list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
+            az sql server firewall-rule delete --server "$sql" --resource-group "$RG" --name AllowDeployer -y 2>/dev/null || true
+            az sql server update --name "$sql" --resource-group "$RG" --enable-public-network false 2>/dev/null || true
+            echo "  ✓ SQL Server: $sql"
+          done
+
+          # Cognitive Services (AI Foundry)
+          for cog in $(az cognitiveservices account list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
+            az cognitiveservices account network-rule remove --resource-group "$RG" --name "$cog" --ip-address "$IP/32" 2>/dev/null || true
+            echo "  ✓ AI Services: $cog"
+          done
+
+          # AI Search
+          for s in $(az search service list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
+            CURRENT=$(az search service show --name "$s" --resource-group "$RG" --query "networkRuleSet.ipRules[].value" -o tsv 2>/dev/null || true)
+            FILTERED=$(echo "$CURRENT" | grep -v "^${IP}$" || true)
+            if [ -n "$FILTERED" ]; then
+              RULES=$(echo "$FILTERED" | jq -Rn '[inputs | {value: .}]')
+            else
+              RULES="[]"
+            fi
+            az search service update --name "$s" --resource-group "$RG" --ip-rules "$RULES" 2>/dev/null || true
+            echo "  ✓ AI Search: $s"
+          done
+
+          echo "Deployer IP removed from all firewalls"
+
+      - name: Disable public access for backend storage account
+        run: |
+          az storage account update \
+            --name "${{ vars.STORAGE_ACCOUNT }}" \
+            --resource-group "${{ vars.RESOURCE_GROUP }}" \
+            --public-network-access Disabled

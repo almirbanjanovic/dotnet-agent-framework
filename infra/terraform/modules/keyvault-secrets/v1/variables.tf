@@ -6,5 +6,4 @@ variable "key_vault_id" {
 variable "secrets" {
   description = "Map of secret name => secret value to store in Key Vault"
   type        = map(string)
-  sensitive   = true
 }

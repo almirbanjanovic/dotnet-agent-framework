@@ -11,6 +11,10 @@ on:
         required: true
       azureSubscriptionId:
         required: true
+    outputs:
+      deployer_ip:
+        description: "Deployer public IP for firewall cleanup"
+        value: ${{ jobs.terraform-plan.outputs.deployer_ip }}
 
 env:
   TF_VAR_tags: ${{ vars.TAGS }}
@@ -58,6 +62,8 @@ jobs:
     name: Terraform Plan
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment}}
+    outputs:
+      deployer_ip: ${{ steps.deployer.outputs.ip }}
 
     defaults:
         run:
@@ -77,6 +83,13 @@ jobs:
 
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
+
+    - name: Get deployer IP
+      id: deployer
+      run: |
+        DEPLOYER_IP=$(curl -s --max-time 10 https://api.ipify.org)
+        echo "ip=$DEPLOYER_IP" >> "$GITHUB_OUTPUT"
+        echo "Deployer IP: $DEPLOYER_IP"
 
     - name: Setup TFLint
       uses: terraform-linters/setup-tflint@v1
@@ -170,11 +183,3 @@ jobs:
       with:
         name: tf-plan
         path: ${{ vars.TERRAFORM_WORKING_DIRECTORY}}/out.tfplan
-
-    - name: Disable public access for backend storage account
-      if: always()
-      run: |
-        az storage account update \
-        --name "${{ vars.STORAGE_ACCOUNT }}" \
-        --resource-group "${{ vars.RESOURCE_GROUP }}" \
-        --public-network-access Disabled

@@ -84,7 +84,7 @@ public static class CrmSeeder
         }),
     };
 
-    public static async Task SeedAsync(string connectionString, string crmFolder)
+    public static async Task SeedAsync(string connectionString, string crmFolder, string? accessToken = null)
     {
         if (!Directory.Exists(crmFolder))
         {
@@ -96,6 +96,8 @@ public static class CrmSeeder
         Console.WriteLine($"  Found {csvFiles.Length} CSV files in {Path.GetFileName(crmFolder)}/\n");
 
         await using var connection = new SqlConnection(connectionString);
+        if (!string.IsNullOrEmpty(accessToken))
+            connection.AccessToken = accessToken;
         await connection.OpenAsync();
 
         // Create tables in dependency order (parents before children)
