@@ -663,6 +663,12 @@ module "entra" {
 # TLS Certificate (self-signed, stored in Key Vault for AGC TLS termination)
 #--------------------------------------------------------------------------------------------------------------------------------
 
+# Wait for Key Vault RBAC + firewall rules to propagate before certificate operations
+resource "time_sleep" "wait_for_keyvault_rbac" {
+  depends_on      = [module.rbac_keyvault]
+  create_duration = "60s"
+}
+
 module "tls_cert" {
   source = "./modules/tls-cert/v1"
 
@@ -671,7 +677,7 @@ module "tls_cert" {
   common_name  = module.agc.frontend_fqdn
   dns_names    = [module.agc.frontend_fqdn]
 
-  depends_on = [module.rbac_keyvault]
+  depends_on = [time_sleep.wait_for_keyvault_rbac]
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------

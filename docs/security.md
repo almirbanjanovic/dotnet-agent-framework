@@ -183,9 +183,9 @@ The developer experience is simple: call `DefaultAzureCredential()` and it works
 
 | Identity | Service | Purpose |
 | --- | --- | --- |
-| `id-bff` | BFF API | Read Blob Storage (image proxy), read/write Cosmos DB (conversations), read Key Vault |
+| `id-bff` | BFF API | Access Cosmos DB (CRM + conversations), read Blob Storage (image proxy), read Key Vault |
 | `id-crm-api` | CRM API | Access Cosmos DB (CRM), read Key Vault |
-| `id-crm-mcp` | CRM MCP Server | Read Key Vault |
+| `id-crm-mcp` | CRM MCP Server | Access Cosmos DB (CRM), read Key Vault |
 | `id-know-mcp` | Knowledge MCP Server | Read AI Search index, read Key Vault |
 | `id-crm-agt` | CRM Agent | Call Azure OpenAI, read Key Vault |
 | `id-prod-agt` | Product Agent | Call Azure OpenAI, read Key Vault |
@@ -198,7 +198,7 @@ Each identity is granted **only** the permissions it needs (least privilege). Th
 
 | Identity | Key Vault Secrets User | Cosmos DB CRM Data Owner | OpenAI User | Cosmos DB Agents Data Owner | Search Index Reader | Blob Data Reader | ACR Pull |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `id-bff` | ✓ | | | ✓ | | ✓ | |
+| `id-bff` | ✓ | ✓ | | ✓ | | ✓ | |
 | `id-crm-api` | ✓ | ✓ | | | | | |
 | `id-crm-mcp` | ✓ | ✓ | | | | | |
 | `id-know-mcp` | ✓ | | | | ✓ | | |

@@ -14,6 +14,12 @@ resource "azurerm_role_assignment" "deployer_blob_contributor" {
   principal_id         = data.azurerm_client_config.current.object_id
 }
 
+# Azure RBAC propagation can take up to 5 minutes; wait before data-plane calls
+resource "time_sleep" "wait_for_rbac" {
+  depends_on      = [azurerm_role_assignment.deployer_blob_contributor]
+  create_duration = "60s"
+}
+
 locals {
   # Flatten uploads × files into a single map for azurerm_storage_blob
   blob_uploads = merge([
@@ -39,5 +45,5 @@ resource "azurerm_storage_blob" "this" {
   source                 = each.value.source_path
   content_type           = each.value.content_type
 
-  depends_on = [azurerm_role_assignment.deployer_blob_contributor]
+  depends_on = [time_sleep.wait_for_rbac]
 }
