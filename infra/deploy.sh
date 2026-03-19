@@ -236,14 +236,16 @@ if [[ -n "$SP_CLIENT_ID" ]]; then
     step "Creating temporary client secret (expires in 1 hour)..."
 
     END_DATE=$(date -u -d "+1 hour" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v+1H '+%Y-%m-%dT%H:%M:%SZ')
+    APP_OBJECT_ID=$(az ad app show --id "$SP_CLIENT_ID" --query id -o tsv 2>/dev/null || true)
     CRED_NAME="terraform-deploy-$(date '+%Y%m%d-%H%M%S')"
-    CRED_BODY=$(cat <<ENDJSON
+    CRED_BODY_FILE=$(mktemp)
+    cat > "$CRED_BODY_FILE" <<ENDJSON
 {"passwordCredential":{"displayName":"$CRED_NAME","endDateTime":"$END_DATE"}}
 ENDJSON
-)
     CRED_RESULT=$(az rest --method POST \
-        --url "https://graph.microsoft.com/v1.0/applications(appId='$SP_CLIENT_ID')/addPassword" \
-        --body "$CRED_BODY" -o json 2>/dev/null || true)
+        --url "https://graph.microsoft.com/v1.0/applications/$APP_OBJECT_ID/addPassword" \
+        --body "@$CRED_BODY_FILE" -o json 2>/dev/null || true)
+    rm -f "$CRED_BODY_FILE" 2>/dev/null || true
     if [[ -n "$CRED_RESULT" ]]; then
         SP_TEMP_SECRET=$(echo "$CRED_RESULT" | jq -r '.secretText')
         export TF_VAR_msgraph_client_id="$SP_CLIENT_ID"

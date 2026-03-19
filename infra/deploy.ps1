@@ -346,13 +346,15 @@ if ($SpClientId) {
     Write-Step "Creating temporary client secret (expires in 1 hour)..."
 
     $EndDate = (Get-Date).AddHours(1).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-    $CredBody = @{
+    $AppObjectId = az ad app show --id "$SpClientId" --query id -o tsv 2>$null
+    $CredBodyFile = [System.IO.Path]::GetTempFileName()
+    @{
         passwordCredential = @{
             displayName = "terraform-deploy-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
             endDateTime = $EndDate
         }
-    } | ConvertTo-Json -Depth 3
-    $CredResult = az rest --method POST --url "https://graph.microsoft.com/v1.0/applications(appId='$SpClientId')/addPassword" --body $CredBody -o json 2>$null
+    } | ConvertTo-Json -Depth 3 | Set-Content $CredBodyFile -Encoding UTF8
+    $CredResult = az rest --method POST --url "https://graph.microsoft.com/v1.0/applications/$AppObjectId/addPassword" --body "@$CredBodyFile" -o json 2>$null
     if ($LASTEXITCODE -eq 0 -and $CredResult) {
         $SecretValue = ($CredResult | ConvertFrom-Json).secretText
         $env:TF_VAR_msgraph_client_id = $SpClientId
