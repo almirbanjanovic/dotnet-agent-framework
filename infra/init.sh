@@ -529,6 +529,23 @@ if ! $LOCAL_ONLY && [[ -n "$APP_CLIENT_ID" ]]; then
         az role assignment create --assignee "$APP_CLIENT_ID" --role "Contributor" --scope "$rg_scope" >/dev/null
         done_ "Contributor granted on $RESOURCE_GROUP"
     fi
+
+    # ── Graph API: Application.ReadWrite.All for Agent Identity (Entra Agent ID) ──
+    step "Granting Application.ReadWrite.All (Graph API) for Agent Identity"
+    APP_RW_ALL_ID="1bfefb4e-e0b5-418b-a88f-73c46d2cc8e9"
+    EXISTING_PERM=$(az ad app permission list --id "$APP_CLIENT_ID" \
+        --query "[?resourceAppId=='00000003-0000-0000-c000-000000000000'].resourceAccess[?id=='$APP_RW_ALL_ID'].id" \
+        -o tsv 2>/dev/null || true)
+    if [[ -n "$EXISTING_PERM" ]]; then
+        skip_ "Application.ReadWrite.All already granted"
+    else
+        az ad app permission add --id "$APP_CLIENT_ID" \
+            --api "00000003-0000-0000-c000-000000000000" \
+            --api-permissions "${APP_RW_ALL_ID}=Role" 2>/dev/null || true
+        done_ "Application.ReadWrite.All added"
+    fi
+    az ad app permission admin-consent --id "$APP_CLIENT_ID" 2>/dev/null || true
+    done_ "Admin consent applied"
 fi
 
 if $LOCAL_ONLY; then

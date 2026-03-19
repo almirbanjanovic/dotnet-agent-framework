@@ -508,6 +508,19 @@ if (-not $LocalOnly -and $AppClientId) {
         $null = az role assignment create --assignee "$AppClientId" --role "Contributor" --scope $rgScope
         Write-Done "Contributor granted on $ResourceGroup"
     }
+
+    # ── Graph API: Application.ReadWrite.All for Agent Identity (Entra Agent ID) ──
+    Write-Step "Granting Application.ReadWrite.All (Graph API) for Agent Identity"
+    $AppRwAllId = "1bfefb4e-e0b5-418b-a88f-73c46d2cc8e9"
+    $existingPerm = az ad app permission list --id "$AppClientId" --query "[?resourceAppId=='00000003-0000-0000-c000-000000000000'].resourceAccess[?id=='$AppRwAllId'].id" -o tsv 2>$null
+    if ($existingPerm) {
+        Write-Skip "Application.ReadWrite.All already granted"
+    } else {
+        az ad app permission add --id "$AppClientId" --api "00000003-0000-0000-c000-000000000000" --api-permissions "${AppRwAllId}=Role" 2>$null | Out-Null
+        Write-Done "Application.ReadWrite.All added"
+    }
+    az ad app permission admin-consent --id "$AppClientId" 2>$null | Out-Null
+    Write-Done "Admin consent applied"
 }
 
 $phase4Items = [ordered]@{
