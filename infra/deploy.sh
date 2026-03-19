@@ -53,6 +53,26 @@ phase() {
 
 step()  { echo -e "  → $1"; }
 done_() { echo -e "    ${G}✓ $1${W}"; }
+info_() { echo -e "    ${D}ℹ $1${W}"; }
+
+wait_progress() {
+    local secs="$1" msg="$2" bar_width=30
+    echo ""
+    for (( i=1; i<=secs; i++ )); do
+        local pct=$((i * 100 / secs))
+        local filled=$((i * bar_width / secs))
+        local empty=$((bar_width - filled))
+        local bar=""
+        for (( j=0; j<filled; j++ )); do bar+="█"; done
+        for (( j=0; j<empty; j++ )); do bar+="░"; done
+        printf "\r    [%s] %3d%%  %s (%d/%ds)" "$bar" "$pct" "$msg" "$i" "$secs"
+        sleep 1
+    done
+    local full_bar=""
+    for (( j=0; j<bar_width; j++ )); do full_bar+="█"; done
+    printf "\r    ${G}[%s] 100%%  %s              ${W}\n" "$full_bar" "$msg"
+    echo ""
+}
 
 phase_summary() {
     local num="$1"; local next_desc="$2"; shift 2
@@ -464,13 +484,15 @@ fi
 # ═══════════════════════════════════════════════════════════════════════════════
 
 phase 1 "Open resource firewalls"
+info_ "All Azure resources have network firewalls (Deny by default)."
+info_ "Your IP must be allowlisted so Terraform can reach them."
+info_ "Firewalls are removed again at the end (see cleanup)."
 
 step "Adding deployer IP to all resource firewalls"
 
 add_deployer_firewall_rules "$RESOURCE_GROUP" "$DEPLOYER_IP"
 
-echo -e "    ${D}Waiting 30s for firewall changes to propagate...${W}"
-sleep 30
+wait_progress 30 "Firewall propagation"
 done_ "All firewalls open"
 
 phase_summary 1 \
@@ -483,6 +505,8 @@ phase_summary 1 \
 # ═══════════════════════════════════════════════════════════════════════════════
 
 phase 2 "terraform init"
+info_ "Connects Terraform to the remote state backend (Azure Storage)."
+info_ "Also imports existing Entra test users to prevent conflicts."
 
 step "Initializing Terraform with backend config"
 
@@ -527,6 +551,7 @@ phase_summary 2 \
 # ═══════════════════════════════════════════════════════════════════════════════
 
 phase 3 "terraform validate"
+info_ "Checks all .tf files for syntax errors before planning."
 
 step "Validating Terraform configuration"
 
@@ -544,6 +569,8 @@ phase_summary 3 \
 # ═══════════════════════════════════════════════════════════════════════════════
 
 phase 4 "terraform plan"
+info_ "Previews what resources will be created, changed, or destroyed."
+info_ "No changes are applied yet \u2014 review the plan before continuing."
 
 step "Planning infrastructure changes"
 
@@ -562,6 +589,9 @@ phase_summary 4 \
 # ═══════════════════════════════════════════════════════════════════════════════
 
 phase 5 "terraform apply"
+info_ "Provisions all Azure resources: AI Foundry, Cosmos DB, AKS, ACR,"
+info_ "Key Vault, Storage, AI Search, VNet, Private Endpoints, RBAC."
+info_ "Also uploads product images and SharePoint PDFs to blob storage."
 
 step "Applying infrastructure changes"
 echo -e "    ${D}Resources: AI Foundry, Cosmos DB, AI Search, AKS, ACR, Key Vault, Storage${W}"
@@ -660,6 +690,9 @@ phase_summary 5 \
 # ═══════════════════════════════════════════════════════════════════════════════
 
 phase 6 "Seed CRM data"
+info_ "Runs the seed-data tool inside an AKS pod (workload identity)."
+info_ "Upserts customers, orders, products, promotions, and tickets"
+info_ "from CSV files into Cosmos DB containers."
 
 step "Resolving infrastructure endpoints"
 KV_NAME=$(az keyvault list --resource-group "$RESOURCE_GROUP" --query "[0].name" -o tsv)
@@ -715,6 +748,9 @@ phase_summary 6 \
 # \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
 
 phase 7 "Link Entra users to Customers"
+info_ "Reads each test user's Entra object ID from Key Vault and"
+info_ "writes it to the corresponding Customer document in Cosmos DB."
+info_ "This is how the app knows 'Emma Wilson' in Entra = customer 101."
 
 step "Reading Entra object IDs from Key Vault"
 

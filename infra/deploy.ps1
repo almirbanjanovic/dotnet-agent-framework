@@ -53,6 +53,23 @@ function Write-Phase {
 function Write-Step  { param([string]$Message) Write-Host "  → $Message" -ForegroundColor White }
 function Write-Done  { param([string]$Message) Write-Host "    ✓ $Message" -ForegroundColor Green }
 function Write-Fail  { param([string]$Message) Write-Host "    ✗ $Message" -ForegroundColor Red }
+function Write-Info  { param([string]$Message) Write-Host "    ℹ $Message" -ForegroundColor DarkGray }
+
+function Write-Wait {
+    param([int]$Seconds, [string]$Message)
+    $barWidth = 30
+    Write-Host ""
+    for ($i = 1; $i -le $Seconds; $i++) {
+        $pct = [int]($i / $Seconds * 100)
+        $filled = [int]($i / $Seconds * $barWidth)
+        $empty  = $barWidth - $filled
+        $bar    = ('█' * $filled) + ('░' * $empty)
+        Write-Host "`r    [$bar] $pct%  $Message ($i/${Seconds}s)" -NoNewline -ForegroundColor DarkGray
+        Start-Sleep -Seconds 1
+    }
+    Write-Host "`r    [$('█' * $barWidth)] 100%  $Message              " -ForegroundColor Green
+    Write-Host ""
+}
 
 function Write-PhaseSummary {
     param([int]$Number, [hashtable]$Items, [string]$NextPhase)
@@ -458,6 +475,9 @@ if ($softDeletedKv) {
 # ═══════════════════════════════════════════════════════════════════════════════
 
 Write-Phase -Number 1 -Title "Open resource firewalls"
+Write-Info "All Azure resources have network firewalls (Deny by default)."
+Write-Info "Your IP must be allowlisted so Terraform can reach them."
+Write-Info "Firewalls are removed again at the end (see cleanup)."
 
 Write-Step "Adding deployer IP to all resource firewalls"
 
@@ -465,8 +485,7 @@ foreach ($ip in $DeployerIps) {
     Add-DeployerFirewallRules -ResourceGroup $ResourceGroup -DeployerIp $ip
 }
 
-Write-Host "    Waiting 30s for firewall changes to propagate..." -ForegroundColor DarkGray
-Start-Sleep -Seconds 30
+Write-Wait -Seconds 30 -Message "Firewall propagation"
 Write-Done "All firewalls open"
 
 Write-PhaseSummary -Number 1 -NextPhase "Phase 2 — terraform init (configure backend)" -Items ([ordered]@{
@@ -479,6 +498,8 @@ Write-PhaseSummary -Number 1 -NextPhase "Phase 2 — terraform init (configure b
 # ═══════════════════════════════════════════════════════════════════════════════
 
 Write-Phase -Number 2 -Title "terraform init"
+Write-Info "Connects Terraform to the remote state backend (Azure Storage)."
+Write-Info "Also imports existing Entra test users to prevent conflicts."
 
 Write-Step "Initializing Terraform with backend config"
 
@@ -531,6 +552,7 @@ Write-PhaseSummary -Number 2 -NextPhase "Phase 3 — terraform validate (check c
 # ═══════════════════════════════════════════════════════════════════════════════
 
 Write-Phase -Number 3 -Title "terraform validate"
+Write-Info "Checks all .tf files for syntax errors before planning."
 
 Write-Step "Validating Terraform configuration"
 
@@ -552,6 +574,8 @@ Write-PhaseSummary -Number 3 -NextPhase "Phase 4 — terraform plan (preview inf
 # ═══════════════════════════════════════════════════════════════════════════════
 
 Write-Phase -Number 4 -Title "terraform plan"
+Write-Info "Previews what resources will be created, changed, or destroyed."
+Write-Info "No changes are applied yet — review the plan before continuing."
 
 Write-Step "Planning infrastructure changes"
 
@@ -574,6 +598,9 @@ Write-PhaseSummary -Number 4 -NextPhase "Phase 5 — terraform apply (provision 
 # ═══════════════════════════════════════════════════════════════════════════════
 
 Write-Phase -Number 5 -Title "terraform apply"
+Write-Info "Provisions all Azure resources: AI Foundry, Cosmos DB, AKS, ACR,"
+Write-Info "Key Vault, Storage, AI Search, VNet, Private Endpoints, RBAC."
+Write-Info "Also uploads product images and SharePoint PDFs to blob storage."
 
 Write-Step "Applying infrastructure changes"
 Write-Host "    Resources: AI Foundry, Cosmos DB, AI Search, AKS, ACR, Key Vault, Storage" -ForegroundColor DarkGray
@@ -671,6 +698,9 @@ Write-PhaseSummary -Number 5 -NextPhase "Phase 6 — Seed CRM data into Cosmos D
 # ═══════════════════════════════════════════════════════════════════════════════
 
 Write-Phase -Number 6 -Title "Seed CRM data"
+Write-Info "Runs the seed-data tool inside an AKS pod (workload identity)."
+Write-Info "Upserts customers, orders, products, promotions, and tickets"
+Write-Info "from CSV files into Cosmos DB containers."
 
 Write-Step "Resolving infrastructure endpoints"
 $KvName = az keyvault list --resource-group $ResourceGroup --query "[0].name" -o tsv
@@ -729,6 +759,9 @@ Write-PhaseSummary -Number 6 -NextPhase "Phase 7 — Link Entra users to Custome
 # ═══════════════════════════════════════════════════════════════════════════════
 
 Write-Phase -Number 7 -Title "Link Entra users to Customers"
+Write-Info "Reads each test user's Entra object ID from Key Vault and"
+Write-Info "writes it to the corresponding Customer document in Cosmos DB."
+Write-Info "This is how the app knows 'Emma Wilson' in Entra = customer 101."
 
 Write-Step "Building Entra mapping from Key Vault"
 
