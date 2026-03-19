@@ -17,9 +17,9 @@
 | **CRM API** | .NET Minimal API | All CRM data: customers, orders, products, promotions, support tickets (11 endpoints) | Cosmos DB (CRM) | `id-crm-api` |
 | **CRM MCP** | MCP Server | 10 tools wrapping all CRM API endpoints | CRM API (HTTP) | `id-crm-mcp` |
 | **Knowledge MCP** | MCP Server | 1 tool: `search_knowledge_base` | AI Search (SDK direct) | `id-know-mcp` |
-| **CRM Agent** | Agent | CRM specialist: customers, orders, billing, tickets, policies | CRM MCP + Knowledge MCP, Azure OpenAI | `id-crm-agt` |
-| **Product Agent** | Agent | Product specialist: catalog, promotions, recommendations, guides | CRM MCP + Knowledge MCP, Azure OpenAI | `id-prod-agt` |
-| **Orchestrator Agent** | Agent | Intent classification, routes to CRM or Product agent | CRM/Product Agent (HTTP), Azure OpenAI | `id-orch` |
+| **CRM Agent** | Agent | CRM specialist: customers, orders, billing, tickets, policies | CRM MCP + Knowledge MCP, Azure OpenAI | Contoso CRM Agent (agent identity) |
+| **Product Agent** | Agent | Product specialist: catalog, promotions, recommendations, guides | CRM MCP + Knowledge MCP, Azure OpenAI | Contoso Product Agent (agent identity) |
+| **Orchestrator Agent** | Agent | Intent classification, routes to CRM or Product agent | CRM/Product Agent (HTTP), Azure OpenAI | Contoso Orchestrator Agent (agent identity) |
 
 Each component is fully independent — own models, own Dockerfile, own Helm chart, own test project. No shared project references. Communication between services is HTTP/JSON only.
 
@@ -27,7 +27,7 @@ Each component is fully independent — own models, own Dockerfile, own Helm cha
 
 #### 1. Each agent is its own container with its own identity
 
-Each agent runs in its own container with its own managed identity and least-privilege RBAC. This provides blast radius isolation, independent scaling, independent deployment, and clear auditability in Azure activity logs.
+Each agent runs in its own container with its own [Entra agent identity](https://learn.microsoft.com/en-us/entra/agent-id/identity-platform/agent-identities) and least-privilege RBAC. Agent identities are created from Agent Identity Blueprints — reusable templates that enable Conditional Access, governance, and centralized management across agent instances. Non-agent services (BFF, CRM API, MCP servers) use standard managed identities. This dual approach provides blast radius isolation, independent scaling, independent deployment, clear auditability in Azure activity logs, and agent-specific governance in Entra.
 
 #### 2. One SQL database → one CRM Domain API
 
@@ -131,7 +131,8 @@ See [docs/security.md](docs/security.md) for the full security architecture: aut
 | Agents | [Microsoft.Agents.AI](https://learn.microsoft.com/en-us/agent-framework/agents/), Azure.AI.OpenAI |
 | BFF + UI | Blazor WebAssembly ([MudBlazor](https://mudblazor.com/), Microsoft.Authentication.Msal, SignalR.Client) + .NET Minimal API (separate containers) |
 | Markdown | [Markdig](https://github.com/xoofx/markdig) (renders agent markdown responses with image rewriting) |
-| Auth | Microsoft.Authentication.Msal in Blazor WASM, JwtBearer validation in BFF |
+| Auth (Users) | Microsoft.Authentication.Msal in Blazor WASM, JwtBearer validation in BFF |
+| Auth (Agents) | [Entra Agent ID](https://learn.microsoft.com/en-us/entra/agent-id/identity-platform/agent-identities) (agent identity blueprints + FIC for AKS) |
 | Chat persistence | Microsoft.Azure.Cosmos |
 | Image proxy | Azure.Storage.Blobs |
 | Testing | xUnit, FluentAssertions, NSubstitute, WebApplicationFactory, bUnit (Blazor) |
