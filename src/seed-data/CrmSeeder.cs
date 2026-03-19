@@ -103,7 +103,7 @@ public static class CrmSeeder
                 var pkPath = containerDef.PartitionKeyPath.TrimStart('/');
                 var pkValue = doc.TryGetValue(pkPath, out var pk) ? pk?.ToString() ?? "" : "";
 
-                await container.UpsertItemAsync(doc, new PartitionKey(pkValue));
+                await UpsertWithRetryAsync(container, doc, new PartitionKey(pkValue));
                 count++;
             }
 
@@ -216,6 +216,35 @@ public static class CrmSeeder
     }
 
     private record ContainerDef(string ContainerName, string PartitionKeyPath);
+
+    /// <summary>
+    /// Upserts a document with retry for RBAC propagation delays.
+    /// Cosmos DB SQL role assignments can take 1-2 minutes to propagate
+    /// to the data plane after creation. This retries 403/5302 errors.
+    /// </summary>
+    private static async Task UpsertWithRetryAsync(
+        Container container, Dictionary<string, object?> doc, PartitionKey pk,
+        int maxRetries = 12, int delaySeconds = 5)
+    {
+        for (int attempt = 1; attempt <= maxRetries; attempt++)
+        {
+            try
+            {
+                await container.UpsertItemAsync(doc, pk);
+                return;
+            }
+            catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Forbidden && (int)ex.SubStatusCode == 5302)
+            {
+                if (attempt == maxRetries)
+                    throw;
+
+                if (attempt == 1)
+                    Console.WriteLine($"\n  ⏳ RBAC not yet active — retrying ({maxRetries * delaySeconds}s max)...");
+
+                await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
+            }
+        }
+    }
 
     /// <summary>
     /// Links Entra user object IDs to customer documents in the Customers container.
