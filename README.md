@@ -97,7 +97,7 @@ CSV files in `data/contoso-crm/` are parsed by the seed tool and upserted into *
 
 #### Unstructured data (SharePoint → Azure AI Search)
 
-PDF documents in `data/contoso-sharepoint/` are uploaded to Azure Blob Storage by Terraform. The AI Search indexer processes them via integrated vectorization: text extraction → chunking → embedding via `text-embedding-ada-002` → indexed for semantic search. Event Grid triggers the indexer on new blob uploads via a Logic App intermediary (Event Grid can't send auth headers to the Search API directly). Agents search via the Knowledge MCP Server which calls the Azure AI Search SDK directly.
+PDF documents in `data/contoso-sharepoint/` are uploaded to Azure Blob Storage by Terraform. The AI Search Knowledge Source automatically creates the full indexing pipeline: text extraction → chunking → embedding via `text-embedding-ada-002` → indexed for semantic search. The auto-generated indexer runs on a 5-minute schedule. Agents search via the Knowledge MCP Server which calls the Azure AI Search SDK directly.
 
 #### Product images (Azure Blob Storage)
 
@@ -110,8 +110,7 @@ Product images in `data/contoso-images/` are uploaded to a private `product-imag
 | **Azure AI Foundry** | AI Services account with chat model (gpt-4.1) and embedding model (text-embedding-ada-002) |
 | **Cosmos DB** (CRM) | Operational CRM data — 6 containers |
 | **Cosmos DB** (Agents) | Conversation history + agent session state (Eventual consistency) |
-| **Azure AI Search** | Knowledge base — indexes PDFs via integrated vectorization (Basic tier) |
-| **Event Grid** | Triggers AI Search indexer on new PDF blob uploads (via Logic App intermediary) |
+| **Azure AI Search** | Knowledge base — indexes PDFs via Knowledge Source API (Standard tier, semantic ranker) |
 | **Storage Account** | Product images + SharePoint documents blob storage |
 | **AKS** | Hosts all 8 containers |
 | **ACR** | Container image registry |
@@ -170,11 +169,12 @@ infra/
   init.ps1 / init.sh              → One-time bootstrap scripts
   deploy.ps1 / deploy.sh          → Deployment scripts (7 phases)
   terraform/                      → Terraform IaC (20 modules, versioned)
-    modules/                      → acr, agc, aks, cosmosdb, entra, eventgrid,
+    modules/                      → acr, agc, aks, cosmosdb, entra,
                                     foundry, identity, keyvault, keyvault-secrets,
-                                    private-dns-zones, private-endpoint, rbac,
-                                    search, sql, storage, storage-uploads,
-                                    tls-cert, vnet, workload-identity
+                                    knowledge-source, private-dns-zones,
+                                    private-endpoint, rbac, search, storage,
+                                    storage-uploads, tls-cert, vnet,
+                                    workload-identity
     manifests/                    → Kubernetes namespace + service account templates
 
 src/

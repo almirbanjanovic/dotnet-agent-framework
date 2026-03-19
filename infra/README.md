@@ -27,8 +27,6 @@ infra/
         │   └── v1/
         ├── cosmosdb/          # Cosmos DB account, database, containers
         │   └── v1/
-        ├── eventgrid/         # Event Grid system topic + blob subscription
-        │   └── v1/
         ├── foundry/           # AI Services account + chat & embedding models
         │   └── v1/
         ├── identity/          # User-assigned managed identities
@@ -37,7 +35,7 @@ infra/
         │   └── v1/
         ├── keyvault-secrets/  # Key Vault secret writer
         │   └── v1/
-        ├── search/            # Azure AI Search + index, data source, skillset (AzAPI)
+        ├── search/            # Azure AI Search service (Standard tier, semantic ranker)
         │   └── v1/
         ├── storage/           # Azure Storage Account + blob containers (control plane)
         │   └── v1/
@@ -127,7 +125,7 @@ The following resources were added to support the full application architecture 
 | **`tls-cert/v1/`** | Self-signed TLS certificate in Key Vault for AGC TLS termination |
 | **`vnet/v1/`** | Virtual Network with 3 subnets (AKS system, AKS workload, AGC) |
 | **`agc/v1/`** | App Gateway for Containers + Frontend + Subnet Association |
-| **Logic App (`eventgrid/v1/`)** | Bridges Event Grid → AI Search indexer (adds api-key header that Event Grid webhooks can't send) |
+| **Knowledge Source (`knowledge-source/v1/`)** | Creates AI Search Knowledge Source via REST API — auto-generates index, data source, skillset, indexer |
 | **Cosmos DB `conversations`** | New container (partition key: `/sessionId`) for BFF-owned chat history |
 | **Key Vault secrets** | Identity client IDs, Entra app credentials, test user passwords, AKS hostname |
 

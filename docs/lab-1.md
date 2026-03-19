@@ -13,8 +13,7 @@ This lab stands up the full Azure environment, validates connectivity, and seeds
 | ---------- | --------- |
 | **Azure AI Foundry** | AI Services account with chat model (gpt-4.1) and embedding model (text-embedding-ada-002) |
 | **Cosmos DB** (×2 accounts) | CRM (operational data) + Agents (state persistence) |
-| **Azure AI Search** | Knowledge base search — indexes PDFs via integrated vectorization |
-| **Event Grid** | Triggers AI Search indexer on new PDF blob uploads (via Logic App intermediary) |
+| **Azure AI Search** | Knowledge base search — indexes PDFs via Knowledge Source API (Standard tier, semantic ranker) |
 | **Storage Account** | Product images + SharePoint documents blob storage — uploaded automatically during `terraform apply` |
 | **AKS** | Kubernetes cluster for future lab deployments |
 | **ACR** | Container image registry |
@@ -27,10 +26,10 @@ The deploy script provisions all infrastructure and seeds data in a single run:
 
 | What | How |
 | ------ | ----- |
-| Cosmos DB (CRM + agents), AI Search, Event Grid, Storage, AKS, ACR, Key Vault | Terraform resources (phases 1–5) |
+| Cosmos DB (CRM + agents), AI Search, Storage, AKS, ACR, Key Vault | Terraform resources (phases 1–5) |
 | Product images (`.png`) → `product-images` blob container | `azurerm_storage_blob` (during terraform apply) |
 | SharePoint PDFs (`.pdf`) → `sharepoint-docs` blob container | `azurerm_storage_blob` (during terraform apply) |
-| PDF text extraction, chunking, embedding → AI Search index | AI Search indexer (triggered by Event Grid on blob upload, plus 5-min schedule fallback) |
+| PDF text extraction, chunking, embedding → AI Search index | AI Search Knowledge Source auto-generates indexer (5-min schedule) |
 | CRM data (CSV) → Cosmos DB containers | Deploy script phase 6 (runs `dotnet run` for seed-data) |
 | Entra user IDs → Cosmos DB Customers container | Deploy script phase 7 (reads object IDs from Key Vault, updates Cosmos DB) |
 

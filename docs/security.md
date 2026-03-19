@@ -425,7 +425,7 @@ A self-signed TLS certificate is stored in Key Vault and referenced by the Gatew
 Every data-plane Azure resource uses a **default deny** firewall with two controlled access paths:
 
 1. **Private endpoints** — AKS pods reach all resources through private endpoints on the `snet-private-endpoints` subnet (same VNet). Private DNS zones resolve service FQDNs to private IPs so traffic never leaves the VNet.
-2. **Azure services bypass** — Azure-to-Azure platform traffic (e.g., AI Search indexer reading Blob Storage, Event Grid triggering Logic App) is explicitly allowed through each resource's firewall.
+2. **Azure services bypass** — Azure-to-Azure platform traffic (e.g., AI Search indexer reading Blob Storage) is explicitly allowed through each resource's firewall.
 
 | Resource | Firewall Default | Azure Services Bypass | Private Endpoint | Deployer IP Exception |
 | --- | --- | --- | --- | --- |

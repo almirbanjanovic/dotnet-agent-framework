@@ -93,7 +93,7 @@ output "search_name" {
 
 output "search_index_name" {
   description = "Azure AI Search index name"
-  value       = module.search.index_name
+  value       = var.search_index_name
 }
 
 # ---------------------------------------------------------------

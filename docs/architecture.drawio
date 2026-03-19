@@ -120,21 +120,6 @@
                 <mxCell id="e-mcp-know-embed" value="" style="edgeStyle=none;html=1;strokeColor=none;" parent="1" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e-blob-eventgrid" value="BlobCreated" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#d6604d;fontSize=9;fontColor=#d6604d;dashed=1;entryX=0.502;entryY=1.094;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" target="42" edge="1">
-                    <mxGeometry relative="1" as="geometry">
-                        <mxPoint x="1660" y="1190" as="sourcePoint"/>
-                        <mxPoint x="2060" y="1154.0526315789473" as="targetPoint"/>
-                    </mxGeometry>
-                </mxCell>
-                <mxCell id="logic-app" value="Logic App&lt;div&gt;(api-key bridge)&lt;/div&gt;" style="image;aspect=fixed;html=1;points=[];align=left;fontSize=11;image=img/lib/azure2/integration/Logic_Apps.svg;labelPosition=right;verticalLabelPosition=middle;verticalAlign=middle;" parent="1" vertex="1">
-                    <mxGeometry x="1920" y="910" width="65" height="65" as="geometry"/>
-                </mxCell>
-                <mxCell id="e-eventgrid-logicapp" value="Webhook" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#d6604d;fontSize=9;fontColor=#d6604d;dashed=1;" parent="1" source="42" target="logic-app" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e-logicapp-search" value="Run indexer&lt;div&gt;(api-key header)&lt;/div&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#d6604d;fontSize=9;fontColor=#d6604d;dashed=1;" parent="1" source="logic-app" target="2" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
                 <mxCell id="e-seed-crm" value="&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;Seed&lt;/font&gt;&lt;div&gt;&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;(Deploy Script)&lt;/font&gt;&lt;/div&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#999999;fontSize=9;fontColor=#999999;dashed=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" parent="1" source="data-crm" edge="1">
                     <mxGeometry relative="1" as="geometry">
                         <mxPoint x="905" y="1260.0000000000002" as="targetPoint"/>
@@ -193,9 +178,6 @@
                 </mxCell>
                 <mxCell id="4" value="Cosmos DB - Agents&lt;br&gt;(Session State)" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/databases/Azure_Cosmos_DB.svg;" parent="1" vertex="1">
                     <mxGeometry x="450" y="1155" width="64" height="64" as="geometry"/>
-                </mxCell>
-                <mxCell id="42" value="&amp;nbsp; Event Grid" style="image;aspect=fixed;html=1;points=[];align=left;fontSize=12;image=img/lib/azure2/integration/Event_Grid_Domains.svg;labelPosition=right;verticalLabelPosition=middle;verticalAlign=middle;" parent="1" vertex="1">
-                    <mxGeometry x="1920" y="1080" width="67" height="60" as="geometry"/>
                 </mxCell>
                 <mxCell id="43" value="Storage Account&lt;div&gt;(Images, Documents)&lt;/div&gt;" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/storage/Storage_Accounts.svg;labelPosition=center;verticalLabelPosition=top;verticalAlign=bottom;" parent="1" vertex="1">
                     <mxGeometry x="1590" y="1161" width="65" height="52" as="geometry"/>
