@@ -519,9 +519,31 @@ $phase4Items = [ordered]@{
 }
 if (-not $LocalOnly) { $phase4Items["RBAC"] = "Contributor on $ResourceGroup" } else { $phase4Items["RBAC"] = "Skipped (local-only mode)" }
 
+# ── RBAC: Storage Blob Data Contributor for deployer (Terraform state) ────────
+Write-Step "Granting Storage Blob Data Contributor to deployer on state storage"
+$deployerOid = az ad signed-in-user show --query id -o tsv 2>$null
+if ($deployerOid) {
+    $stScope = az storage account show --name $StorageAccount --resource-group $ResourceGroup --query id -o tsv 2>$null
+    if ($stScope) {
+        $blobRole = "Storage Blob Data Contributor"
+        $exists = az role assignment list --assignee $deployerOid --role $blobRole --scope $stScope --query "[0].id" -o tsv 2>$null
+        if ($exists) {
+            Write-Skip "$blobRole already assigned"
+        } else {
+            az role assignment create --assignee-object-id $deployerOid --assignee-principal-type User --role $blobRole --scope $stScope 2>$null | Out-Null
+            Write-Done "$blobRole granted on $StorageAccount"
+        }
+        $phase4Items["Storage RBAC"] = "Blob Data Contributor on $StorageAccount"
+    } else {
+        Write-Host "    ⚠ Could not find storage account $StorageAccount — assign Storage Blob Data Contributor manually" -ForegroundColor Yellow
+        $phase4Items["Storage RBAC"] = "Manual assignment required"
+    }
+} else {
+    Write-Host "    ⚠ Could not determine deployer identity — assign roles manually" -ForegroundColor Yellow
+}
+
 # ── RBAC: Key Vault data-plane roles for deployer (current user) ─────────────
 Write-Step "Granting Key Vault data-plane roles to deployer"
-$deployerOid = az ad signed-in-user show --query id -o tsv 2>$null
 if ($deployerOid) {
     $rgScope = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup"
     $kvRoles = @("Key Vault Secrets Officer", "Key Vault Certificates Officer")

@@ -538,9 +538,31 @@ else
     RBAC_STATUS="Contributor on $RESOURCE_GROUP"
 fi
 
+# ── RBAC: Storage Blob Data Contributor for deployer (Terraform state) ────────
+step "Granting Storage Blob Data Contributor to deployer on state storage"
+DEPLOYER_OID=$(az ad signed-in-user show --query id -o tsv 2>/dev/null || true)
+STORAGE_RBAC_STATUS="Manual assignment required"
+if [[ -n "$DEPLOYER_OID" ]]; then
+    ST_SCOPE=$(az storage account show --name "$STORAGE_ACCOUNT" --resource-group "$RESOURCE_GROUP" --query id -o tsv 2>/dev/null || true)
+    if [[ -n "$ST_SCOPE" ]]; then
+        BLOB_ROLE="Storage Blob Data Contributor"
+        EXISTS=$(az role assignment list --assignee "$DEPLOYER_OID" --role "$BLOB_ROLE" --scope "$ST_SCOPE" --query "[0].id" -o tsv 2>/dev/null || true)
+        if [[ -n "$EXISTS" ]]; then
+            skip_ "$BLOB_ROLE already assigned"
+        else
+            az role assignment create --assignee-object-id "$DEPLOYER_OID" --assignee-principal-type User --role "$BLOB_ROLE" --scope "$ST_SCOPE" >/dev/null
+            done_ "$BLOB_ROLE granted on $STORAGE_ACCOUNT"
+        fi
+        STORAGE_RBAC_STATUS="Blob Data Contributor on $STORAGE_ACCOUNT"
+    else
+        echo -e "    ${Y}\u26a0 Could not find storage account $STORAGE_ACCOUNT \u2014 assign Storage Blob Data Contributor manually${W}"
+    fi
+else
+    echo -e "    ${Y}\u26a0 Could not determine deployer identity \u2014 assign roles manually${W}"
+fi
+
 # ── RBAC: Key Vault data-plane roles for deployer (current user) ─────────────
 step "Granting Key Vault data-plane roles to deployer"
-DEPLOYER_OID=$(az ad signed-in-user show --query id -o tsv 2>/dev/null || true)
 KV_RBAC_STATUS="Manual assignment required"
 if [[ -n "$DEPLOYER_OID" ]]; then
     RG_SCOPE="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP"
@@ -560,12 +582,13 @@ fi
 
 phase_summary 4 \
     "Phase 5 — Generate terraform.tfvars and backend.hcl configuration files" \
-    "Resource group"  "$RESOURCE_GROUP" \
-    "Storage account" "$STORAGE_ACCOUNT" \
-    "Container"       "$CONTAINER_NAME" \
-    "RBAC"            "$RBAC_STATUS" \
-    "KV RBAC"         "$KV_RBAC_STATUS" \
-    "Public access"   "Disabled"
+    "Resource group"   "$RESOURCE_GROUP" \
+    "Storage account"  "$STORAGE_ACCOUNT" \
+    "Container"        "$CONTAINER_NAME" \
+    "RBAC"             "$RBAC_STATUS" \
+    "Storage RBAC"     "$STORAGE_RBAC_STATUS" \
+    "KV RBAC"          "$KV_RBAC_STATUS" \
+    "Public access"    "Disabled"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 5 — Generate config files
