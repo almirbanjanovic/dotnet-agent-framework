@@ -73,7 +73,6 @@ function Write-Phase {
     Write-Host "║" -ForegroundColor DarkCyan
     Write-Host "  ╚═════════════════════════════════════════════════════════╝" -ForegroundColor DarkCyan
 }
-}
 
 function Write-Step  { param([string]$Message) Write-Host "  → $Message" -ForegroundColor White }
 function Write-Done  { param([string]$Message) Write-Host "    ✓ $Message" -ForegroundColor Green }
