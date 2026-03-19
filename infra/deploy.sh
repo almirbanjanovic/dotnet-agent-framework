@@ -564,41 +564,6 @@ cleanup_deployer_ip() {
 trap cleanup_deployer_ip EXIT
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# PRE-FLIGHT — Purge soft-deleted resources from previous runs
-# Azure keeps deleted Key Vaults, Cognitive Services, and other resources in a
-# soft-deleted state. These block re-creation with the same name. Purge them
-# as a fail-safe before Terraform runs.
-# ═══════════════════════════════════════════════════════════════════════════════
-
-step "Checking for soft-deleted Cognitive Services accounts"
-SOFT_COG=$(az cognitiveservices account list-deleted --query "[?contains(id, '$RESOURCE_GROUP')].[name]" -o tsv 2>/dev/null || true)
-if [[ -n "$SOFT_COG" ]]; then
-    while IFS= read -r acct; do
-        acct=$(echo "$acct" | xargs)
-        [[ -z "$acct" ]] && continue
-        echo -e "    ${Y}Purging soft-deleted account: $acct${W}"
-        az cognitiveservices account purge --location "$LOCATION" --resource-group "$RESOURCE_GROUP" --name "$acct" 2>/dev/null || true
-        done_ "Purged $acct"
-    done <<< "$SOFT_COG"
-else
-    done_ "No soft-deleted Cognitive Services accounts found"
-fi
-
-step "Checking for soft-deleted Key Vaults"
-SOFT_KV=$(az keyvault list-deleted --query "[?properties.vaultId && contains(properties.vaultId, '$RESOURCE_GROUP')].[name]" -o tsv 2>/dev/null || true)
-if [[ -n "$SOFT_KV" ]]; then
-    while IFS= read -r kv; do
-        kv=$(echo "$kv" | xargs)
-        [[ -z "$kv" ]] && continue
-        echo -e "    ${Y}Purging soft-deleted Key Vault: $kv${W}"
-        az keyvault purge --name "$kv" --no-wait 2>/dev/null || true
-        done_ "Purged $kv (async)"
-    done <<< "$SOFT_KV"
-else
-    done_ "No soft-deleted Key Vaults found"
-fi
-
-# ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 1 — Open resource firewalls
 # ═══════════════════════════════════════════════════════════════════════════════
 

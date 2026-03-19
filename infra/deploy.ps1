@@ -590,43 +590,6 @@ Write-Host ""
 try {
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# PRE-FLIGHT — Purge soft-deleted resources from previous runs
-# Azure keeps deleted Key Vaults, Cognitive Services, and other resources in a
-# soft-deleted state. These block re-creation with the same name. Purge them
-# as a fail-safe before Terraform runs.
-# ═══════════════════════════════════════════════════════════════════════════════
-
-Write-Step "Checking for soft-deleted Cognitive Services accounts"
-$softDeletedCog = az cognitiveservices account list-deleted --query "[?contains(id, '$ResourceGroup')].[name]" -o tsv 2>$null
-if ($softDeletedCog) {
-    foreach ($acctName in $softDeletedCog -split "`n") {
-        $acctName = $acctName.Trim()
-        if ($acctName) {
-            Write-Host "    Purging soft-deleted account: $acctName" -ForegroundColor Yellow
-            az cognitiveservices account purge --location $Location --resource-group $ResourceGroup --name $acctName 2>$null
-            Write-Done "Purged $acctName"
-        }
-    }
-} else {
-    Write-Done "No soft-deleted Cognitive Services accounts found"
-}
-
-Write-Step "Checking for soft-deleted Key Vaults"
-$softDeletedKv = az keyvault list-deleted --query "[?properties.vaultId && contains(properties.vaultId, '$ResourceGroup')].[name]" -o tsv 2>$null
-if ($softDeletedKv) {
-    foreach ($kvName in $softDeletedKv -split "`n") {
-        $kvName = $kvName.Trim()
-        if ($kvName) {
-            Write-Host "    Purging soft-deleted Key Vault: $kvName" -ForegroundColor Yellow
-            az keyvault purge --name $kvName --no-wait 2>$null
-            Write-Done "Purged $kvName (async)"
-        }
-    }
-} else {
-    Write-Done "No soft-deleted Key Vaults found"
-}
-
-# ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 1 — Open resource firewalls
 # ═══════════════════════════════════════════════════════════════════════════════
 

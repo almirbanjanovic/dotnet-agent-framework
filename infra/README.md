@@ -177,7 +177,6 @@ Each module lives under a `v1/` folder. When a breaking change is needed, create
 
 | Feature | Description |
 | --- | --- |
-| **Soft-delete purge** | Pre-flight purge of soft-deleted Cognitive Services accounts and Key Vaults. KV purges use `--no-wait` to avoid blocking. |
 | **Agent Identity SP** | Auto-creates or reuses a service principal for the msgraph provider. Grants Agent Identity Graph API permissions and creates a temporary client secret that expires in 1 hour. Cleaned up on script exit. |
 | **CAE token retry** | If Entra operations fail due to a `TokenCreatedWithOutdatedPolicies` challenge, the script clears cached tokens and re-authenticates interactively. |
 | **Policy diagnostic** | On `terraform apply` failure, lists all deny-effect Azure Policy assignments (resolving parameterized effects through assignment overrides and definition defaults). |

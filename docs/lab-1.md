@@ -61,8 +61,6 @@ The script performs 8 phases (0-7) with a confirmation gate between each:
 | **6** | Seed CRM data -- runs seed-data tool directly via `dotnet run` with DefaultAzureCredential (firewalls are open, deployer has Cosmos DB RBAC) |
 | **7** | Link Entra users to Customers — reads Entra object IDs from Key Vault, updates `entra_id` in Cosmos DB |
 
-Before Phase 1, the script runs a **pre-flight check** that purges soft-deleted Key Vaults and Cognitive Services accounts from previous runs. Azure retains these in a soft-deleted state which blocks re-creation with the same name. Key Vault purges use `--no-wait` since they can take several minutes.
-
 If `terraform apply` fails, the script runs a **post-failure diagnostic** that lists all deny-effect Azure Policy assignments (including parameterized policies in initiatives) across the subscription and resource group. This helps identify `RequestDisallowedByPolicy` errors quickly.
 
 ### Option B — GitHub Actions
