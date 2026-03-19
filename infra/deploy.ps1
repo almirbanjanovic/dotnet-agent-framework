@@ -89,16 +89,20 @@ function Write-Phase {
             "Authenticates via az login (RBAC, no keys)."
         )}
         7 { @(
-            "Customers are Cosmos DB documents with an entra_id",
-            "field. Test users (Emma, James, etc.) are Entra ID",
-            "accounts created by Terraform. This phase reads",
-            "each user's Entra object ID from Key Vault and",
-            "writes it to their Customer document. Without this",
-            "link, the app can't map 'who logged in' (Entra) to",
-            "'whose data to show' (Cosmos DB). Example:",
+            "Customers are JSON documents in Cosmos DB (NoSQL)",
+            "with an entra_id field used for data scoping.",
+            "Test users (Emma, James, etc.) are Entra ID",
+            "accounts created by Terraform in Phase 5.",
             "",
-            "  Emma Wilson (Entra OID) --> Customer 101 (Cosmos DB)",
-            "  Login JWT oid claim    --> entra_id field filter"
+            "This phase reads each user's Entra object ID",
+            "from Key Vault and updates the entra_id field",
+            "on their Customer record in Cosmos DB. This is",
+            "how the app maps 'who logged in' to 'whose data",
+            "to show' — the BFF extracts the oid claim from",
+            "the JWT and filters: WHERE c.entra_id = '<oid>'",
+            "",
+            "  Emma Wilson (Entra OID) --> Customer 101",
+            "  JWT oid claim           --> entra_id filter"
         )}
         default { @() }
     }
@@ -876,21 +880,34 @@ $KeyVaultUri = (az keyvault show --name $KvName --query properties.vaultUri -o t
 
 # ── Final summary ────────────────────────────────────────────────────────────
 Write-Host ""
-Write-Host "  ╔═══════════════════════════════════════════════════════╗" -ForegroundColor Green
-Write-Host "  ║  Deployment Complete!                                 ║" -ForegroundColor Green
-Write-Host "  ╠═══════════════════════════════════════════════════════╣" -ForegroundColor Green
-Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Environment:    $Environment"
-Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Resource group: $ResourceGroup"
-Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Location:       $Location"
+Write-Host "  ╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
+Write-Host "  ║                                                                ║" -ForegroundColor Green
+Write-Host "  ║    ____  _  _  ___  ___  ____  ____  ____  _                   ║" -ForegroundColor Green
+Write-Host "  ║   / ___)/ )( \/ __)/ __)( ___)/ ___)/ ___)/ )                  ║" -ForegroundColor Green
+Write-Host "  ║   \___ \) \/ ( (__ ( (__  ) _) \___ \\___ \\_/                  ║" -ForegroundColor Green
+Write-Host "  ║   (____/\____/\___)\___)(____)(_____/(_____(_)                  ║" -ForegroundColor Green
+Write-Host "  ║                                                                ║" -ForegroundColor Green
+Write-Host "  ║    All phases completed successfully!                          ║" -ForegroundColor Green
+Write-Host "  ║                                                                ║" -ForegroundColor Green
+Write-Host "  ╠════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
+Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Environment:    $($Environment.PadRight(48))" -NoNewline; Write-Host "║" -ForegroundColor Green
+Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Resource group: $($ResourceGroup.PadRight(48))" -NoNewline; Write-Host "║" -ForegroundColor Green
+Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Location:       $($Location.PadRight(48))" -NoNewline; Write-Host "║" -ForegroundColor Green
 if ($KeyVaultUri) {
-    Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Key Vault URI:  $KeyVaultUri"
+    Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Key Vault URI:  $($KeyVaultUri.PadRight(48))" -NoNewline; Write-Host "║" -ForegroundColor Green
 }
-Write-Host "  ║" -ForegroundColor Green
-Write-Host "  ║  Next steps (see Lab 1, Steps 2–3):                   " -ForegroundColor Green
-Write-Host "  ║    1. cd src/config-sync                               " -ForegroundColor Green
-Write-Host "  ║    2. dotnet run -- $KeyVaultUri" -ForegroundColor Green
-Write-Host "  ║    3. cd ../simple-agent && dotnet run                 " -ForegroundColor Green
-Write-Host "  ╚═══════════════════════════════════════════════════════╝" -ForegroundColor Green
+Write-Host "  ║                                                                ║" -ForegroundColor Green
+Write-Host "  ║  Next steps (see Lab 1, Steps 2-3):                            ║" -ForegroundColor Green
+Write-Host "  ║                                                                ║" -ForegroundColor Green
+Write-Host "  ║    Step 2: Config Sync (open KV firewall, run, close)          ║" -ForegroundColor Green
+Write-Host "  ║      cd src/config-sync                                        ║" -ForegroundColor Green
+Write-Host "  ║      dotnet run -- <keyvault-uri>                              ║" -ForegroundColor Green
+Write-Host "  ║                                                                ║" -ForegroundColor Green
+Write-Host "  ║    Step 3: Validate (open AI Services firewall, run, close)    ║" -ForegroundColor Green
+Write-Host "  ║      cd src/simple-agent                                       ║" -ForegroundColor Green
+Write-Host "  ║      dotnet run                                                ║" -ForegroundColor Green
+Write-Host "  ║                                                                ║" -ForegroundColor Green
+Write-Host "  ╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
 Write-Host ""
 
 } finally {
