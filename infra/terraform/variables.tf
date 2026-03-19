@@ -1,3 +1,28 @@
+# ---------------------------------------------------------------
+# msgraph provider credentials (Agent Identity)
+# Set via TF_VAR_msgraph_client_* by deploy scripts.
+# Left empty in CI/CD where OIDC handles auth.
+# ---------------------------------------------------------------
+
+variable "msgraph_client_id" {
+  description = "Client ID for msgraph provider (SP for Agent Identity). Set by deploy script."
+  type        = string
+  default     = ""
+}
+
+variable "msgraph_client_secret" {
+  description = "Client secret for msgraph provider. Temporary, created by deploy script."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "msgraph_tenant_id" {
+  description = "Tenant ID for msgraph provider."
+  type        = string
+  default     = ""
+}
+
 variable "tags" {
   type = map(string)
 }

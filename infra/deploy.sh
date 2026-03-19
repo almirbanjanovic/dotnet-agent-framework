@@ -163,10 +163,9 @@ if [[ -n "$SP_CLIENT_ID" ]]; then
     SP_TEMP_SECRET=$(az ad app credential reset --id "$SP_CLIENT_ID" --years 0 \
         --end-date "$END_DATE" --query password -o tsv 2>/dev/null || true)
     if [[ -n "$SP_TEMP_SECRET" ]]; then
-        export ARM_CLIENT_ID="$SP_CLIENT_ID"
-        export ARM_CLIENT_SECRET="$SP_TEMP_SECRET"
-        export ARM_TENANT_ID="$TENANT_ID"
-        export ARM_SUBSCRIPTION_ID="$SUBSCRIPTION_ID"
+        export TF_VAR_msgraph_client_id="$SP_CLIENT_ID"
+        export TF_VAR_msgraph_client_secret="$SP_TEMP_SECRET"
+        export TF_VAR_msgraph_tenant_id="$TENANT_ID"
         done_ "Temporary client secret created for msgraph provider"
     else
         echo -e "    ${Y}⚠ Could not create client secret — Agent Identity may fail${W}"
@@ -339,7 +338,7 @@ cleanup_deployer_ip() {
         echo -e "  ${D}Cleaning up temporary client secret...${W}"
         CLEANUP_END=$(date -u -d "+1 minute" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v+1M '+%Y-%m-%dT%H:%M:%SZ')
         az ad app credential reset --id "$SP_CLIENT_ID" --years 0 --end-date "$CLEANUP_END" 2>/dev/null || true
-        unset ARM_CLIENT_SECRET
+        unset TF_VAR_msgraph_client_secret
     fi
 }
 trap cleanup_deployer_ip EXIT

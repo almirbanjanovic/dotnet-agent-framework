@@ -280,10 +280,9 @@ if ($SpClientId) {
     $SecretOutput = az ad app credential reset --id "$SpClientId" --years 0 --end-date $EndDate -o json 2>&1
     if ($LASTEXITCODE -eq 0) {
         $SecretJson = ($SecretOutput | ConvertFrom-Json).password
-        $env:ARM_CLIENT_ID = $SpClientId
-        $env:ARM_CLIENT_SECRET = $SecretJson
-        $env:ARM_TENANT_ID = $TenantId
-        $env:ARM_SUBSCRIPTION_ID = $SubscriptionId
+        $env:TF_VAR_msgraph_client_id = $SpClientId
+        $env:TF_VAR_msgraph_client_secret = $SecretJson
+        $env:TF_VAR_msgraph_tenant_id = $TenantId
         Write-Done "Temporary client secret created for msgraph provider"
     } else {
         Write-Host "    ⚠ Could not create client secret — Agent Identity may fail" -ForegroundColor Yellow
@@ -732,9 +731,9 @@ Write-Host ""
     }
 
     # Remove the temporary client secret created for the msgraph provider
-    if ($SpClientId -and $env:ARM_CLIENT_SECRET) {
+    if ($SpClientId -and $env:TF_VAR_msgraph_client_secret) {
         Write-Host "  Cleaning up temporary client secret..." -ForegroundColor DarkGray
         az ad app credential reset --id "$SpClientId" --years 0 --end-date ((Get-Date).AddMinutes(1).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")) 2>$null | Out-Null
-        $env:ARM_CLIENT_SECRET = ""
+        $env:TF_VAR_msgraph_client_secret = ""
     }
 }

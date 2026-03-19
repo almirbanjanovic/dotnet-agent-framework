@@ -89,11 +89,18 @@ provider "azuread" {
 # which includes Directory.AccessAsUser.All (a first-party Microsoft permission
 # on the Azure CLI app). The Agent ID API explicitly blocks that permission.
 #
-# Authentication paths (all controlled by environment variables):
-# - CI/CD (GitHub Actions): ARM_USE_OIDC=true → OIDC federated token (app-only)
-# - Local (deploy.ps1/sh): ARM_CLIENT_ID + ARM_CLIENT_SECRET → client credentials
+# Authentication:
+# - Local: deploy script creates a temp client secret and passes it via
+#   TF_VAR_msgraph_client_id/secret. Only msgraph uses it; other providers
+#   keep using CLI auth.
+# - CI/CD: ARM_USE_OIDC=true → all providers (including msgraph) use OIDC.
+#   The msgraph_client_* vars are left empty and use_oidc takes over.
 provider "msgraph" {
-  use_cli = false
+  use_cli       = false
+  use_oidc      = var.msgraph_client_secret == "" ? true : false
+  client_id     = var.msgraph_client_id != "" ? var.msgraph_client_id : null
+  client_secret = var.msgraph_client_secret != "" ? var.msgraph_client_secret : null
+  tenant_id     = var.msgraph_tenant_id != "" ? var.msgraph_tenant_id : null
 }
 
 # kubectl provider is configured dynamically using AKS cluster credentials.
