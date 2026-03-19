@@ -2,21 +2,26 @@
 # Agent Identity Module v1 — Variables
 # =============================================================================
 
-variable "environment" {
-  description = "Deployment environment (e.g., dev, staging, prod). Used in agent identity tags."
+variable "aks_oidc_issuer_url" {
+  description = "OIDC issuer URL from the AKS cluster (for federated identity credentials)"
   type        = string
 }
 
-variable "aks_oidc_issuer_url" {
-  description = "OIDC issuer URL from the AKS cluster (for federated identity credentials)"
+variable "sponsor_object_id" {
+  description = "Entra object ID of the human sponsor for Agent Identity Blueprints."
+  type        = string
+}
+
+variable "owner_object_id" {
+  description = "Entra object ID of the human owner for Agent Identity Blueprints."
   type        = string
 }
 
 variable "agents" {
   description = <<-EOT
     Map of agent identities to create. Each entry creates:
-    - An application registration (blueprint)
-    - A service principal (agent identity)
+    - An Agent Identity Blueprint (Graph beta application)
+    - A Blueprint Principal (Graph beta service principal)
     - A federated identity credential (AKS workload identity)
 
     blueprint_display_name: Human-readable name for the blueprint (no env suffix).

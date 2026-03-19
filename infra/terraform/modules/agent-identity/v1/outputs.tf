@@ -12,11 +12,11 @@ output "agents" {
   EOT
 
   value = {
-    for key, agent in azuread_service_principal.agent : key => {
-      client_id              = agent.client_id
-      object_id              = agent.object_id
-      app_object_id          = azuread_application.blueprint[key].object_id
-      blueprint_display_name = azuread_application.blueprint[key].display_name
+    for key, principal in msgraph_resource.blueprint_principal : key => {
+      client_id              = principal.output.appId
+      object_id              = principal.output.id
+      app_object_id          = msgraph_resource.blueprint[key].output.id
+      blueprint_display_name = msgraph_resource.blueprint[key].output.displayName
     }
   }
 }

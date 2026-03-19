@@ -107,3 +107,7 @@
 ### 2026-03-20 — Agent Identity v2 (msgraph)
 
 **Agent Identity v2 architecture:** Implemented a new `agent-identity/v2` module using the `microsoft/msgraph` provider to create Agent Identity Blueprints, Blueprint Principals, and AKS federated identity credentials via Graph beta. The blueprint service now owns runtime identity creation, with Terraform only provisioning the blueprint and principal objects. Updated main.tf to use v2 and fixed Cosmos DB RBAC for agent principals.
+
+### 2025-07-25 — Agent Identity Module Consolidation (v2 → v1)
+
+**Consolidated agent-identity module:** Deleted the old azuread-based v1 module and promoted the msgraph-based v2 code into v1 as the single canonical version. Removed unused `var.environment` and `var.resource_group_name` from the module variables. Updated `main.tf` source path from `v2` back to `v1` and removed the corresponding `environment` and `resource_group_name` arguments from the module block. Verified no duplicate data source blocks (`azuread_client_config` and `azurerm_client_config` each appear exactly once). `terraform fmt -check -recursive` passes clean.

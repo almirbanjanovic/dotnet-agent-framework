@@ -1,71 +1,64 @@
 # =============================================================================
-# Agent Identity Module v1
-# Creates: Agent Identity Blueprints (app registrations) + Agent Identity
-# service principals + Federated Identity Credentials for AKS workload identity.
+# Agent Identity Module v1 (Microsoft Graph beta)
+# Creates Entra Agent Identity Blueprints and Blueprint Principals via the
+# Microsoft Graph beta API using the msgraph provider.
 #
-# Uses the Entra Agent ID platform model:
-#   Blueprint (azuread_application)
-#     └── Agent Identity (azuread_service_principal)
-#           └── FIC (azuread_application_federated_identity_credential) → AKS
+# IMPORTANT:
+# - Agent Identity instances are created at runtime by the blueprint service,
+#   NOT during Terraform provisioning. This is by design per Microsoft docs.
+# - Federated Identity Credentials (FICs) bind blueprints to AKS service
+#   accounts for workload identity (OIDC token exchange).
 #
-# The azuread provider handles the core resources. Agent-specific metadata
-# (agent subtype, blueprint-to-instance parent relationship) will be set via
-# Microsoft Graph API when the Entra Agent ID platform reaches GA and provider
-# support is added. For now, tags identify these as agent identities.
+# References:
+# - https://learn.microsoft.com/en-us/entra/agent-id/identity-platform/create-blueprint
+# - https://learn.microsoft.com/en-us/entra/agent-id/identity-platform/create-delete-agent-identities
+#
+# Prerequisite: Microsoft 365 Copilot license + Frontier program enrollment.
 # =============================================================================
 
-data "azuread_client_config" "current" {}
-
 # -----------------------------------------------------------------------------
-# Agent Identity Blueprints (Application Registrations)
-# Each blueprint defines a "kind" of agent (CRM, Product, Orchestrator).
-# Display name has no environment suffix — a blueprint is a type, not a deployment.
+# Agent Identity Blueprints (Graph beta: AgentIdentityBlueprint)
 # -----------------------------------------------------------------------------
 
-resource "azuread_application" "blueprint" {
+resource "msgraph_resource" "blueprint" {
   for_each = var.agents
+  type     = "microsoft.graph.applications@beta"
 
-  display_name     = each.value.blueprint_display_name
-  owners           = [data.azuread_client_config.current.object_id]
-  sign_in_audience = "AzureADMyOrg"
-
-  api {
-    requested_access_token_version = 2
+  body = {
+    "@odata.type"         = "#Microsoft.Graph.AgentIdentityBlueprint"
+    displayName           = each.value.blueprint_display_name
+    signInAudience        = "AzureADMyOrg"
+    "sponsors@odata.bind" = ["https://graph.microsoft.com/v1.0/users/${var.sponsor_object_id}"]
+    "owners@odata.bind"   = ["https://graph.microsoft.com/v1.0/users/${var.owner_object_id}"]
   }
-
-  tags = ["AgentIdentityBlueprint", "Contoso"]
 }
 
 # -----------------------------------------------------------------------------
-# Agent Identity Service Principals
-# Each service principal is the runtime identity for an agent instance.
-# Display name includes the environment to identify the deployment.
-# RBAC roles are assigned to the service principal's object_id.
-# K8s service accounts reference the application's client_id.
+# Agent Identity Blueprint Principals (Graph beta: AgentIdentityBlueprintPrincipal)
 # -----------------------------------------------------------------------------
 
-resource "azuread_service_principal" "agent" {
+resource "msgraph_resource" "blueprint_principal" {
   for_each = var.agents
+  type     = "microsoft.graph.serviceprincipals@beta"
 
-  client_id = azuread_application.blueprint[each.key].client_id
-  owners    = [data.azuread_client_config.current.object_id]
-
-  tags = ["AgentIdentity", "Contoso", var.environment]
+  body = {
+    "@odata.type" = "#Microsoft.Graph.AgentIdentityBlueprintPrincipal"
+    appId         = msgraph_resource.blueprint[each.key].output.appId
+  }
 }
 
 # -----------------------------------------------------------------------------
 # Federated Identity Credentials (AKS Workload Identity)
-# Binds each agent identity to a specific K8s service account in a specific
-# namespace on a specific AKS cluster. Same mechanism as managed identity FIC.
-# DefaultAzureCredential() in the pod resolves to this identity at runtime.
 # -----------------------------------------------------------------------------
 
-resource "azuread_application_federated_identity_credential" "aks" {
+resource "msgraph_resource" "fic" {
   for_each = var.agents
+  type     = "microsoft.graph.applications/${msgraph_resource.blueprint[each.key].output.id}/federatedIdentityCredentials@beta"
 
-  application_id = azuread_application.blueprint[each.key].id
-  display_name   = "aks-${replace(each.key, "_", "-")}"
-  audiences      = ["api://AzureADTokenExchange"]
-  issuer         = var.aks_oidc_issuer_url
-  subject        = "system:serviceaccount:${each.value.namespace}:${each.value.service_account}"
+  body = {
+    name      = "aks-${replace(each.key, "_", "-")}"
+    audiences = ["api://AzureADTokenExchange"]
+    issuer    = var.aks_oidc_issuer_url
+    subject   = "system:serviceaccount:${each.value.namespace}:${each.value.service_account}"
+  }
 }
