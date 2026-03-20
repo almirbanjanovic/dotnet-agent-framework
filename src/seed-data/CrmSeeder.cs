@@ -232,13 +232,15 @@ public static class CrmSeeder
                 await container.UpsertItemAsync(doc, pk);
                 return;
             }
-            catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Forbidden && (int)ex.SubStatusCode == 5302)
+            catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
             {
                 if (attempt == maxRetries)
                     throw;
 
                 if (attempt == 1)
                     Console.WriteLine($"\n  ⏳ RBAC not yet active — retrying ({maxRetries * delaySeconds}s max)...");
+                else
+                    Console.Write(".");
 
                 await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
             }
