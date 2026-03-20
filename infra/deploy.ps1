@@ -859,34 +859,34 @@ $KeyVaultUri = (az keyvault show --name $KvName --query properties.vaultUri -o t
 
 # ── Final summary ────────────────────────────────────────────────────────────
 Write-Host ""
-Write-Host "  ╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
-Write-Host "  ║                                                                ║" -ForegroundColor Green
-Write-Host "  ║    ____  _  _  ___  ___  ____  ____  ____  _                   ║" -ForegroundColor Green
-Write-Host "  ║   / ___)/ )( \/ __)/ __)( ___)/ ___)/ ___)/ )                  ║" -ForegroundColor Green
-Write-Host "  ║   \___ \) \/ ( (__ ( (__  ) _) \___ \\___ \\_/                  ║" -ForegroundColor Green
-Write-Host "  ║   (____/\____/\___)\___)(____)(_____/(_____(_)                  ║" -ForegroundColor Green
-Write-Host "  ║                                                                ║" -ForegroundColor Green
-Write-Host "  ║    All phases completed successfully!                          ║" -ForegroundColor Green
-Write-Host "  ║                                                                ║" -ForegroundColor Green
-Write-Host "  ╠════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
+Write-Host "  ╔═══════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
+Write-Host "  ║                                                                   ║" -ForegroundColor Green
+Write-Host "  ║    ____  _  _  ___  ___  ____  ____  ____  _                      ║" -ForegroundColor Green
+Write-Host "  ║   / ___)/ )( \/ __)/ __)( ___)/ ___)/ ___)/ )                     ║" -ForegroundColor Green
+Write-Host "  ║   \___ \) \/ ( (__ ( (__  ) _) \___ \\___ \\_/                    ║" -ForegroundColor Green
+Write-Host "  ║   (____/\____/\___)\___)(____)(_____/(_____(_)                    ║" -ForegroundColor Green
+Write-Host "  ║                                                                   ║" -ForegroundColor Green
+Write-Host "  ║    All phases completed successfully!                             ║" -ForegroundColor Green
+Write-Host "  ║                                                                   ║" -ForegroundColor Green
+Write-Host "  ╠═══════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
 Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Environment:    $($Environment.PadRight(48))" -NoNewline; Write-Host "║" -ForegroundColor Green
 Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Resource group: $($ResourceGroup.PadRight(48))" -NoNewline; Write-Host "║" -ForegroundColor Green
 Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Location:       $($Location.PadRight(48))" -NoNewline; Write-Host "║" -ForegroundColor Green
 if ($KeyVaultUri) {
     Write-Host "  ║" -ForegroundColor Green -NoNewLine; Write-Host "  Key Vault URI:  $($KeyVaultUri.PadRight(48))" -NoNewline; Write-Host "║" -ForegroundColor Green
 }
-Write-Host "  ║                                                                ║" -ForegroundColor Green
-Write-Host "  ║  Next steps (see Lab 1, Steps 2-3):                            ║" -ForegroundColor Green
-Write-Host "  ║                                                                ║" -ForegroundColor Green
-Write-Host "  ║    Step 2: Config Sync (open KV firewall, run, close)          ║" -ForegroundColor Green
-Write-Host "  ║      cd src/config-sync                                        ║" -ForegroundColor Green
-Write-Host "  ║      dotnet run -- <keyvault-uri>                              ║" -ForegroundColor Green
-Write-Host "  ║                                                                ║" -ForegroundColor Green
-Write-Host "  ║    Step 3: Validate (open AI Services firewall, run, close)    ║" -ForegroundColor Green
-Write-Host "  ║      cd src/simple-agent                                       ║" -ForegroundColor Green
-Write-Host "  ║      dotnet run                                                ║" -ForegroundColor Green
-Write-Host "  ║                                                                ║" -ForegroundColor Green
-Write-Host "  ╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+Write-Host "  ║                                                                   ║" -ForegroundColor Green
+Write-Host "  ║  Next steps (see Lab 1, Steps 2-3):                               ║" -ForegroundColor Green
+Write-Host "  ║                                                                   ║" -ForegroundColor Green
+Write-Host "  ║    Step 2: Config Sync (open KV firewall, run, close)             ║" -ForegroundColor Green
+Write-Host "  ║      cd src/config-sync                                           ║" -ForegroundColor Green
+Write-Host "  ║      dotnet run -- <keyvault-uri>                                 ║" -ForegroundColor Green
+Write-Host "  ║                                                                   ║" -ForegroundColor Green
+Write-Host "  ║    Step 3: Validate (open AI Services firewall, run, close)       ║" -ForegroundColor Green
+Write-Host "  ║      cd src/simple-agent                                          ║" -ForegroundColor Green
+Write-Host "  ║      dotnet run                                                   ║" -ForegroundColor Green
+Write-Host "  ║                                                                   ║" -ForegroundColor Green
+Write-Host "  ╚═══════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
 Write-Host ""
 
 } finally {

@@ -98,11 +98,19 @@ public static class CrmSeeder
                 // Ensure id is always a string for Cosmos DB
                 doc["id"] = row["id"]!.ToString();
 
-                // Extract partition key value
+                // Extract partition key value — must match the typed value in the document
                 var pkPath = containerDef.PartitionKeyPath.TrimStart('/');
-                var pkValue = doc.TryGetValue(pkPath, out var pk) ? pk?.ToString() ?? "" : "";
+                var pkRaw = doc.TryGetValue(pkPath, out var pk) ? pk : null;
+                var partitionKey = pkRaw switch
+                {
+                    int iv    => new PartitionKey(iv),
+                    long lv   => new PartitionKey(lv),
+                    double dv => new PartitionKey(dv),
+                    bool bv   => new PartitionKey(bv),
+                    _         => new PartitionKey(pkRaw?.ToString() ?? "")
+                };
 
-                await UpsertWithRetryAsync(container, doc, new PartitionKey(pkValue));
+                await UpsertWithRetryAsync(container, doc, partitionKey);
                 count++;
             }
 
