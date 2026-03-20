@@ -52,8 +52,8 @@ A single customer request touches both flows:
 ③ BFF validates the JWT signature → extracts her unique ID (oid claim) →
   passes it as X-Customer-Entra-Id header to the CRM API
 ④ CRM API pod uses Workload Identity (id-crm-api) to get an Azure AD token
-⑥ CRM API connects to Cosmos DB using that managed identity token (no password needed)
-⑦ CRM API queries: SELECT * FROM c WHERE c.entra_id = '<emma-oid>' (in Customers container)
+⑤ CRM API connects to Cosmos DB using that managed identity token (no password needed)
+⑥ CRM API queries: SELECT * FROM c WHERE c.entra_id = '<emma-oid>' (in Customers container)
 ⑦ Only Emma's orders are returned — scoped by user auth, accessed by workload identity
 ```
 
@@ -161,11 +161,11 @@ Terraform creates 6 Cosmos DB containers     →  Customers container seeded fro
 Deploy script reads OIDs from Key Vault      →  Updates entra_id field on each Customer
 
   Entra ID                          Cosmos DB (Customers container)
-  ┌──────────────────────┐          ┌─────────────────────────────────┐
-  │ Emma Wilson           │          │ { "id": "101",                  │
-  │ OID: abc-123-...      │ ──────▶ │   "name": "Emma Wilson",       │
-  │ UPN: emma.wilson@...  │          │   "entra_id": "abc-123-...",   │
-  └──────────────────────┘          │   "loyalty_tier": "Silver" }   │
+  ┌───────────────────────┐         ┌─────────────────────────────────┐
+  │ Emma Wilson           │         │ { "id": "101",                  │
+  │ OID: abc-123-...      │ ------> │   "name": "Emma Wilson",        │
+  │ UPN: emma.wilson@...  │         │   "entra_id": "abc-123-...",    │
+  └───────────────────────┘         │   "loyalty_tier": "Silver" }    │
                                     └─────────────────────────────────┘
 ```
 
@@ -247,12 +247,12 @@ Why agent identity here?
                   │    agentObjectId: <entra-oid>
                   │
                   ▼
-            ┌──────────────────────────────────────────┐
-            │ 🛡️ Contoso CRM Agent wants to:            │
-            │ Cancel order #1023 (Alpine Explorer Tent) │
-            │                                          │
-            │ [Approve Once] [Approve Session] [Deny]  │
-            └──────────────────────────────────────────┘
+            ┌─────────────────────────────────────────────┐
+            │  🛡️  Contoso CRM Agent wants to:            │
+            │  Cancel order #1023 (Alpine Explorer Tent)  │
+            │                                             │
+            │  [Approve Once]  [Approve Session]  [Deny]  │
+            └─────────────────────────────────────────────┘
 
 Identity flow:
   Emma (Entra user)        ──JWT──▶  BFF validates, extracts oid
@@ -536,12 +536,12 @@ MCP tools are classified by sensitivity:
    - If pre-approved (user chose "always allow"): auto-approve, execute tool
    - If no consent: emit ConsentRequested event via SignalR
 ⑥ Blazor UI shows inline consent card in chat:
-   ┌─────────────────────────────────────────────┐
-   │ 🛡️ Contoso CRM Agent wants to:              │
-   │ Cancel order #1023 (Alpine Explorer Tent)    │
-   │                                              │
-   │ [Approve Once] [Approve for Session] [Deny]  │
-   └─────────────────────────────────────────────┘
+   ┌───────────────────────────────────────────────┐
+   │  🛡️  Contoso CRM Agent wants to:              │
+   │  Cancel order #1023 (Alpine Explorer Tent)    │
+   │                                               │
+   │  [Approve Once]  [Approve for Session]  [Deny] │
+   └───────────────────────────────────────────────┘
 ⑦ User clicks Approve → BFF records consent in Cosmos DB → replays tool call
 ⑧ CRM Agent executes cancel_order → returns result → chat resumes
 ```
