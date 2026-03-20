@@ -160,13 +160,13 @@ Terraform creates 5 Entra ID test users     →  Entra object IDs stored in Key 
 Terraform creates 6 Cosmos DB containers     →  Customers container seeded from CSV
 Deploy script reads OIDs from Key Vault      →  Updates entra_id field on each Customer
 
-  Entra ID                          Cosmos DB (Customers container)
-  ┌───────────────────────┐         ┌─────────────────────────────────┐
-  │ Emma Wilson           │         │ { "id": "101",                  │
-  │ OID: abc-123-...      │ ------> │   "name": "Emma Wilson",        │
-  │ UPN: emma.wilson@...  │         │   "entra_id": "abc-123-...",    │
-  └───────────────────────┘         │   "loyalty_tier": "Silver" }    │
-                                    └─────────────────────────────────┘
+  Entra ID                         Cosmos DB (Customers container)
+  ┌───────────────────────┐        ┌─────────────────────────────────┐
+  │ Emma Wilson           │        │ { "id": "101",                  │
+  │ OID: abc-123-...      │ -----> │   "name": "Emma Wilson",        │
+  │ UPN: emma.wilson@...  │        │   "entra_id": "abc-123-...",    │
+  └───────────────────────┘        │   "loyalty_tier": "Silver" }    │
+                                   └─────────────────────────────────┘
 ```
 
 **At runtime (every request):**
@@ -189,14 +189,14 @@ This section shows how all three identity types (user, managed, agent) work toge
 ```text
 ┌─────────┐     ┌─────────┐     ┌─────────┐     ┌───────────┐
 │  Emma's │     │         │     │         │     │           │
-│ Browser │────▶│   BFF   │────▶│ CRM API │────▶│ Cosmos DB │
+│ Browser │---->│   BFF   │---->│ CRM API │---->│ Cosmos DB │
 │ (Blazor)│     │         │     │         │     │   (CRM)   │
 └─────────┘     └─────────┘     └─────────┘     └───────────┘
 
 Identity flow:
-  Emma (Entra user)  ──JWT──▶  BFF validates JWT, extracts oid
+  Emma (Entra user)  --JWT-->  BFF validates JWT, extracts oid
                                BFF passes X-Customer-Entra-Id header
-  id-crm-api (managed identity)  ──token──▶  Cosmos DB
+  id-crm-api (managed identity)  --token-->  Cosmos DB
                                CRM API filters: WHERE c.entra_id = '<oid>'
 
 Identities used:
@@ -210,15 +210,15 @@ Identities used:
 ```text
 ┌─────────┐    ┌─────┐    ┌──────┐    ┌─────────┐    ┌─────────┐    ┌──────────┐
 │  Emma's │    │     │    │ Orch │    │   CRM   │    │   CRM   │    │          │
-│ Browser │───▶│ BFF │───▶│Agent │───▶│  Agent  │───▶│   MCP   │───▶│Cosmos DB │
+│ Browser │--->│ BFF │--->│Agent │--->│  Agent  │--->│   MCP   │--->│Cosmos DB │
 │ (chat)  │    │     │    │      │    │         │    │         │    │  (CRM)   │
 └─────────┘    └─────┘    └──────┘    └─────────┘    └─────────┘    └──────────┘
 
 Identity flow:
-  Emma (Entra user)      ──JWT──▶  BFF validates, extracts oid
-  Orch Agent (agent ID)  ──token──▶  Azure OpenAI (intent classification)
-  CRM Agent (agent ID)   ──token──▶  Azure OpenAI (tool selection)
-  id-crm-mcp (managed)   ──token──▶  Cosmos DB (execute get_orders tool)
+  Emma (Entra user)      --JWT-->  BFF validates, extracts oid
+  Orch Agent (agent ID)  --token-->  Azure OpenAI (intent classification)
+  CRM Agent (agent ID)   --token-->  Azure OpenAI (tool selection)
+  id-crm-mcp (managed)   --token-->  Cosmos DB (execute get_orders tool)
 
 Identities used:
   ✓ User identity    — Emma's JWT (determines WHOSE orders to retrieve)
@@ -238,15 +238,15 @@ Why agent identity here?
 ```text
 ┌─────────┐    ┌─────┐    ┌──────┐    ┌─────────┐    ┌──────────────┐    ┌──────────┐
 │  Emma's │    │     │    │ Orch │    │   CRM   │    │  CRM MCP     │    │          │
-│ Browser │───▶│ BFF │───▶│Agent │───▶│  Agent  │───▶│ cancel_order │───▶│Cosmos DB │
+│ Browser │--->│ BFF │--->│Agent │--->│  Agent  │--->│ cancel_order │--->│Cosmos DB │
 │ (chat)  │    │     │    │      │    │         │    │  (HIGH sens) │    │  (CRM)   │
 └─────────┘    └─────┘    └──────┘    └─────────┘    └──────────────┘    └──────────┘
                   │                        │
-                  │◀── consent_required ───┘
+                  │<── consent_required ───┘
                   │    agentName: "Contoso CRM Agent"
                   │    agentObjectId: <entra-oid>
                   │
-                  ▼
+                  v
             ┌─────────────────────────────────────────────┐
             │  🛡️  Contoso CRM Agent wants to:            │
             │  Cancel order #1023 (Alpine Explorer Tent)  │
@@ -255,12 +255,12 @@ Why agent identity here?
             └─────────────────────────────────────────────┘
 
 Identity flow:
-  Emma (Entra user)        ──JWT──▶  BFF validates, extracts oid
-  Orch Agent (agent ID)    ──token──▶  Azure OpenAI
-  CRM Agent (agent ID)     ──token──▶  Azure OpenAI → decides cancel_order
-  CRM Agent                ──returns consent_required to BFF
-  BFF                      ──checks consent records in Cosmos DB (Agents account)
-  id-crm-mcp (managed)     ──token──▶  Cosmos DB (execute cancel_order after approval)
+  Emma (Entra user)        --JWT-->  BFF validates, extracts oid
+  Orch Agent (agent ID)    --token-->  Azure OpenAI
+  CRM Agent (agent ID)     --token-->  Azure OpenAI -> decides cancel_order
+  CRM Agent                --returns consent_required to BFF
+  BFF                      --checks consent records in Cosmos DB (Agents account)
+  id-crm-mcp (managed)     --token-->  Cosmos DB (execute cancel_order after approval)
 
 Why agent identity is critical here:
   The consent dialog shows "Contoso CRM Agent wants to..." — this name
@@ -277,15 +277,15 @@ Why agent identity is critical here:
 ```text
 ┌─────────┐    ┌─────┐    ┌──────┐    ┌─────────┐    ┌──────────┐    ┌───────────┐
 │  Emma's │    │     │    │ Orch │    │ Product │    │Knowledge │    │ AI Search │
-│ Browser │───▶│ BFF │───▶│Agent │───▶│  Agent  │───▶│   MCP    │───▶│  (index)  │
+│ Browser │--->│ BFF │--->│Agent │--->│  Agent  │--->│   MCP    │--->│  (index)  │
 │ (chat)  │    │     │    │      │    │         │    │          │    │           │
 └─────────┘    └─────┘    └──────┘    └─────────┘    └──────────┘    └───────────┘
 
 Identity flow:
-  Emma (Entra user)         ──JWT──▶  BFF validates
-  Orch Agent (agent ID)     ──token──▶  Azure OpenAI (routes to Product Agent)
-  Product Agent (agent ID)  ──token──▶  Azure OpenAI (generates search query)
-  id-know-mcp (managed)     ──token──▶  AI Search (searches knowledge base)
+  Emma (Entra user)         --JWT-->  BFF validates
+  Orch Agent (agent ID)     --token-->  Azure OpenAI (routes to Product Agent)
+  Product Agent (agent ID)  --token-->  Azure OpenAI (generates search query)
+  id-know-mcp (managed)     --token-->  AI Search (searches knowledge base)
 
 Identities used:
   ✓ User identity    — Emma's JWT (user context, though no data scoping here)
@@ -540,7 +540,7 @@ MCP tools are classified by sensitivity:
    │  🛡️  Contoso CRM Agent wants to:              │
    │  Cancel order #1023 (Alpine Explorer Tent)    │
    │                                               │
-   │  [Approve Once]  [Approve for Session]  [Deny] │
+   │  [Approve Once]  [Approve Session]  [Deny]    │
    └───────────────────────────────────────────────┘
 ⑦ User clicks Approve → BFF records consent in Cosmos DB → replays tool call
 ⑧ CRM Agent executes cancel_order → returns result → chat resumes
