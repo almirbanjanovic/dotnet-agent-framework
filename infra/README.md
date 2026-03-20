@@ -65,7 +65,7 @@ infra/
             │   └── v1/
             ├── aks/           # AKS control plane Contributor
             │   └── v1/
-            ├── cosmosdb/      # Cosmos DB Data Owner
+            ├── cosmosdb/      # Cosmos DB Data Contributor
             │   └── v1/
             ├── foundry/       # Cognitive Services OpenAI User
             │   └── v1/

@@ -18,7 +18,7 @@ These terms appear throughout this document:
 | **Agent identity** | An Entra ID service principal with "agent" subtype, created from an Agent Identity Blueprint. Represents an AI agent in the directory — visible in the Entra Admin Center under Agent ID. Supports the same federated identity credentials as managed identities (including AKS workload identity), and can be assigned Azure RBAC roles. Used by CRM Agent, Product Agent, and Orchestrator Agent. See [Agent Identity Platform](#agent-identity-platform-entra-agent-id). |
 | **Agent Identity Blueprint** | A reusable template (Entra application registration) that defines a "kind" of agent. E.g., "Contoso CRM Agent" is a blueprint; the actual agent instance running in dev is created from it. Blueprints enable Conditional Access policies across all instances of an agent type, centralized permission management, and governance at scale. |
 | **Workload Identity** | The AKS-specific mechanism that connects a Kubernetes pod to an Azure identity (managed identity or agent identity). It uses the cluster's OIDC issuer (a certificate-based trust) to prove "this pod in this namespace is authorized to use this identity." |
-| **RBAC** | Role-Based Access Control. Azure's permission system. Each identity (managed or agent) is granted specific roles (e.g., "Key Vault Secrets User", "Cosmos DB Data Owner") scoped to specific resources. |
+| **RBAC** | Role-Based Access Control. Azure's permission system. Each identity (managed or agent) is granted specific roles (e.g., "Key Vault Secrets User", "Cosmos DB Data Contributor") scoped to specific resources. |
 | **Human-in-the-loop** | A pattern where an AI agent pauses before executing a sensitive operation (e.g., canceling an order) and requests explicit approval from the user through the chat UI. See [Human-in-the-Loop](#human-in-the-loop-consent). |
 | **OIDC** | OpenID Connect. A standard identity protocol built on top of OAuth 2.0. Used here in two places: (1) Entra ID uses OIDC for user login, and (2) AKS uses OIDC to federate pod identities with Azure AD. |
 | **CORS** | Cross-Origin Resource Sharing. A browser security feature that prevents JavaScript on one website from calling APIs on a different website. The BFF explicitly allows requests from the Blazor WASM UI's origin. |
@@ -149,6 +149,173 @@ Agents receive customer context from the Orchestrator via `X-Customer-Entra-Id` 
 - **Agents don't need to "look up" the customer** — the identity is known from the token
 - **Orchestrator** → propagates `X-Customer-Entra-Id` to specialist agents
 
+### How Entra Users Link to Cosmos DB Customers
+
+Customers exist in two places: Entra ID (for login) and Cosmos DB (for data). The `entra_id` field in the Customers container bridges them.
+
+**During deployment (Lab 1, Phase 7):**
+
+```text
+Terraform creates 5 Entra ID test users     →  Entra object IDs stored in Key Vault
+Terraform creates 6 Cosmos DB containers     →  Customers container seeded from CSV
+Deploy script reads OIDs from Key Vault      →  Updates entra_id field on each Customer
+
+  Entra ID                          Cosmos DB (Customers container)
+  ┌──────────────────────┐          ┌─────────────────────────────────┐
+  │ Emma Wilson           │          │ { "id": "101",                  │
+  │ OID: abc-123-...      │ ──────▶ │   "name": "Emma Wilson",       │
+  │ UPN: emma.wilson@...  │          │   "entra_id": "abc-123-...",   │
+  └──────────────────────┘          │   "loyalty_tier": "Silver" }   │
+                                    └─────────────────────────────────┘
+```
+
+**At runtime (every request):**
+
+```text
+① Emma logs in → JWT contains oid claim = "abc-123-..."
+② BFF extracts oid → passes as X-Customer-Entra-Id header
+③ CRM API queries: SELECT * FROM c WHERE c.entra_id = "abc-123-..."
+④ Only Emma's data is returned — orders, tickets, promotions
+```
+
+Without the `entra_id` link, the system would know *someone* logged in but couldn't determine *whose* data to show.
+
+## Identity Flows — End-to-End Scenarios
+
+This section shows how all three identity types (user, managed, agent) work together during real user interactions.
+
+### Scenario 1: "Show me my orders" (Read — No Agent Involved)
+
+```text
+┌─────────┐     ┌─────────┐     ┌─────────┐     ┌───────────┐
+│  Emma's │     │         │     │         │     │           │
+│ Browser │────▶│   BFF   │────▶│ CRM API │────▶│ Cosmos DB │
+│ (Blazor)│     │         │     │         │     │   (CRM)   │
+└─────────┘     └─────────┘     └─────────┘     └───────────┘
+
+Identity flow:
+  Emma (Entra user)  ──JWT──▶  BFF validates JWT, extracts oid
+                               BFF passes X-Customer-Entra-Id header
+  id-crm-api (managed identity)  ──token──▶  Cosmos DB
+                               CRM API filters: WHERE c.entra_id = '<oid>'
+
+Identities used:
+  ✓ User identity   — Emma's JWT (determines WHOSE data)
+  ✓ Managed identity — id-crm-api (determines HOW to access Cosmos DB)
+  ✗ Agent identity   — not involved (no AI interaction)
+```
+
+### Scenario 2: "What's the status of my order?" (Agent Chat — Read Only)
+
+```text
+┌─────────┐    ┌─────┐    ┌──────┐    ┌─────────┐    ┌─────────┐    ┌──────────┐
+│  Emma's │    │     │    │ Orch │    │   CRM   │    │   CRM   │    │          │
+│ Browser │───▶│ BFF │───▶│Agent │───▶│  Agent  │───▶│   MCP   │───▶│Cosmos DB │
+│ (chat)  │    │     │    │      │    │         │    │         │    │  (CRM)   │
+└─────────┘    └─────┘    └──────┘    └─────────┘    └─────────┘    └──────────┘
+
+Identity flow:
+  Emma (Entra user)      ──JWT──▶  BFF validates, extracts oid
+  Orch Agent (agent ID)  ──token──▶  Azure OpenAI (intent classification)
+  CRM Agent (agent ID)   ──token──▶  Azure OpenAI (tool selection)
+  id-crm-mcp (managed)   ──token──▶  Cosmos DB (execute get_orders tool)
+
+Identities used:
+  ✓ User identity    — Emma's JWT (determines WHOSE orders to retrieve)
+  ✓ Managed identity — id-crm-mcp (CRM MCP connects to Cosmos DB)
+  ✓ Agent identity   — Orchestrator + CRM Agent (call Azure OpenAI for reasoning)
+
+Why agent identity here?
+  The Orchestrator and CRM Agent call Azure OpenAI to understand intent and
+  select MCP tools. These calls appear in Entra sign-in logs as "Contoso
+  Orchestrator Agent" and "Contoso CRM Agent" — not as anonymous managed
+  identities. This enables audit trails showing which agent made which
+  AI inference call.
+```
+
+### Scenario 3: "Cancel my order #1023" (Agent Chat — Write with Consent)
+
+```text
+┌─────────┐    ┌─────┐    ┌──────┐    ┌─────────┐    ┌──────────────┐    ┌──────────┐
+│  Emma's │    │     │    │ Orch │    │   CRM   │    │  CRM MCP     │    │          │
+│ Browser │───▶│ BFF │───▶│Agent │───▶│  Agent  │───▶│ cancel_order │───▶│Cosmos DB │
+│ (chat)  │    │     │    │      │    │         │    │  (HIGH sens) │    │  (CRM)   │
+└─────────┘    └─────┘    └──────┘    └─────────┘    └──────────────┘    └──────────┘
+                  │                        │
+                  │◀── consent_required ───┘
+                  │    agentName: "Contoso CRM Agent"
+                  │    agentObjectId: <entra-oid>
+                  │
+                  ▼
+            ┌──────────────────────────────────────────┐
+            │ 🛡️ Contoso CRM Agent wants to:            │
+            │ Cancel order #1023 (Alpine Explorer Tent) │
+            │                                          │
+            │ [Approve Once] [Approve Session] [Deny]  │
+            └──────────────────────────────────────────┘
+
+Identity flow:
+  Emma (Entra user)        ──JWT──▶  BFF validates, extracts oid
+  Orch Agent (agent ID)    ──token──▶  Azure OpenAI
+  CRM Agent (agent ID)     ──token──▶  Azure OpenAI → decides cancel_order
+  CRM Agent                ──returns consent_required to BFF
+  BFF                      ──checks consent records in Cosmos DB (Agents account)
+  id-crm-mcp (managed)     ──token──▶  Cosmos DB (execute cancel_order after approval)
+
+Why agent identity is critical here:
+  The consent dialog shows "Contoso CRM Agent wants to..." — this name
+  comes from the agent identity in Entra, not a hardcoded string. If
+  an admin disables the CRM Agent blueprint in Entra, the consent
+  records become invalid and the agent can no longer perform write ops.
+
+  This is governance: the agent's ability to act is controlled by its
+  Entra identity status, not just by code deployment.
+```
+
+### Scenario 4: "What hiking boots do you recommend?" (Knowledge Search)
+
+```text
+┌─────────┐    ┌─────┐    ┌──────┐    ┌─────────┐    ┌──────────┐    ┌───────────┐
+│  Emma's │    │     │    │ Orch │    │ Product │    │Knowledge │    │ AI Search │
+│ Browser │───▶│ BFF │───▶│Agent │───▶│  Agent  │───▶│   MCP    │───▶│  (index)  │
+│ (chat)  │    │     │    │      │    │         │    │          │    │           │
+└─────────┘    └─────┘    └──────┘    └─────────┘    └──────────┘    └───────────┘
+
+Identity flow:
+  Emma (Entra user)         ──JWT──▶  BFF validates
+  Orch Agent (agent ID)     ──token──▶  Azure OpenAI (routes to Product Agent)
+  Product Agent (agent ID)  ──token──▶  Azure OpenAI (generates search query)
+  id-know-mcp (managed)     ──token──▶  AI Search (searches knowledge base)
+
+Identities used:
+  ✓ User identity    — Emma's JWT (user context, though no data scoping here)
+  ✓ Managed identity — id-know-mcp (Knowledge MCP reads AI Search via RBAC)
+  ✓ Agent identity   — Orchestrator + Product Agent (AI reasoning calls)
+
+Note: Knowledge search is NOT customer-scoped — product info, sizing guides,
+and policies are the same for all customers. The user identity still flows
+through for audit purposes but doesn't filter results.
+```
+
+### Identity Type Summary
+
+| Identity Type | Created By | Where It Lives | When It's Used | Governance |
+| --- | --- | --- | --- | --- |
+| **User (Entra ID)** | Terraform (`entra/v1`) | Entra ID directory | Every HTTP request from browser | Password policies, MFA, Conditional Access |
+| **Managed Identity** | Terraform (`identity/v1`) | Azure resource | Pod → Azure resource calls (Cosmos DB, Storage, Search) | Azure RBAC only |
+| **Agent Identity** | Terraform (`agent-identity/v1`) | Entra Agent ID platform | Pod → Azure OpenAI calls, consent tracking | RBAC + Agent ID portal + Conditional Access + audit logs + M365 Copilot discovery |
+
+### Microsoft 365 Copilot Integration
+
+Agent identities created via Entra Agent ID are discoverable in the **Microsoft 365 Copilot** ecosystem. When an organization deploys agents using Agent Identity Blueprints:
+
+- **IT admins** see all agents in **Entra Admin Center → Agent ID** — grouped by blueprint, with sign-in activity, owners, and status
+- **Microsoft 365 Copilot** can discover agents registered via blueprints, enabling them to appear in Copilot's agent catalog (when published)
+- **Conditional Access policies** can target agent blueprints — e.g., "require all CRM agents to only authenticate from trusted networks" or "disable all agents of this type during an incident"
+- **Entra sign-in logs** show agent activity alongside human user activity, with the blueprint relationship visible for each sign-in event
+
+This is why agents use Agent Identity Blueprints instead of plain managed identities — managed identities are invisible in the Agent ID portal and can't participate in the M365 Copilot agent ecosystem.
+
 ## Service Authentication (Workload Identity)
 
 This section covers how backend services (running as containers in Kubernetes) authenticate to Azure resources like Cosmos DB, Blob Storage, and AI Search — without any hardcoded passwords.
@@ -219,7 +386,7 @@ Why agent identities instead of managed identities for agents?
 
 Each identity is granted **only** the permissions it needs (least privilege). This table shows which identity can access which resource:
 
-| Identity | Type | Key Vault Secrets User | Cosmos DB CRM Data Owner | OpenAI User | Cosmos DB Agents Data Owner | Search Index Reader | Blob Data Reader | ACR Pull |
+| Identity | Type | Key Vault Secrets User | Cosmos DB CRM Data Contributor | OpenAI User | Cosmos DB Agents Data Contributor | Search Index Reader | Blob Data Reader | ACR Pull |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `id-bff` | Managed | ✓ | ✓ | | ✓ | | ✓ | |
 | `id-crm-api` | Managed | ✓ | ✓ | | | | | |
