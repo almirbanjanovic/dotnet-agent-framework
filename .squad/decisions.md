@@ -80,6 +80,8 @@
 
 **Decision (Whole Team):** The RC2 status of Microsoft.Agents.AI SDK should be monitored. Pin the version and abstract the agent construction pattern. Be prepared for breaking changes in GA release.
 
+**Decision (Brian):** Pin Microsoft.Extensions.AI versions explicitly when using Microsoft.Agents.AI SDK. Microsoft.Agents.AI 1.0.0-rc2 declares transitive dependency on Microsoft.Extensions.AI 10.3.0, but when combined with Microsoft.Extensions.AI.OpenAI 10.4.1, NuGet resolves to a version skew that causes runtime TypeLoadException. Solution: explicitly pin Microsoft.Extensions.AI 10.4.1 and Microsoft.Extensions.AI.Abstractions 10.4.1 in all projects referencing this SDK. All future agent projects (CRM Agent, Product Agent, Orchestrator Agent) must include these explicit references. Re-evaluate when Microsoft.Agents.AI reaches GA.
+
 ## Governance
 
 - All meaningful changes require team consensus
