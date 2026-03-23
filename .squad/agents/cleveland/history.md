@@ -28,3 +28,8 @@
 - **T-07 (ee72793):** Fix seed-data dependency — added `terraform-apply` to seed-data `needs:` list alongside `cleanup-after-apply`. Correct fix: `cleanup-after-apply` uses `if: always()` so it could succeed even when apply fails, which would have allowed seed-data to run against non-existent infrastructure. `cleanup-after-apply` itself is unaffected (still runs with `if: always()`). APPROVED.
 - **T-08 (8a50aa4):** CAE disable flags — added `ARM_DISABLE_CAE`, `AZURE_DISABLE_CAE`, `HAMILTON_DISABLE_CAE` to all 4 Terraform API-calling steps (plan init, plan, apply init, apply). Matches `deploy.ps1` parity (lines 400-402). `terraform validate` and `terraform fmt` intentionally excluded (local-only, no Azure API calls). No missed steps. APPROVED.
 - All 4 commits approved. No security issues found. High stage gate cleared.
+
+### 2026-03-23: Medium Stage Security Documentation (T-14 + T-15)
+- **T-14 (acd8952):** Documented AI Search admin key usage in `knowledge-source` Terraform module as accepted interim risk. Azure AI Search Knowledge Source data-plane API (2025-11-01-preview) does not support RBAC — admin key is the only auth method. Key is not persisted in code/config; CI/CD uses OIDC. Added to `docs/security.md` under Known Gaps.
+- **T-15 (90b48e1):** Documented test user password visibility in `terraform plan` output as accepted lab-only pattern. The `keyvault-secrets` module uses `nonsensitive()` deliberately to write passwords to Key Vault. Mitigation: rotate passwords and remove `nonsensitive()` if users persist beyond workshop. Added to `docs/security.md` under Known Gaps.
+- Both items are accepted risks with clear mitigations documented. No code changes needed — documentation-only commits.
