@@ -667,3 +667,23 @@ All security resources are created by Terraform during `terraform apply`:
 | TLS certificate | `modules/tls-cert/v1` |
 | K8s namespace + service accounts | `kubectl_manifest` resources (manifests/) |
 | Key Vault + secrets | `modules/keyvault/v1`, `modules/keyvault-secrets/v1` |
+
+## Known Gaps
+
+### CI/CD Cannot Provision Agent Identity Blueprints
+
+**What:** The `agent-identity` Terraform module uses the `msgraph` provider to create Entra Agent Identity Blueprints (application registrations with agent subtype), service principals, and federated identity credentials. This provider requires a client ID + client secret for authentication.
+
+**Why it matters for CI/CD:** The GitHub Actions workflows authenticate to Azure via OIDC federation — the service principal has no stored client secret. The `msgraph` provider cannot use OIDC-only authentication, so `terraform apply` in CI/CD skips (or fails on) agent identity resources.
+
+**Current impact:** Agent Identity provisioning is **local-deploy-only**. The `deploy.ps1` / `deploy.sh` scripts create a temporary client secret for the deployer SP, run Terraform with it, then delete the secret. CI/CD workflows (`deploy.yml`) cannot replicate this flow.
+
+**Options for the future:**
+
+| Option | Trade-off |
+| --- | --- |
+| CI/CD job creates a temporary secret, uses it, deletes it | Most aligned with local flow; requires SP secret-management permissions in CI/CD |
+| Store a long-lived client secret in GitHub Actions secrets | Simpler but weaker security posture (secret rotation burden) |
+| Accept local-only provisioning | No CI/CD risk; agent identities change infrequently |
+
+For now, **option 3 is accepted**. Agent Identity Blueprints are created once during initial deployment and rarely change. If automated re-provisioning becomes necessary, option 1 is the recommended path.
