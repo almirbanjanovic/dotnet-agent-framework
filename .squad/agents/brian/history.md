@@ -143,3 +143,52 @@ This forces NuGet to resolve all three AI extension packages to 10.4.1, overridi
 **Not touched:** `deploy.sh` line 234 and `deploy.ps1` line 393 — those set `AZURE_TENANT_ID` for Azure CLI usage, not for .NET app config.
 
 **Lesson:** When renaming config keys in application code, always grep the deploy/infra scripts for the old key name. Env vars passed inline to `dotnet run` must match the .NET configuration binding pattern (`Section__Key`).
+
+### 2026-03-23 — CRM API (Component 1) Fully Implemented
+
+**What:** Built the complete CRM API — the foundation service that all other components depend on. 11 REST endpoints serving CRM data from Cosmos DB, plus health check endpoints.
+
+**Project structure:**
+```
+src/crm-api/
+├── Program.cs              — Composition root (DI, middleware, endpoints)
+├── Contoso.CrmApi.csproj   — .NET 9 Minimal API (SDK-inherited props)
+├── appsettings.template.json
+├── Models/                 — 6 entity models + CreateTicketRequest DTO
+├── Services/               — ICosmosService + CosmosService (Cosmos DB SDK)
+├── Endpoints/              — 5 endpoint groups (extension method pattern)
+├── Middleware/              — GlobalExceptionHandler (ProblemDetails RFC 9457)
+├── Dockerfile              — Multi-stage, non-root, port 8080
+├── chart/                  — Helm chart (from helm-base template)
+└── deploy.ps1              — Build → ACR push → Helm deploy
+```
+
+**Endpoints (11):**
+1. GET /api/v1/customers
+2. GET /api/v1/customers/{id}
+3. GET /api/v1/customers/{id}/orders
+4. GET /api/v1/orders/{id} (cross-partition query)
+5. GET /api/v1/orders/{id}/items
+6. GET /api/v1/products (query, category, in_stock_only filters)
+7. GET /api/v1/products/{id}
+8. GET /api/v1/promotions
+9. GET /api/v1/promotions/eligible/{customerId}
+10. GET /api/v1/customers/{id}/tickets (open_only filter)
+11. POST /api/v1/tickets (with validation)
+
+**Key patterns established:**
+- Cosmos DB partition keys: /id (Customers, Products, Promotions), /customer_id (Orders, SupportTickets), /order_id (OrderItems)
+- DefaultAzureCredential with tenant pinning from AzureAd:TenantId
+- JSON console logging for AKS structured log aggregation
+- ProblemDetails (RFC 9457) for all error responses with traceId
+- Health checks: /health (liveness, always 200), /ready (readiness, Cosmos DB connectivity)
+- CosmosSerializationOptions with CamelCase (matches seed-data's camelCase property naming)
+- Newtonsoft.Json explicit dependency required by Microsoft.Azure.Cosmos 3.46.1
+
+**Build verification:** `dotnet build` succeeds at both project and solution level — 0 errors, 0 warnings with TreatWarningsAsErrors=true.
+
+**NuGet versions locked:** Azure.Identity 1.19.0, Microsoft.Azure.Cosmos 3.46.1, Microsoft.Extensions.Http.Resilience 10.4.0, Newtonsoft.Json 13.0.3.
+
+**Lesson:** Microsoft.Azure.Cosmos 3.46.1 requires explicit Newtonsoft.Json >= 10.0.2 reference (enforced via MSBuild target, not just NuGet dependency resolution). Add `<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />` to any project using this Cosmos SDK version.
+
+**Lesson:** The `dotnet new webapi` scaffold generates properties already in Directory.Build.props (TargetFramework, Nullable, ImplicitUsings). Always strip these from the generated csproj and keep only project-specific properties + package references.
