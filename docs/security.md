@@ -446,7 +446,7 @@ metadata:
     azure.workload.identity/client-id: <client-id-of-id-crm-api>
 ```
 
-Manifests are in `infra/terraform/manifests/` and applied via `kubectl_manifest` resources. For agents, the `client-id` annotation references the agent identity's application (client) ID instead of a managed identity's client ID — but `DefaultAzureCredential()` works identically in both cases.
+Manifests are in `infra/k8s/manifests/` and applied via `kubectl_manifest` resources. For agents, the `client-id` annotation references the agent identity's application (client) ID instead of a managed identity's client ID — but `DefaultAzureCredential()` works identically in both cases.
 
 ## Agent Identity Platform (Entra Agent ID)
 

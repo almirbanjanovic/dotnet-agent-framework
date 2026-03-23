@@ -83,7 +83,7 @@ The Blazor WebAssembly UI produces static files. Options:
 - **Workload Identity**: Pods authenticate to Azure via OIDC token exchange — zero secrets in containers.
 
 ### Service Accounts
-Service accounts are **pre-provisioned by Terraform** (`infra/terraform/manifests/service-account.yaml`) with the `azure.workload.identity/client-id` annotation. The Helm chart defaults to `serviceAccount.create: false` and references the Terraform-managed SA by name. Set `create: true` only for local dev clusters without Terraform.
+Service accounts are **pre-provisioned by Terraform** (`infra/k8s/manifests/service-account.yaml`) with the `azure.workload.identity/client-id` annotation. The Helm chart defaults to `serviceAccount.create: false` and references the Terraform-managed SA by name. Set `create: true` only for local dev clusters without Terraform.
 
 ### Health Probes
 Every service must implement two endpoints:

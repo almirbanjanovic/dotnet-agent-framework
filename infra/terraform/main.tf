@@ -468,11 +468,11 @@ module "workload_identity" {
 #--------------------------------------------------------------------------------------------------------------------------------
 # Kubernetes Resources (namespace + service accounts)
 # Uses kubectl provider — see providers.tf for configuration.
-# Manifest templates are in manifests/ folder.
+# Manifest templates are in infra/k8s/manifests/ folder (consolidated with other K8s YAML).
 #--------------------------------------------------------------------------------------------------------------------------------
 
 resource "kubectl_manifest" "namespace" {
-  yaml_body = templatefile("${path.module}/manifests/namespace.yaml", {
+  yaml_body = templatefile("${path.module}/../k8s/manifests/namespace.yaml", {
     namespace = var.k8s_namespace
   })
 
@@ -490,7 +490,7 @@ resource "kubectl_manifest" "service_accounts" {
     orch_agent = { name = "sa-orch-agent", client_id = module.agent_identity.agents["orch_agent"].client_id }
   }
 
-  yaml_body = templatefile("${path.module}/manifests/service-account.yaml", {
+  yaml_body = templatefile("${path.module}/../k8s/manifests/service-account.yaml", {
     name      = each.value.name
     namespace = var.k8s_namespace
     client_id = each.value.client_id
