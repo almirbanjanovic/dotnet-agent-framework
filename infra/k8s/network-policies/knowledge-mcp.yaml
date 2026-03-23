@@ -12,7 +12,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app: knowledge-mcp
+      app.kubernetes.io/name: knowledge-mcp
   policyTypes:
     - Ingress
     - Egress
@@ -20,7 +20,7 @@ spec:
     - from:
         - podSelector:
             matchLabels:
-              app: product-agent
+              app.kubernetes.io/name: product-agent
       ports:
         - protocol: TCP
           port: 8080

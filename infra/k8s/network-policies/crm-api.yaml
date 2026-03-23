@@ -12,7 +12,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app: crm-api
+      app.kubernetes.io/name: crm-api
   policyTypes:
     - Ingress
     - Egress
@@ -20,7 +20,7 @@ spec:
     - from:
         - podSelector:
             matchLabels:
-              app: crm-mcp
+              app.kubernetes.io/name: crm-mcp
       ports:
         - protocol: TCP
           port: 8080

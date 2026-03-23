@@ -30,20 +30,22 @@ All services ──→ Key Vault (PE)
 | File | Pod Selector | Ingress From | Egress To |
 |---|---|---|---|
 | `default-deny.yaml` | `{}` (all pods) | ✗ all denied | ✗ all denied |
-| `bff-api.yaml` | `app: bff-api` | AGC namespace | orchestrator-agent, PE subnet, DNS |
-| `blazor-ui.yaml` | `app: blazor-ui` | AGC namespace | DNS only |
-| `orchestrator-agent.yaml` | `app: orchestrator-agent` | bff-api | crm-agent, product-agent, PE subnet, DNS |
-| `crm-agent.yaml` | `app: crm-agent` | orchestrator-agent | crm-mcp, PE subnet, DNS |
-| `product-agent.yaml` | `app: product-agent` | orchestrator-agent | knowledge-mcp, PE subnet, DNS |
-| `crm-mcp.yaml` | `app: crm-mcp` | crm-agent | crm-api, PE subnet, DNS |
-| `knowledge-mcp.yaml` | `app: knowledge-mcp` | product-agent | PE subnet, DNS |
-| `crm-api.yaml` | `app: crm-api` | crm-mcp | PE subnet, DNS |
+| `bff-api.yaml` | `app.kubernetes.io/name: bff-api` | AGC namespace | orchestrator-agent, PE subnet, DNS |
+| `blazor-ui.yaml` | `app.kubernetes.io/name: blazor-ui` | AGC namespace | DNS only |
+| `orchestrator-agent.yaml` | `app.kubernetes.io/name: orchestrator-agent` | bff-api | crm-agent, product-agent, PE subnet, DNS |
+| `crm-agent.yaml` | `app.kubernetes.io/name: crm-agent` | orchestrator-agent | crm-mcp, PE subnet, DNS |
+| `product-agent.yaml` | `app.kubernetes.io/name: product-agent` | orchestrator-agent | knowledge-mcp, PE subnet, DNS |
+| `crm-mcp.yaml` | `app.kubernetes.io/name: crm-mcp` | crm-agent | crm-api, PE subnet, DNS |
+| `knowledge-mcp.yaml` | `app.kubernetes.io/name: knowledge-mcp` | product-agent | PE subnet, DNS |
+| `crm-api.yaml` | `app.kubernetes.io/name: crm-api` | crm-mcp | PE subnet, DNS |
 
 ## Design Decisions
 
 ### Pod Selectors
-Policies use `app: {service-name}` labels as pod selectors. Helm deployments must apply
-this label to pods (in addition to the standard `app.kubernetes.io/name` label).
+Policies use `app.kubernetes.io/name: {service-name}` labels as pod selectors. This is the
+Kubernetes standard label convention and matches the labels automatically produced by Helm
+chart templates (see `docs/templates/helm-base/templates/_helpers.tpl`, `service.selectorLabels`).
+No custom labels need to be added to Helm values.
 
 ### DNS Egress
 Every policy allows egress to kube-dns (`k8s-app: kube-dns` in `kube-system`) on port 53

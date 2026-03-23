@@ -13,7 +13,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app: blazor-ui
+      app.kubernetes.io/name: blazor-ui
   policyTypes:
     - Ingress
     - Egress

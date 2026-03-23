@@ -12,7 +12,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app: bff-api
+      app.kubernetes.io/name: bff-api
   policyTypes:
     - Ingress
     - Egress
@@ -43,7 +43,7 @@ spec:
     - to:
         - podSelector:
             matchLabels:
-              app: orchestrator-agent
+              app.kubernetes.io/name: orchestrator-agent
       ports:
         - protocol: TCP
           port: 8080
