@@ -119,8 +119,10 @@ Every service will need these — establish the pattern once in CRM API, then re
 - [ ] **Health check endpoints**: `/health` (liveness — always 200) and `/ready` (readiness — checks dependencies)
 - [ ] **Structured logging**: `builder.Logging.AddJsonConsole()` for AKS log aggregation
 - [ ] **Resilience via Polly**: `Microsoft.Extensions.Http.Resilience` for all outbound HTTP calls (retry + circuit breaker + timeout)
-- [ ] **Dockerfile** from `infra/templates/Dockerfile.template`
-- [ ] **Helm chart** from `infra/templates/helm-base/`
+- [ ] **Dockerfile** from `infra/templates/Dockerfile.template` — ⚠️ **Required deliverable per component, not optional.** Each component has an explicit "Containerization & Deployment" section with step-by-step Dockerfile tasks.
+- [ ] **Helm chart** from `infra/templates/helm-base/` — ⚠️ **Required deliverable per component, not optional.** Each component has an explicit "Containerization & Deployment" section with step-by-step Helm chart tasks.
+
+> **⚠️ Dockerfile and Helm chart are NOT optional add-ons.** They are first-class implementation steps for every component. A component is not "done" until its Dockerfile builds, its container runs and passes health checks, and its Helm chart lints and renders valid YAML. See the "Containerization & Deployment" section within each component below.
 
 ---
 
@@ -222,11 +224,33 @@ AzureAd:TenantId         → Tenant for DefaultAzureCredential
 - [ ] `/health` returns 200, `/ready` returns 200 when Cosmos is reachable (503 when not)
 - [ ] ProblemDetails returned on all error paths (404, 400, 500)
 - [ ] Structured JSON logging (correlation IDs)
-- [ ] Dockerfile builds and runs (`docker build`, `docker run`, `curl localhost:8080/health`)
-- [ ] Helm chart validates (`helm lint`, `helm template`)
+- [ ] Dockerfile builds and runs (see Containerization & Deployment → Step A below)
+- [ ] Helm chart validates (see Containerization & Deployment → Step B below)
 - [ ] Unit tests pass (CosmosService logic)
 - [ ] Integration tests pass (endpoint → response verification)
 - [ ] Added to solution file under `Domain APIs` folder
+
+### Containerization & Deployment
+
+**Step A: Dockerfile**
+- [ ] Create `src/crm-api/Dockerfile` using `infra/templates/Dockerfile.template` as base
+- [ ] Customize build args for `src/crm-api/crm-api.csproj` project path
+- [ ] Expose port 8080 (Kestrel default for non-root containers)
+- [ ] Verify: `docker build -t crm-api:dev src/crm-api/`
+- [ ] Verify: `docker run --rm -p 8080:8080 crm-api:dev` → `curl http://localhost:8080/health` returns 200
+
+**Step B: Helm Chart**
+- [ ] Create `src/crm-api/chart/` using `infra/templates/helm-base/` as base
+- [ ] Customize `Chart.yaml` (name: `crm-api`, description: "Contoso Outdoors CRM REST API")
+- [ ] Customize `values.yaml`:
+  - Image repository/tag for crm-api
+  - Environment variables: `COSMOSDB_CRM_ENDPOINT`, `COSMOSDB_CRM_DATABASE`, `AzureAd__TenantId`
+  - Resource limits: 256Mi memory request / 512Mi limit, 100m CPU request / 250m limit (data API — moderate resource profile)
+  - Service account name matching Terraform-provisioned SA for Cosmos DB access
+  - Liveness probe: `/health`, Readiness probe: `/ready`
+- [ ] Add Cosmos DB connection config to `templates/configmap.yaml`
+- [ ] Verify: `helm lint src/crm-api/chart/`
+- [ ] Verify: `helm template crm-api src/crm-api/chart/` renders valid YAML
 
 ---
 
@@ -311,11 +335,33 @@ AzureAd:TenantId         → Tenant for DefaultAzureCredential
 - [ ] Error handling: CRM API errors are translated to MCP error responses
 - [ ] Polly resilience on HTTP client (retry, circuit breaker, timeout)
 - [ ] `/health` returns 200, `/ready` checks CRM API reachability
-- [ ] Dockerfile builds and runs
-- [ ] Helm chart validates
+- [ ] Dockerfile builds and runs (see Containerization & Deployment → Step A below)
+- [ ] Helm chart validates (see Containerization & Deployment → Step B below)
 - [ ] Unit tests pass
 - [ ] Integration tests pass
 - [ ] Added to solution file under `MCP Servers` folder
+
+### Containerization & Deployment
+
+**Step A: Dockerfile**
+- [ ] Create `src/crm-mcp/Dockerfile` using `infra/templates/Dockerfile.template` as base
+- [ ] Customize build args for `src/crm-mcp/crm-mcp.csproj` project path
+- [ ] Expose port 8080 (Streamable HTTP transport)
+- [ ] Verify: `docker build -t crm-mcp:dev src/crm-mcp/`
+- [ ] Verify: `docker run --rm -p 8080:8080 crm-mcp:dev` → `curl http://localhost:8080/health` returns 200
+
+**Step B: Helm Chart**
+- [ ] Create `src/crm-mcp/chart/` using `infra/templates/helm-base/` as base
+- [ ] Customize `Chart.yaml` (name: `crm-mcp`, description: "CRM MCP Server — protocol adapter for CRM API")
+- [ ] Customize `values.yaml`:
+  - Image repository/tag for crm-mcp
+  - Environment variables: `CRM_API_BASE_URL`, `AzureAd__TenantId`
+  - Resource limits: 128Mi memory request / 256Mi limit, 50m CPU request / 200m limit (thin adapter — lightweight profile)
+  - Service account name matching Terraform-provisioned SA
+  - Liveness probe: `/health`, Readiness probe: `/ready`
+- [ ] Add CRM API base URL config to `templates/configmap.yaml`
+- [ ] Verify: `helm lint src/crm-mcp/chart/`
+- [ ] Verify: `helm template crm-mcp src/crm-mcp/chart/` renders valid YAML
 
 ---
 
@@ -391,11 +437,33 @@ AzureAd:TenantId         → Tenant for DefaultAzureCredential
 - [ ] Handles empty results gracefully (returns empty array, not error)
 - [ ] `top_k` parameter works (default 3, configurable 1-10)
 - [ ] `/health` returns 200, `/ready` checks AI Search reachability
-- [ ] Dockerfile builds and runs
-- [ ] Helm chart validates
+- [ ] Dockerfile builds and runs (see Containerization & Deployment → Step A below)
+- [ ] Helm chart validates (see Containerization & Deployment → Step B below)
 - [ ] Unit tests pass
 - [ ] Integration tests pass
 - [ ] Added to solution file under `MCP Servers` folder
+
+### Containerization & Deployment
+
+**Step A: Dockerfile**
+- [ ] Create `src/knowledge-mcp/Dockerfile` using `infra/templates/Dockerfile.template` as base
+- [ ] Customize build args for `src/knowledge-mcp/knowledge-mcp.csproj` project path
+- [ ] Expose port 8080
+- [ ] Verify: `docker build -t knowledge-mcp:dev src/knowledge-mcp/`
+- [ ] Verify: `docker run --rm -p 8080:8080 knowledge-mcp:dev` → `curl http://localhost:8080/health` returns 200
+
+**Step B: Helm Chart**
+- [ ] Create `src/knowledge-mcp/chart/` using `infra/templates/helm-base/` as base
+- [ ] Customize `Chart.yaml` (name: `knowledge-mcp`, description: "Knowledge Base MCP Server — semantic search over policies and guides")
+- [ ] Customize `values.yaml`:
+  - Image repository/tag for knowledge-mcp
+  - Environment variables: `SEARCH_ENDPOINT`, `SEARCH_INDEX_NAME`, `AzureAd__TenantId`
+  - Resource limits: 128Mi memory request / 256Mi limit, 50m CPU request / 200m limit (single-tool server — lightweight profile)
+  - Service account name matching Terraform-provisioned SA for AI Search access
+  - Liveness probe: `/health`, Readiness probe: `/ready`
+- [ ] Add AI Search config to `templates/configmap.yaml`
+- [ ] Verify: `helm lint src/knowledge-mcp/chart/`
+- [ ] Verify: `helm template knowledge-mcp src/knowledge-mcp/chart/` renders valid YAML
 
 ---
 
@@ -484,10 +552,33 @@ AzureAd:TenantId                → Tenant for DefaultAzureCredential
 - [ ] Handles Scenarios 1, 2, 4, 6, 7, 8 with correct tool usage
 - [ ] Stateless — conversation history comes from request body, not stored locally
 - [ ] `/health` returns 200, `/ready` checks MCP servers + Azure OpenAI
-- [ ] Dockerfile builds and runs
-- [ ] Helm chart validates
+- [ ] Dockerfile builds and runs (see Containerization & Deployment → Step A below)
+- [ ] Helm chart validates (see Containerization & Deployment → Step B below)
 - [ ] Tests pass
 - [ ] Added to solution file under `Agents` folder
+
+### Containerization & Deployment
+
+**Step A: Dockerfile**
+- [ ] Create `src/crm-agent/Dockerfile` using `infra/templates/Dockerfile.template` as base
+- [ ] Customize build args for `src/crm-agent/crm-agent.csproj` project path
+- [ ] Ensure `Prompts/system-prompt.md` is included as an embedded resource in the build output
+- [ ] Expose port 8080
+- [ ] Verify: `docker build -t crm-agent:dev src/crm-agent/`
+- [ ] Verify: `docker run --rm -p 8080:8080 crm-agent:dev` → `curl http://localhost:8080/health` returns 200
+
+**Step B: Helm Chart**
+- [ ] Create `src/crm-agent/chart/` using `infra/templates/helm-base/` as base
+- [ ] Customize `Chart.yaml` (name: `crm-agent`, description: "CRM Specialist Agent — orders, returns, billing, and support")
+- [ ] Customize `values.yaml`:
+  - Image repository/tag for crm-agent
+  - Environment variables: `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT_NAME`, `CRM_MCP_BASE_URL`, `KNOWLEDGE_MCP_BASE_URL`, `AzureAd__TenantId`
+  - Resource limits: 256Mi memory request / 512Mi limit, 200m CPU request / 500m limit (agent — higher profile for LLM orchestration overhead)
+  - Service account name matching Terraform-provisioned SA for Azure OpenAI access
+  - Liveness probe: `/health`, Readiness probe: `/ready`
+- [ ] Add MCP server URLs and Azure OpenAI config to `templates/configmap.yaml`
+- [ ] Verify: `helm lint src/crm-agent/chart/`
+- [ ] Verify: `helm template crm-agent src/crm-agent/chart/` renders valid YAML
 
 ---
 
@@ -563,8 +654,31 @@ AzureAd:TenantId
 - [ ] Agent references fitting/care guides from Knowledge MCP
 - [ ] Agent includes product images in markdown responses
 - [ ] Handles Scenarios 3 and 5 correctly
-- [ ] Stateless, health checks, Dockerfile, Helm chart, tests
+- [ ] Stateless, health checks, tests
 - [ ] Added to solution file under `Agents` folder
+
+### Containerization & Deployment
+
+**Step A: Dockerfile**
+- [ ] Create `src/product-agent/Dockerfile` using `infra/templates/Dockerfile.template` as base
+- [ ] Customize build args for `src/product-agent/product-agent.csproj` project path
+- [ ] Ensure `Prompts/system-prompt.md` is included as an embedded resource in the build output
+- [ ] Expose port 8080
+- [ ] Verify: `docker build -t product-agent:dev src/product-agent/`
+- [ ] Verify: `docker run --rm -p 8080:8080 product-agent:dev` → `curl http://localhost:8080/health` returns 200
+
+**Step B: Helm Chart**
+- [ ] Create `src/product-agent/chart/` using `infra/templates/helm-base/` as base
+- [ ] Customize `Chart.yaml` (name: `product-agent`, description: "Product Specialist Agent — catalog, recommendations, and promotions")
+- [ ] Customize `values.yaml`:
+  - Image repository/tag for product-agent
+  - Environment variables: `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT_NAME`, `CRM_MCP_BASE_URL`, `KNOWLEDGE_MCP_BASE_URL`, `AzureAd__TenantId`
+  - Resource limits: 256Mi memory request / 512Mi limit, 200m CPU request / 500m limit (agent — higher profile for LLM orchestration overhead)
+  - Service account name matching Terraform-provisioned SA for Azure OpenAI access
+  - Liveness probe: `/health`, Readiness probe: `/ready`
+- [ ] Add MCP server URLs and Azure OpenAI config to `templates/configmap.yaml`
+- [ ] Verify: `helm lint src/product-agent/chart/`
+- [ ] Verify: `helm template product-agent src/product-agent/chart/` renders valid YAML
 
 ---
 
@@ -648,8 +762,32 @@ AzureAd:TenantId
 - [ ] Handles ambiguous intents (asks clarifying question or picks most likely)
 - [ ] Returns specialist agent response as-is (preserves markdown, images)
 - [ ] Polly resilience on outbound HTTP to specialist agents
-- [ ] Health checks, Dockerfile, Helm chart, tests
+- [ ] Health checks, tests
 - [ ] Added to solution file under `Agents` folder
+
+### Containerization & Deployment
+
+**Step A: Dockerfile**
+- [ ] Create `src/orchestrator-agent/Dockerfile` using `infra/templates/Dockerfile.template` as base
+- [ ] Customize build args for `src/orchestrator-agent/orchestrator-agent.csproj` project path
+- [ ] Ensure `Prompts/system-prompt.md` is included as an embedded resource in the build output
+- [ ] Expose port 8080
+- [ ] Verify: `docker build -t orchestrator-agent:dev src/orchestrator-agent/`
+- [ ] Verify: `docker run --rm -p 8080:8080 orchestrator-agent:dev` → `curl http://localhost:8080/health` returns 200
+
+**Step B: Helm Chart**
+- [ ] Create `src/orchestrator-agent/chart/` using `infra/templates/helm-base/` as base
+- [ ] Customize `Chart.yaml` (name: `orchestrator-agent`, description: "Orchestrator Agent — intent classification and agent routing")
+- [ ] Customize `values.yaml`:
+  - Image repository/tag for orchestrator-agent
+  - Environment variables: `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT_NAME`, `CRM_AGENT_BASE_URL`, `PRODUCT_AGENT_BASE_URL`, `AzureAd__TenantId`
+  - Resource limits: 128Mi memory request / 256Mi limit, 100m CPU request / 250m limit (routing agent — lighter than specialist agents, no MCP tool calls)
+  - Service account name matching Terraform-provisioned SA for Azure OpenAI access
+  - Polly resilience config for outbound HTTP to specialist agents
+  - Liveness probe: `/health`, Readiness probe: `/ready`
+- [ ] Add specialist agent URLs and Azure OpenAI config to `templates/configmap.yaml`
+- [ ] Verify: `helm lint src/orchestrator-agent/chart/`
+- [ ] Verify: `helm template orchestrator-agent src/orchestrator-agent/chart/` renders valid YAML
 
 ---
 
@@ -759,8 +897,33 @@ BFF_HOSTNAME
 - [ ] CORS configured for Blazor UI origin
 - [ ] Conversation persistence in Cosmos DB (agents account)
 - [ ] Correlation ID middleware (X-Correlation-ID header)
-- [ ] Health checks, Dockerfile, Helm chart, tests
+- [ ] Health checks, tests
 - [ ] Added to solution file under `Frontend` folder
+
+### Containerization & Deployment
+
+**Step A: Dockerfile**
+- [ ] Create `src/bff-api/Dockerfile` using `infra/templates/Dockerfile.template` as base
+- [ ] Customize build args for `src/bff-api/bff-api.csproj` project path
+- [ ] Expose port 8080
+- [ ] Verify: `docker build -t bff-api:dev src/bff-api/`
+- [ ] Verify: `docker run --rm -p 8080:8080 bff-api:dev` → `curl http://localhost:8080/health` returns 200
+
+**Step B: Helm Chart**
+- [ ] Create `src/bff-api/chart/` using `infra/templates/helm-base/` as base
+- [ ] Customize `Chart.yaml` (name: `bff-api`, description: "Backend-for-Frontend API — auth gateway, chat orchestration, and data proxy")
+- [ ] Customize `values.yaml`:
+  - Image repository/tag for bff-api
+  - Environment variables: `COSMOSDB_AGENTS_ENDPOINT`, `COSMOSDB_AGENTS_DATABASE`, `STORAGE_IMAGES_ENDPOINT`, `STORAGE_IMAGES_CONTAINER`, `CRM_API_BASE_URL`, `ORCHESTRATOR_AGENT_BASE_URL`, `AzureAd__ClientId`, `AzureAd__TenantId`, `BFF_HOSTNAME`
+  - Resource limits: 256Mi memory request / 512Mi limit, 200m CPU request / 500m limit (gateway — handles auth, proxying, and SignalR connections)
+  - Service account name matching Terraform-provisioned SA for Cosmos DB + Blob Storage access
+  - Liveness probe: `/health`, Readiness probe: `/ready`
+  - **Ingress configuration**: Enable Application Gateway for Containers (AGC) ingress with TLS termination, public hostname, and path-based routing
+  - CORS origin allowlist for Blazor UI domain
+- [ ] Add all service URLs and auth config to `templates/configmap.yaml`
+- [ ] Add ingress resource to `templates/ingress.yaml` with AGC annotations
+- [ ] Verify: `helm lint src/bff-api/chart/`
+- [ ] Verify: `helm template bff-api src/bff-api/chart/` renders valid YAML
 
 ---
 
@@ -842,10 +1005,39 @@ MSAL Client ID, Authority → wwwroot/appsettings.json
 - [ ] Order history page shows customer's orders
 - [ ] MudBlazor themed (responsive, accessible)
 - [ ] State management via scoped services (ConversationState)
-- [ ] Dockerfile builds and serves static files
-- [ ] Helm chart validates
 - [ ] bUnit tests pass
 - [ ] Added to solution file under `Frontend` folder
+
+### Containerization & Deployment
+
+**Step A: Dockerfile**
+- [ ] Create `src/blazor-ui/Dockerfile` — ⚠️ **Special: multi-stage build with nginx**
+  - Stage 1: .NET SDK to publish Blazor WASM (`dotnet publish -c Release`)
+  - Stage 2: `nginx:alpine` to serve the static `wwwroot/_framework/` output
+- [ ] Create `src/blazor-ui/nginx.conf` with:
+  - SPA fallback routing (`try_files $uri $uri/ /index.html`)
+  - Gzip compression for `.wasm`, `.dll`, `.js`, `.css` assets
+  - Cache-Control headers for framework files (immutable, long-lived)
+  - Security headers (X-Content-Type-Options, X-Frame-Options, CSP)
+- [ ] Expose port 80 (nginx default)
+- [ ] Verify: `docker build -t blazor-ui:dev src/blazor-ui/`
+- [ ] Verify: `docker run --rm -p 8080:80 blazor-ui:dev` → browser at `http://localhost:8080` loads the Blazor app shell
+
+**Step B: Helm Chart**
+- [ ] Create `src/blazor-ui/chart/` using `infra/templates/helm-base/` as base
+- [ ] Customize `Chart.yaml` (name: `blazor-ui`, description: "Contoso Outdoors Blazor WebAssembly UI")
+- [ ] Customize `values.yaml`:
+  - Image repository/tag for blazor-ui
+  - Container port: 80 (nginx), not 8080
+  - Resource limits: 64Mi memory request / 128Mi limit, 25m CPU request / 100m limit (static file server — minimal profile)
+  - **No service account needed** (UI has no Azure SDK calls — all backend access goes through BFF)
+  - Liveness probe: HTTP GET `/` on port 80
+  - Readiness probe: HTTP GET `/` on port 80
+  - **Ingress configuration**: Enable AGC ingress with TLS, public hostname, and path-based routing (serve UI at `/`, route `/api/` to BFF)
+- [ ] Add nginx config as a ConfigMap in `templates/configmap.yaml`
+- [ ] Add ingress resource to `templates/ingress.yaml` with AGC annotations
+- [ ] Verify: `helm lint src/blazor-ui/chart/`
+- [ ] Verify: `helm template blazor-ui src/blazor-ui/chart/` renders valid YAML
 
 ---
 
