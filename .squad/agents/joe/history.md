@@ -257,3 +257,11 @@ Firewall bracket pattern (try/finally + trap EXIT), OIDC everywhere (zero stored
 **T-07 (Fix seed-data after failed apply) → Commit ee72793:** Added `terraform-apply` to seed-data job's `needs` list (was only `[cleanup-after-apply]`). Since cleanup-after-apply runs with `if: always()`, it always succeeds — meaning seed-data would proceed even after a failed terraform-apply. Now seed-data correctly requires both terraform-apply success AND cleanup completion.
 
 **T-08 (CAE flags in CI/CD) → Commit 8a50aa4:** Added `ARM_DISABLE_CAE`, `AZURE_DISABLE_CAE`, `HAMILTON_DISABLE_CAE` to all Terraform Init/Plan/Apply steps in both terraform-plan.yaml and terraform-apply.yaml. These match the deploy.ps1/sh pattern and prevent Continuous Access Evaluation from revoking tokens mid-operation in corporate Entra tenants with aggressive CAE policies.
+
+### 2025-07-25 — Medium Stage: T-09, T-10, T-12 (Observability, Security Hardening, Docs)
+
+**T-09 (Diagnostic settings) → Commit e3e5363:** Created `infra/terraform/diagnostics.tf` with `azurerm_monitor_diagnostic_setting` for Key Vault (AuditEvent), Cosmos DB CRM (DataPlaneRequests + ControlPlaneRequests), and Cosmos DB Agents (same categories). All send to the Log Analytics workspace created by the AKS module (`module.aks.log_analytics_workspace_id`).
+
+**T-10 (Harden module defaults) → Commit 60b5799:** Flipped `public_network_access_enabled` default to `false` in cosmosdb, keyvault, acr, and foundry modules. Flipped `purge_protection_enabled` to `true` in keyvault. Added `public_network_access_enabled` variable to foundry module (previously absent). Added NSG resources to VNet module for private endpoint subnet (DenyAllInbound) and AGC subnet (AllowHTTPS + DenyAll). Updated root main.tf to pass explicit `public_network_access_enabled = true` and `purge_protection_enabled = true` where needed — ensures current deployment behavior is preserved while module reuse gets secure defaults.
+
+**T-12 (CI/CD Agent Identity gap) → Commit 44675b5:** Added "Known Gaps" section to `docs/security.md` documenting that CI/CD cannot provision Entra Agent Identity Blueprints because the msgraph provider requires a client secret and GitHub Actions uses OIDC-only. Documented three options; accepted local-only provisioning for now.
