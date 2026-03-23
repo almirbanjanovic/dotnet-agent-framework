@@ -480,6 +480,8 @@ module "workload_identity" {
 #--------------------------------------------------------------------------------------------------------------------------------
 
 resource "kubectl_manifest" "namespace" {
+  count = var.deploy_k8s_resources ? 1 : 0
+
   yaml_body = templatefile("${path.module}/../k8s/manifests/namespace.yaml", {
     namespace = var.k8s_namespace
   })
@@ -488,7 +490,7 @@ resource "kubectl_manifest" "namespace" {
 }
 
 resource "kubectl_manifest" "service_accounts" {
-  for_each = {
+  for_each = var.deploy_k8s_resources ? {
     bff        = { name = "sa-bff", client_id = module.identity.identities["bff"].client_id }
     crm_api    = { name = "sa-crm-api", client_id = module.identity.identities["crm_api"].client_id }
     crm_mcp    = { name = "sa-crm-mcp", client_id = module.identity.identities["crm_mcp"].client_id }
@@ -496,7 +498,7 @@ resource "kubectl_manifest" "service_accounts" {
     crm_agent  = { name = "sa-crm-agent", client_id = module.agent_identity.agents["crm_agent"].client_id }
     prod_agent = { name = "sa-prod-agent", client_id = module.agent_identity.agents["prod_agent"].client_id }
     orch_agent = { name = "sa-orch-agent", client_id = module.agent_identity.agents["orch_agent"].client_id }
-  }
+  } : {}
 
   yaml_body = templatefile("${path.module}/../k8s/manifests/service-account.yaml", {
     name      = each.value.name

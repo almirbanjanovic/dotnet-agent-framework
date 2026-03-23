@@ -105,19 +105,18 @@ provider "msgraph" {
 
 # kubectl provider — configured dynamically from AKS cluster credentials.
 #
-# try() guards return empty strings when AKS module outputs are unavailable
-# (fresh deploy, or destroyed cluster with no state). This prevents provider
-# initialization failures when the cluster doesn't exist yet.
+# var.deploy_k8s_resources gates BOTH the provider config and all kubectl_manifest
+# resources. When false, the provider gets empty credentials (no connection attempt)
+# and all kubectl resources are skipped via count/for_each conditions.
 #
-# KNOWN LIMITATION: If AKS was destroyed but stale kubectl_manifest resources
-# remain in Terraform state, the provider will still fail during refresh
-# (stale FQDN → DNS resolution error). The deploy scripts handle this by
-# removing stale kubectl state entries before planning when the AKS cluster
-# is unreachable. See deploy.ps1/deploy.sh "Pre-plan: kubectl state guard".
+# The deploy scripts detect AKS reachability (az aks show + DNS resolution) and
+# automatically set deploy_k8s_resources=false for the first pass when AKS is
+# unreachable, then run a second pass with deploy_k8s_resources=true after AKS
+# is created. See deploy.ps1/deploy.sh "Pre-plan: kubectl state guard".
 provider "kubectl" {
-  host                   = try(module.aks.kube_config_host, "")
-  client_certificate     = try(base64decode(module.aks.kube_config_client_certificate), "")
-  client_key             = try(base64decode(module.aks.kube_config_client_key), "")
-  cluster_ca_certificate = try(base64decode(module.aks.kube_config_cluster_ca), "")
+  host                   = var.deploy_k8s_resources ? try(module.aks.kube_config_host, "") : ""
+  client_certificate     = var.deploy_k8s_resources ? try(base64decode(module.aks.kube_config_client_certificate), "") : ""
+  client_key             = var.deploy_k8s_resources ? try(base64decode(module.aks.kube_config_client_key), "") : ""
+  cluster_ca_certificate = var.deploy_k8s_resources ? try(base64decode(module.aks.kube_config_cluster_ca), "") : ""
   load_config_file       = false
 }

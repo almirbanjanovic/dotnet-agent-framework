@@ -654,37 +654,62 @@ Write-PhaseSummary -Number 3 -NextPhase "Phase 4 — terraform plan (preview inf
 })
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# PRE-PLAN — kubectl state guard
+# PRE-PLAN — kubectl state guard + AKS reachability check
 # ═══════════════════════════════════════════════════════════════════════════════
-# The gavinbunney/kubectl provider connects to AKS during resource refresh.
-# If the cluster was destroyed but kubectl_manifest resources remain in state,
-# the stale FQDN causes a DNS error that blocks `terraform plan`.
-# Fix: detect the condition and remove stale kubectl entries before planning.
+# The gavinbunney/kubectl provider connects to AKS during provider initialization
+# (before resource refresh). If AKS is unreachable — destroyed, FQDN changed, or
+# DNS not propagated — the stale FQDN causes a DNS error that blocks `terraform plan`.
+#
+# Fix: detect the condition, remove stale kubectl state, AND gate K8s resources
+# via deploy_k8s_resources=false. After AKS is created/updated in pass 1,
+# run a second pass with deploy_k8s_resources=true to create K8s resources.
 
-Write-Step "Checking kubectl state consistency"
+Write-Step "Checking AKS reachability for kubectl provider"
 
 $AksClusterName = "aks-$BaseName-$Environment-$Location"
+$DeployK8sResources = $true
+$NeedSecondPass = $false
 
 Push-Location $TerraformDir
 try {
-    $kubectlState = @(cmd /c "terraform state list 2>NUL" | Where-Object { $_ -like "kubectl_manifest.*" })
-    if ($kubectlState.Count -gt 0) {
-        Write-Host "    Found $($kubectlState.Count) kubectl_manifest resource(s) in state" -ForegroundColor DarkGray
+    # Step 1: Check if AKS cluster exists in Azure
+    $aksId = az aks show --name $AksClusterName --resource-group $ResourceGroup --query "id" -o tsv 2>$null
+    if (-not $aksId) {
+        Write-Host "    AKS cluster '$AksClusterName' not found in Azure" -ForegroundColor Yellow
+        $DeployK8sResources = $false
+        $NeedSecondPass = $true
+    } else {
+        # Step 2: AKS exists — verify FQDN is DNS-resolvable
+        $aksFqdn = az aks show --name $AksClusterName --resource-group $ResourceGroup --query "fqdn" -o tsv 2>$null
+        if ($aksFqdn) {
+            try {
+                [System.Net.Dns]::GetHostEntry($aksFqdn) | Out-Null
+                Write-Host "    AKS FQDN '$aksFqdn' resolves — cluster is reachable" -ForegroundColor DarkGray
+            } catch {
+                Write-Host "    AKS FQDN '$aksFqdn' DNS resolution failed — cluster unreachable" -ForegroundColor Yellow
+                $DeployK8sResources = $false
+                $NeedSecondPass = $true
+            }
+        } else {
+            Write-Host "    Could not retrieve AKS FQDN — assuming unreachable" -ForegroundColor Yellow
+            $DeployK8sResources = $false
+            $NeedSecondPass = $true
+        }
+    }
 
-        # Check if AKS cluster actually exists in Azure
-        $aksId = az aks show --name $AksClusterName --resource-group $ResourceGroup --query "id" -o tsv 2>$null
-        if (-not $aksId) {
-            Write-Host "    AKS cluster '$AksClusterName' not found — removing stale kubectl state" -ForegroundColor Yellow
+    # Step 3: If AKS unreachable, clean stale kubectl state entries
+    if (-not $DeployK8sResources) {
+        $kubectlState = @(cmd /c "terraform state list 2>NUL" | Where-Object { $_ -like "kubectl_manifest.*" })
+        if ($kubectlState.Count -gt 0) {
+            Write-Host "    Removing $($kubectlState.Count) stale kubectl_manifest resource(s) from state" -ForegroundColor Yellow
             foreach ($resource in $kubectlState) {
                 cmd /c "terraform state rm `"$resource`" 2>NUL"
                 Write-Host "      Removed: $resource" -ForegroundColor DarkGray
             }
-            Write-Done "Stale kubectl state cleaned — resources will be recreated after AKS"
-        } else {
-            Write-Done "AKS cluster exists — kubectl state is valid"
         }
+        Write-Done "K8s resources deferred to pass 2 (deploy_k8s_resources=false)"
     } else {
-        Write-Done "No kubectl_manifest resources in state — nothing to guard"
+        Write-Done "AKS reachable — K8s resources will deploy in this pass"
     }
 } finally {
     Pop-Location
@@ -696,11 +721,13 @@ try {
 
 Write-Phase -Number 4 -Title "terraform plan"
 
-Write-Step "Planning infrastructure changes"
+$k8sVarArg = if (-not $DeployK8sResources) { "-var deploy_k8s_resources=false" } else { "" }
+
+Write-Step "Planning infrastructure changes$(if (-not $DeployK8sResources) { ' (pass 1: infra only, K8s deferred)' })"
 
 Push-Location $TerraformDir
 try {
-    cmd /c "terraform plan -var-file=$Environment.tfvars -out=tfplan"
+    cmd /c "terraform plan -var-file=$Environment.tfvars $k8sVarArg -out=tfplan"
     if ($LASTEXITCODE -ne 0) { Write-Fail "terraform plan failed"; exit 1 }
     Write-Done "Plan saved to tfplan"
 } finally {
@@ -803,6 +830,33 @@ try {
 # ── Clean up ─────────────────────────────────────────────────────────────────
 if (Test-Path "$TerraformDir\tfplan") {
     Remove-Item "$TerraformDir\tfplan" -Force
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PASS 2 — Deploy K8s resources (if deferred in pass 1)
+# ═══════════════════════════════════════════════════════════════════════════════
+# AKS was unreachable during pass 1, so K8s resources were skipped.
+# Now AKS should be up — re-plan and apply with deploy_k8s_resources=true.
+
+if ($NeedSecondPass) {
+    Write-Step "Pass 2: AKS should now be up — deploying K8s resources"
+
+    Push-Location $TerraformDir
+    try {
+        cmd /c "terraform plan -var-file=$Environment.tfvars -var deploy_k8s_resources=true -out=tfplan"
+        if ($LASTEXITCODE -ne 0) { Write-Fail "terraform plan (pass 2) failed"; exit 1 }
+        Write-Done "Pass 2 plan saved"
+
+        terraform apply "tfplan"
+        if ($LASTEXITCODE -ne 0) { Write-Fail "terraform apply (pass 2) failed"; exit 1 }
+        Write-Done "K8s resources deployed (pass 2)"
+    } finally {
+        Pop-Location
+    }
+
+    if (Test-Path "$TerraformDir\tfplan") {
+        Remove-Item "$TerraformDir\tfplan" -Force
+    }
 }
 
 Write-PhaseSummary -Number 5 -NextPhase "Phase 6 — Seed CRM data into Cosmos DB" -Items ([ordered]@{
