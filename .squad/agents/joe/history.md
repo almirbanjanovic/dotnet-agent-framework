@@ -111,3 +111,70 @@
 ### 2025-07-25 — Agent Identity Module Consolidation (v2 → v1)
 
 **Consolidated agent-identity module:** Deleted the old azuread-based v1 module and promoted the msgraph-based v2 code into v1 as the single canonical version. Removed unused `var.environment` and `var.resource_group_name` from the module variables. Updated `main.tf` source path from `v2` back to `v1` and removed the corresponding `environment` and `resource_group_name` arguments from the module block. Verified no duplicate data source blocks (`azuread_client_config` and `azurerm_client_config` each appear exactly once). `terraform fmt -check -recursive` passes clean.
+
+### 2025-07-25 — Scripts & CI/CD Comprehensive Audit
+
+**Audit scope:** init.ps1/sh, deploy.ps1/sh, 6 GitHub Actions workflows.
+
+**Critical findings (2):**
+1. Orchestrator approval gate hardcodes "production" in issue title regardless of selected environment (`terraform-plan-approve-apply-seed-data.yaml` line 57).
+2. CI/CD has no Phase 0 equivalent — `TF_VAR_msgraph_*` not set in workflows, so Agent Identity Blueprints cannot be provisioned via GitHub Actions. The deploy scripts create a temp SP + secret but workflows don't replicate this flow.
+
+**Key warnings (11):**
+- deploy.ps1 Phase 7 sets `CRM_DATA_PATH="/dev/null"` — Unix path doesn't exist on Windows.
+- deploy.ps1 uses `cmd /c` for terraform init/plan but not apply — inconsistent exit code handling.
+- deploy.sh has Cosmos RBAC retry loop (12×5s); deploy.ps1 uses fixed 30s wait — parity gap.
+- TFLint in CI/CD not run with `--recursive` — child modules under `modules/*/v1/` skipped.
+- `terraform fmt` check has `continue-on-error: true` — format violations silently ignored.
+- CAE disable flags (`ARM_DISABLE_CAE` etc.) missing from all GitHub Actions workflow env blocks.
+- No plan-on-PR trigger — infrastructure changes can land without automated plan review.
+- Orchestrator seed-data job depends only on cleanup-after-apply, not terraform-apply — would run after a failed apply.
+- 4 `STORAGE_ACCOUNT_*` GitHub env variables set by init but consumed by nothing.
+- Approval gate restricted to `github.repository_owner` — may be too narrow for teams.
+- Banner text in deploy scripts says "via AKS pod" but code runs dotnet directly.
+
+**Positive findings (9):**
+Firewall bracket pattern (try/finally + trap EXIT), OIDC everywhere (zero stored creds), idempotent bootstrap, CAE handling in local scripts, Agent Identity SP lifecycle (1hr secret + cleanup), policy diagnostic on failure, state storage locked down, Terraform state locking via blob lease, cross-platform parity (PS1/SH produce identical infra).
+
+**Overall grade: B+** — Strong security posture and well-designed automation. Two critical gaps need fixing before CI/CD can fully replace local deploy scripts.
+
+### 2025-07-25 — Deep Terraform Audit (Read-Only)
+
+**Scope:** Full audit of root configuration + all 20 modules (13 primary + 7 RBAC sub-modules).
+
+**Overall Grade: B+ (Strong foundation, module defaults need hardening)**
+
+**Key findings by severity:**
+
+**Critical (3):**
+1. AKS RBAC module assigns `Contributor` on entire resource group — overly broad for control plane identity.
+2. knowledge-source module uses `local-exec` provisioner with API key — fragile cross-platform and embeds key in provisioner env.
+3. Module defaults not secure-by-default: cosmosdb, keyvault, foundry all default `public_network_access_enabled = true` and firewall to `Allow` when no IPs given. Root main.tf compensates (passes deployer IP + creates private endpoints), but modules themselves are insecure if reused standalone.
+
+**Warnings (12):**
+- `tags` variable in root variables.tf has no description.
+- kubernetes provider declared but never configured (only kubectl used).
+- Key Vault `purge_protection_enabled` defaults to `false`, `soft_delete_retention_days` defaults to 7 (too low for prod).
+- VNet module creates no NSGs or route tables — subnets have no network security rules.
+- AKS `drain_timeout_in_minutes = 0` (no pod drain grace during upgrades).
+- AKS kubelet identity passed as 3 separate variables instead of single object reference.
+- Cosmos DB RBAC module description says "Data Owner" but actually assigns "Data Contributor" (UUID 00000000-0000-0000-0000-000000000002).
+- Key Vault RBAC module missing `certificate_officer_assignment_ids` output.
+- storage-uploads module creates deployer role assignment that persists after destroy.
+- ACR module `public_network_access_enabled` defaults to `true`.
+- No variable validation rules on SKUs, IP addresses, K8s version, or container names across most modules.
+- Entra module always creates test users (no toggle to disable).
+
+**Positives (10):**
+- All 7 PaaS services have private endpoints with correct DNS zones (7 PEs, 6 zones — both Cosmos accounts share zone).
+- Dual identity model (managed identities + Entra Agent IDs) is clean and least-privilege.
+- Workload identity federation (zero secrets in pods) for all 7 K8s service accounts.
+- Storage: shared key disabled, OAuth default, network deny-by-default.
+- Foundry: local auth disabled (RBAC-only).
+- Cosmos DB: local auth disabled.
+- Key Vault: RBAC authorization (no access policies).
+- Key Vault RBAC has excellent 3-tier separation (Officer/User/CertOfficer).
+- K8s manifests correct (namespace + SA with workload identity annotations).
+- Module versioning (v1/) consistently applied across all 20 modules.
+
+**RBAC completeness verified:** All service identities have correct permissions — no missing assignments that would cause runtime failures. Deployer gets Secrets Officer + CRM Cosmos Data Contributor (for seeding). Only over-permissioning is AKS Contributor on RG.
