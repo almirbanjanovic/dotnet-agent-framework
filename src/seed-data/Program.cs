@@ -16,7 +16,7 @@ var cosmosEndpoint = configuration["COSMOSDB_CRM_ENDPOINT"]
     ?? throw new InvalidOperationException("COSMOSDB_CRM_ENDPOINT is not set.");
 var databaseName = configuration["COSMOSDB_CRM_DATABASE"]
     ?? throw new InvalidOperationException("COSMOSDB_CRM_DATABASE is not set.");
-var tenantId = configuration["AzureAd:TenantId"];
+var tenantId = configuration["AzureAd:TenantId"] ?? configuration["AzureAd__TenantId"];
 
 // ---------------------------------------------------------------------------
 // Resolve data folder paths

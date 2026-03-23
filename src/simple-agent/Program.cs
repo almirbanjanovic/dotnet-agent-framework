@@ -14,10 +14,11 @@ var configuration = new ConfigurationBuilder()
 
 var endpoint = configuration["AZURE_OPENAI_ENDPOINT"] ?? throw new InvalidOperationException("AZURE_OPENAI_ENDPOINT is not set.");
 var deploymentName = configuration["AZURE_OPENAI_DEPLOYMENT_NAME"] ?? throw new InvalidOperationException("AZURE_OPENAI_DEPLOYMENT_NAME is not set.");
-var tenantId = configuration["AzureAd:TenantId"];
+var tenantId = configuration["AzureAd:TenantId"] ?? configuration["AzureAd__TenantId"];
 
 Console.WriteLine($"Using Azure OpenAI endpoint: {endpoint}");
 Console.WriteLine($"Deployment name: {deploymentName}");
+Console.WriteLine($"Tenant ID: {(string.IsNullOrEmpty(tenantId) ? "(not set — using default credential)" : tenantId)}");
 
 // Pin to the project tenant when AzureAd:TenantId is available (populated by
 // config-sync from Key Vault secret AzureAd__TenantId). Prevents
