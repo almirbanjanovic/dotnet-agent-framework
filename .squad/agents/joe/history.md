@@ -281,3 +281,22 @@ Firewall bracket pattern (try/finally + trap EXIT), OIDC everywhere (zero stored
 - `terraform state rm` on `kubectl_manifest` is safe when AKS is destroyed — the K8s namespace and service accounts no longer exist either.
 
 **Files changed:** `infra/terraform/providers.tf`, `infra/deploy.ps1`, `infra/deploy.sh`
+
+### 2025-07-25 — Fix: kubectl provider DNS failure v2 (structural fix with variable gate)
+
+**Problem:** The prior fix (try() guards + state removal) was INSUFFICIENT. The `gavinbunney/kubectl` provider initializes eagerly — it creates a REST client and connects to the K8s API server during provider initialization, which happens BEFORE resource refresh. `try()` only catches null/error, not "valid string pointing to a dead host." State removal alone doesn't prevent provider initialization because ALL declared providers initialize during plan regardless of resources.
+
+**Fix (structural, commit 0b58039):**
+1. `infra/terraform/variables.tf` — Added `var.deploy_k8s_resources` (bool, default=true) to gate the kubectl provider and all K8s resources.
+2. `infra/terraform/providers.tf` — Provider config now uses ternary: `var.deploy_k8s_resources ? try(module.aks...) : ""`. When false, provider gets empty credentials (no connection attempt).
+3. `infra/terraform/main.tf` — `kubectl_manifest.namespace` gets `count = var.deploy_k8s_resources ? 1 : 0`. `kubectl_manifest.service_accounts` `for_each` wrapped with `var.deploy_k8s_resources ? {...} : {}`.
+4. `infra/deploy.ps1` + `infra/deploy.sh` — Enhanced pre-plan guard with 3-step reachability check: (a) `az aks show` cluster exists, (b) DNS resolution of FQDN (PowerShell: `[System.Net.Dns]::GetHostEntry()`, bash: `host`/`nslookup`), (c) if unreachable: remove stale state + set `deploy_k8s_resources=false`. Added two-pass deployment: pass 1 creates infra with K8s deferred, pass 2 creates K8s resources after AKS is up.
+
+**Key learnings:**
+- The gavinbunney/kubectl provider DOES initialize eagerly (contradicting prior learning about lazy per-resource init). The `host` config is evaluated and a connection attempt is made during provider init, not just during resource refresh.
+- Variable-gated provider config is the most reliable pattern for conditional providers in Terraform. When the variable is false, the provider gets empty/dummy config and never attempts connection.
+- Two-pass deployment is necessary because Terraform can't create a resource (AKS) and then use its outputs in a provider config in the same plan — the provider config is evaluated at plan time, before any resources are created/updated.
+- `count` and `for_each` conditions on resources are belt-and-suspenders with the provider gate — even if the provider somehow initializes, the resources won't be planned.
+- Backward compatible: `default=true` means existing CI/CD and manual deploys that don't pass the variable work exactly as before.
+
+**Files changed:** `infra/terraform/variables.tf`, `infra/terraform/providers.tf`, `infra/terraform/main.tf`, `infra/deploy.ps1`, `infra/deploy.sh`
