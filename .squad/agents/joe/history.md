@@ -265,3 +265,19 @@ Firewall bracket pattern (try/finally + trap EXIT), OIDC everywhere (zero stored
 **T-10 (Harden module defaults) → Commit 60b5799:** Flipped `public_network_access_enabled` default to `false` in cosmosdb, keyvault, acr, and foundry modules. Flipped `purge_protection_enabled` to `true` in keyvault. Added `public_network_access_enabled` variable to foundry module (previously absent). Added NSG resources to VNet module for private endpoint subnet (DenyAllInbound) and AGC subnet (AllowHTTPS + DenyAll). Updated root main.tf to pass explicit `public_network_access_enabled = true` and `purge_protection_enabled = true` where needed — ensures current deployment behavior is preserved while module reuse gets secure defaults.
 
 **T-12 (CI/CD Agent Identity gap) → Commit 44675b5:** Added "Known Gaps" section to `docs/security.md` documenting that CI/CD cannot provision Entra Agent Identity Blueprints because the msgraph provider requires a client secret and GitHub Actions uses OIDC-only. Documented three options; accepted local-only provisioning for now.
+
+### 2025-07-25 — Fix: kubectl provider DNS failure (stale AKS FQDN)
+
+**Root cause:** The `gavinbunney/kubectl` provider creates a Kubernetes REST client lazily per resource read. When `kubectl_manifest` resources exist in Terraform state but the AKS cluster has been destroyed, the provider attempts DNS resolution of the stale FQDN during `terraform plan` refresh — causing `no such host` errors that block the entire plan.
+
+**Fix (two-part, commit 9461d64):**
+1. `infra/terraform/providers.tf` — Wrapped provider config with `try()` guards. Returns empty strings when AKS module outputs are null/unknown (fresh deploy). Doesn't help with stale-in-state values, but provides defense in depth.
+2. `infra/deploy.ps1` + `infra/deploy.sh` — Added "Pre-plan: kubectl state guard" between validate and plan phases. Detects `kubectl_manifest.*` resources in state, checks if the AKS cluster exists in Azure via `az aks show`, and removes stale state entries if the cluster is gone. Constructs AKS name from `base_name`, `environment`, `location` (matching AKS module naming: `aks-{base_name}-{environment}-{location}`).
+
+**Key patterns:**
+- Provider blocks can only reference variables, locals, and module outputs (from state). They CANNOT reference data sources or resources — this is why the fix requires deploy-script-level state cleanup.
+- `gavinbunney/kubectl` creates REST clients per-resource, not during provider init. This means `-target=module.aks` would also work (kubectl resources aren't refreshed), but state cleanup is more explicit.
+- The `try()` in provider config handles: fresh deploy (unknown outputs), module errors, and null kube_config values. It does NOT handle stale-but-valid state values.
+- `terraform state rm` on `kubectl_manifest` is safe when AKS is destroyed — the K8s namespace and service accounts no longer exist either.
+
+**Files changed:** `infra/terraform/providers.tf`, `infra/deploy.ps1`, `infra/deploy.sh`
