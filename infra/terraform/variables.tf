@@ -175,8 +175,9 @@ variable "acr_name" {
 # ---------------------------------------------------------------
 
 variable "aks_kubernetes_version" {
-  description = "Kubernetes version. Leave null for latest."
+  description = "Kubernetes version for AKS cluster (major.minor, e.g. '1.30'). Pinned to prevent silent upgrades."
   type        = string
+  default     = "1.30"
 }
 
 variable "aks_system_node_vm_size" {
