@@ -103,13 +103,21 @@ provider "msgraph" {
   tenant_id     = var.msgraph_tenant_id != "" ? var.msgraph_tenant_id : null
 }
 
-# kubectl provider is configured dynamically using AKS cluster credentials.
-# The kubernetes provider is declared but not configured — only kubectl is used
-# because it handles unknown values at plan time (when AKS doesn't exist yet).
+# kubectl provider — configured dynamically from AKS cluster credentials.
+#
+# try() guards return empty strings when AKS module outputs are unavailable
+# (fresh deploy, or destroyed cluster with no state). This prevents provider
+# initialization failures when the cluster doesn't exist yet.
+#
+# KNOWN LIMITATION: If AKS was destroyed but stale kubectl_manifest resources
+# remain in Terraform state, the provider will still fail during refresh
+# (stale FQDN → DNS resolution error). The deploy scripts handle this by
+# removing stale kubectl state entries before planning when the AKS cluster
+# is unreachable. See deploy.ps1/deploy.sh "Pre-plan: kubectl state guard".
 provider "kubectl" {
-  host                   = module.aks.kube_config_host
-  client_certificate     = base64decode(module.aks.kube_config_client_certificate)
-  client_key             = base64decode(module.aks.kube_config_client_key)
-  cluster_ca_certificate = base64decode(module.aks.kube_config_cluster_ca)
+  host                   = try(module.aks.kube_config_host, "")
+  client_certificate     = try(base64decode(module.aks.kube_config_client_certificate), "")
+  client_key             = try(base64decode(module.aks.kube_config_client_key), "")
+  cluster_ca_certificate = try(base64decode(module.aks.kube_config_cluster_ca), "")
   load_config_file       = false
 }

@@ -423,6 +423,7 @@ BACKEND_FILE="$TERRAFORM_DIR/backend.hcl"
 
 RESOURCE_GROUP=$(read_hcl_value "$TFVARS_FILE" "resource_group_name")
 LOCATION=$(read_hcl_value "$TFVARS_FILE" "location")
+BASE_NAME=$(read_hcl_value "$TFVARS_FILE" "base_name")
 STORAGE_ACCOUNT=$(read_hcl_value "$BACKEND_FILE" "storage_account_name")
 
 if [[ -z "$RESOURCE_GROUP" || -z "$STORAGE_ACCOUNT" || -z "$ENVIRONMENT" ]]; then
@@ -621,6 +622,40 @@ popd >/dev/null
 phase_summary 3 \
     "Phase 4 — terraform plan (preview infrastructure changes)" \
     "Status" "Valid"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PRE-PLAN — kubectl state guard
+# ═══════════════════════════════════════════════════════════════════════════════
+# The gavinbunney/kubectl provider connects to AKS during resource refresh.
+# If the cluster was destroyed but kubectl_manifest resources remain in state,
+# the stale FQDN causes a DNS error that blocks `terraform plan`.
+# Fix: detect the condition and remove stale kubectl entries before planning.
+
+step "Checking kubectl state consistency"
+
+AKS_CLUSTER_NAME="aks-${BASE_NAME}-${ENVIRONMENT}-${LOCATION}"
+
+pushd "$TERRAFORM_DIR" >/dev/null
+KUBECTL_STATE=$(terraform state list 2>/dev/null | grep '^kubectl_manifest\.' || true)
+if [[ -n "$KUBECTL_STATE" ]]; then
+    KUBECTL_COUNT=$(echo "$KUBECTL_STATE" | wc -l | tr -d ' ')
+    echo -e "    ${D}Found ${KUBECTL_COUNT} kubectl_manifest resource(s) in state${W}"
+
+    # Check if AKS cluster actually exists in Azure
+    if ! az aks show --name "$AKS_CLUSTER_NAME" --resource-group "$RESOURCE_GROUP" --query "id" -o tsv >/dev/null 2>&1; then
+        echo -e "    ${Y}AKS cluster '${AKS_CLUSTER_NAME}' not found — removing stale kubectl state${W}"
+        while IFS= read -r resource; do
+            terraform state rm "$resource" >/dev/null 2>&1 || true
+            echo -e "      ${D}Removed: ${resource}${W}"
+        done <<< "$KUBECTL_STATE"
+        done_ "Stale kubectl state cleaned — resources will be recreated after AKS"
+    else
+        done_ "AKS cluster exists — kubectl state is valid"
+    fi
+else
+    done_ "No kubectl_manifest resources in state — nothing to guard"
+fi
+popd >/dev/null
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 4 — terraform plan

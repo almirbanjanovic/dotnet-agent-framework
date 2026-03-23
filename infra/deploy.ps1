@@ -568,6 +568,7 @@ if (-not (Test-Path $BackendFile)) { throw "backend.hcl not found — run init.p
 
 $ResourceGroup  = Read-HclValue -FilePath $TfVarsFile -Key "resource_group_name"
 $Location       = Read-HclValue -FilePath $TfVarsFile -Key "location"
+$BaseName       = Read-HclValue -FilePath $TfVarsFile -Key "base_name"
 $StorageAccount = Read-HclValue -FilePath $BackendFile -Key "storage_account_name"
 
 if (-not $ResourceGroup -or -not $StorageAccount -or -not $Environment) {
@@ -651,6 +652,43 @@ try {
 Write-PhaseSummary -Number 3 -NextPhase "Phase 4 — terraform plan (preview infrastructure changes)" -Items ([ordered]@{
     "Status" = "Valid"
 })
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PRE-PLAN — kubectl state guard
+# ═══════════════════════════════════════════════════════════════════════════════
+# The gavinbunney/kubectl provider connects to AKS during resource refresh.
+# If the cluster was destroyed but kubectl_manifest resources remain in state,
+# the stale FQDN causes a DNS error that blocks `terraform plan`.
+# Fix: detect the condition and remove stale kubectl entries before planning.
+
+Write-Step "Checking kubectl state consistency"
+
+$AksClusterName = "aks-$BaseName-$Environment-$Location"
+
+Push-Location $TerraformDir
+try {
+    $kubectlState = @(cmd /c "terraform state list 2>NUL" | Where-Object { $_ -like "kubectl_manifest.*" })
+    if ($kubectlState.Count -gt 0) {
+        Write-Host "    Found $($kubectlState.Count) kubectl_manifest resource(s) in state" -ForegroundColor DarkGray
+
+        # Check if AKS cluster actually exists in Azure
+        $aksId = az aks show --name $AksClusterName --resource-group $ResourceGroup --query "id" -o tsv 2>$null
+        if (-not $aksId) {
+            Write-Host "    AKS cluster '$AksClusterName' not found — removing stale kubectl state" -ForegroundColor Yellow
+            foreach ($resource in $kubectlState) {
+                cmd /c "terraform state rm `"$resource`" 2>NUL"
+                Write-Host "      Removed: $resource" -ForegroundColor DarkGray
+            }
+            Write-Done "Stale kubectl state cleaned — resources will be recreated after AKS"
+        } else {
+            Write-Done "AKS cluster exists — kubectl state is valid"
+        }
+    } else {
+        Write-Done "No kubectl_manifest resources in state — nothing to guard"
+    }
+} finally {
+    Pop-Location
+}
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 4 — terraform plan
