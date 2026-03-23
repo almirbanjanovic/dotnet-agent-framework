@@ -648,7 +648,20 @@ if ! AKS_ID=$(az aks show --name "$AKS_CLUSTER_NAME" --resource-group "$RESOURCE
     DEPLOY_K8S_RESOURCES=false
     NEED_SECOND_PASS=true
 else
-    # Step 2: AKS exists — verify FQDN is DNS-resolvable
+    # Step 1b: AKS exists — check power state (stopped clusters have no DNS)
+    AKS_POWER_STATE=$(az aks show --name "$AKS_CLUSTER_NAME" --resource-group "$RESOURCE_GROUP" --query "powerState.code" -o tsv 2>/dev/null || true)
+    if [[ "$AKS_POWER_STATE" == "Stopped" ]]; then
+        echo ""
+        echo -e "    ${R}AKS cluster '${AKS_CLUSTER_NAME}' is stopped (deallocated).${W}"
+        echo -e "    ${R}A stopped cluster has no control plane — DNS will not resolve.${W}"
+        echo ""
+        echo -e "    ${Y}Start the cluster first:${W}"
+        echo -e "    ${C}  az aks start --name ${AKS_CLUSTER_NAME} --resource-group ${RESOURCE_GROUP}${W}"
+        echo ""
+        fail "Cannot deploy to a stopped AKS cluster. Start it and re-run."
+    fi
+
+    # Step 2: AKS is running — verify FQDN is DNS-resolvable
     AKS_FQDN=$(az aks show --name "$AKS_CLUSTER_NAME" --resource-group "$RESOURCE_GROUP" --query "fqdn" -o tsv 2>/dev/null || true)
     if [[ -n "$AKS_FQDN" ]]; then
         if host "$AKS_FQDN" >/dev/null 2>&1 || nslookup "$AKS_FQDN" >/dev/null 2>&1; then
