@@ -71,7 +71,7 @@ policies then whitelist only the required paths.
 
 ```bash
 # Apply all policies at once
-kubectl apply -f infra/k8s/network-policies/
+kubectl apply -f infra/k8s/manifests/network-policies/
 
 # Verify policies are active
 kubectl get networkpolicy -n contoso
@@ -85,4 +85,4 @@ kubectl exec -n contoso deploy/bff-api -- wget -qO- --timeout=2 http://orchestra
 When adding a new service to the namespace:
 1. Create a new `{service}.yaml` following the same pattern
 2. Update upstream services' egress rules to allow traffic to the new service
-3. Re-apply: `kubectl apply -f infra/k8s/network-policies/`
+3. Re-apply: `kubectl apply -f infra/k8s/manifests/network-policies/`

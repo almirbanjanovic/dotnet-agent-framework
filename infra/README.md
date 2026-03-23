@@ -17,8 +17,10 @@ infra/
 │   ├── README.md
 │   └── helm-base/
 ├── k8s/                       # Kubernetes manifests (not managed by Terraform modules)
-│   ├── manifests/             # Namespace + service accounts (applied by Terraform kubectl provider)
-│   └── network-policies/      # NetworkPolicy YAMLs (applied manually via kubectl)
+│   └── manifests/             # All K8s YAML — namespace, service accounts, network policies
+│       ├── namespace.yaml
+│       ├── service-account.yaml
+│       └── network-policies/  # NetworkPolicy YAMLs (applied manually via kubectl)
 └── terraform/
     ├── main.tf                # Root module — wires all child modules
     ├── variables.tf           # Root input variables (no defaults)
