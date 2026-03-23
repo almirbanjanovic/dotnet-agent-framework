@@ -1,0 +1,42 @@
+# NetworkPolicy for blazor-ui
+# Ingress: AGC ingress controller (azure-alb-system namespace)
+# Egress:  DNS only (serves static Blazor WASM files; all API calls
+#          happen client-side in the browser, not from this pod)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-blazor-ui
+  namespace: contoso
+  labels:
+    app.kubernetes.io/part-of: contoso-outdoors
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  podSelector:
+    matchLabels:
+      app: blazor-ui
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow traffic from AGC (Application Gateway for Containers)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: azure-alb-system
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    # DNS resolution (kube-dns)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

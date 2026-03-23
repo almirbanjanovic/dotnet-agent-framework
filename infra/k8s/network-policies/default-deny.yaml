@@ -1,0 +1,17 @@
+# Namespace-wide default deny policy for the contoso namespace.
+# Blocks all ingress and egress traffic unless explicitly allowed
+# by a per-service NetworkPolicy.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: contoso
+  labels:
+    app.kubernetes.io/part-of: contoso-outdoors
+    app.kubernetes.io/managed-by: kubectl
+    contoso.com/policy-type: default-deny
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress

@@ -1,0 +1,56 @@
+# NetworkPolicy for bff-api
+# Ingress: AGC ingress controller (azure-alb-system namespace)
+# Egress:  orchestrator-agent (port 8080), Key Vault (port 443 via PE), DNS
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-bff-api
+  namespace: contoso
+  labels:
+    app.kubernetes.io/part-of: contoso-outdoors
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  podSelector:
+    matchLabels:
+      app: bff-api
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow traffic from AGC (Application Gateway for Containers)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: azure-alb-system
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    # DNS resolution (kube-dns)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # orchestrator-agent (downstream)
+    - to:
+        - podSelector:
+            matchLabels:
+              app: orchestrator-agent
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Azure PaaS via private endpoints (Key Vault)
+    - to:
+        - ipBlock:
+            cidr: 10.0.3.0/24
+      ports:
+        - protocol: TCP
+          port: 443
