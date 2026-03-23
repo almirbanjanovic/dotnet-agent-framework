@@ -624,74 +624,65 @@ phase_summary 3 \
     "Status" "Valid"
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# PRE-PLAN — kubectl state guard + AKS reachability check
+# PRE-PLAN — AKS reachability check
 # ═══════════════════════════════════════════════════════════════════════════════
-# The gavinbunney/kubectl provider connects to AKS during provider initialization
-# (before resource refresh). If AKS is unreachable — destroyed, FQDN changed, or
-# DNS not propagated — the stale FQDN causes a DNS error that blocks `terraform plan`.
-#
-# Fix: detect the condition, remove stale kubectl state, AND gate K8s resources
-# via deploy_k8s_resources=false. After AKS is created/updated in pass 1,
-# run a second pass with deploy_k8s_resources=true to create K8s resources.
+# The gavinbunney/kubectl provider connects to AKS during provider initialization.
+# If AKS is unreachable, terraform plan will fail with a DNS error.
+# Detect the condition early and abort with an actionable message.
 
 step "Checking AKS reachability for kubectl provider"
 
 AKS_CLUSTER_NAME="aks-${BASE_NAME}-${ENVIRONMENT}-${LOCATION}"
-DEPLOY_K8S_RESOURCES=true
-NEED_SECOND_PASS=false
 
 pushd "$TERRAFORM_DIR" >/dev/null
 
-# Step 1: Check if AKS cluster exists in Azure
-if ! AKS_ID=$(az aks show --name "$AKS_CLUSTER_NAME" --resource-group "$RESOURCE_GROUP" --query "id" -o tsv 2>/dev/null); then
-    echo -e "    ${Y}AKS cluster '${AKS_CLUSTER_NAME}' not found in Azure${W}"
-    DEPLOY_K8S_RESOURCES=false
-    NEED_SECOND_PASS=true
-else
-    # Step 1b: AKS exists — check power state (stopped clusters have no DNS)
-    AKS_POWER_STATE=$(az aks show --name "$AKS_CLUSTER_NAME" --resource-group "$RESOURCE_GROUP" --query "powerState.code" -o tsv 2>/dev/null || true)
-    if [[ "$AKS_POWER_STATE" == "Stopped" ]]; then
-        echo ""
-        echo -e "    ${R}AKS cluster '${AKS_CLUSTER_NAME}' is stopped (deallocated).${W}"
-        echo -e "    ${R}A stopped cluster has no control plane — DNS will not resolve.${W}"
-        echo ""
-        echo -e "    ${Y}Start the cluster first:${W}"
-        echo -e "    ${C}  az aks start --name ${AKS_CLUSTER_NAME} --resource-group ${RESOURCE_GROUP}${W}"
-        echo ""
-        fail "Cannot deploy to a stopped AKS cluster. Start it and re-run."
-    fi
-
-    # Step 2: AKS is running — verify FQDN is DNS-resolvable
-    AKS_FQDN=$(az aks show --name "$AKS_CLUSTER_NAME" --resource-group "$RESOURCE_GROUP" --query "fqdn" -o tsv 2>/dev/null || true)
-    if [[ -n "$AKS_FQDN" ]]; then
-        if host "$AKS_FQDN" >/dev/null 2>&1 || nslookup "$AKS_FQDN" >/dev/null 2>&1; then
-            echo -e "    ${D}AKS FQDN '${AKS_FQDN}' resolves — cluster is reachable${W}"
-        else
-            echo -e "    ${Y}AKS FQDN '${AKS_FQDN}' DNS resolution failed — cluster unreachable${W}"
-            DEPLOY_K8S_RESOURCES=false
-            NEED_SECOND_PASS=true
-        fi
-    else
-        echo -e "    ${Y}Could not retrieve AKS FQDN — assuming unreachable${W}"
-        DEPLOY_K8S_RESOURCES=false
-        NEED_SECOND_PASS=true
-    fi
+# Check if AKS cluster exists in Azure
+AKS_JSON=$(az aks show --name "$AKS_CLUSTER_NAME" --resource-group "$RESOURCE_GROUP" --query "{fqdn:fqdn, powerState:powerState.code}" -o json 2>/dev/null || true)
+if [[ -z "$AKS_JSON" ]]; then
+    echo ""
+    echo -e "    ${R}AKS cluster '${AKS_CLUSTER_NAME}' not found in Azure.${W}"
+    echo ""
+    echo -e "    ${Y}If this is a fresh deploy, create the cluster first with:${W}"
+    echo -e "    ${C}  terraform apply -target=module.aks${W}"
+    echo ""
+    fail "AKS cluster does not exist. Cannot proceed."
 fi
 
-# Step 3: If AKS unreachable, clean stale kubectl state entries
-if [[ "$DEPLOY_K8S_RESOURCES" == "false" ]]; then
-    KUBECTL_STATE=$(terraform state list 2>/dev/null | grep '^kubectl_manifest\.' || true)
-    if [[ -n "$KUBECTL_STATE" ]]; then
-        KUBECTL_COUNT=$(echo "$KUBECTL_STATE" | wc -l | tr -d ' ')
-        echo -e "    ${Y}Removing ${KUBECTL_COUNT} stale kubectl_manifest resource(s) from state${W}"
-        while IFS= read -r resource; do
-            terraform state rm "$resource" >/dev/null 2>&1 || true
-            echo -e "      ${D}Removed: ${resource}${W}"
-        done <<< "$KUBECTL_STATE"
+AKS_POWER_STATE=$(echo "$AKS_JSON" | jq -r '.powerState // empty')
+AKS_FQDN=$(echo "$AKS_JSON" | jq -r '.fqdn // empty')
+
+# Check if cluster is stopped
+if [[ "$AKS_POWER_STATE" == "Stopped" ]]; then
+    echo ""
+    echo -e "    ${R}AKS cluster '${AKS_CLUSTER_NAME}' is stopped (deallocated).${W}"
+    echo -e "    ${R}A stopped cluster has no control plane — DNS will not resolve.${W}"
+    echo ""
+    echo -e "    ${Y}Start the cluster first:${W}"
+    echo -e "    ${C}  az aks start --name ${AKS_CLUSTER_NAME} --resource-group ${RESOURCE_GROUP}${W}"
+    echo ""
+    fail "AKS cluster is stopped. Start it and re-run."
+fi
+
+# Verify FQDN resolves
+if [[ -n "$AKS_FQDN" ]]; then
+    if host "$AKS_FQDN" >/dev/null 2>&1 || nslookup "$AKS_FQDN" >/dev/null 2>&1; then
+        done_ "AKS cluster is reachable (${AKS_FQDN})"
+    else
+        echo ""
+        echo -e "    ${R}AKS FQDN '${AKS_FQDN}' does not resolve from this machine.${W}"
+        echo -e "    ${R}The cluster exists and is running, but DNS resolution failed.${W}"
+        echo ""
+        echo -e "    ${Y}Try:${W}"
+        echo -e "    ${C}  sudo systemd-resolve --flush-caches     # flush local DNS cache${W}"
+        echo -e "    ${C}  nslookup ${AKS_FQDN}                    # test DNS manually${W}"
+        echo ""
+        fail "AKS DNS resolution failed. Fix DNS and re-run."
     fi
-    done_ "K8s resources deferred to pass 2 (deploy_k8s_resources=false)"
 else
-    done_ "AKS reachable — K8s resources will deploy in this pass"
+    echo ""
+    echo -e "    ${R}Could not retrieve AKS FQDN from Azure.${W}"
+    echo ""
+    fail "AKS FQDN unavailable. Check cluster health in the Azure portal."
 fi
 popd >/dev/null
 
@@ -701,18 +692,12 @@ popd >/dev/null
 
 phase 4 "terraform plan"
 info_ "Previews what resources will be created, changed, or destroyed."
-info_ "No changes are applied yet \u2014 review the plan before continuing."
+info_ "No changes are applied yet — review the plan before continuing."
 
-K8S_VAR_ARG=""
-if [[ "$DEPLOY_K8S_RESOURCES" == "false" ]]; then
-    K8S_VAR_ARG="-var deploy_k8s_resources=false"
-    step "Planning infrastructure changes (pass 1: infra only, K8s deferred)"
-else
-    step "Planning infrastructure changes"
-fi
+step "Planning infrastructure changes"
 
 pushd "$TERRAFORM_DIR" >/dev/null
-terraform plan -var-file="${ENVIRONMENT}.tfvars" $K8S_VAR_ARG -out="tfplan"
+terraform plan -var-file="${ENVIRONMENT}.tfvars" -out="tfplan"
 done_ "Plan saved to tfplan"
 popd >/dev/null
 
@@ -817,26 +802,6 @@ popd >/dev/null
 
 # ── Clean up ─────────────────────────────────────────────────────────────────
 rm -f "$TERRAFORM_DIR/tfplan"
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# PASS 2 — Deploy K8s resources (if deferred in pass 1)
-# ═══════════════════════════════════════════════════════════════════════════════
-# AKS was unreachable during pass 1, so K8s resources were skipped.
-# Now AKS should be up — re-plan and apply with deploy_k8s_resources=true.
-
-if [[ "$NEED_SECOND_PASS" == "true" ]]; then
-    step "Pass 2: AKS should now be up — deploying K8s resources"
-
-    pushd "$TERRAFORM_DIR" >/dev/null
-    terraform plan -var-file="${ENVIRONMENT}.tfvars" -var deploy_k8s_resources=true -out="tfplan"
-    done_ "Pass 2 plan saved"
-
-    terraform apply "tfplan"
-    done_ "K8s resources deployed (pass 2)"
-    popd >/dev/null
-
-    rm -f "$TERRAFORM_DIR/tfplan"
-fi
 
 phase_summary 5 \
     "Phase 6 — Seed CRM data into Cosmos DB" \

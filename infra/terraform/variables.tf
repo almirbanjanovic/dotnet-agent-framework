@@ -214,17 +214,3 @@ variable "k8s_namespace" {
   type        = string
   default     = "contoso"
 }
-
-# ---------------------------------------------------------------
-# kubectl provider gate
-# ---------------------------------------------------------------
-
-variable "deploy_k8s_resources" {
-  description = <<-EOT
-    Deploy Kubernetes resources (namespace + service accounts) via the kubectl provider.
-    Set to false when AKS is not yet reachable (fresh deploy, stale FQDN).
-    The deploy scripts auto-detect this and run a two-pass apply when needed.
-  EOT
-  type        = bool
-  default     = true
-}

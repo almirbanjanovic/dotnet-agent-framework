@@ -654,76 +654,69 @@ Write-PhaseSummary -Number 3 -NextPhase "Phase 4 — terraform plan (preview inf
 })
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# PRE-PLAN — kubectl state guard + AKS reachability check
+# PRE-PLAN — AKS reachability check
 # ═══════════════════════════════════════════════════════════════════════════════
-# The gavinbunney/kubectl provider connects to AKS during provider initialization
-# (before resource refresh). If AKS is unreachable — destroyed, FQDN changed, or
-# DNS not propagated — the stale FQDN causes a DNS error that blocks `terraform plan`.
-#
-# Fix: detect the condition, remove stale kubectl state, AND gate K8s resources
-# via deploy_k8s_resources=false. After AKS is created/updated in pass 1,
-# run a second pass with deploy_k8s_resources=true to create K8s resources.
+# The gavinbunney/kubectl provider connects to AKS during provider initialization.
+# If AKS is unreachable, terraform plan will fail with a DNS error.
+# Detect the condition early and abort with an actionable message.
 
 Write-Step "Checking AKS reachability for kubectl provider"
 
 $AksClusterName = "aks-$BaseName-$Environment-$Location"
-$DeployK8sResources = $true
-$NeedSecondPass = $false
 
 Push-Location $TerraformDir
 try {
-    # Step 1: Check if AKS cluster exists in Azure
-    $aksId = az aks show --name $AksClusterName --resource-group $ResourceGroup --query "id" -o tsv 2>$null
-    if (-not $aksId) {
-        Write-Host "    AKS cluster '$AksClusterName' not found in Azure" -ForegroundColor Yellow
-        $DeployK8sResources = $false
-        $NeedSecondPass = $true
-    } else {
-        # Step 1b: AKS exists — check power state (stopped clusters have no DNS)
-        $aksPowerState = az aks show --name $AksClusterName --resource-group $ResourceGroup --query "powerState.code" -o tsv 2>$null
-        if ($aksPowerState -eq "Stopped") {
-            Write-Host ""
-            Write-Host "    AKS cluster '$AksClusterName' is stopped (deallocated)." -ForegroundColor Red
-            Write-Host "    A stopped cluster has no control plane — DNS will not resolve." -ForegroundColor Red
-            Write-Host ""
-            Write-Host "    Start the cluster first:" -ForegroundColor Yellow
-            Write-Host "      az aks start --name $AksClusterName --resource-group $ResourceGroup" -ForegroundColor Cyan
-            Write-Host ""
-            Write-Fail "Cannot deploy to a stopped AKS cluster. Start it and re-run."
-            exit 1
-        }
-
-        # Step 2: AKS is running — verify FQDN is DNS-resolvable
-        $aksFqdn = az aks show --name $AksClusterName --resource-group $ResourceGroup --query "fqdn" -o tsv 2>$null
-        if ($aksFqdn) {
-            try {
-                [System.Net.Dns]::GetHostEntry($aksFqdn) | Out-Null
-                Write-Host "    AKS FQDN '$aksFqdn' resolves — cluster is reachable" -ForegroundColor DarkGray
-            } catch {
-                Write-Host "    AKS FQDN '$aksFqdn' DNS resolution failed — cluster unreachable" -ForegroundColor Yellow
-                $DeployK8sResources = $false
-                $NeedSecondPass = $true
-            }
-        } else {
-            Write-Host "    Could not retrieve AKS FQDN — assuming unreachable" -ForegroundColor Yellow
-            $DeployK8sResources = $false
-            $NeedSecondPass = $true
-        }
+    # Check if AKS cluster exists in Azure
+    $aksJson = az aks show --name $AksClusterName --resource-group $ResourceGroup --query "{fqdn:fqdn, powerState:powerState.code}" -o json 2>$null
+    if (-not $aksJson) {
+        Write-Host ""
+        Write-Host "    AKS cluster '$AksClusterName' not found in Azure." -ForegroundColor Red
+        Write-Host ""
+        Write-Host "    If this is a fresh deploy, create the cluster first with:" -ForegroundColor Yellow
+        Write-Host "      terraform apply -target=module.aks" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Fail "AKS cluster does not exist. Cannot proceed."
+        exit 1
     }
 
-    # Step 3: If AKS unreachable, clean stale kubectl state entries
-    if (-not $DeployK8sResources) {
-        $kubectlState = @(cmd /c "terraform state list 2>NUL" | Where-Object { $_ -like "kubectl_manifest.*" })
-        if ($kubectlState.Count -gt 0) {
-            Write-Host "    Removing $($kubectlState.Count) stale kubectl_manifest resource(s) from state" -ForegroundColor Yellow
-            foreach ($resource in $kubectlState) {
-                cmd /c "terraform state rm `"$resource`" 2>NUL"
-                Write-Host "      Removed: $resource" -ForegroundColor DarkGray
-            }
+    $aks = $aksJson | ConvertFrom-Json
+
+    # Check if cluster is stopped
+    if ($aks.powerState -eq "Stopped") {
+        Write-Host ""
+        Write-Host "    AKS cluster '$AksClusterName' is stopped (deallocated)." -ForegroundColor Red
+        Write-Host "    A stopped cluster has no control plane — DNS will not resolve." -ForegroundColor Red
+        Write-Host ""
+        Write-Host "    Start the cluster first:" -ForegroundColor Yellow
+        Write-Host "      az aks start --name $AksClusterName --resource-group $ResourceGroup" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Fail "AKS cluster is stopped. Start it and re-run."
+        exit 1
+    }
+
+    # Verify FQDN resolves
+    if ($aks.fqdn) {
+        try {
+            [System.Net.Dns]::GetHostEntry($aks.fqdn) | Out-Null
+            Write-Done "AKS cluster is reachable ($($aks.fqdn))"
+        } catch {
+            Write-Host ""
+            Write-Host "    AKS FQDN '$($aks.fqdn)' does not resolve from this machine." -ForegroundColor Red
+            Write-Host "    The cluster exists and is running, but DNS resolution failed." -ForegroundColor Red
+            Write-Host ""
+            Write-Host "    Try:" -ForegroundColor Yellow
+            Write-Host "      ipconfig /flushdns                          # flush local DNS cache" -ForegroundColor Cyan
+            Write-Host "      nslookup $($aks.fqdn)    # test DNS manually" -ForegroundColor Cyan
+            Write-Host ""
+            Write-Fail "AKS DNS resolution failed. Fix DNS and re-run."
+            exit 1
         }
-        Write-Done "K8s resources deferred to pass 2 (deploy_k8s_resources=false)"
     } else {
-        Write-Done "AKS reachable — K8s resources will deploy in this pass"
+        Write-Host ""
+        Write-Host "    Could not retrieve AKS FQDN from Azure." -ForegroundColor Red
+        Write-Host ""
+        Write-Fail "AKS FQDN unavailable. Check cluster health in the Azure portal."
+        exit 1
     }
 } finally {
     Pop-Location
@@ -735,13 +728,11 @@ try {
 
 Write-Phase -Number 4 -Title "terraform plan"
 
-$k8sVarArg = if (-not $DeployK8sResources) { "-var deploy_k8s_resources=false" } else { "" }
-
-Write-Step "Planning infrastructure changes$(if (-not $DeployK8sResources) { ' (pass 1: infra only, K8s deferred)' })"
+Write-Step "Planning infrastructure changes"
 
 Push-Location $TerraformDir
 try {
-    cmd /c "terraform plan -var-file=$Environment.tfvars $k8sVarArg -out=tfplan"
+    cmd /c "terraform plan -var-file=$Environment.tfvars -out=tfplan"
     if ($LASTEXITCODE -ne 0) { Write-Fail "terraform plan failed"; exit 1 }
     Write-Done "Plan saved to tfplan"
 } finally {
@@ -844,33 +835,6 @@ try {
 # ── Clean up ─────────────────────────────────────────────────────────────────
 if (Test-Path "$TerraformDir\tfplan") {
     Remove-Item "$TerraformDir\tfplan" -Force
-}
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# PASS 2 — Deploy K8s resources (if deferred in pass 1)
-# ═══════════════════════════════════════════════════════════════════════════════
-# AKS was unreachable during pass 1, so K8s resources were skipped.
-# Now AKS should be up — re-plan and apply with deploy_k8s_resources=true.
-
-if ($NeedSecondPass) {
-    Write-Step "Pass 2: AKS should now be up — deploying K8s resources"
-
-    Push-Location $TerraformDir
-    try {
-        cmd /c "terraform plan -var-file=$Environment.tfvars -var deploy_k8s_resources=true -out=tfplan"
-        if ($LASTEXITCODE -ne 0) { Write-Fail "terraform plan (pass 2) failed"; exit 1 }
-        Write-Done "Pass 2 plan saved"
-
-        terraform apply "tfplan"
-        if ($LASTEXITCODE -ne 0) { Write-Fail "terraform apply (pass 2) failed"; exit 1 }
-        Write-Done "K8s resources deployed (pass 2)"
-    } finally {
-        Pop-Location
-    }
-
-    if (Test-Path "$TerraformDir\tfplan") {
-        Remove-Item "$TerraformDir\tfplan" -Force
-    }
 }
 
 Write-PhaseSummary -Number 5 -NextPhase "Phase 6 — Seed CRM data into Cosmos DB" -Items ([ordered]@{

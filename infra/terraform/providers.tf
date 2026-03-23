@@ -104,19 +104,13 @@ provider "msgraph" {
 }
 
 # kubectl provider — configured dynamically from AKS cluster credentials.
-#
-# var.deploy_k8s_resources gates BOTH the provider config and all kubectl_manifest
-# resources. When false, the provider gets empty credentials (no connection attempt)
-# and all kubectl resources are skipped via count/for_each conditions.
-#
-# The deploy scripts detect AKS reachability (az aks show + DNS resolution) and
-# automatically set deploy_k8s_resources=false for the first pass when AKS is
-# unreachable, then run a second pass with deploy_k8s_resources=true after AKS
-# is created. See deploy.ps1/deploy.sh "Pre-plan: kubectl state guard".
+# The deploy scripts verify AKS is reachable before running terraform plan.
+# If AKS is unreachable (stopped, destroyed, DNS failure), the script aborts
+# with an actionable error message before Terraform ever runs.
 provider "kubectl" {
-  host                   = var.deploy_k8s_resources ? try(module.aks.kube_config_host, "") : ""
-  client_certificate     = var.deploy_k8s_resources ? try(base64decode(module.aks.kube_config_client_certificate), "") : ""
-  client_key             = var.deploy_k8s_resources ? try(base64decode(module.aks.kube_config_client_key), "") : ""
-  cluster_ca_certificate = var.deploy_k8s_resources ? try(base64decode(module.aks.kube_config_cluster_ca), "") : ""
+  host                   = try(module.aks.kube_config_host, "")
+  client_certificate     = try(base64decode(module.aks.kube_config_client_certificate), "")
+  client_key             = try(base64decode(module.aks.kube_config_client_key), "")
+  cluster_ca_certificate = try(base64decode(module.aks.kube_config_cluster_ca), "")
   load_config_file       = false
 }
