@@ -117,11 +117,29 @@ This forces NuGet to resolve all three AI extension packages to 10.4.1, overridi
 
 **Problem:** `DefaultAzureCredential()` picked up a token from the Microsoft corp tenant (`72f988bf-86f1-41af-91ab-2d7cd011db47`) instead of the project tenant (`7960be14-fc91-4f30-8ca1-237851909103`). This happened because VS credential or other ambient credential sources defaulted to the wrong tenant. The Azure OpenAI endpoint rejected the token with HTTP 400 "Tenant provided in token does not match resource token."
 
-**Fix:** All 3 projects that use `DefaultAzureCredential` now read an optional `AZURE_TENANT_ID` from configuration (or env var for config-sync). When set, it's passed via `DefaultAzureCredentialOptions { TenantId = tenantId }`, which forces authentication against the correct tenant. When not set, behavior is unchanged (no breaking change).
+**Fix (v1 — superseded by v2 below):** Added `AZURE_TENANT_ID` as a separate config key. This was redundant because the tenant ID already existed in Key Vault as `AzureAd__TenantId` and config-sync already pulls it.
 
-**Files changed:**
-- `src/simple-agent/Program.cs` — reads `AZURE_TENANT_ID` from ConfigurationBuilder (appsettings.json / env vars)
-- `src/seed-data/Program.cs` — same pattern
-- `src/config-sync/Program.cs` — reads `AZURE_TENANT_ID` from `Environment.GetEnvironmentVariable` directly (chicken-and-egg: config-sync is the tool that creates appsettings.json, so it can't read from it). Also added `AZURE-TENANT-ID` → `AZURE_TENANT_ID` to the Key Vault secret mapping so future config-sync runs populate the value in appsettings.json.
+### 2026-03-19 — Simplified Tenant ID to Single Config Key (AzureAd:TenantId)
 
-**Lesson:** Always pass `TenantId` via `DefaultAzureCredentialOptions` when working in multi-tenant environments. The Azure SDK's `AZURE_TENANT_ID` env var is the standard key. All future projects (CRM API, MCP servers, agents, BFF) must follow this pattern.
+**Problem with v1:** The previous fix introduced `AZURE_TENANT_ID` as a duplicate config key when the tenant ID was already available via `AzureAd__TenantId` from Key Vault (mapped to `AzureAd:TenantId` in .NET config). Config-sync was also given an unnecessary extra Key Vault mapping for `AZURE-TENANT-ID`.
+
+**Fix (v2):**
+- `src/simple-agent/Program.cs` — reads `AzureAd:TenantId` from configuration (already populated by config-sync)
+- `src/seed-data/Program.cs` — same pattern, reads `AzureAd:TenantId`
+- `src/config-sync/Program.cs` — reverted to plain `new DefaultAzureCredential()`, removed `AZURE-TENANT-ID` mapping. Config-sync already maps `ENTRA-TENANT-ID` → `AzureAd__TenantId` which covers the tenant ID. Config-sync runs with `az login` against the correct tenant; no special handling needed.
+
+**Lesson:** Don't create parallel config keys for the same value. The tenant ID flows: Key Vault (`AzureAd__TenantId`) → config-sync → appsettings.json (`AzureAd:TenantId`) → app reads `configuration["AzureAd:TenantId"]`. One key, one path. All future projects should read `AzureAd:TenantId` from configuration and pass it to `DefaultAzureCredentialOptions.TenantId`.
+
+### 2026-03-19 — Fixed Deploy Scripts: Tenant ID Env Var for .NET Apps
+
+**Problem:** After the C# apps (simple-agent, seed-data) were updated to read tenant ID from `AzureAd:TenantId` (env var `AzureAd__TenantId`), the deploy scripts (`deploy.sh`, `deploy.ps1`) still passed `AZURE_TENANT_ID` when invoking `dotnet run` for seed-data. The apps silently ignored the old variable, meaning `DefaultAzureCredential` could pick up the wrong tenant.
+
+**Fix:** Changed 4 lines across 2 deploy scripts:
+- `infra/deploy.sh` line 781: `AZURE_TENANT_ID="$TENANT_ID"` → `AzureAd__TenantId="$TENANT_ID"` (seed-data run)
+- `infra/deploy.sh` line 834: same change (Entra user linking run)
+- `infra/deploy.ps1` line 800: `$env:AZURE_TENANT_ID` → `$env:AzureAd__TenantId` (seed-data run)
+- `infra/deploy.ps1` line 847: same change (Entra user linking run)
+
+**Not touched:** `deploy.sh` line 234 and `deploy.ps1` line 393 — those set `AZURE_TENANT_ID` for Azure CLI usage, not for .NET app config.
+
+**Lesson:** When renaming config keys in application code, always grep the deploy/infra scripts for the old key name. Env vars passed inline to `dotnet run` must match the .NET configuration binding pattern (`Section__Key`).

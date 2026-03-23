@@ -92,19 +92,19 @@
 **What:** Every squad member must use Claude Opus 4.6 (1M context) (`claude-opus-4.6-1m`) as the default model. This overrides the standard model selection hierarchy (Layer 1 — User Override).
 **Why:** User request — captured for team memory
 
-# Decision: AZURE_TENANT_ID in DefaultAzureCredential
+# Decision: Tenant ID via AzureAd:TenantId (simplified)
 
 ## Context
-`DefaultAzureCredential()` picks up tokens from the wrong Azure AD tenant when developers have multiple tenant credentials cached (e.g., Visual Studio credential defaulting to Microsoft corp tenant). This causes HTTP 400 errors on Azure OpenAI, Cosmos DB, and Key Vault.
+The original fix for DefaultAzureCredential tenant mismatch introduced `AZURE_TENANT_ID` as a separate config key. This was redundant — the tenant ID already existed in Key Vault as `AzureAd__TenantId`, and config-sync already pulls all secrets including that one. Having two keys for the same value violated single-source-of-truth.
 
 ## Decision
-All projects using `DefaultAzureCredential` must read an optional `AZURE_TENANT_ID` from configuration and pass it via `DefaultAzureCredentialOptions { TenantId = tenantId }`. When not set, plain `DefaultAzureCredential()` is used (no breaking change). Config-sync maps `AZURE-TENANT-ID` from Key Vault to `AZURE_TENANT_ID` in appsettings.json.
+All projects using `DefaultAzureCredential` read the tenant ID from `configuration["AzureAd:TenantId"]` — the standard config key already populated by config-sync from Key Vault. No new env vars, no new Key Vault mappings, no `AZURE_TENANT_ID` references. Config-sync itself uses plain `DefaultAzureCredential()` (developer must `az login` to the correct tenant).
 
 ## Consequences
-- All 3 existing projects (simple-agent, seed-data, config-sync) now support tenant pinning
+- Single config key for tenant ID: `AzureAd:TenantId`
+- Flow: Key Vault (`AzureAd__TenantId`) → config-sync → appsettings.json → app reads `AzureAd:TenantId`
 - All future projects (CRM API, MCP servers, agents, BFF) must follow this pattern
-- Developers set `AZURE_TENANT_ID` env var or rely on config-sync populating appsettings.json
-- No hardcoded tenant IDs in source code
+- No duplicate config keys for the same value
 
 # Decision: Scripts & CI/CD Audit Findings
 
