@@ -91,6 +91,73 @@
 **By:** Almir Banjanovic (via Copilot)
 **What:** Every squad member must use Claude Opus 4.6 (1M context) (`claude-opus-4.6-1m`) as the default model. This overrides the standard model selection hierarchy (Layer 1 — User Override).
 **Why:** User request — captured for team memory
+
+# Decision: AZURE_TENANT_ID in DefaultAzureCredential
+
+## Context
+`DefaultAzureCredential()` picks up tokens from the wrong Azure AD tenant when developers have multiple tenant credentials cached (e.g., Visual Studio credential defaulting to Microsoft corp tenant). This causes HTTP 400 errors on Azure OpenAI, Cosmos DB, and Key Vault.
+
+## Decision
+All projects using `DefaultAzureCredential` must read an optional `AZURE_TENANT_ID` from configuration and pass it via `DefaultAzureCredentialOptions { TenantId = tenantId }`. When not set, plain `DefaultAzureCredential()` is used (no breaking change). Config-sync maps `AZURE-TENANT-ID` from Key Vault to `AZURE_TENANT_ID` in appsettings.json.
+
+## Consequences
+- All 3 existing projects (simple-agent, seed-data, config-sync) now support tenant pinning
+- All future projects (CRM API, MCP servers, agents, BFF) must follow this pattern
+- Developers set `AZURE_TENANT_ID` env var or rely on config-sync populating appsettings.json
+- No hardcoded tenant IDs in source code
+
+# Decision: Scripts & CI/CD Audit Findings
+
+## Context
+Comprehensive audit of all deployment automation: bootstrap scripts (init.ps1/sh), deploy scripts (deploy.ps1/sh), and 6 GitHub Actions workflows.
+
+## Key Decisions Needed
+
+### 1. CI/CD Agent Identity Gap (Critical)
+The deploy scripts create a temporary SP + secret for the msgraph provider (Agent Identity Blueprints). The CI/CD workflows have no equivalent. Either:
+- Add a pre-apply job that creates a temp secret for the OIDC SP and passes `TF_VAR_msgraph_*` via outputs, OR
+- Store the OIDC SP secret in GitHub Secrets (less secure, contradicts zero-stored-creds posture), OR
+- Accept that Agent Identity is local-deploy-only for now.
+
+### 2. Approval Gate Hardcodes "Production" (Critical)
+`terraform-plan-approve-apply-seed-data.yaml` line 57: `issue-title: "Approve deployment to production"`. Should use `${{ inputs.environment }}`.
+
+### 3. Seed-Data After Failed Apply (Warning)
+Orchestrator seed-data job depends on cleanup-after-apply (which always succeeds) but not terraform-apply. If apply fails, seed-data still runs. Fix: add terraform-apply to seed-data's `needs` list.
+
+### 4. CAE Flags Missing From CI/CD (Warning)
+Deploy scripts set ARM_DISABLE_CAE, AZURE_DISABLE_CAE, HAMILTON_DISABLE_CAE. Workflows don't. Corporate tenants with aggressive CAE policies could see intermittent Terraform failures.
+
+## Consequences
+Until these are addressed, CI/CD cannot fully replace local deploy scripts. The deploy scripts remain the reliable path for full deployments including Agent Identity. The approval gate cosmetic issue could confuse operators deploying to dev/staging.
+
+# Decision: Terraform Module Defaults Need Security Hardening
+
+## Context
+Deep audit of all 20 Terraform modules revealed that while the root configuration (main.tf) correctly compensates — passing deployer IPs to firewalls and creating 7 private endpoints — the individual modules are not secure-by-default. If any module is reused outside this project without explicit overrides, PaaS services would be exposed to the public internet.
+
+## Findings
+- cosmosdb, keyvault, foundry, acr modules all default `public_network_access_enabled = true`
+- Firewall logic in cosmosdb/keyvault/foundry sets `default_action = "Deny"` only when `allowed_ips` is non-empty; empty list = open
+- Key Vault `purge_protection_enabled = false` and `soft_delete_retention_days = 7`
+- AKS RBAC assigns `Contributor` on entire resource group (should be scoped to cluster)
+- VNet module creates no NSGs (subnets have no ingress/egress rules)
+- knowledge-source module uses `local-exec` provisioner with API key (fragile, not idempotent)
+
+## Decision
+When modules are next updated (not now — this was a read-only audit):
+1. Flip module defaults to secure: `public_network_access_enabled = false`, purge protection on, firewall deny-by-default always
+2. Replace AKS `Contributor` with `Azure Kubernetes Service Contributor` scoped to cluster resource
+3. Add NSG resources to VNet module (at minimum for PE and AGC subnets)
+4. Add variable validation rules for SKUs, IP addresses, and Kubernetes versions
+5. Fix Cosmos DB RBAC module description ("Data Owner" → "Data Contributor")
+
+## Impact
+No immediate deployment impact (root config already compensates). These are defense-in-depth improvements for module reusability and compliance audits.
+
+## Status
+Proposed — requires team review before implementation.
+
 # Decision: Agent Identity v2 via msgraph
 
 ## Context
