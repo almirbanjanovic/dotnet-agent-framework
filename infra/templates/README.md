@@ -102,7 +102,7 @@ Default values are conservative starting points. Profile each service under load
 ## File Structure
 
 ```
-docs/templates/
+infra/templates/
 ├── Dockerfile.template          # Multi-stage .NET 9 Dockerfile
 ├── README.md                    # This file
 └── helm-base/

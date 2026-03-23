@@ -12,6 +12,10 @@ infra/
 ├── init.sh                    # One-time bootstrap: backend + Entra + GitHub CI/CD (Bash)
 ├── deploy.ps1                 # Deploy infrastructure + seed data (PowerShell)
 ├── deploy.sh                  # Deploy infrastructure + seed data (Bash)
+├── templates/                 # Reference Dockerfile + Helm chart patterns for all services
+│   ├── Dockerfile.template
+│   ├── README.md
+│   └── helm-base/
 └── terraform/
     ├── main.tf                # Root module — wires all child modules
     ├── variables.tf           # Root input variables (no defaults)

@@ -196,7 +196,7 @@ No Dockerfiles or Helm charts existed. All 8 services need consistent containeri
 The Blazor WASM UI will need a modified Dockerfile pattern (nginx or dotnet static file server). The base template works for all 7 backend .NET Minimal API services directly.
 
 ## Impact
-- All service developers use `docs/templates/README.md` as the starting guide
+- All service developers use `infra/templates/README.md` as the starting guide
 - Per-service Dockerfiles and Helm charts will be created as each service is built
 - Helm charts go under `infra/helm/<service-name>/`
 

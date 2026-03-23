@@ -2,7 +2,7 @@
 # Default values for a Contoso Outdoors .NET 9 microservice
 # =============================================================================
 # Override these per service in a values-<service>.yaml or via --set flags.
-# See docs/templates/README.md for usage instructions.
+# See infra/templates/README.md for usage instructions.
 
 # -- Container image configuration
 image:

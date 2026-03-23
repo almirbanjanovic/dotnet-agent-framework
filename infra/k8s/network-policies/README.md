@@ -44,7 +44,7 @@ All services ──→ Key Vault (PE)
 ### Pod Selectors
 Policies use `app.kubernetes.io/name: {service-name}` labels as pod selectors. This is the
 Kubernetes standard label convention and matches the labels automatically produced by Helm
-chart templates (see `docs/templates/helm-base/templates/_helpers.tpl`, `service.selectorLabels`).
+chart templates (see `infra/templates/helm-base/templates/_helpers.tpl`, `service.selectorLabels`).
 No custom labels need to be added to Helm values.
 
 ### DNS Egress
