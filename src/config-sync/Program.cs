@@ -51,10 +51,18 @@ var secretMapping = new Dictionary<string, string>
     ["ENTRA-BFF-CLIENT-ID"]                = "AzureAd__ClientId",
     ["ENTRA-TENANT-ID"]                    = "AzureAd__TenantId",
     ["ENTRA-BFF-HOSTNAME"]                 = "BFF_HOSTNAME",
+    ["AZURE-TENANT-ID"]                    = "AZURE_TENANT_ID",
 };
 
+// Pin to a specific tenant when AZURE_TENANT_ID is set (env var only —
+// appsettings.json doesn't exist yet when config-sync runs for the first time).
+var tenantId = Environment.GetEnvironmentVariable("AZURE_TENANT_ID");
+var credential = string.IsNullOrEmpty(tenantId)
+    ? new DefaultAzureCredential()
+    : new DefaultAzureCredential(new DefaultAzureCredentialOptions { TenantId = tenantId });
+
 // Connect to Key Vault
-var client = new SecretClient(new Uri(keyVaultUri), new DefaultAzureCredential());
+var client = new SecretClient(new Uri(keyVaultUri), credential);
 
 // Read secrets
 var settings = new JsonObject();

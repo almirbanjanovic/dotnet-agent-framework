@@ -14,13 +14,21 @@ var configuration = new ConfigurationBuilder()
 
 var endpoint = configuration["AZURE_OPENAI_ENDPOINT"] ?? throw new InvalidOperationException("AZURE_OPENAI_ENDPOINT is not set.");
 var deploymentName = configuration["AZURE_OPENAI_DEPLOYMENT_NAME"] ?? throw new InvalidOperationException("AZURE_OPENAI_DEPLOYMENT_NAME is not set.");
+var tenantId = configuration["AZURE_TENANT_ID"];
 
 Console.WriteLine($"Using Azure OpenAI endpoint: {endpoint}");
 Console.WriteLine($"Deployment name: {deploymentName}");
 
+// Pin to a specific tenant when AZURE_TENANT_ID is set, preventing
+// DefaultAzureCredential from picking up tokens from the wrong tenant
+// (e.g., VS credential defaulting to the Microsoft corp tenant).
+var credential = string.IsNullOrEmpty(tenantId)
+    ? new DefaultAzureCredential()
+    : new DefaultAzureCredential(new DefaultAzureCredentialOptions { TenantId = tenantId });
+
 AIAgent agent = new AzureOpenAIClient(
     new Uri(endpoint),
-    new DefaultAzureCredential())
+    credential)
     .GetChatClient(deploymentName)
     .AsAIAgent(instructions: "You are a helpful and funny assistant who tells short jokes.", name: "Joker");
 
