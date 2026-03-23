@@ -699,3 +699,15 @@ For now, **option 3 is accepted**. Agent Identity Blueprints are created once du
 **Mitigation:** The key is not stored in code, config files, or state. CI/CD pipelines use OIDC (no key exposure in automation). Track the Azure SDK roadmap for RBAC data-plane support and migrate when available.
 
 **Status:** Accepted interim risk — no alternative available.
+
+### Test User Passwords Visible in Terraform Plan
+
+**What:** Test user passwords (Emma, James, Sarah, David, Lisa) are visible in `terraform plan` output.
+
+**Why:** The `keyvault-secrets` module uses `nonsensitive()` deliberately so Terraform can write passwords to Key Vault without marking them as sensitive output, which would block the write operation.
+
+**Risk:** Passwords for 5 test accounts are visible to anyone who runs `terraform plan` or inspects plan logs.
+
+**Mitigation:** This is a lab-only pattern. If test users persist beyond the development workshop, rotate all passwords and remove the `nonsensitive()` wrapper to revoke Terraform plan visibility.
+
+**Status:** Accepted for workshop use.
