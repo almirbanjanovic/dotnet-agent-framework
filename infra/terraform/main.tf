@@ -45,6 +45,8 @@ module "foundry" {
 
   allowed_ips = [local.deployer_ip]
   tags        = var.tags
+
+  public_network_access_enabled = true # deploy scripts toggle firewalls; Terraform needs access
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -61,6 +63,8 @@ module "cosmosdb_crm" {
   consistency_level   = "Session"
   allowed_ips         = [local.deployer_ip]
   tags                = var.tags
+
+  public_network_access_enabled = true # deploy scripts toggle firewalls; Terraform needs access
 
   containers = {
     customers = {
@@ -104,6 +108,8 @@ module "cosmosdb_agents" {
   consistency_level   = "Eventual"
   allowed_ips         = [local.deployer_ip]
   tags                = var.tags
+
+  public_network_access_enabled = true # deploy scripts toggle firewalls; Terraform needs access
 
   containers = {
     agent_state = {
@@ -188,6 +194,8 @@ module "acr" {
   sku                 = var.acr_sku
   acr_name            = var.acr_name
   tags                = var.tags
+
+  public_network_access_enabled = true # AKS pulls images; toggled by deploy scripts
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -513,6 +521,9 @@ module "keyvault" {
   tenant_id           = data.azurerm_client_config.current.tenant_id
   allowed_ips         = ["${local.deployer_ip}/32"]
   tags                = var.tags
+
+  public_network_access_enabled = true # deploy scripts toggle firewalls; Terraform needs access
+  purge_protection_enabled      = true # secure default — matches new module default
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------

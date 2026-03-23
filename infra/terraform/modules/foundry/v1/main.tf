@@ -21,6 +21,8 @@ resource "azurerm_cognitive_account" "this" {
   custom_subdomain_name = local.subdomain
   tags                  = var.tags
 
+  public_network_access_enabled = var.public_network_access_enabled
+
   network_acls {
     default_action = "Deny"
     ip_rules       = var.allowed_ips

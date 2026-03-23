@@ -58,7 +58,7 @@ variable "tags" {
 variable "public_network_access_enabled" {
   description = "Whether public network access is enabled for the Cosmos DB account"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "allowed_ips" {

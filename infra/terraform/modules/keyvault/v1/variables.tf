@@ -32,7 +32,7 @@ variable "soft_delete_retention_days" {
 variable "purge_protection_enabled" {
   description = "Enable purge protection (prevents permanent deletion during retention period)"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "tags" {
@@ -44,7 +44,7 @@ variable "tags" {
 variable "public_network_access_enabled" {
   description = "Whether public network access is enabled for the Key Vault"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "allowed_ips" {

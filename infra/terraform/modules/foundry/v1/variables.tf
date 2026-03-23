@@ -95,3 +95,9 @@ variable "allowed_ips" {
   default     = []
 }
 
+variable "public_network_access_enabled" {
+  description = "Whether public network access is enabled for the AI Services account"
+  type        = bool
+  default     = false
+}
+

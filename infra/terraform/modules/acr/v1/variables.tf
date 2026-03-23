@@ -61,6 +61,6 @@ variable "tags" {
 variable "public_network_access_enabled" {
   description = "Whether public network access is enabled for the ACR"
   type        = bool
-  default     = true
+  default     = false
 }
 
