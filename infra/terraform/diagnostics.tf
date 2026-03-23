@@ -13,10 +13,6 @@ resource "azurerm_monitor_diagnostic_setting" "keyvault" {
     category = "AuditEvent"
   }
 
-  metric {
-    category = "AllMetrics"
-    enabled  = false
-  }
 }
 
 resource "azurerm_monitor_diagnostic_setting" "cosmosdb_crm" {
@@ -32,10 +28,6 @@ resource "azurerm_monitor_diagnostic_setting" "cosmosdb_crm" {
     category = "ControlPlaneRequests"
   }
 
-  metric {
-    category = "AllMetrics"
-    enabled  = false
-  }
 }
 
 resource "azurerm_monitor_diagnostic_setting" "cosmosdb_agents" {
@@ -51,8 +43,4 @@ resource "azurerm_monitor_diagnostic_setting" "cosmosdb_agents" {
     category = "ControlPlaneRequests"
   }
 
-  metric {
-    category = "AllMetrics"
-    enabled  = false
-  }
 }
