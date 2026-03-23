@@ -5,7 +5,9 @@ using Microsoft.Azure.Cosmos;
 
 namespace Contoso.CrmApi.Middleware;
 
-public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IExceptionHandler
+public sealed class GlobalExceptionHandler(
+    ILogger<GlobalExceptionHandler> logger,
+    IHostEnvironment environment) : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext,
@@ -25,7 +27,7 @@ public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logge
             Type = $"https://httpstatuses.io/{statusCode}",
             Title = title,
             Status = statusCode,
-            Detail = exception.Message,
+            Detail = environment.IsDevelopment() ? exception.Message : "An unexpected error occurred.",
             Instance = httpContext.Request.Path
         };
 

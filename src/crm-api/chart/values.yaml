@@ -13,7 +13,7 @@ replicaCount: 1
 
 serviceAccount:
   create: false
-  name: "crm-api-sa"
+  name: "sa-crm-api"
   annotations: {}
 
 workloadIdentity:
