@@ -15,6 +15,8 @@ How to decide who handles what.
 | Testing | Peter | Write tests, find edge cases, verify fixes |
 | Infrastructure | Joe | Terraform, AKS, Helm, Docker, identities, RBAC |
 | CI/CD & deployment | Joe | GitHub Actions, deploy scripts, container registry |
+| Security audit & findings | Cleveland | Network policies, secrets, container hardening, RBAC least-privilege, AI security |
+| Auth & access review | Cleveland | MSAL config, JWT validation, managed identity scoping, CORS |
 | Scope & priorities | Stewie | What to build next, trade-offs, decisions |
 | Async issue work (bugs, tests, small features) | @copilot 🤖 | Well-defined tasks matching capability profile |
 | Session logging | Scribe | Automatic — never needs routing |
