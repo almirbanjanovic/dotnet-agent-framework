@@ -797,7 +797,7 @@ Push-Location $SeedDataDir
 try {
     $env:COSMOSDB_CRM_ENDPOINT = $CosmosEndpoint
     $env:COSMOSDB_CRM_DATABASE = $CosmosDb
-    $env:AZURE_TENANT_ID = $TenantId
+    $env:AzureAd__TenantId = $TenantId
     dotnet run
     if ($LASTEXITCODE -ne 0) { Write-Fail "seed-data failed"; exit 1 }
     Write-Done "CRM data seeded"
@@ -844,7 +844,7 @@ try {
     $env:COSMOSDB_CRM_DATABASE = $CosmosDb
     $env:CRM_DATA_PATH = "/dev/null"
     $env:ENTRA_MAPPING = $EntraMapping
-    $env:AZURE_TENANT_ID = $TenantId
+    $env:AzureAd__TenantId = $TenantId
     dotnet run
     if ($LASTEXITCODE -ne 0) { Write-Fail "entra linking failed"; exit 1 }
     Write-Done "Entra users linked to Customers"

@@ -778,7 +778,7 @@ done
 step "Running seed-data (dotnet run -- uses DefaultAzureCredential)"
 SEED_DATA_DIR="$(dirname "$SCRIPT_DIR")/src/seed-data"
 pushd "$SEED_DATA_DIR" >/dev/null
-COSMOSDB_CRM_ENDPOINT="$COSMOS_ENDPOINT" COSMOSDB_CRM_DATABASE="$COSMOS_DB" AZURE_TENANT_ID="$TENANT_ID" dotnet run
+COSMOSDB_CRM_ENDPOINT="$COSMOS_ENDPOINT" COSMOSDB_CRM_DATABASE="$COSMOS_DB" AzureAd__TenantId="$TENANT_ID" dotnet run
 done_ "CRM data seeded"
 popd >/dev/null
 
@@ -831,7 +831,7 @@ done
 
 step "Linking Entra users to Cosmos DB Customers (dotnet run)"
 pushd "$SEED_DATA_DIR" >/dev/null
-COSMOSDB_CRM_ENDPOINT="$COSMOS_ENDPOINT" COSMOSDB_CRM_DATABASE="$COSMOS_DB" AZURE_TENANT_ID="$TENANT_ID" \
+COSMOSDB_CRM_ENDPOINT="$COSMOS_ENDPOINT" COSMOSDB_CRM_DATABASE="$COSMOS_DB" AzureAd__TenantId="$TENANT_ID" \
     CRM_DATA_PATH="/dev/null" ENTRA_MAPPING="$ENTRA_PAIRS" dotnet run
 done_ "Entra users linked to Customers"
 popd >/dev/null

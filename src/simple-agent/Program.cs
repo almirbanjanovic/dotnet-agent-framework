@@ -14,14 +14,14 @@ var configuration = new ConfigurationBuilder()
 
 var endpoint = configuration["AZURE_OPENAI_ENDPOINT"] ?? throw new InvalidOperationException("AZURE_OPENAI_ENDPOINT is not set.");
 var deploymentName = configuration["AZURE_OPENAI_DEPLOYMENT_NAME"] ?? throw new InvalidOperationException("AZURE_OPENAI_DEPLOYMENT_NAME is not set.");
-var tenantId = configuration["AZURE_TENANT_ID"];
+var tenantId = configuration["AzureAd:TenantId"];
 
 Console.WriteLine($"Using Azure OpenAI endpoint: {endpoint}");
 Console.WriteLine($"Deployment name: {deploymentName}");
 
-// Pin to a specific tenant when AZURE_TENANT_ID is set, preventing
-// DefaultAzureCredential from picking up tokens from the wrong tenant
-// (e.g., VS credential defaulting to the Microsoft corp tenant).
+// Pin to the project tenant when AzureAd:TenantId is available (populated by
+// config-sync from Key Vault secret AzureAd__TenantId). Prevents
+// DefaultAzureCredential from picking up tokens from the wrong tenant.
 var credential = string.IsNullOrEmpty(tenantId)
     ? new DefaultAzureCredential()
     : new DefaultAzureCredential(new DefaultAzureCredentialOptions { TenantId = tenantId });

@@ -16,7 +16,7 @@ var cosmosEndpoint = configuration["COSMOSDB_CRM_ENDPOINT"]
     ?? throw new InvalidOperationException("COSMOSDB_CRM_ENDPOINT is not set.");
 var databaseName = configuration["COSMOSDB_CRM_DATABASE"]
     ?? throw new InvalidOperationException("COSMOSDB_CRM_DATABASE is not set.");
-var tenantId = configuration["AZURE_TENANT_ID"];
+var tenantId = configuration["AzureAd:TenantId"];
 
 // ---------------------------------------------------------------------------
 // Resolve data folder paths
@@ -50,7 +50,8 @@ try
         UseSystemTextJsonSerializerWithOptions = new System.Text.Json.JsonSerializerOptions(),
     };
 
-    // Pin to a specific tenant when AZURE_TENANT_ID is set
+    // Pin to the project tenant when AzureAd:TenantId is available (populated
+    // by config-sync from Key Vault secret AzureAd__TenantId).
     var credential = string.IsNullOrEmpty(tenantId)
         ? new DefaultAzureCredential()
         : new DefaultAzureCredential(new DefaultAzureCredentialOptions { TenantId = tenantId });
