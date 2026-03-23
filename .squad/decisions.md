@@ -92,6 +92,16 @@
 **What:** Every squad member must use Claude Opus 4.6 (1M context) (`claude-opus-4.6-1m`) as the default model. This overrides the standard model selection hierarchy (Layer 1 — User Override).
 **Why:** User request — captured for team memory
 
+### 2026-03-23T15:12: User directive
+**By:** Almir Banjanovic (via Copilot)
+**What:** Helm charts and Dockerfiles for each src component live inside their respective component folder in src/ (e.g., src/crm-api/Dockerfile, src/crm-api/chart/). Not in a separate infra location.
+**Why:** User request — captured for team memory
+
+### 2026-03-23T15:16: User directive
+**By:** Almir Banjanovic (via Copilot)
+**What:** Fix all audit findings in staged order: Critical → High → Medium → Implementation. Test each stage and get user approval before moving to next stage. Each task must be committed to git separately (one commit per task).
+**Why:** User request — captured for team memory
+
 # Decision: Tenant ID via AzureAd:TenantId (simplified)
 
 ## Context
@@ -157,6 +167,97 @@ No immediate deployment impact (root config already compensates). These are defe
 
 ## Status
 Proposed — requires team review before implementation.
+
+# Decision: Dockerfile + Helm Chart Base Patterns (T-01)
+
+## Context
+No Dockerfiles or Helm charts existed. All 8 services need consistent containerization and K8s deployment patterns before AKS deployment can proceed.
+
+## Decisions Made
+
+### 1. Dockerfile Pattern
+- Multi-stage build: SDK 9.0 → publish → aspnet 9.0 runtime
+- Non-root execution: `USER app` (UID 1654 from aspnet:9.0)
+- PublishReadyToRun enabled for AKS cold start performance
+- Health check via `wget` (available in Debian-based aspnet image, no curl needed)
+- Build context is repo root (not service directory) so Directory.Build.props is accessible
+- OCI labels via build args for registry/scanner integration
+
+### 2. Helm Chart Pattern
+- Service accounts default to `create: false` — Terraform owns SA lifecycle
+- Workload identity enabled by default (pod label + SA annotation)
+- Security context: runAsNonRoot, readOnlyRootFilesystem, drop ALL capabilities
+- Writable /tmp via emptyDir (required for ASP.NET temp files with read-only root fs)
+- Pod UID 1654 aligns with aspnet:9.0 `app` user across Dockerfile and K8s
+- HPA disabled by default, configurable per service
+- ConfigMap checksum annotation forces rollout on config changes
+
+### 3. Blazor UI Exception
+The Blazor WASM UI will need a modified Dockerfile pattern (nginx or dotnet static file server). The base template works for all 7 backend .NET Minimal API services directly.
+
+## Impact
+- All service developers use `docs/templates/README.md` as the starting guide
+- Per-service Dockerfiles and Helm charts will be created as each service is built
+- Helm charts go under `infra/helm/<service-name>/`
+
+## Status
+Implemented — templates committed.
+
+# Decision: NetworkPolicy Manifests for contoso Namespace (T-02)
+
+## Date
+2026-03-23
+
+## Author
+Joe (DevOps/Infra)
+
+## Context
+Security finding F-01 (HIGH): AKS cluster has Azure Network Policy engine enabled but zero NetworkPolicy manifests. All pods in the `contoso` namespace can communicate freely, violating least-privilege network segmentation.
+
+## Decision
+Created 9 NetworkPolicy manifests in `infra/k8s/network-policies/`:
+- 1 default-deny-all (namespace-wide)
+- 8 per-service policies with explicit ingress/egress allowlists
+
+### Team-Relevant Details
+
+1. **Pod label requirement:** All Helm deployments MUST apply `app.kubernetes.io/name: {service-name}` as a pod label (Kubernetes standard). This is the selector used by NetworkPolicy rules. If a pod lacks this label, it gets only the default-deny policy (no traffic allowed).
+
+2. **Port 8080 assumed:** All inter-service egress rules target port 8080 (the .NET 9 non-root default from the Helm templates). If any service changes its listen port, the corresponding NetworkPolicy must be updated.
+
+3. **PE subnet CIDR hardcoded:** Egress to Azure PaaS uses `10.0.3.0/24` (the private endpoint subnet default from the VNet module). If Terraform variables override this CIDR, the network policies must be updated in tandem.
+
+4. **AGC namespace:** Ingress for bff-api and blazor-ui uses `namespaceSelector` targeting `azure-alb-system`. If the ALB Controller is installed in a different namespace, update the selector in both policies.
+
+## Consequences
+- Pods can no longer freely communicate — only the documented traffic flow is allowed
+- New services added to the namespace need a corresponding NetworkPolicy file
+- Helm chart values must include `app.kubernetes.io/name: {service-name}` pod label
+- CI/CD should apply these manifests as part of the deployment pipeline
+
+## Status
+Implemented and refined post-security review.
+
+# Decision: NetworkPolicy Selectors Aligned to Helm Standard Labels (Label Fix)
+
+## Context
+Cleveland's security review identified a label mismatch between NetworkPolicy pod selectors and Helm chart templates (Finding 1, HIGH severity). NetworkPolicies initially used `app: {service-name}` but Helm produces `app.kubernetes.io/name: {service-name}`. Under default-deny, this mismatch would block all inter-service traffic when deployed via Helm — causing a full service outage.
+
+## Options Considered
+- **Option A (chosen):** Update NetworkPolicy selectors to `app.kubernetes.io/name` — aligns with Kubernetes standard labels and Helm conventions. Zero changes needed in Helm templates.
+- **Option B:** Add custom `app` labels to Helm templates alongside standard labels. Works but adds redundancy and deviates from convention.
+
+## Decision
+Option A — all 8 per-service NetworkPolicy files updated to use `app.kubernetes.io/name: {service-name}` as pod selectors and matchLabels. README updated to document the convention. Default-deny policy unchanged (uses `podSelector: {}`, no label dependency).
+
+## Consequences
+- NetworkPolicies now match the labels Helm charts naturally produce — no manual label overrides needed in values.yaml
+- Services deployed via Helm will correctly have allow rules applied alongside the default-deny baseline
+- Any future services must use Helm standard labels (which they will by default via `_helpers.tpl`)
+- If any service is deployed outside Helm (e.g., raw kubectl), it must include `app.kubernetes.io/name: {service-name}` in pod labels
+
+## Status
+Implemented — committed. Resolves Cleveland security review Finding 1.
 
 # Decision: Agent Identity v2 via msgraph
 

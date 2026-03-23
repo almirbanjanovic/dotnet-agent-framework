@@ -178,3 +178,72 @@ Firewall bracket pattern (try/finally + trap EXIT), OIDC everywhere (zero stored
 - Module versioning (v1/) consistently applied across all 20 modules.
 
 **RBAC completeness verified:** All service identities have correct permissions — no missing assignments that would cause runtime failures. Deployer gets Secrets Officer + CRM Cosmos Data Contributor (for seeding). Only over-permissioning is AKS Contributor on RG.
+
+### 2025-07-25 — T-01: Dockerfile + Helm Chart Base Templates
+
+**Created `docs/templates/` with reusable patterns for all 8 services:**
+
+**Dockerfile.template:** Multi-stage .NET 9 build (SDK → publish → aspnet runtime). Security: runs as `app` user (UID 1654), non-root enforced. Health check via `wget` (aspnet:9.0 Debian image). OCI image labels with build args for version/date/ref. Build context is repo root so `Directory.Build.props` and `global.json` are available. Layer caching optimized (csproj restore before full source copy). PublishReadyToRun enabled for fast cold start on AKS.
+
+**Helm chart skeleton (`helm-base/`):** Complete chart with 7 templates:
+- `deployment.yaml` — securityContext (runAsNonRoot, readOnlyRootFilesystem, drop ALL caps), writable /tmp emptyDir, liveness/readiness probes, workload identity pod label, ConfigMap checksum for auto-rollout.
+- `service.yaml` — ClusterIP targeting port 8080 (.NET 9 non-root default).
+- `serviceaccount.yaml` — Conditional creation (defaults to `create: false` since Terraform pre-provisions SAs).
+- `hpa.yaml` — autoscaling/v2, CPU + memory targets, disabled by default.
+- `configmap.yaml` — Non-secret config as env vars.
+- `_helpers.tpl` — Standard name/label/image helpers, 63-char truncation, app.kubernetes.io labels.
+- `NOTES.txt` — Post-install instructions with kubectl commands.
+
+**Key design choices:**
+- `serviceAccount.create: false` by default — references Terraform-managed SAs (sa-crm-api, sa-bff, etc.)
+- `workloadIdentity.enabled: true` — adds `azure.workload.identity/use` pod label for OIDC token exchange
+- Pod UID 1654 matches aspnet:9.0 `app` user — consistent between Dockerfile USER and K8s securityContext
+- Resources: 100m/128Mi requests, 500m/512Mi limits — conservative defaults to tune per service
+- Probes: /health (liveness) and /ready (readiness) as agreed in decisions.md
+
+### 2025-07-25 — T-02: Kubernetes NetworkPolicy Manifests (F-01 remediation)
+
+**Created `infra/k8s/network-policies/` with 10 files (9 YAML + README):**
+
+**Default deny (`default-deny.yaml`):** Namespace-wide policy matching all pods with empty ingress/egress — blocks everything unless a per-service policy explicitly allows it.
+
+**Per-service policies (8 files):** Each targets a single service via `app: {service-name}` pod selector and declares both Ingress and Egress policy types:
+- `bff-api` / `blazor-ui` — ingress from AGC namespace (`azure-alb-system`) via `namespaceSelector`
+- `orchestrator-agent` — ingress from bff-api, egress to crm-agent + product-agent
+- `crm-agent` / `product-agent` — ingress from orchestrator-agent, egress to respective MCP servers
+- `crm-mcp` — ingress from crm-agent, egress to crm-api
+- `knowledge-mcp` — ingress from product-agent, egress to PE subnet only
+- `crm-api` — ingress from crm-mcp, egress to PE subnet only
+
+**Egress patterns:**
+- DNS: Every policy allows UDP+TCP/53 to `k8s-app: kube-dns` in `kube-system` (required for any hostname resolution)
+- Internal: Pod-to-pod on port 8080 via pod selector within namespace
+- External: Azure PaaS via private endpoint subnet `10.0.3.0/24` on port 443 (Cosmos DB, AI Search, OpenAI, Key Vault)
+
+**Key design choices:**
+- Used `kubernetes.io/metadata.name` label for cross-namespace selectors (built-in, no manual labeling needed)
+- PE subnet CIDR (`10.0.3.0/24`) matches VNet module defaults — documented in README that this must update if CIDRs are customized
+- `blazor-ui` has the tightest policy: only DNS egress (serves static WASM, all API calls happen client-side in the browser)
+- Pod selectors use `app.kubernetes.io/name: {service-name}` convention — matches Helm chart `service.selectorLabels` helper automatically
+
+### 2025-07-25 — Fix: NetworkPolicy Label Mismatch (Cleveland Security Review)
+
+**Issue:** Cleveland's security review (Finding 1, HIGH severity) identified that all 8 per-service NetworkPolicy files used `app: {service-name}` as pod selectors, but the Helm chart base templates produce pods with `app.kubernetes.io/name: {service-name}`. Result: when deployed via Helm, allow rules would never match actual pod labels — full service outage under default-deny.
+
+**Fix (Option A):** Updated all `matchLabels` and `podSelector` entries across 8 YAML files to use `app.kubernetes.io/name: {service-name}`. This is the Kubernetes standard label convention and what Helm charts naturally produce. Updated README to document the convention and remove the old requirement to add custom `app` labels.
+
+**Files changed:** 8 service policy YAMLs + README.md (9 files total). Default-deny unchanged (uses `podSelector: {}`, not label-specific).
+
+**Verification:** Grep confirmed zero remaining `app: ` selectors across all policy files. 20 occurrences of `app.kubernetes.io/name` across the 8 files (correct count for all podSelector + matchLabels references).
+
+### 2026-03-23T15:42 — Critical Stage: T-01, T-02, Security Review, Label Fix
+
+**Stage completion:** Completed all infrastructure templates and resolved all security findings.
+
+**T-01 (Dockerfile + Helm) → Commit c91915d:** Base templates created and committed. Multi-stage Dockerfile follows security best practices (non-root, PublishReadyToRun). Helm base chart pattern (helm-base/) ready for all 8 services to customize.
+
+**T-02 (NetworkPolicy manifests) → Commit ad4b9a1:** 9 manifests (default-deny + 8 per-service) created with pod label selectors `app: {service-name}`. Architecture DAG flow documented and enforced.
+
+**Cleveland Security Review:** APPROVED with notes. Critical finding: label mismatch between NetworkPolicy selectors (`app: X`) and Helm chart outputs (`app.kubernetes.io/name: X`). Would cause full service outage under default-deny on AKS. Also flagged medium-severity gap: no monitoring ingress rules (deferred, known issue).
+
+**Label fix (follow-up) → Commit ff8d5ad:** Updated all 8 NetworkPolicy files to use `app.kubernetes.io/name: {service-name}` selectors, aligning with Kubernetes standard and Helm conventions. README updated. Finding 1 resolved. Deployment gate cleared.
