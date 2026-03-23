@@ -20,3 +20,11 @@
 - Joe completed the follow-up task (commit ff8d5ad): updated all 8 per-service NetworkPolicy files to use `app.kubernetes.io/name: {service-name}` selectors instead of `app: {service-name}`. This aligns with Kubernetes standard label conventions and matches what Helm chart templates naturally produce.
 - Finding 1 (HIGH severity) from Cleveland's review now resolved. NetworkPolicies will correctly match Helm-deployed pods under default-deny baseline.
 - Deployment gate cleared. Critical stage complete.
+
+### 2026-03-23T16:30: High Stage Security Review (T-05 through T-08)
+- Reviewed 4 commits across infra/terraform and CI/CD workflows for correctness and security.
+- **T-05 (a061410):** Pin kubernetes_version — default `"1.30"` added to `variables.tf`. Format is correct `major.minor` for AzureRM AKS provider. Prevents silent version drift when `AKS_KUBERNETES_VERSION` var is unset. APPROVED.
+- **T-06 (c3a5839):** Fix approval gate hardcode — replaced hardcoded `"production"` with `${{ inputs.environment }}` in issue-title/body. No injection risk: `inputs.environment` is `type: choice` constrained to `[dev, staging, production]`. APPROVED.
+- **T-07 (ee72793):** Fix seed-data dependency — added `terraform-apply` to seed-data `needs:` list alongside `cleanup-after-apply`. Correct fix: `cleanup-after-apply` uses `if: always()` so it could succeed even when apply fails, which would have allowed seed-data to run against non-existent infrastructure. `cleanup-after-apply` itself is unaffected (still runs with `if: always()`). APPROVED.
+- **T-08 (8a50aa4):** CAE disable flags — added `ARM_DISABLE_CAE`, `AZURE_DISABLE_CAE`, `HAMILTON_DISABLE_CAE` to all 4 Terraform API-calling steps (plan init, plan, apply init, apply). Matches `deploy.ps1` parity (lines 400-402). `terraform validate` and `terraform fmt` intentionally excluded (local-only, no Azure API calls). No missed steps. APPROVED.
+- All 4 commits approved. No security issues found. High stage gate cleared.

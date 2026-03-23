@@ -269,3 +269,98 @@ Move agent identity provisioning to a new `agent-identity/v2` module built on th
 
 ## Consequences
 Terraform now provisions the correct Entra Agent ID objects, aligning with the platform requirements and enabling runtime agent identity creation. AKS workload identities remain secretless and use OIDC token exchange through FICs. Cosmos DB access is corrected for all agents, reducing authorization gaps.
+
+
+# High Stage Decisions
+
+# High Stage Decisions — Joe (DevOps/Infra)
+
+## T-05: Pin AKS Kubernetes Version
+
+**Decision:** Added `default = "1.30"` to `aks_kubernetes_version` variable in variables.tf. The dev.tfvars (gitignored) already pins "1.34", but without a default, a bare terraform plan could let AKS auto-select latest GA. This is defense-in-depth — the tfvars value always takes precedence.
+
+**Impact:** No deployment change (dev.tfvars overrides). Prevents accidental version drift if a new environment is created without setting this variable.
+
+## T-06: Dynamic Environment in Approval Gate
+
+**Decision:** Replaced hardcoded "production" in orchestrator workflow approval gate with `${{ inputs.environment }}`. Both issue-title and issue-body now reflect the actual target environment.
+
+**Impact:** Operators deploying to dev or staging will no longer see misleading "Approve deployment to production" prompts.
+
+## T-07: Seed-Data Depends on Terraform Apply
+
+**Decision:** Added `terraform-apply` to the seed-data job's `needs` list alongside `cleanup-after-apply`. Previously, seed-data only depended on cleanup-after-apply (which runs with `if: always()`), so it would execute even after a failed apply.
+
+**Impact:** Seed data will only run when infrastructure was successfully provisioned. Prevents wasted compute and confusing error logs from trying to seed into non-existent resources.
+
+## T-08: CAE Disable Flags in CI/CD
+
+**Decision:** Added `ARM_DISABLE_CAE`, `AZURE_DISABLE_CAE`, and `HAMILTON_DISABLE_CAE` environment variables to all Terraform Init, Plan, and Apply steps in terraform-plan.yaml and terraform-apply.yaml. These match the existing pattern in deploy.ps1/deploy.sh.
+
+**Impact:** Corporate Entra tenants with aggressive Continuous Access Evaluation policies will no longer see intermittent token revocations during long-running Terraform operations in CI/CD. Achieves parity between local deploy scripts and GitHub Actions workflows.
+
+## Status
+
+All 4 tasks implemented as separate commits. CI/CD is now closer to full parity with local deploy scripts. Remaining gap: `TF_VAR_msgraph_*` credentials for Agent Identity Blueprints (Critical finding from audit — deferred, requires architectural decision).
+
+
+# Cleveland — High Stage Security Review
+
+**Reviewer:** Cleveland (Security Engineer)
+**Date:** 2026-03-23
+**Commits reviewed:** T-05 (a061410), T-06 (c3a5839), T-07 (ee72793), T-08 (8a50aa4)
+
+---
+
+## T-05: Pin kubernetes_version (a061410)
+
+**Verdict:** ✅ **APPROVED**
+
+- Default `"1.30"` added to `aks_kubernetes_version` in `variables.tf`
+- Format `major.minor` is correct for AzureRM `azurerm_kubernetes_cluster` resource
+- 1.30 is a current stable AKS version — sensible default
+- CI/CD workflow already passes `TF_VAR_aks_kubernetes_version` from GitHub vars, so this default is a safety net, not the primary source
+- Description updated to explain pinning rationale
+
+---
+
+## T-06: Fix approval gate hardcode (c3a5839)
+
+**Verdict:** ✅ **APPROVED**
+
+- Hardcoded `"production"` replaced with `${{ inputs.environment }}` in both `issue-title` and `issue-body`
+- **Injection risk: NONE.** The `inputs.environment` is defined as `type: choice` with fixed options `[dev, staging, production]` on the `workflow_dispatch` trigger. GitHub enforces the enum — freeform text cannot be submitted
+- Even in the theoretical case of injection, the values only flow into a GitHub Issue title/body (not shell commands), so the attack surface is minimal
+
+---
+
+## T-07: Fix seed-data dependency (ee72793)
+
+**Verdict:** ✅ **APPROVED**
+
+- `seed-data.needs` changed from `[cleanup-after-apply]` to `[terraform-apply, cleanup-after-apply]`
+- **Why this was needed:** `cleanup-after-apply` runs with `if: always()`, meaning it succeeds even when `terraform-apply` fails. Under the old config, seed-data could run against non-existent infrastructure
+- **cleanup-after-apply unaffected:** It still has `needs: [terraform-apply]` with `if: always()`, so firewall cleanup continues to run regardless of apply outcome
+- **DAG correctness verified:** plan → cleanup-plan → approval → purge → apply → cleanup-apply → seed-data → cleanup-seed. All dependency chains intact
+
+---
+
+## T-08: CAE disable flags (8a50aa4)
+
+**Verdict:** ✅ **APPROVED**
+
+- Three environment variables added to all Terraform steps that make Azure API calls:
+  - `terraform-plan.yaml`: init (line 125-127), plan (line 150-152)
+  - `terraform-apply.yaml`: init (line 116-118), apply (line 135-137)
+- **Parity with `deploy.ps1` confirmed:** Lines 400-402 set the same three variables (`ARM_DISABLE_CAE`, `AZURE_DISABLE_CAE`, `HAMILTON_DISABLE_CAE`)
+- **No missed steps:** `terraform validate` and `terraform fmt -check` are local operations with no Azure API calls — correctly excluded
+- **Purpose:** Prevents CAE token revocation (`TokenCreatedWithOutdatedPolicies`) in corporate Entra tenants with aggressive Conditional Access policies
+
+---
+
+## Overall Verdict
+
+### ✅ ALL 4 COMMITS APPROVED
+
+No security vulnerabilities, injection risks, or correctness issues found. All changes are precise, well-scoped, and match the intended behavior. High stage security gate is **cleared**.
+
