@@ -47,3 +47,20 @@
 ### 2026-03-19 — Cross-Team Finding: Full Codebase Analysis Complete
 
 **Team Update (from all 5 agents):** Architecture is fully specced and infrastructure is provisioned, but **zero application code exists yet.** This is the intended state at end of Phase 1 (infrastructure/tooling complete). All 5 agents confirm the critical path: CRM API first, then MCP servers, then agents, then BFF, then UI. No fundamental re-design needed. All decisions merged into `.squad/decisions.md` with consensus on next steps.
+
+### 2025-07-25 — Folder Structure Reorganization
+
+**Problem:** Two structural issues flagged by Almir: (1) Dockerfile + Helm templates wrongly placed in `docs/templates/` — docs/ should only contain documentation; (2) K8s manifests split between `infra/terraform/manifests/` and `infra/k8s/network-policies/`.
+
+**Actions taken:**
+1. Moved `docs/templates/` → `infra/templates/` (Dockerfile.template + helm-base chart skeleton). docs/ now contains only documentation files.
+2. Moved `infra/terraform/manifests/` → `infra/k8s/manifests/` to consolidate all Kubernetes YAML under `infra/k8s/`. Updated Terraform `templatefile()` paths from `${path.module}/manifests/` to `${path.module}/../k8s/manifests/` — verified Terraform resolves relative paths correctly.
+3. Updated all cross-references across 7 files (main.tf, security.md, templates README, serviceaccount.yaml, network-policies README, infra README, decisions.md).
+
+**Key constraint respected:** Terraform's `kubectl_manifest` resources use `templatefile()` with a relative path. The manifests must remain accessible to Terraform — the `../k8s/manifests/` relative path from the terraform directory satisfies this.
+
+**Final structure:**
+- `docs/` — documentation only (architecture, labs, security)
+- `infra/templates/` — reference Dockerfile + Helm patterns
+- `infra/k8s/manifests/` — namespace + service accounts (Terraform-applied)
+- `infra/k8s/network-policies/` — NetworkPolicy YAMLs (manually applied)

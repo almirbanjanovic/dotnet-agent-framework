@@ -161,6 +161,7 @@ data/
 
 docs/
   architecture.drawio             → Editable architecture diagram (draw.io)
+  architecture.png                → Exported architecture diagram (PNG)
   lab-0.md                        → Lab 0: Bootstrap (Terraform backend, Entra, CI/CD)
   lab-1.md                        → Lab 1: Infrastructure, Validation & Data Seeding
   security.md                     → Security architecture (auth, RBAC, network)
@@ -168,6 +169,14 @@ docs/
 infra/
   init.ps1 / init.sh              → One-time bootstrap scripts
   deploy.ps1 / deploy.sh          → Deployment scripts (7 phases)
+  k8s/
+    manifests/                    → Kubernetes namespace, service account, network policies
+      namespace.yaml
+      service-account.yaml
+      network-policies/           → default-deny + 8 per-service policies
+  templates/
+    Dockerfile.template           → Shared Dockerfile template
+    helm-base/                    → Base Helm chart (Chart.yaml, values.yaml, templates/)
   terraform/                      → Terraform IaC (20 modules, versioned)
     modules/                      → acr, agc, aks, cosmosdb, entra,
                                     foundry, identity, keyvault, keyvault-secrets,
@@ -175,7 +184,7 @@ infra/
                                     private-endpoint, rbac, search, storage,
                                     storage-uploads, tls-cert, vnet,
                                     workload-identity
-    manifests/                    → Kubernetes namespace + service account templates
+    main.tf, providers.tf, variables.tf, outputs.tf
 
 src/
   appsettings.json                → Shared config (gitignored, populated by config-sync)
