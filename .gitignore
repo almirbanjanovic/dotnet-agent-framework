@@ -78,3 +78,6 @@ override.tf.json
 *.tfvars
 *.tfvars.json
 backend.hcl
+
+# Terraform init artifacts (stale working dirs)
+infra/terraform/infra/
