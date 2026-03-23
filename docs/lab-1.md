@@ -82,25 +82,49 @@ The **config-sync** tool pulls secrets from Key Vault into `src/appsettings.json
 
 Get your deployer IP and Key Vault name:
 
+```powershell
+# PowerShell
+$DEPLOYER_IP = (Invoke-RestMethod https://api.ipify.org)
+$RG = "<your-resource-group>"   # e.g. rg-dotnetagent-dev-eastus2
+$KV = (az keyvault list --resource-group $RG --query "[0].name" -o tsv)
+```
+
 ```bash
+# Bash / WSL / macOS
 DEPLOYER_IP=$(curl -s https://api.ipify.org)
 RG="<your-resource-group>"   # e.g. rg-dotnetagent-dev-eastus2
 KV=$(az keyvault list --resource-group "$RG" --query "[0].name" -o tsv)
 ```
 
-Open Key Vault firewall, run config-sync, then close it:
+Open Key Vault firewall, run config-sync, then close it. Run from the **repository root**:
+
+```powershell
+# PowerShell — Open
+az keyvault network-rule add --name $KV --resource-group $RG --ip-address "$DEPLOYER_IP/32"
+Start-Sleep 15
+
+# Sync
+Push-Location src/config-sync
+$kvUri = (az keyvault show --name $KV --resource-group $RG --query properties.vaultUri -o tsv)
+dotnet run -- $kvUri
+Pop-Location
+
+# Close
+az keyvault network-rule remove --name $KV --resource-group $RG --ip-address "$DEPLOYER_IP/32"
+```
 
 ```bash
-# Open
-az keyvault network-rule add --name "$KV" --ip-address "$DEPLOYER_IP/32"
+# Bash / WSL / macOS — Open
+az keyvault network-rule add --name "$KV" --resource-group "$RG" --ip-address "$DEPLOYER_IP/32"
 sleep 15
 
 # Sync
-cd src/config-sync
-dotnet run -- $(az keyvault show --name "$KV" --query properties.vaultUri -o tsv)
+pushd src/config-sync
+dotnet run -- $(az keyvault show --name "$KV" --resource-group "$RG" --query properties.vaultUri -o tsv)
+popd
 
 # Close
-az keyvault network-rule remove --name "$KV" --ip-address "$DEPLOYER_IP/32"
+az keyvault network-rule remove --name "$KV" --resource-group "$RG" --ip-address "$DEPLOYER_IP/32"
 ```
 
 Expected output:
@@ -127,23 +151,44 @@ Expected output:
 
 The **simple-agent** project creates a minimal AI agent that calls Azure OpenAI. This confirms your endpoint, deployment, and credentials are all working. Since Azure OpenAI (Cognitive Services) has a firewall, you need to temporarily open it.
 
+```powershell
+# PowerShell
+$COG = (az cognitiveservices account list --resource-group $RG --query "[0].name" -o tsv)
+```
+
 ```bash
+# Bash / WSL / macOS
 COG=$(az cognitiveservices account list --resource-group "$RG" --query "[0].name" -o tsv)
 ```
 
-Open the AI Services firewall, run simple-agent, then close it:
+Open the AI Services firewall, run simple-agent, then close it. Run from the **repository root**:
+
+```powershell
+# PowerShell — Open (no /32 suffix — Cognitive Services doesn't accept CIDR notation)
+az cognitiveservices account network-rule add --resource-group $RG --name $COG --ip-address $DEPLOYER_IP
+Start-Sleep 15
+
+# Validate
+Push-Location src/simple-agent
+dotnet run
+Pop-Location
+
+# Close
+az cognitiveservices account network-rule remove --resource-group $RG --name $COG --ip-address $DEPLOYER_IP
+```
 
 ```bash
-# Open
-az cognitiveservices account network-rule add --resource-group "$RG" --name "$COG" --ip-address "$DEPLOYER_IP/32"
+# Bash / WSL / macOS — Open (no /32 suffix — Cognitive Services doesn't accept CIDR notation)
+az cognitiveservices account network-rule add --resource-group "$RG" --name "$COG" --ip-address "$DEPLOYER_IP"
 sleep 15
 
 # Validate
-cd src/simple-agent
+pushd src/simple-agent
 dotnet run
+popd
 
 # Close
-az cognitiveservices account network-rule remove --resource-group "$RG" --name "$COG" --ip-address "$DEPLOYER_IP/32"
+az cognitiveservices account network-rule remove --resource-group "$RG" --name "$COG" --ip-address "$DEPLOYER_IP"
 ```
 
 Expected output (the joke will differ on each run — it's AI-generated):
