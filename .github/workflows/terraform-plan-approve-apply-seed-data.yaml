@@ -53,8 +53,8 @@ jobs:
           secret: ${{ github.TOKEN }}
           approvers: ${{ github.repository_owner }}
           minimum-approvals: 1
-          issue-title: "Approve deployment to production"
-          issue-body: "Please approve or deny the deployment."
+          issue-title: "Approve deployment to ${{ inputs.environment }}"
+          issue-body: "Please approve or deny the deployment to ${{ inputs.environment }}."
           fail-on-denial: true
 
   purge-soft-deleted:
