@@ -94,7 +94,7 @@ jobs:
 
   seed-data:
     name: Seed CRM Data
-    needs: [cleanup-after-apply]
+    needs: [terraform-apply, cleanup-after-apply]
     uses: ./.github/workflows/seed-data.yaml
     with:
       environment: ${{ inputs.environment }}
