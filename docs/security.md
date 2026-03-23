@@ -687,3 +687,15 @@ All security resources are created by Terraform during `terraform apply`:
 | Accept local-only provisioning | No CI/CD risk; agent identities change infrequently |
 
 For now, **option 3 is accepted**. Agent Identity Blueprints are created once during initial deployment and rarely change. If automated re-provisioning becomes necessary, option 1 is the recommended path.
+
+### AI Search Admin Key in Knowledge Source Provisioning
+
+**What:** The `knowledge-source` Terraform module uses an AI Search admin API key in a `local-exec` provisioner to create the knowledge source index.
+
+**Why:** Azure AI Search's Knowledge Source data-plane API (2025-11-01-preview) does not support RBAC — admin key authentication is the only option.
+
+**Risk:** The admin key briefly lives in the shell environment during local deploys. It grants full read/write/admin access to the Search service.
+
+**Mitigation:** The key is not stored in code, config files, or state. CI/CD pipelines use OIDC (no key exposure in automation). Track the Azure SDK roadmap for RBAC data-plane support and migrate when available.
+
+**Status:** Accepted interim risk — no alternative available.
