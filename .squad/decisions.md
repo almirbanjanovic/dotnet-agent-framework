@@ -72,6 +72,8 @@
 
 **Decision (Joe):** Bootstrap scripts support local dev and GitHub Actions CI/CD. OIDC federation is used everywhere (zero stored credentials). Security posture is strong. No changes needed.
 
+**Decision (Joe):** Terraform kubectl provider DNS resolution failure when AKS cluster is destroyed/missing requires two-layered fix. (1) Provider config (providers.tf): Wrap AKS output references with `try()` guards to handle fresh deploys and missing clusters. (2) Deploy scripts (deploy.ps1/deploy.sh): Add pre-plan kubectl state guard that detects destroyed AKS via `az aks show` and removes stale `kubectl_manifest.*` resources from state. Resources idempotently recreate on next apply. No impact to normal deployments (AKS exists, state valid). Alternatives considered (alekc/kubectl provider switch, two-phase apply with -target, separate Terraform root) deferred as more invasive.
+
 ### Cross-Team
 
 **Decision (Whole Team):** Architecture is specced, infrastructure is provisioned, zero application code exists. This is the intended state at end of Phase 1. All 5 agents agree on the critical path: CRM API first, then MCP servers, then agents, then BFF, then UI. No fundamental redesign needed.
