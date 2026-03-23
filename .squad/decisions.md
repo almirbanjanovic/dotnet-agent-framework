@@ -366,3 +366,122 @@ All 4 tasks implemented as separate commits. CI/CD is now closer to full parity 
 
 No security vulnerabilities, injection risks, or correctness issues found. All changes are precise, well-scoped, and match the intended behavior. High stage security gate is **cleared**.
 
+---
+
+## Infrastructure & Deployment Decisions
+
+### Terraform kubectl Provider DNS Resolution (Joe)
+
+**Decision (Joe):** Implement a variable-gated provider pattern with two-pass deployment to handle stale kubectl provider state when AKS is destroyed/missing or DNS-unresolved.
+
+**Problem:** The `gavinbunney/kubectl` Terraform provider initializes eagerly, attempting to connect to the Kubernetes API server during provider initialization (before any resource refresh). A stale or unreachable FQDN causes a DNS resolution error that blocks `terraform plan` entirely. Prior `try()` guards were insufficient because they don't catch valid-looking stale FQDNs from state, and ALL providers initialize regardless of whether their resources exist.
+
+**Solution:**
+- `var.deploy_k8s_resources` (bool, default=true) gates kubectl provider config AND all `kubectl_manifest` resources
+- Provider config uses ternary: when false, provider gets empty credentials (no connection attempt)
+- `kubectl_manifest` resources use count/for_each conditions to skip when false
+- Deploy scripts perform 3-step AKS reachability check (exists + DNS resolves), then run two-pass deployment if AKS is unreachable
+
+**Impact:**
+- Backward compatible: existing CI/CD unchanged (default=true)
+- Handles all scenarios: fresh deploy, destroyed AKS, stale FQDN, unreachable cluster
+- No performance impact on normal deployments (AKS exists, state valid)
+- Deploy scripts auto-detect and adapt transparently
+
+**Commits:** 0b58039, 3dc56f1
+
+---
+
+### Project Folder Structure Reorganization (Stewie)
+
+**Decision (Stewie):** Move infrastructure templates out of `docs/` into `infra/templates/`, and consolidate all Kubernetes manifests under `infra/k8s/`.
+
+**Rationale:**
+1. `docs/templates/` contained Dockerfile.template and Helm chart skeleton — infrastructure artifacts, not documentation
+2. Kubernetes manifests split between `infra/terraform/manifests/` (Terraform-applied) and `infra/k8s/network-policies/` (manually applied) — confusing and hard to maintain
+
+**Implementation:**
+- Move `docs/templates/` → `infra/templates/` — reference Dockerfile and Helm patterns now grouped with infrastructure
+- Move `infra/terraform/manifests/` → `infra/k8s/manifests/` — all K8s YAML consolidated under `infra/k8s/`
+- Update Terraform `templatefile()` paths from `${path.module}/manifests/` to `${path.module}/../k8s/manifests/`
+
+**Final Structure:**
+```
+docs/                          # Documentation only
+infra/
+├── templates/                 # Reference Dockerfile + Helm patterns
+├── k8s/                       # All Kubernetes YAML
+│   ├── manifests/             # Terraform-applied (namespace, service accounts)
+│   └── network-policies/      # Manually applied (NetworkPolicy YAMLs)
+└── terraform/                 # Terraform modules and root config
+```
+
+**Impact:**
+- Developers easily locate infrastructure templates and K8s manifests
+- `docs/` is clean — documentation only
+- No Terraform functional changes (path updates only)
+- File history preserved via `git mv`
+
+---
+
+### Diagnostic Settings for Observability (Joe)
+
+**Decision (Joe):** Key Vault and both Cosmos DB accounts send audit/control plane logs to the AKS Log Analytics workspace via `azurerm_monitor_diagnostic_setting`.
+
+**Implementation:**
+- New `diagnostics.tf` in Terraform root — keeps main.tf clean
+- Reuses existing Log Analytics workspace from `module.aks.log_analytics_workspace_id`
+- No new resources beyond diagnostic settings themselves
+
+**Impact:**
+- Centralized observability: audit logs for all data resources flow to AKS workspace
+- Clean terraform code organization
+
+---
+
+### Secure-by-Default Module Defaults (Joe)
+
+**Decision (Joe):** Flip all module defaults to secure posture while keeping the current project deployment unchanged.
+
+**Module Changes:**
+- `public_network_access_enabled` → `false` (cosmosdb, keyvault, acr, foundry modules)
+- `purge_protection_enabled` → `true` (keyvault module)
+- NSGs added to VNet module for private endpoint and AGC subnets
+
+**Project Root:**
+- Root `main.tf` explicitly passes `public_network_access_enabled = true` where deploy pipeline requires it
+
+**Impact:**
+- Module reuse: anyone using modules without overrides gets locked-down defaults
+- Current project: unchanged (explicit overrides in root)
+- Better security posture for the framework
+- Trade-off acknowledged: foundry module previously had no `public_network_access_enabled` variable at all — added for consistency
+
+---
+
+### AI Search Admin Key — Accepted Interim Risk (Cleveland)
+
+**Decision (Cleveland):** Accept interim risk of AI Search admin API key in `local-exec` until Azure adds RBAC support for data-plane API.
+
+**Rationale:** Azure AI Search data-plane API (2025-11-01-preview) does not support RBAC — admin key authentication is the only current option for `local-exec` provisioning. The key is not stored in code or config; CI/CD uses OIDC with no key exposure.
+
+**Mitigation:** Documented in `docs/security.md` under "Known Gaps"
+
+**Future:** Revisit when Azure adds RBAC data-plane support
+
+**Status:** Accepted workshop pattern, documented for future hardening
+
+---
+
+### Test User Passwords — Accepted Lab-Only Pattern (Cleveland)
+
+**Decision (Cleveland):** Test user passwords are visible in `terraform plan` output via `nonsensitive()` in the `keyvault-secrets` module — accepted workshop pattern for lab environments.
+
+**Justification:**
+- 5 test accounts (Emma, James, Sarah, David, Lisa) are lab-only for the development workshop
+- Pattern is acceptable for non-persistent environments
+
+**Rotation Plan:** If test users persist beyond the workshop, rotate all passwords and remove `nonsensitive()` to revoke plan visibility
+
+**Status:** Accepted workshop pattern, documented in `docs/security.md` under "Known Gaps"
+
