@@ -78,7 +78,7 @@ All Terraform variables are read from the GitHub environment variables that `ini
 
 ## Step 2 — Configure app settings
 
-The **config-sync** tool pulls secrets from Key Vault into `src/appsettings.json` so all projects can use them locally. Since the deploy script closes resource firewalls when it finishes, you need to temporarily open the Key Vault firewall first.
+The **config-sync** tool pulls secrets from Key Vault into per-component `appsettings.{Environment}.json` files so each project can use them locally. Since the deploy script closes resource firewalls when it finishes, you need to temporarily open the Key Vault firewall first.
 
 Get your deployer IP and Key Vault name:
 
@@ -131,19 +131,36 @@ Expected output:
 
 ```text
 ═══════════════════════════════════════════════════════════
-  Config Sync — Key Vault → appsettings.json
+  Config Sync — Key Vault → per-component appsettings.Development.json
 ═══════════════════════════════════════════════════════════
 
-  Key Vault: <your-keyvault-uri>
-  Auth:      DefaultAzureCredential (az login)
+  Key Vault:     <your-keyvault-uri>
+  Environment:   Development
+  Auth:          DefaultAzureCredential (az login)
 
-  ✓ AZURE-OPENAI-ENDPOINT → AZURE_OPENAI_ENDPOINT
-  ✓ AZURE-OPENAI-DEPLOYMENT-NAME → AZURE_OPENAI_DEPLOYMENT_NAME
+  Fetching secrets from Key Vault...
+
+  ✓ AzureAd--BffClientId
+  ✓ AzureAd--TenantId
+  ✓ AzureOpenAi--DeploymentName
+  ✓ AzureOpenAi--Endpoint
   ...
-  Wrote 15/15 secrets to .../src/appsettings.json
+
+  Fetched 20/20 secrets
+
+  Writing per-component appsettings.Development.json files...
+
+  ✓ crm-api/appsettings.Development.json (3 keys)
+  ✓ crm-mcp/appsettings.Development.json (2 keys)
+  ✓ knowledge-mcp/appsettings.Development.json (6 keys)
+  ✓ crm-agent/appsettings.Development.json (4 keys)
+  ✓ product-agent/appsettings.Development.json (5 keys)
+  ✓ orchestrator-agent/appsettings.Development.json (5 keys)
+  ✓ bff-api/appsettings.Development.json (9 keys)
+  ✓ blazor-ui/appsettings.Development.json (3 keys)
 
 ═══════════════════════════════════════════════════════════
-  Done! Apps can now read from appsettings.json.
+  Done! Each component has its own appsettings.Development.json.
 ═══════════════════════════════════════════════════════════
 ```
 
@@ -206,7 +223,7 @@ If you see an error, check:
 
 - `az login` is authenticated
 - `az login` is authenticated with an account that has the **Cognitive Services OpenAI User** role on the AI Services account
-- `src/appsettings.json` has non-empty values for `AZURE_OPENAI_ENDPOINT` and `AZURE_OPENAI_DEPLOYMENT_NAME`
+- `AzureOpenAi:Endpoint` and `AzureOpenAi:DeploymentName` are set in `src/simple-agent/appsettings.json` or via environment variables (`AzureOpenAi__Endpoint`, `AzureOpenAi__DeploymentName`)
 - The AI Services deployment exists in the Azure portal
 
 ## Verification checklist
@@ -214,7 +231,7 @@ If you see an error, check:
 After completing all steps, verify:
 
 - [ ] Infrastructure resources are visible in the Azure portal (or `terraform output` shows all endpoints)
-- [ ] `src/appsettings.json` has 15 non-empty values
+- [ ] 8 per-component `appsettings.Development.json` files exist under `src/` with non-empty values
 - [ ] `simple-agent` returns a joke from Azure OpenAI
 - [ ] Cosmos DB CRM account has 6 containers with data (Customers, Orders, etc.)
 - [ ] Azure AI Search index has vectorized document chunks (check indexer status in Azure portal)
