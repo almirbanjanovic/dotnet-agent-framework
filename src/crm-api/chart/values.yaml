@@ -94,13 +94,13 @@ config:
   Logging__LogLevel__Microsoft.AspNetCore: "Warning"
   Logging__LogLevel__Microsoft.Azure.Cosmos: "Warning"
 
-secretRefs: []
-  # - name: keyvault-secrets
-  #   keys:
-  #     - key: CosmosDb__Endpoint
-  #       envVar: CosmosDb__Endpoint
-  #     - key: AzureAd__TenantId
-  #       envVar: AzureAd__TenantId
+secretRefs:
+  - name: keyvault-secrets
+    keys:
+      - key: CosmosDb--CrmEndpoint
+        envVar: CosmosDb__Endpoint
+      - key: AzureAd--TenantId
+        envVar: AzureAd__TenantId
 
 nodeSelector: {}
 
