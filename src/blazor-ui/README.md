@@ -13,4 +13,4 @@ Required config keys (populated by config-sync from Key Vault):
 | `AzureAd:BffClientId` | Entra app registration client ID for BFF |
 | `AzureAd:TenantId` | Entra tenant ID for DefaultAzureCredential |
 
-Run config-sync to populate: `cd src/config-sync && dotnet run -- <key-vault-uri>`
+Run config-sync to populate: `cd src/config-sync && dotnet run -- <key-vault-uri> [environment]`

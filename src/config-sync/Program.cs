@@ -4,14 +4,15 @@ using Azure.Identity;
 using Azure.Security.KeyVault.Secrets;
 
 // ---------------------------------------------------------------------------
-// Config Sync — pulls secrets from Azure Key Vault into per-component appsettings.Development.json
+// Config Sync — pulls secrets from Azure Key Vault into per-component appsettings.{Environment}.json
 // ---------------------------------------------------------------------------
 // Usage:
-//   dotnet run -- <key-vault-uri>
+//   dotnet run -- <key-vault-uri> [environment]
 //   dotnet run -- https://kv-agentic-ai-001.vault.azure.net/
+//   dotnet run -- https://kv-agentic-ai-001.vault.azure.net/ Staging
 //
 // Authenticates via DefaultAzureCredential (az login locally, managed identity on AKS).
-// Writes a SEPARATE appsettings.Development.json for each component under src/<component>/.
+// Writes a SEPARATE appsettings.{Environment}.json for each component under src/<component>/.
 //
 // Key Vault naming convention: PascalCase--Hierarchy (double-hyphen = .NET : separator)
 //   e.g., CosmosDb--CrmEndpoint → { "CosmosDb": { "CrmEndpoint": "" } }
@@ -21,23 +22,69 @@ using Azure.Security.KeyVault.Secrets;
 // local key per component (e.g., CosmosDb:Endpoint in crm-api).
 // ---------------------------------------------------------------------------
 
+var validEnvironments = new[] { "Development", "Staging", "Production" };
+
 if (args.Length == 0 || string.IsNullOrWhiteSpace(args[0]))
 {
-    Console.WriteLine("Usage: dotnet run -- <key-vault-uri>");
+    Console.WriteLine("Usage: dotnet run -- <key-vault-uri> [environment]");
     Console.WriteLine("  Example: dotnet run -- https://kv-agentic-ai-001.vault.azure.net/");
+    Console.WriteLine("  Example: dotnet run -- https://kv-agentic-ai-001.vault.azure.net/ Staging");
     Console.WriteLine();
+    Console.WriteLine("  Environments: Development, Staging, Production");
     Console.WriteLine("  You can find the Key Vault URI with: terraform output keyvault_uri");
     return;
 }
 
 var keyVaultUri = args[0].Trim();
 
+// ── Resolve environment ───────────────────────────────────────────────────
+string environment;
+
+if (args.Length >= 2 && !string.IsNullOrWhiteSpace(args[1]))
+{
+    var match = validEnvironments.FirstOrDefault(e =>
+        e.Equals(args[1].Trim(), StringComparison.OrdinalIgnoreCase));
+
+    if (match is null)
+    {
+        Console.Error.WriteLine($"Error: '{args[1].Trim()}' is not a valid environment.");
+        Console.Error.WriteLine($"Valid environments: {string.Join(", ", validEnvironments)}");
+        Environment.Exit(1);
+        return;
+    }
+
+    environment = match;
+}
+else
+{
+    while (true)
+    {
+        Console.Write("Which environment? (Development/Staging/Production): ");
+        var input = Console.ReadLine()?.Trim();
+
+        if (string.IsNullOrWhiteSpace(input))
+            continue;
+
+        var match = validEnvironments.FirstOrDefault(e =>
+            e.Equals(input, StringComparison.OrdinalIgnoreCase));
+
+        if (match is not null)
+        {
+            environment = match;
+            break;
+        }
+
+        Console.WriteLine($"Invalid environment '{input}'. Please enter Development, Staging, or Production.");
+    }
+}
+
 Console.WriteLine("═══════════════════════════════════════════════════════════");
-Console.WriteLine("  Config Sync — Key Vault → per-component appsettings.Development.json");
+Console.WriteLine($"  Config Sync — Key Vault → per-component appsettings.{environment}.json");
 Console.WriteLine("═══════════════════════════════════════════════════════════");
 Console.WriteLine();
-Console.WriteLine($"  Key Vault: {keyVaultUri}");
-Console.WriteLine($"  Auth:      DefaultAzureCredential (az login)");
+Console.WriteLine($"  Key Vault:     {keyVaultUri}");
+Console.WriteLine($"  Environment:   {environment}");
+Console.WriteLine($"  Auth:          DefaultAzureCredential (az login)");
 Console.WriteLine();
 
 // ── Component Manifest ────────────────────────────────────────────────────
@@ -155,7 +202,7 @@ Console.WriteLine();
 var srcDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
 var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
 
-Console.WriteLine("  Writing per-component appsettings.Development.json files...");
+Console.WriteLine($"  Writing per-component appsettings.{environment}.json files...");
 Console.WriteLine();
 
 foreach (var (component, entries) in componentManifest)
@@ -174,15 +221,15 @@ foreach (var (component, entries) in componentManifest)
         SetNestedValue(root, configKey, value);
     }
 
-    var outputPath = Path.Combine(componentDir, "appsettings.Development.json");
+    var outputPath = Path.Combine(componentDir, $"appsettings.{environment}.json");
     var json = root.ToJsonString(jsonOptions);
     await File.WriteAllTextAsync(outputPath, json + Environment.NewLine);
-    Console.WriteLine($"  ✓ {component}/appsettings.Development.json ({entries.Length} keys)");
+    Console.WriteLine($"  ✓ {component}/appsettings.{environment}.json ({entries.Length} keys)");
 }
 
 Console.WriteLine();
 Console.WriteLine("═══════════════════════════════════════════════════════════");
-Console.WriteLine("  Done! Each component has its own appsettings.Development.json.");
+Console.WriteLine($"  Done! Each component has its own appsettings.{environment}.json.");
 Console.WriteLine("═══════════════════════════════════════════════════════════");
 
 // ── Helper: set a nested value in a JsonObject using : notation ───────────

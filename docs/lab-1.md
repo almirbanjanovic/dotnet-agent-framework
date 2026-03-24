@@ -106,7 +106,7 @@ Start-Sleep 15
 # Sync
 Push-Location src/config-sync
 $kvUri = (az keyvault show --name $KV --resource-group $RG --query properties.vaultUri -o tsv)
-dotnet run -- $kvUri
+dotnet run -- $kvUri Development
 Pop-Location
 
 # Close
@@ -120,7 +120,7 @@ sleep 15
 
 # Sync
 pushd src/config-sync
-dotnet run -- $(az keyvault show --name "$KV" --resource-group "$RG" --query properties.vaultUri -o tsv)
+dotnet run -- $(az keyvault show --name "$KV" --resource-group "$RG" --query properties.vaultUri -o tsv) Development
 popd
 
 # Close
