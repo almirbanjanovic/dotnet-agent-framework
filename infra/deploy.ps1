@@ -865,8 +865,8 @@ Write-Step "Running seed-data (dotnet run -- uses DefaultAzureCredential)"
 $SeedDataDir = Join-Path (Split-Path $ScriptDir) "src" "seed-data"
 Push-Location $SeedDataDir
 try {
-    $env:COSMOSDB_CRM_ENDPOINT = $CosmosEndpoint
-    $env:COSMOSDB_CRM_DATABASE = $CosmosDb
+    $env:CosmosDb__Endpoint = $CosmosEndpoint
+    $env:CosmosDb__DatabaseName = $CosmosDb
     $env:AzureAd__TenantId = $TenantId
     dotnet run
     if ($LASTEXITCODE -ne 0) { Write-Fail "seed-data failed"; exit 1 }
@@ -910,8 +910,8 @@ $EntraMapping = $EntraPairs -join ";"
 Write-Step "Linking Entra users to Cosmos DB Customers (dotnet run)"
 Push-Location $SeedDataDir
 try {
-    $env:COSMOSDB_CRM_ENDPOINT = $CosmosEndpoint
-    $env:COSMOSDB_CRM_DATABASE = $CosmosDb
+    $env:CosmosDb__Endpoint = $CosmosEndpoint
+    $env:CosmosDb__DatabaseName = $CosmosDb
     $env:CRM_DATA_PATH = "/dev/null"
     $env:ENTRA_MAPPING = $EntraMapping
     $env:AzureAd__TenantId = $TenantId

@@ -11,12 +11,12 @@ var configuration = new ConfigurationBuilder()
     .AddEnvironmentVariables()
     .Build();
 
-// Cosmos DB (CRM operational data)
-var cosmosEndpoint = configuration["COSMOSDB_CRM_ENDPOINT"]
-    ?? throw new InvalidOperationException("COSMOSDB_CRM_ENDPOINT is not set.");
-var databaseName = configuration["COSMOSDB_CRM_DATABASE"]
-    ?? throw new InvalidOperationException("COSMOSDB_CRM_DATABASE is not set.");
-var tenantId = configuration["AzureAd:TenantId"] ?? configuration["AzureAd__TenantId"];
+// Cosmos DB (CRM operational data) — hierarchical keys matching appsettings.json structure
+var cosmosEndpoint = configuration["CosmosDb:Endpoint"]
+    ?? throw new InvalidOperationException("CosmosDb:Endpoint is not set.");
+var databaseName = configuration["CosmosDb:DatabaseName"]
+    ?? throw new InvalidOperationException("CosmosDb:DatabaseName is not set.");
+var tenantId = configuration["AzureAd:TenantId"];
 
 // ---------------------------------------------------------------------------
 // Resolve data folder paths
@@ -51,7 +51,7 @@ try
     };
 
     // Pin to the project tenant when AzureAd:TenantId is available (populated
-    // by config-sync from Key Vault secret AzureAd__TenantId).
+    // by config-sync from Key Vault secret AzureAd--TenantId).
     var credential = string.IsNullOrEmpty(tenantId)
         ? new DefaultAzureCredential()
         : new DefaultAzureCredential(new DefaultAzureCredentialOptions { TenantId = tenantId });
