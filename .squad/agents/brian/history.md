@@ -192,3 +192,19 @@ src/crm-api/
 **Lesson:** Microsoft.Azure.Cosmos 3.46.1 requires explicit Newtonsoft.Json >= 10.0.2 reference (enforced via MSBuild target, not just NuGet dependency resolution). Add `<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />` to any project using this Cosmos SDK version.
 
 **Lesson:** The `dotnet new webapi` scaffold generates properties already in Directory.Build.props (TargetFramework, Nullable, ImplicitUsings). Always strip these from the generated csproj and keep only project-specific properties + package references.
+
+### 2026-03-24 — Unified Config Standard: config-sync rewrite, CRM API fix, utility migration
+
+**What:** Implemented the approved config naming standard (from Stewie's architecture decision) across all existing projects. Three commits:
+
+1. **config-sync rewrite** — Replaced flat single-file output with per-component manifest. Each of the 8 components (crm-api, crm-mcp, knowledge-mcp, crm-agent, product-agent, orchestrator-agent, bff-api, blazor-ui) gets its own `appsettings.json` with only its required secrets. KV secrets use new `PascalCase--Hierarchy` naming (e.g., `CosmosDb--CrmEndpoint`). The manifest maps KV secrets to local config keys with override support (e.g., `CosmosDb--CrmEndpoint` → `CosmosDb:Endpoint` in crm-api, while `CosmosDb--AgentsEndpoint` → `CosmosDb:Endpoint` in bff-api). Nested JSON output via `SetNestedValue` helper.
+
+2. **CRM API config fix** — Renamed `appsettings.template.json` → `appsettings.Development.json` (checked into git with safe defaults). Removed redundant `.AddJsonFile("appsettings.json")` and `.AddEnvironmentVariables()` from `Program.cs` — `WebApplication.CreateBuilder()` already loads these automatically. Config keys (`CosmosDb:Endpoint`, `CosmosDb:DatabaseName`, `AzureAd:TenantId`) were already hierarchical — no code changes needed.
+
+3. **simple-agent + seed-data migration** — Updated config keys: `AZURE_OPENAI_ENDPOINT` → `AzureOpenAi:Endpoint`, `AZURE_OPENAI_DEPLOYMENT_NAME` → `AzureOpenAi:DeploymentName`, `COSMOSDB_CRM_ENDPOINT` → `CosmosDb:Endpoint`, `COSMOSDB_CRM_DATABASE` → `CosmosDb:DatabaseName`. Removed `AzureAd__TenantId` fallback (redundant with proper `:` binding). Updated csproj files to reference own `appsettings.json` instead of shared `../appsettings.json`. Updated deploy scripts (`deploy.ps1`, `deploy.sh`) env vars to match: `CosmosDb__Endpoint`, `CosmosDb__DatabaseName`.
+
+**Build result:** `dotnet build dotnet-agent-framework.sln` — 0 errors, 0 warnings across all 4 projects.
+
+**Lesson:** When config-sync writes per-component files, the KV secret name (globally unique, e.g., `CosmosDb--CrmEndpoint`) can differ from the component's local config key (e.g., `CosmosDb:Endpoint`). The manifest handles this mapping — each component only knows about its own config keys, while KV names disambiguate globally (CRM vs Agents Cosmos DB).
+
+**Lesson:** `WebApplication.CreateBuilder()` in ASP.NET Core automatically calls `AddJsonFile("appsettings.json")`, `AddJsonFile("appsettings.{Environment}.json")`, and `AddEnvironmentVariables()`. Don't add them again in `Program.cs` — it creates duplicate config sources.
