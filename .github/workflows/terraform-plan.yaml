@@ -4,6 +4,9 @@ on:
       environment:
         required: true
         type: string
+      region:
+        required: false
+        type: string
     secrets:
       azureClientId:
         required: true
@@ -16,12 +19,80 @@ on:
         description: "Deployer public IP for firewall cleanup"
         value: ${{ jobs.terraform-plan.outputs.deployer_ip }}
 
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Select environment'
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+      region:
+        description: 'Azure region'
+        required: true
+        default: 'eastus2'
+        type: choice
+        options:
+          # United States
+          - eastus
+          - eastus2
+          - centralus
+          - northcentralus
+          - southcentralus
+          - westus
+          - westus2
+          - westus3
+          # Canada
+          - canadacentral
+          - canadaeast
+          # Brazil
+          - brazilsouth
+          # Europe
+          - westeurope
+          - northeurope
+          # France
+          - francecentral
+          # Germany
+          - germanywestcentral
+          # Norway
+          - norwayeast
+          # Sweden
+          - swedencentral
+          # Switzerland
+          - switzerlandnorth
+          # United Kingdom
+          - uksouth
+          # Italy
+          - italynorth
+          # Spain
+          - spaincentral
+          # Asia Pacific
+          - eastasia
+          - southeastasia
+          # Australia
+          - australiaeast
+          # Japan
+          - japaneast
+          # Korea
+          - koreacentral
+          # India
+          - centralindia
+          # UAE
+          - uaenorth
+          # Qatar
+          - qatarcentral
+          # South Africa
+          - southafricanorth
+
 env:
   TF_VAR_tags: ${{ vars.TAGS }}
   TF_VAR_resource_group_name: ${{ vars.RESOURCE_GROUP }}
   TF_VAR_environment: ${{ vars.ENVIRONMENT }}
   TF_VAR_base_name: ${{ vars.BASE_NAME }}
-  TF_VAR_location: ${{ vars.LOCATION }}
+  TF_VAR_location: ${{ inputs.region || vars.LOCATION || 'eastus2' }}
   # Foundry
   TF_VAR_cognitive_account_kind: ${{ vars.COGNITIVE_ACCOUNT_KIND }}
   TF_VAR_oai_sku_name: ${{ vars.OAI_SKU_NAME }}
