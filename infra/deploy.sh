@@ -190,12 +190,32 @@ read_hcl_value() {
     grep -E "^\s*${key}\s*=" "$file" | head -1 | sed 's/.*=\s*"\([^"]*\)".*/\1/'
 }
 
-# ── Select environment ───────────────────────────────────────────────────────────
+# ── Load deployment configuration ────────────────────────────────────────────
 
-mapfile -t tfvars_files < <(find "$TERRAFORM_DIR" -maxdepth 1 -name '*.tfvars' ! -name 'example.tfvars' -printf '%f\n' | sort)
+DEPLOY_ENV_FILE="$SCRIPT_DIR/deploy.env"
 
-if [[ ${#tfvars_files[@]} -eq 0 ]]; then
-    echo "No .tfvars files found — run init.sh first."; exit 1
+if [[ ! -f "$DEPLOY_ENV_FILE" ]]; then
+    echo "deploy.env not found. Run init first: ./init.sh"; exit 1
+fi
+
+# Parse deploy.env key=value pairs (skip comments and blank lines)
+ENVIRONMENT=""
+LOCATION=""
+BASE_NAME=""
+RESOURCE_GROUP=""
+while IFS='=' read -r key value; do
+    key=$(echo "$key" | xargs)
+    value=$(echo "$value" | xargs)
+    case "$key" in
+        ENVIRONMENT)    ENVIRONMENT="$value" ;;
+        LOCATION)       LOCATION="$value" ;;
+        BASE_NAME)      BASE_NAME="$value" ;;
+        RESOURCE_GROUP) RESOURCE_GROUP="$value" ;;
+    esac
+done < <(grep -E '^\s*[A-Z_]+=.+' "$DEPLOY_ENV_FILE")
+
+if [[ -z "$ENVIRONMENT" || -z "$LOCATION" || -z "$BASE_NAME" || -z "$RESOURCE_GROUP" ]]; then
+    echo "deploy.env is incomplete. Re-run init: ./init.sh"; exit 1
 fi
 
 banner
@@ -391,122 +411,35 @@ ENDJSON
     fi
 fi
 
-if [[ ${#tfvars_files[@]} -eq 1 ]]; then
-    ENVIRONMENT="${tfvars_files[0]%.tfvars}"
-    echo -e "    Found environment: ${C}${ENVIRONMENT}${W}"
-else
-    echo -e "    ${D}Available environments:${W}"
-    echo ""
-    for (( i=0; i<${#tfvars_files[@]}; i++ )); do
-        env_name="${tfvars_files[$i]%.tfvars}"
-        echo -e "      ${C}$((i+1)). ${env_name}${W}"
-    done
-    echo ""
-    read -p "    Select environment [1-${#tfvars_files[@]}]: " pick
-    if [[ "$pick" =~ ^[0-9]+$ ]]; then
-        idx=$((pick - 1))
-        if (( idx >= 0 && idx < ${#tfvars_files[@]} )); then
-            ENVIRONMENT="${tfvars_files[$idx]%.tfvars}"
-        else
-            echo "Invalid selection: $pick"; exit 1
-        fi
-    else
-        echo "Invalid selection: $pick"; exit 1
-    fi
-fi
-
-# ── Read config ──────────────────────────────────────────────────────────────────
+# ── Read backend config ──────────────────────────────────────────────────────
 
 TFVARS_FILE="$TERRAFORM_DIR/${ENVIRONMENT}.tfvars"
 BACKEND_FILE="$TERRAFORM_DIR/backend.hcl"
 
 [[ -f "$BACKEND_FILE" ]] || { echo "backend.hcl not found — run init.sh first."; exit 1; }
 
-RESOURCE_GROUP=$(read_hcl_value "$TFVARS_FILE" "resource_group_name")
-LOCATION=$(read_hcl_value "$TFVARS_FILE" "location")
-BASE_NAME=$(read_hcl_value "$TFVARS_FILE" "base_name")
 STORAGE_ACCOUNT=$(read_hcl_value "$BACKEND_FILE" "storage_account_name")
 
-if [[ -z "$RESOURCE_GROUP" || -z "$STORAGE_ACCOUNT" || -z "$ENVIRONMENT" ]]; then
-    echo "Could not read required values from config files. Re-run init.sh."; exit 1
+if [[ -z "$STORAGE_ACCOUNT" ]]; then
+    echo "Could not read storage_account_name from backend.hcl. Re-run init.sh."; exit 1
 fi
 
-# ── Region override ──────────────────────────────────────────────────────────
-DEFAULT_REGION="${LOCATION:-eastus2}"
-step "Select Azure region"
+# ── Display deployment configuration ─────────────────────────────────────────
+
 echo ""
-echo -e "    ${D}Azure Region Selection (grouped by data residency zone)${W}"
-echo -e "    ${D}─────────────────────────────────────────────────────────${W}"
-echo -e "    ${D}United States:   eastus, eastus2, centralus, northcentralus,${W}"
-echo -e "    ${D}                 southcentralus, westus, westus2, westus3${W}"
-echo -e "    ${D}Canada:          canadacentral, canadaeast${W}"
-echo -e "    ${D}Brazil:          brazilsouth${W}"
-echo -e "    ${D}Europe:          westeurope, northeurope${W}"
-echo -e "    ${D}France:          francecentral${W}"
-echo -e "    ${D}Germany:         germanywestcentral${W}"
-echo -e "    ${D}Norway:          norwayeast${W}"
-echo -e "    ${D}Sweden:          swedencentral${W}"
-echo -e "    ${D}Switzerland:     switzerlandnorth${W}"
-echo -e "    ${D}United Kingdom:  uksouth${W}"
-echo -e "    ${D}Italy:           italynorth${W}"
-echo -e "    ${D}Spain:           spaincentral${W}"
-echo -e "    ${D}Asia Pacific:    eastasia, southeastasia${W}"
-echo -e "    ${D}Australia:       australiaeast${W}"
-echo -e "    ${D}Japan:           japaneast${W}"
-echo -e "    ${D}Korea:           koreacentral${W}"
-echo -e "    ${D}India:           centralindia${W}"
-echo -e "    ${D}UAE:             uaenorth${W}"
-echo -e "    ${D}Qatar:           qatarcentral${W}"
-echo -e "    ${D}South Africa:    southafricanorth${W}"
+echo -e "    Deployment Configuration (from deploy.env)"
+echo -e "    ${D}──────────────────────────────────────────${W}"
+echo -e "    Environment:    ${C}${ENVIRONMENT}${W}"
+echo -e "    Region:         ${C}${LOCATION}${W}"
+echo -e "    Base Name:      ${C}${BASE_NAME}${W}"
+echo -e "    Resource Group: ${C}${RESOURCE_GROUP}${W}"
 echo ""
+read -p "    Continue with these settings? (Y/n): " confirm
+if [[ -n "$confirm" && ! "$confirm" =~ ^[Yy]$ ]]; then
+    echo -e "    ${Y}Aborted. Re-run init to change settings: ./init.sh${W}"
+    exit 0
+fi
 
-VALID_REGIONS=(
-    eastus eastus2 centralus northcentralus southcentralus
-    westus westus2 westus3
-    canadacentral canadaeast
-    brazilsouth
-    westeurope northeurope
-    francecentral
-    germanywestcentral
-    norwayeast
-    swedencentral
-    switzerlandnorth
-    uksouth
-    italynorth
-    spaincentral
-    eastasia southeastasia
-    australiaeast
-    japaneast
-    koreacentral
-    centralindia
-    uaenorth
-    qatarcentral
-    southafricanorth
-)
-
-while true; do
-    read -p "    Region (default: $DEFAULT_REGION): " region_input
-    if [[ -z "$region_input" ]]; then
-        LOCATION="$DEFAULT_REGION"
-        break
-    fi
-    region_input=$(echo "$region_input" | tr '[:upper:]' '[:lower:]' | xargs)
-    for r in "${VALID_REGIONS[@]}"; do
-        if [[ "$r" == "$region_input" ]]; then
-            LOCATION="$region_input"
-            break 2
-        fi
-    done
-    echo -e "    ${R}✗ Invalid region '$region_input'. Please choose from the list above.${W}"
-done
-done_ "Region: $LOCATION"
-
-banner
-
-echo -e "    Environment:     ${C}${ENVIRONMENT}${W}"
-echo -e "    Resource group:  ${C}${RESOURCE_GROUP}${W}"
-echo -e "    Storage account: ${C}${STORAGE_ACCOUNT}${W}"
-echo -e "    Location:        ${C}${LOCATION}${W}"
 echo ""
 
 # ── Get deployer IP ──────────────────────────────────────────────────────────
