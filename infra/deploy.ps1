@@ -575,6 +575,74 @@ if (-not $ResourceGroup -or -not $StorageAccount -or -not $Environment) {
     throw "Could not read required values from config files. Re-run init.ps1."
 }
 
+# ── Region override ──────────────────────────────────────────────────────────
+$defaultRegion = if ($Location) { $Location } else { "eastus2" }
+Write-Step "Select Azure region"
+Write-Host ""
+Write-Host "    Azure Region Selection (grouped by data residency zone)" -ForegroundColor DarkGray
+Write-Host "    ─────────────────────────────────────────────────────────" -ForegroundColor DarkGray
+Write-Host "    United States:   eastus, eastus2, centralus, northcentralus," -ForegroundColor DarkGray
+Write-Host "                     southcentralus, westus, westus2, westus3" -ForegroundColor DarkGray
+Write-Host "    Canada:          canadacentral, canadaeast" -ForegroundColor DarkGray
+Write-Host "    Brazil:          brazilsouth" -ForegroundColor DarkGray
+Write-Host "    Europe:          westeurope, northeurope" -ForegroundColor DarkGray
+Write-Host "    France:          francecentral" -ForegroundColor DarkGray
+Write-Host "    Germany:         germanywestcentral" -ForegroundColor DarkGray
+Write-Host "    Norway:          norwayeast" -ForegroundColor DarkGray
+Write-Host "    Sweden:          swedencentral" -ForegroundColor DarkGray
+Write-Host "    Switzerland:     switzerlandnorth" -ForegroundColor DarkGray
+Write-Host "    United Kingdom:  uksouth" -ForegroundColor DarkGray
+Write-Host "    Italy:           italynorth" -ForegroundColor DarkGray
+Write-Host "    Spain:           spaincentral" -ForegroundColor DarkGray
+Write-Host "    Asia Pacific:    eastasia, southeastasia" -ForegroundColor DarkGray
+Write-Host "    Australia:       australiaeast" -ForegroundColor DarkGray
+Write-Host "    Japan:           japaneast" -ForegroundColor DarkGray
+Write-Host "    Korea:           koreacentral" -ForegroundColor DarkGray
+Write-Host "    India:           centralindia" -ForegroundColor DarkGray
+Write-Host "    UAE:             uaenorth" -ForegroundColor DarkGray
+Write-Host "    Qatar:           qatarcentral" -ForegroundColor DarkGray
+Write-Host "    South Africa:    southafricanorth" -ForegroundColor DarkGray
+Write-Host ""
+
+$validRegions = @(
+    'eastus','eastus2','centralus','northcentralus','southcentralus',
+    'westus','westus2','westus3',
+    'canadacentral','canadaeast',
+    'brazilsouth',
+    'westeurope','northeurope',
+    'francecentral',
+    'germanywestcentral',
+    'norwayeast',
+    'swedencentral',
+    'switzerlandnorth',
+    'uksouth',
+    'italynorth',
+    'spaincentral',
+    'eastasia','southeastasia',
+    'australiaeast',
+    'japaneast',
+    'koreacentral',
+    'centralindia',
+    'uaenorth',
+    'qatarcentral',
+    'southafricanorth'
+)
+
+while ($true) {
+    $regionInput = Read-Host "    Region (default: $defaultRegion)"
+    if ([string]::IsNullOrWhiteSpace($regionInput)) {
+        $Location = $defaultRegion
+        break
+    }
+    $regionInput = $regionInput.Trim().ToLower()
+    if ($validRegions -contains $regionInput) {
+        $Location = $regionInput
+        break
+    }
+    Write-Host "    ✗ Invalid region '$regionInput'. Please choose from the list above." -ForegroundColor Red
+}
+Write-Done "Region: $Location"
+
 Write-Host ""
 Write-Host "    Environment:     " -NoNewLine; Write-Host "$Environment" -ForegroundColor Cyan
 Write-Host "    Resource group:  " -NoNewLine; Write-Host "$ResourceGroup" -ForegroundColor Cyan

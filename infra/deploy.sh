@@ -431,6 +431,76 @@ if [[ -z "$RESOURCE_GROUP" || -z "$STORAGE_ACCOUNT" || -z "$ENVIRONMENT" ]]; the
     echo "Could not read required values from config files. Re-run init.sh."; exit 1
 fi
 
+# ── Region override ──────────────────────────────────────────────────────────
+DEFAULT_REGION="${LOCATION:-eastus2}"
+step "Select Azure region"
+echo ""
+echo -e "    ${D}Azure Region Selection (grouped by data residency zone)${W}"
+echo -e "    ${D}─────────────────────────────────────────────────────────${W}"
+echo -e "    ${D}United States:   eastus, eastus2, centralus, northcentralus,${W}"
+echo -e "    ${D}                 southcentralus, westus, westus2, westus3${W}"
+echo -e "    ${D}Canada:          canadacentral, canadaeast${W}"
+echo -e "    ${D}Brazil:          brazilsouth${W}"
+echo -e "    ${D}Europe:          westeurope, northeurope${W}"
+echo -e "    ${D}France:          francecentral${W}"
+echo -e "    ${D}Germany:         germanywestcentral${W}"
+echo -e "    ${D}Norway:          norwayeast${W}"
+echo -e "    ${D}Sweden:          swedencentral${W}"
+echo -e "    ${D}Switzerland:     switzerlandnorth${W}"
+echo -e "    ${D}United Kingdom:  uksouth${W}"
+echo -e "    ${D}Italy:           italynorth${W}"
+echo -e "    ${D}Spain:           spaincentral${W}"
+echo -e "    ${D}Asia Pacific:    eastasia, southeastasia${W}"
+echo -e "    ${D}Australia:       australiaeast${W}"
+echo -e "    ${D}Japan:           japaneast${W}"
+echo -e "    ${D}Korea:           koreacentral${W}"
+echo -e "    ${D}India:           centralindia${W}"
+echo -e "    ${D}UAE:             uaenorth${W}"
+echo -e "    ${D}Qatar:           qatarcentral${W}"
+echo -e "    ${D}South Africa:    southafricanorth${W}"
+echo ""
+
+VALID_REGIONS=(
+    eastus eastus2 centralus northcentralus southcentralus
+    westus westus2 westus3
+    canadacentral canadaeast
+    brazilsouth
+    westeurope northeurope
+    francecentral
+    germanywestcentral
+    norwayeast
+    swedencentral
+    switzerlandnorth
+    uksouth
+    italynorth
+    spaincentral
+    eastasia southeastasia
+    australiaeast
+    japaneast
+    koreacentral
+    centralindia
+    uaenorth
+    qatarcentral
+    southafricanorth
+)
+
+while true; do
+    read -p "    Region (default: $DEFAULT_REGION): " region_input
+    if [[ -z "$region_input" ]]; then
+        LOCATION="$DEFAULT_REGION"
+        break
+    fi
+    region_input=$(echo "$region_input" | tr '[:upper:]' '[:lower:]' | xargs)
+    for r in "${VALID_REGIONS[@]}"; do
+        if [[ "$r" == "$region_input" ]]; then
+            LOCATION="$region_input"
+            break 2
+        fi
+    done
+    echo -e "    ${R}✗ Invalid region '$region_input'. Please choose from the list above.${W}"
+done
+done_ "Region: $LOCATION"
+
 banner
 
 echo -e "    Environment:     ${C}${ENVIRONMENT}${W}"
