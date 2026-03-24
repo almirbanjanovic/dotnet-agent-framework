@@ -684,14 +684,23 @@ try {
     # Check if cluster is stopped
     if ($aks.powerState -eq "Stopped") {
         Write-Host ""
-        Write-Host "    AKS cluster '$AksClusterName' is stopped (deallocated)." -ForegroundColor Red
-        Write-Host "    A stopped cluster has no control plane — DNS will not resolve." -ForegroundColor Red
+        Write-Host "    AKS cluster '$AksClusterName' is stopped (deallocated)." -ForegroundColor Yellow
+        Write-Host "    A stopped cluster has no control plane — DNS will not resolve." -ForegroundColor Yellow
         Write-Host ""
-        Write-Host "    Start the cluster first:" -ForegroundColor Yellow
-        Write-Host "      az aks start --name $AksClusterName --resource-group $ResourceGroup" -ForegroundColor Cyan
-        Write-Host ""
-        Write-Fail "AKS cluster is stopped. Start it and re-run."
-        exit 1
+        $startCluster = Read-Host "    Start the cluster now? (Y/n)"
+        if ($startCluster -eq '' -or $startCluster -match '^[Yy]') {
+            Write-Host ""
+            Write-Host "    Starting AKS cluster (this takes 3-5 minutes)..." -ForegroundColor Cyan
+            az aks start --name $AksClusterName --resource-group $ResourceGroup
+            if ($LASTEXITCODE -ne 0) {
+                Write-Fail "Failed to start AKS cluster."
+                exit 1
+            }
+            Write-Done "AKS cluster started successfully"
+        } else {
+            Write-Fail "AKS cluster is stopped. Cannot proceed without a running cluster."
+            exit 1
+        }
     }
 
     # Verify FQDN resolves
@@ -865,8 +874,8 @@ Write-Step "Running seed-data (dotnet run -- uses DefaultAzureCredential)"
 $SeedDataDir = Join-Path (Split-Path $ScriptDir) "src" "seed-data"
 Push-Location $SeedDataDir
 try {
-    $env:CosmosDb__Endpoint = $CosmosEndpoint
-    $env:CosmosDb__DatabaseName = $CosmosDb
+    $env:COSMOSDB_CRM_ENDPOINT = $CosmosEndpoint
+    $env:COSMOSDB_CRM_DATABASE = $CosmosDb
     $env:AzureAd__TenantId = $TenantId
     dotnet run
     if ($LASTEXITCODE -ne 0) { Write-Fail "seed-data failed"; exit 1 }
@@ -910,8 +919,8 @@ $EntraMapping = $EntraPairs -join ";"
 Write-Step "Linking Entra users to Cosmos DB Customers (dotnet run)"
 Push-Location $SeedDataDir
 try {
-    $env:CosmosDb__Endpoint = $CosmosEndpoint
-    $env:CosmosDb__DatabaseName = $CosmosDb
+    $env:COSMOSDB_CRM_ENDPOINT = $CosmosEndpoint
+    $env:COSMOSDB_CRM_DATABASE = $CosmosDb
     $env:CRM_DATA_PATH = "/dev/null"
     $env:ENTRA_MAPPING = $EntraMapping
     $env:AzureAd__TenantId = $TenantId

@@ -654,13 +654,18 @@ AKS_FQDN=$(echo "$AKS_JSON" | jq -r '.fqdn // empty')
 # Check if cluster is stopped
 if [[ "$AKS_POWER_STATE" == "Stopped" ]]; then
     echo ""
-    echo -e "    ${R}AKS cluster '${AKS_CLUSTER_NAME}' is stopped (deallocated).${W}"
-    echo -e "    ${R}A stopped cluster has no control plane — DNS will not resolve.${W}"
+    echo -e "    ${Y}AKS cluster '${AKS_CLUSTER_NAME}' is stopped (deallocated).${W}"
+    echo -e "    ${Y}A stopped cluster has no control plane — DNS will not resolve.${W}"
     echo ""
-    echo -e "    ${Y}Start the cluster first:${W}"
-    echo -e "    ${C}  az aks start --name ${AKS_CLUSTER_NAME} --resource-group ${RESOURCE_GROUP}${W}"
-    echo ""
-    fail "AKS cluster is stopped. Start it and re-run."
+    read -rp "    Start the cluster now? (Y/n): " START_CLUSTER
+    if [[ -z "$START_CLUSTER" || "$START_CLUSTER" =~ ^[Yy] ]]; then
+        echo ""
+        echo -e "    ${C}Starting AKS cluster (this takes 3-5 minutes)...${W}"
+        az aks start --name "$AKS_CLUSTER_NAME" --resource-group "$RESOURCE_GROUP"
+        done_ "AKS cluster started successfully"
+    else
+        fail "AKS cluster is stopped. Cannot proceed without a running cluster."
+    fi
 fi
 
 # Verify FQDN resolves
