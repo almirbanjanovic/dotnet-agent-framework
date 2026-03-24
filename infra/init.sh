@@ -306,31 +306,6 @@ done_ "Environment: $GITHUB_ENV"
 
 # ── Region ───────────────────────────────────────────────────────────────────
 step "Select Azure region"
-echo ""
-echo -e "    ${D}Azure Region Selection (grouped by data residency zone)${W}"
-echo -e "    ${D}─────────────────────────────────────────────────────────${W}"
-echo -e "    ${D}United States:   eastus, eastus2, centralus, northcentralus,${W}"
-echo -e "    ${D}                 southcentralus, westus, westus2, westus3${W}"
-echo -e "    ${D}Canada:          canadacentral, canadaeast${W}"
-echo -e "    ${D}Brazil:          brazilsouth${W}"
-echo -e "    ${D}Europe:          westeurope, northeurope${W}"
-echo -e "    ${D}France:          francecentral${W}"
-echo -e "    ${D}Germany:         germanywestcentral${W}"
-echo -e "    ${D}Norway:          norwayeast${W}"
-echo -e "    ${D}Sweden:          swedencentral${W}"
-echo -e "    ${D}Switzerland:     switzerlandnorth${W}"
-echo -e "    ${D}United Kingdom:  uksouth${W}"
-echo -e "    ${D}Italy:           italynorth${W}"
-echo -e "    ${D}Spain:           spaincentral${W}"
-echo -e "    ${D}Asia Pacific:    eastasia, southeastasia${W}"
-echo -e "    ${D}Australia:       australiaeast${W}"
-echo -e "    ${D}Japan:           japaneast${W}"
-echo -e "    ${D}Korea:           koreacentral${W}"
-echo -e "    ${D}India:           centralindia${W}"
-echo -e "    ${D}UAE:             uaenorth${W}"
-echo -e "    ${D}Qatar:           qatarcentral${W}"
-echo -e "    ${D}South Africa:    southafricanorth${W}"
-echo ""
 
 VALID_REGIONS=(
     eastus eastus2 centralus northcentralus southcentralus
@@ -356,20 +331,92 @@ VALID_REGIONS=(
     southafricanorth
 )
 
+REGION_COUNT=${#VALID_REGIONS[@]}
+
+# Helper: print a row of numbered regions (up to 3 per line)
+print_region_row() {
+    local line=""
+    for i in "$@"; do
+        line+=$(printf "%2d) %-16s" "$i" "${VALID_REGIONS[$((i-1))]}")
+    done
+    echo -e "       ${D}${line}${W}"
+}
+
+echo ""
+echo -e "    ${D}Azure Region (grouped by data residency zone)${W}"
+echo -e "    ${D}──────────────────────────────────────────────${W}"
+
+echo -e "    ${D}United States${W}"
+print_region_row 1 2 3
+print_region_row 4 5 6
+print_region_row 7 8
+echo -e "    ${D}Canada${W}"
+print_region_row 9 10
+echo -e "    ${D}Brazil${W}"
+print_region_row 11
+echo -e "    ${D}Europe${W}"
+print_region_row 12 13
+echo -e "    ${D}France${W}"
+print_region_row 14
+echo -e "    ${D}Germany${W}"
+print_region_row 15
+echo -e "    ${D}Norway${W}"
+print_region_row 16
+echo -e "    ${D}Sweden${W}"
+print_region_row 17
+echo -e "    ${D}Switzerland${W}"
+print_region_row 18
+echo -e "    ${D}United Kingdom${W}"
+print_region_row 19
+echo -e "    ${D}Italy${W}"
+print_region_row 20
+echo -e "    ${D}Spain${W}"
+print_region_row 21
+echo -e "    ${D}Asia Pacific${W}"
+print_region_row 22 23
+echo -e "    ${D}Australia${W}"
+print_region_row 24
+echo -e "    ${D}Japan${W}"
+print_region_row 25
+echo -e "    ${D}Korea${W}"
+print_region_row 26
+echo -e "    ${D}India${W}"
+print_region_row 27
+echo -e "    ${D}UAE${W}"
+print_region_row 28
+echo -e "    ${D}Qatar${W}"
+print_region_row 29
+echo -e "    ${D}South Africa${W}"
+print_region_row 30
+echo ""
+
+DEFAULT_INDEX=2   # eastus2
+
 while true; do
-    read -p "    Region (default: eastus2): " region_input
+    read -p "    Select region [$DEFAULT_INDEX]: " region_input
     if [[ -z "$region_input" ]]; then
-        LOCATION="eastus2"
+        LOCATION="${VALID_REGIONS[$((DEFAULT_INDEX-1))]}"
         break
     fi
-    region_input=$(echo "$region_input" | tr '[:upper:]' '[:lower:]' | xargs)
+    region_input=$(echo "$region_input" | xargs)
+    # Check if input is a number
+    if [[ "$region_input" =~ ^[0-9]+$ ]]; then
+        if (( region_input >= 1 && region_input <= REGION_COUNT )); then
+            LOCATION="${VALID_REGIONS[$((region_input-1))]}"
+            break
+        fi
+        echo -e "    ${R}✗ Invalid selection '$region_input'. Enter a number 1-${REGION_COUNT} or a region name.${W}"
+        continue
+    fi
+    # Backward compatibility: accept region name
+    region_input=$(echo "$region_input" | tr '[:upper:]' '[:lower:]')
     for r in "${VALID_REGIONS[@]}"; do
         if [[ "$r" == "$region_input" ]]; then
             LOCATION="$region_input"
             break 2
         fi
     done
-    echo -e "    ${R}✗ Invalid region '$region_input'. Please choose from the list above.${W}"
+    echo -e "    ${R}✗ Invalid region '$region_input'. Enter a number 1-${REGION_COUNT} or a region name.${W}"
 done
 done_ "Region: $LOCATION"
 

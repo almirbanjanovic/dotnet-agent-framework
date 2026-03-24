@@ -291,31 +291,6 @@ Write-Done "Environment: $GitHubEnv"
 
 # ── Region ───────────────────────────────────────────────────────────────────
 Write-Step "Select Azure region"
-Write-Host ""
-Write-Host "    Azure Region Selection (grouped by data residency zone)" -ForegroundColor DarkGray
-Write-Host "    ─────────────────────────────────────────────────────────" -ForegroundColor DarkGray
-Write-Host "    United States:   eastus, eastus2, centralus, northcentralus," -ForegroundColor DarkGray
-Write-Host "                     southcentralus, westus, westus2, westus3" -ForegroundColor DarkGray
-Write-Host "    Canada:          canadacentral, canadaeast" -ForegroundColor DarkGray
-Write-Host "    Brazil:          brazilsouth" -ForegroundColor DarkGray
-Write-Host "    Europe:          westeurope, northeurope" -ForegroundColor DarkGray
-Write-Host "    France:          francecentral" -ForegroundColor DarkGray
-Write-Host "    Germany:         germanywestcentral" -ForegroundColor DarkGray
-Write-Host "    Norway:          norwayeast" -ForegroundColor DarkGray
-Write-Host "    Sweden:          swedencentral" -ForegroundColor DarkGray
-Write-Host "    Switzerland:     switzerlandnorth" -ForegroundColor DarkGray
-Write-Host "    United Kingdom:  uksouth" -ForegroundColor DarkGray
-Write-Host "    Italy:           italynorth" -ForegroundColor DarkGray
-Write-Host "    Spain:           spaincentral" -ForegroundColor DarkGray
-Write-Host "    Asia Pacific:    eastasia, southeastasia" -ForegroundColor DarkGray
-Write-Host "    Australia:       australiaeast" -ForegroundColor DarkGray
-Write-Host "    Japan:           japaneast" -ForegroundColor DarkGray
-Write-Host "    Korea:           koreacentral" -ForegroundColor DarkGray
-Write-Host "    India:           centralindia" -ForegroundColor DarkGray
-Write-Host "    UAE:             uaenorth" -ForegroundColor DarkGray
-Write-Host "    Qatar:           qatarcentral" -ForegroundColor DarkGray
-Write-Host "    South Africa:    southafricanorth" -ForegroundColor DarkGray
-Write-Host ""
 
 $validRegions = @(
     'eastus','eastus2','centralus','northcentralus','southcentralus',
@@ -341,18 +316,76 @@ $validRegions = @(
     'southafricanorth'
 )
 
+# Geography groups: name → array of 1-based indices into $validRegions
+$regionGroups = [ordered]@{
+    'United States'  = @(1,2,3,4,5,6,7,8)
+    'Canada'         = @(9,10)
+    'Brazil'         = @(11)
+    'Europe'         = @(12,13)
+    'France'         = @(14)
+    'Germany'        = @(15)
+    'Norway'         = @(16)
+    'Sweden'         = @(17)
+    'Switzerland'    = @(18)
+    'United Kingdom' = @(19)
+    'Italy'          = @(20)
+    'Spain'          = @(21)
+    'Asia Pacific'   = @(22,23)
+    'Australia'      = @(24)
+    'Japan'          = @(25)
+    'Korea'          = @(26)
+    'India'          = @(27)
+    'UAE'            = @(28)
+    'Qatar'          = @(29)
+    'South Africa'   = @(30)
+}
+
+Write-Host ""
+Write-Host "    Azure Region (grouped by data residency zone)" -ForegroundColor DarkGray
+Write-Host "    ──────────────────────────────────────────────" -ForegroundColor DarkGray
+
+foreach ($geo in $regionGroups.Keys) {
+    Write-Host "    $geo" -ForegroundColor DarkGray
+    $indices = $regionGroups[$geo]
+    $items = @()
+    foreach ($i in $indices) {
+        $items += "{0,2}) {1}" -f $i, $validRegions[$i - 1]
+    }
+    # Print 3 items per line
+    for ($r = 0; $r -lt $items.Count; $r += 3) {
+        $end = [Math]::Min($r + 3, $items.Count) - 1
+        $line = ($items[$r..$end] | ForEach-Object { $_.PadRight(19) }) -join ''
+        Write-Host "       $line" -ForegroundColor DarkGray
+    }
+}
+Write-Host ""
+
+$defaultIndex = 2   # eastus2
+
 while ($true) {
-    $regionInput = Read-Host "    Region (default: eastus2)"
+    $regionInput = Read-Host "    Select region [$defaultIndex]"
     if ([string]::IsNullOrWhiteSpace($regionInput)) {
-        $Location = "eastus2"
+        $Location = $validRegions[$defaultIndex - 1]
         break
     }
-    $regionInput = $regionInput.Trim().ToLower()
+    $regionInput = $regionInput.Trim()
+    # Check if input is a number
+    $num = 0
+    if ([int]::TryParse($regionInput, [ref]$num)) {
+        if ($num -ge 1 -and $num -le $validRegions.Count) {
+            $Location = $validRegions[$num - 1]
+            break
+        }
+        Write-Host "    ✗ Invalid selection '$regionInput'. Enter a number 1-$($validRegions.Count) or a region name." -ForegroundColor Red
+        continue
+    }
+    # Backward compatibility: accept region name
+    $regionInput = $regionInput.ToLower()
     if ($validRegions -contains $regionInput) {
         $Location = $regionInput
         break
     }
-    Write-Host "    ✗ Invalid region '$regionInput'. Please choose from the list above." -ForegroundColor Red
+    Write-Host "    ✗ Invalid region '$regionInput'. Enter a number 1-$($validRegions.Count) or a region name." -ForegroundColor Red
 }
 Write-Done "Region: $Location"
 
