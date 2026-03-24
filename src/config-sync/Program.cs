@@ -91,18 +91,19 @@ var componentManifest = new Dictionary<string, (string KvSecret, string ConfigKe
     ["bff-api"] =
     [
         ("Orchestrator--BaseUrl",       "Orchestrator:BaseUrl"),
-        ("CosmosDb--AgentsEndpoint",    "CosmosDb:Endpoint"),
-        ("CosmosDb--AgentsDatabase",    "CosmosDb:DatabaseName"),
-        ("AzureAd--TenantId",           "AzureAd:TenantId"),
-        ("AzureAd--ClientId",           "AzureAd:ClientId"),
+        ("CosmosDb--AgentsEndpoint",    "CosmosDb:AgentsEndpoint"),
+        ("CosmosDb--AgentsDatabase",    "CosmosDb:AgentsDatabase"),
         ("Storage--ImagesEndpoint",     "Storage:ImagesEndpoint"),
         ("Storage--ImagesAccountName",  "Storage:ImagesAccountName"),
         ("Storage--ImagesContainer",    "Storage:ImagesContainer"),
+        ("AzureAd--TenantId",           "AzureAd:TenantId"),
+        ("AzureAd--BffClientId",        "AzureAd:BffClientId"),
+        ("Bff--Hostname",               "Bff:Hostname"),
     ],
     ["blazor-ui"] =
     [
         ("Bff--BaseUrl",                "Bff:BaseUrl"),
-        ("AzureAd--ClientId",           "AzureAd:ClientId"),
+        ("AzureAd--BffClientId",        "AzureAd:BffClientId"),
         ("AzureAd--TenantId",           "AzureAd:TenantId"),
     ],
 };
