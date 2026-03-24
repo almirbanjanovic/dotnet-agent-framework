@@ -4,14 +4,21 @@ using Azure.Identity;
 using Azure.Security.KeyVault.Secrets;
 
 // ---------------------------------------------------------------------------
-// Config Sync — pulls secrets from Azure Key Vault into src/appsettings.json
+// Config Sync — pulls secrets from Azure Key Vault into per-component appsettings.json
 // ---------------------------------------------------------------------------
 // Usage:
 //   dotnet run -- <key-vault-uri>
 //   dotnet run -- https://kv-agentic-ai-001.vault.azure.net/
 //
 // Authenticates via DefaultAzureCredential (az login locally, managed identity on AKS).
-// Writes values to ../appsettings.json so all apps under src/ can use them.
+// Writes a SEPARATE appsettings.json for each component under src/<component>/.
+//
+// Key Vault naming convention: PascalCase--Hierarchy (double-hyphen = .NET : separator)
+//   e.g., CosmosDb--CrmEndpoint → { "CosmosDb": { "CrmEndpoint": "" } }
+//
+// Each component's manifest maps KV secrets to local config keys, allowing
+// the same KV secret (e.g., CosmosDb--CrmEndpoint) to appear as a different
+// local key per component (e.g., CosmosDb:Endpoint in crm-api).
 // ---------------------------------------------------------------------------
 
 if (args.Length == 0 || string.IsNullOrWhiteSpace(args[0]))
@@ -26,72 +33,173 @@ if (args.Length == 0 || string.IsNullOrWhiteSpace(args[0]))
 var keyVaultUri = args[0].Trim();
 
 Console.WriteLine("═══════════════════════════════════════════════════════════");
-Console.WriteLine("  Config Sync — Key Vault → appsettings.json");
+Console.WriteLine("  Config Sync — Key Vault → per-component appsettings.json");
 Console.WriteLine("═══════════════════════════════════════════════════════════");
 Console.WriteLine();
 Console.WriteLine($"  Key Vault: {keyVaultUri}");
 Console.WriteLine($"  Auth:      DefaultAzureCredential (az login)");
 Console.WriteLine();
 
-// Map Key Vault secret names (hyphens) to appsettings.json keys (underscores)
-var secretMapping = new Dictionary<string, string>
+// ── Component Manifest ────────────────────────────────────────────────────
+// Maps each component to its required Key Vault secrets.
+// Format: (kvSecret, configKey) — configKey uses : notation for nesting.
+var componentManifest = new Dictionary<string, (string KvSecret, string ConfigKey)[]>
 {
-    ["AZURE-OPENAI-ENDPOINT"]              = "AZURE_OPENAI_ENDPOINT",
-    ["AZURE-OPENAI-DEPLOYMENT-NAME"]       = "AZURE_OPENAI_DEPLOYMENT_NAME",
-    ["AZURE-OPENAI-EMBEDDING-DEPLOYMENT"]  = "AZURE_OPENAI_EMBEDDING_DEPLOYMENT",
-    ["COSMOSDB-AGENTS-ENDPOINT"]           = "COSMOSDB_AGENTS_ENDPOINT",
-    ["COSMOSDB-AGENTS-DATABASE"]           = "COSMOSDB_AGENTS_DATABASE",
-    ["COSMOSDB-CRM-ENDPOINT"]             = "COSMOSDB_CRM_ENDPOINT",
-    ["COSMOSDB-CRM-DATABASE"]             = "COSMOSDB_CRM_DATABASE",
-    ["STORAGE-IMAGES-ENDPOINT"]            = "STORAGE_IMAGES_ENDPOINT",
-    ["STORAGE-IMAGES-ACCOUNT-NAME"]        = "STORAGE_IMAGES_ACCOUNT_NAME",
-    ["STORAGE-IMAGES-CONTAINER"]           = "STORAGE_IMAGES_CONTAINER",
-    ["SEARCH-ENDPOINT"]                    = "SEARCH_ENDPOINT",
-    ["SEARCH-INDEX-NAME"]                  = "SEARCH_INDEX_NAME",
-    ["ENTRA-BFF-CLIENT-ID"]                = "AzureAd__ClientId",
-    ["ENTRA-TENANT-ID"]                    = "AzureAd__TenantId",
-    ["ENTRA-BFF-HOSTNAME"]                 = "BFF_HOSTNAME",
+    ["crm-api"] =
+    [
+        ("CosmosDb--CrmEndpoint",       "CosmosDb:Endpoint"),
+        ("CosmosDb--CrmDatabase",       "CosmosDb:DatabaseName"),
+        ("AzureAd--TenantId",           "AzureAd:TenantId"),
+    ],
+    ["crm-mcp"] =
+    [
+        ("CrmApi--BaseUrl",             "CrmApi:BaseUrl"),
+        ("AzureAd--TenantId",           "AzureAd:TenantId"),
+    ],
+    ["knowledge-mcp"] =
+    [
+        ("Search--Endpoint",            "Search:Endpoint"),
+        ("Search--IndexName",           "Search:IndexName"),
+        ("Storage--ImagesEndpoint",     "Storage:ImagesEndpoint"),
+        ("Storage--ImagesAccountName",  "Storage:ImagesAccountName"),
+        ("Storage--ImagesContainer",    "Storage:ImagesContainer"),
+        ("AzureAd--TenantId",           "AzureAd:TenantId"),
+    ],
+    ["crm-agent"] =
+    [
+        ("AzureOpenAi--Endpoint",       "AzureOpenAi:Endpoint"),
+        ("AzureOpenAi--DeploymentName", "AzureOpenAi:DeploymentName"),
+        ("CrmMcp--BaseUrl",             "CrmMcp:BaseUrl"),
+        ("AzureAd--TenantId",           "AzureAd:TenantId"),
+    ],
+    ["product-agent"] =
+    [
+        ("AzureOpenAi--Endpoint",       "AzureOpenAi:Endpoint"),
+        ("AzureOpenAi--DeploymentName", "AzureOpenAi:DeploymentName"),
+        ("KnowledgeMcp--BaseUrl",       "KnowledgeMcp:BaseUrl"),
+        ("CrmMcp--BaseUrl",             "CrmMcp:BaseUrl"),
+        ("AzureAd--TenantId",           "AzureAd:TenantId"),
+    ],
+    ["orchestrator-agent"] =
+    [
+        ("AzureOpenAi--Endpoint",       "AzureOpenAi:Endpoint"),
+        ("AzureOpenAi--DeploymentName", "AzureOpenAi:DeploymentName"),
+        ("CrmAgent--BaseUrl",           "CrmAgent:BaseUrl"),
+        ("ProductAgent--BaseUrl",       "ProductAgent:BaseUrl"),
+        ("AzureAd--TenantId",           "AzureAd:TenantId"),
+    ],
+    ["bff-api"] =
+    [
+        ("Orchestrator--BaseUrl",       "Orchestrator:BaseUrl"),
+        ("CosmosDb--AgentsEndpoint",    "CosmosDb:Endpoint"),
+        ("CosmosDb--AgentsDatabase",    "CosmosDb:DatabaseName"),
+        ("AzureAd--TenantId",           "AzureAd:TenantId"),
+        ("AzureAd--ClientId",           "AzureAd:ClientId"),
+        ("Storage--ImagesEndpoint",     "Storage:ImagesEndpoint"),
+        ("Storage--ImagesAccountName",  "Storage:ImagesAccountName"),
+        ("Storage--ImagesContainer",    "Storage:ImagesContainer"),
+    ],
+    ["blazor-ui"] =
+    [
+        ("Bff--BaseUrl",                "Bff:BaseUrl"),
+        ("AzureAd--ClientId",           "AzureAd:ClientId"),
+        ("AzureAd--TenantId",           "AzureAd:TenantId"),
+    ],
 };
 
-var credential = new DefaultAzureCredential();
+// ── Collect unique KV secrets ─────────────────────────────────────────────
+var allSecretNames = componentManifest.Values
+    .SelectMany(entries => entries.Select(e => e.KvSecret))
+    .Distinct()
+    .OrderBy(n => n)
+    .ToList();
 
-// Connect to Key Vault
+var credential = new DefaultAzureCredential();
 var client = new SecretClient(new Uri(keyVaultUri), credential);
 
-// Read secrets
-var settings = new JsonObject();
-int found = 0;
+// ── Fetch secrets from Key Vault ──────────────────────────────────────────
+var secretValues = new Dictionary<string, string>();
+var found = 0;
 
-foreach (var (secretName, configKey) in secretMapping)
+Console.WriteLine("  Fetching secrets from Key Vault...");
+Console.WriteLine();
+
+foreach (var secretName in allSecretNames)
 {
     try
     {
         var secret = await client.GetSecretAsync(secretName);
-        settings[configKey] = secret.Value.Value;
-        Console.WriteLine($"  ✓ {secretName} → {configKey}");
+        secretValues[secretName] = secret.Value.Value;
+        Console.WriteLine($"  ✓ {secretName}");
         found++;
     }
     catch (Azure.RequestFailedException ex) when (ex.Status == 404)
     {
-        Console.WriteLine($"  ⚠ {secretName} — not found in Key Vault, skipping");
-        settings[configKey] = "";
+        Console.WriteLine($"  ⚠ {secretName} — not found, skipping");
+        secretValues[secretName] = "";
     }
     catch (Exception ex)
     {
         Console.WriteLine($"  ✗ {secretName} — error: {ex.Message}");
-        settings[configKey] = "";
+        secretValues[secretName] = "";
     }
 }
 
-// Write to appsettings.json (in the src/ folder, one level up from config-sync/)
-var appSettingsPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "appsettings.json"));
+Console.WriteLine();
+Console.WriteLine($"  Fetched {found}/{allSecretNames.Count} secrets");
+Console.WriteLine();
 
-var json = settings.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
-await File.WriteAllTextAsync(appSettingsPath, json);
+// ── Write per-component appsettings.json ──────────────────────────────────
+// Resolve src/ directory (config-sync sits at src/config-sync/)
+var srcDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
+var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
+
+Console.WriteLine("  Writing per-component appsettings.json files...");
+Console.WriteLine();
+
+foreach (var (component, entries) in componentManifest)
+{
+    var componentDir = Path.Combine(srcDir, component);
+    if (!Directory.Exists(componentDir))
+    {
+        Console.WriteLine($"  ⚠ {component}/ — directory not found, skipping");
+        continue;
+    }
+
+    var root = new JsonObject();
+    foreach (var (kvSecret, configKey) in entries)
+    {
+        var value = secretValues.GetValueOrDefault(kvSecret, "");
+        SetNestedValue(root, configKey, value);
+    }
+
+    var outputPath = Path.Combine(componentDir, "appsettings.json");
+    var json = root.ToJsonString(jsonOptions);
+    await File.WriteAllTextAsync(outputPath, json + Environment.NewLine);
+    Console.WriteLine($"  ✓ {component}/appsettings.json ({entries.Length} keys)");
+}
 
 Console.WriteLine();
-Console.WriteLine($"  Wrote {found}/{secretMapping.Count} secrets to {appSettingsPath}");
-Console.WriteLine();
 Console.WriteLine("═══════════════════════════════════════════════════════════");
-Console.WriteLine("  Done! Apps can now read from appsettings.json.");
+Console.WriteLine("  Done! Each component has its own appsettings.json.");
 Console.WriteLine("═══════════════════════════════════════════════════════════");
+
+// ── Helper: set a nested value in a JsonObject using : notation ───────────
+static void SetNestedValue(JsonObject root, string configKey, string value)
+{
+    var segments = configKey.Split(':');
+    var current = root;
+
+    for (var i = 0; i < segments.Length - 1; i++)
+    {
+        if (current[segments[i]] is not JsonObject child)
+        {
+            child = new JsonObject();
+            current[segments[i]] = child;
+        }
+
+        current = child;
+    }
+
+    current[segments[^1]] = value;
+}
