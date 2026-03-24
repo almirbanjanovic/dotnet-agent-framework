@@ -568,54 +568,55 @@ module "keyvault_secrets" {
   key_vault_id = module.keyvault.id
 
   secrets = {
-    "AZURE-OPENAI-ENDPOINT"             = module.foundry.endpoint
-    "AZURE-OPENAI-DEPLOYMENT-NAME"      = module.foundry.deployment_name
-    "AZURE-OPENAI-EMBEDDING-DEPLOYMENT" = module.foundry.embedding_deployment_name
-    "COSMOSDB-AGENTS-ENDPOINT"          = module.cosmosdb_agents.endpoint
-    "COSMOSDB-AGENTS-DATABASE"          = module.cosmosdb_agents.database_name
-    "COSMOSDB-CRM-ENDPOINT"             = module.cosmosdb_crm.endpoint
-    "COSMOSDB-CRM-DATABASE"             = module.cosmosdb_crm.database_name
-    "STORAGE-IMAGES-ENDPOINT"           = module.storage_images.primary_blob_endpoint
-    "STORAGE-IMAGES-ACCOUNT-NAME"       = module.storage_images.name
-    "STORAGE-IMAGES-CONTAINER"          = module.storage_images.container_names["images"]
-    "SEARCH-ENDPOINT"                   = module.search.endpoint
-    "SEARCH-INDEX-NAME"                 = module.knowledge_source.index_name
-
-    # Workload identity client IDs (used by Helm at deploy time)
-    "IDENTITY-BFF-CLIENT-ID"        = module.identity.identities["bff"].client_id
-    "IDENTITY-CRM-API-CLIENT-ID"    = module.identity.identities["crm_api"].client_id
-    "IDENTITY-CRM-MCP-CLIENT-ID"    = module.identity.identities["crm_mcp"].client_id
-    "IDENTITY-KNOW-MCP-CLIENT-ID"   = module.identity.identities["know_mcp"].client_id
-    "IDENTITY-CRM-AGENT-CLIENT-ID"  = module.agent_identity.agents["crm_agent"].client_id
-    "IDENTITY-PROD-AGENT-CLIENT-ID" = module.agent_identity.agents["prod_agent"].client_id
-    "IDENTITY-ORCH-AGENT-CLIENT-ID" = module.agent_identity.agents["orch_agent"].client_id
-
-    # Agent identity details (Entra Agent ID platform)
-    "AGENT-CRM-OBJECT-ID"      = module.agent_identity.agents["crm_agent"].object_id
-    "AGENT-PROD-OBJECT-ID"     = module.agent_identity.agents["prod_agent"].object_id
-    "AGENT-ORCH-OBJECT-ID"     = module.agent_identity.agents["orch_agent"].object_id
-    "AGENT-CRM-APP-OBJECT-ID"  = module.agent_identity.agents["crm_agent"].app_object_id
-    "AGENT-PROD-APP-OBJECT-ID" = module.agent_identity.agents["prod_agent"].app_object_id
-    "AGENT-ORCH-APP-OBJECT-ID" = module.agent_identity.agents["orch_agent"].app_object_id
+    # App-consumed secrets (PascalCase--Hierarchy → .NET Section:Key)
+    "AzureOpenAi--Endpoint"            = module.foundry.endpoint
+    "AzureOpenAi--DeploymentName"      = module.foundry.deployment_name
+    "AzureOpenAi--EmbeddingDeployment" = module.foundry.embedding_deployment_name
+    "CosmosDb--AgentsEndpoint"         = module.cosmosdb_agents.endpoint
+    "CosmosDb--AgentsDatabase"         = module.cosmosdb_agents.database_name
+    "CosmosDb--CrmEndpoint"            = module.cosmosdb_crm.endpoint
+    "CosmosDb--CrmDatabase"            = module.cosmosdb_crm.database_name
+    "Storage--ImagesEndpoint"          = module.storage_images.primary_blob_endpoint
+    "Storage--ImagesAccountName"       = module.storage_images.name
+    "Storage--ImagesContainer"         = module.storage_images.container_names["images"]
+    "Search--Endpoint"                 = module.search.endpoint
+    "Search--IndexName"                = module.knowledge_source.index_name
 
     # Entra ID (Blazor WASM SPA authentication)
-    "ENTRA-BFF-CLIENT-ID" = module.entra.bff_client_id
-    "ENTRA-TENANT-ID"     = module.entra.tenant_id
-    "ENTRA-BFF-HOSTNAME"  = module.agc.frontend_fqdn
+    "AzureAd--BffClientId" = module.entra.bff_client_id
+    "AzureAd--TenantId"    = module.entra.tenant_id
+    "Bff--Hostname"         = module.agc.frontend_fqdn
+
+    # Workload identity client IDs (used by Helm at deploy time)
+    "Identity--BffClientId"       = module.identity.identities["bff"].client_id
+    "Identity--CrmApiClientId"    = module.identity.identities["crm_api"].client_id
+    "Identity--CrmMcpClientId"    = module.identity.identities["crm_mcp"].client_id
+    "Identity--KnowMcpClientId"   = module.identity.identities["know_mcp"].client_id
+    "Identity--CrmAgentClientId"  = module.agent_identity.agents["crm_agent"].client_id
+    "Identity--ProdAgentClientId" = module.agent_identity.agents["prod_agent"].client_id
+    "Identity--OrchAgentClientId" = module.agent_identity.agents["orch_agent"].client_id
+
+    # Agent identity details (Entra Agent ID platform)
+    "Agent--CrmObjectId"     = module.agent_identity.agents["crm_agent"].object_id
+    "Agent--ProdObjectId"    = module.agent_identity.agents["prod_agent"].object_id
+    "Agent--OrchObjectId"    = module.agent_identity.agents["orch_agent"].object_id
+    "Agent--CrmAppObjectId"  = module.agent_identity.agents["crm_agent"].app_object_id
+    "Agent--ProdAppObjectId" = module.agent_identity.agents["prod_agent"].app_object_id
+    "Agent--OrchAppObjectId" = module.agent_identity.agents["orch_agent"].app_object_id
 
     # Customer passwords (for lab use)
-    "CUSTOMER-EMMA-PASSWORD"  = nonsensitive(module.entra.test_user_passwords["emma"])
-    "CUSTOMER-JAMES-PASSWORD" = nonsensitive(module.entra.test_user_passwords["james"])
-    "CUSTOMER-SARAH-PASSWORD" = nonsensitive(module.entra.test_user_passwords["sarah"])
-    "CUSTOMER-DAVID-PASSWORD" = nonsensitive(module.entra.test_user_passwords["david"])
-    "CUSTOMER-LISA-PASSWORD"  = nonsensitive(module.entra.test_user_passwords["lisa"])
+    "Customer--EmmaPassword"  = nonsensitive(module.entra.test_user_passwords["emma"])
+    "Customer--JamesPassword" = nonsensitive(module.entra.test_user_passwords["james"])
+    "Customer--SarahPassword" = nonsensitive(module.entra.test_user_passwords["sarah"])
+    "Customer--DavidPassword" = nonsensitive(module.entra.test_user_passwords["david"])
+    "Customer--LisaPassword"  = nonsensitive(module.entra.test_user_passwords["lisa"])
 
     # Customer Entra object IDs (used by deploy script to link Entra users to Cosmos DB Customers container)
-    "CUSTOMER-EMMA-ENTRA-OID"  = module.entra.test_user_object_ids["emma"]
-    "CUSTOMER-JAMES-ENTRA-OID" = module.entra.test_user_object_ids["james"]
-    "CUSTOMER-SARAH-ENTRA-OID" = module.entra.test_user_object_ids["sarah"]
-    "CUSTOMER-DAVID-ENTRA-OID" = module.entra.test_user_object_ids["david"]
-    "CUSTOMER-LISA-ENTRA-OID"  = module.entra.test_user_object_ids["lisa"]
+    "Customer--EmmaEntraOid"  = module.entra.test_user_object_ids["emma"]
+    "Customer--JamesEntraOid" = module.entra.test_user_object_ids["james"]
+    "Customer--SarahEntraOid" = module.entra.test_user_object_ids["sarah"]
+    "Customer--DavidEntraOid" = module.entra.test_user_object_ids["david"]
+    "Customer--LisaEntraOid"  = module.entra.test_user_object_ids["lisa"]
   }
 
   depends_on = [

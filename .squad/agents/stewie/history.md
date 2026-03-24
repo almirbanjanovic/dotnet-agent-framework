@@ -64,3 +64,17 @@
 - `infra/templates/` — reference Dockerfile + Helm patterns
 - `infra/k8s/manifests/` — namespace + service accounts (Terraform-applied)
 - `infra/k8s/network-policies/` — NetworkPolicy YAMLs (manually applied)
+
+### 2025-07-25 — Architecture Review: CRM API (Component 1)
+
+**Reviewed:** Brian's complete CRM API implementation (`src/crm-api/`).
+
+**Verdict:** ⚠️ APPROVED WITH NOTES — architecturally sound, one fix required.
+
+**What passed (11/12 clean):** Project structure (Models/Services/Endpoints/Middleware), self-contained (zero project refs), all 11 REST endpoints with /api/v1/ prefix, Cosmos DB partition keys match seed data exactly, ProblemDetails error handling with GlobalExceptionHandler, /health + /ready health checks, configuration with DefaultAzureCredential tenant pinning, multi-stage Dockerfile matching template, deploy script with proper parameters, CI/CD with path filter + OIDC + CAE flag, independence (extractable to standalone repo).
+
+**Issue found:** Service account name mismatch — Helm `values.yaml` uses `crm-api-sa` but Terraform provisions `sa-crm-api`. Will break workload identity federation in AKS. Brian to fix.
+
+**Minor notes:** Two unused NuGet packages (Newtonsoft.Json, Microsoft.Extensions.Http.Resilience) should be removed. `GetAllPromotionsAsync` only returns active promotions — naming could be clearer.
+
+**Full review:** `.squad/decisions/inbox/stewie-crm-api-review.md`

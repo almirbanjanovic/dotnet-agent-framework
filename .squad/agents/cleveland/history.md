@@ -33,3 +33,9 @@
 - **T-14 (acd8952):** Documented AI Search admin key usage in `knowledge-source` Terraform module as accepted interim risk. Azure AI Search Knowledge Source data-plane API (2025-11-01-preview) does not support RBAC — admin key is the only auth method. Key is not persisted in code/config; CI/CD uses OIDC. Added to `docs/security.md` under Known Gaps.
 - **T-15 (90b48e1):** Documented test user password visibility in `terraform plan` output as accepted lab-only pattern. The `keyvault-secrets` module uses `nonsensitive()` deliberately to write passwords to Key Vault. Mitigation: rotate passwords and remove `nonsensitive()` if users persist beyond workshop. Added to `docs/security.md` under Known Gaps.
 - Both items are accepted risks with clear mitigations documented. No code changes needed — documentation-only commits.
+
+### 2026-03-23: CRM API Security Review (Component 1)
+- Performed full 10-point security review of `src/crm-api/` — all source files, Dockerfile, Helm chart, deploy script, CI/CD workflow, and appsettings.
+- **9 of 10 checks passed clean.** One medium-severity finding: `GlobalExceptionHandler.cs` sets `Detail = exception.Message` in ProblemDetails responses for all environments, including Production. This can leak internal error details (Cosmos errors, network failures, paths) to callers. Recommendation: suppress in non-Development environments by injecting `IHostEnvironment` and conditionally setting Detail.
+- All Cosmos queries use parameterized `QueryDefinition` — zero SQL injection risk. `DefaultAzureCredential` with pinned tenant — no connection strings. Dockerfile runs as non-root `USER app`. Helm chart has full security context (runAsNonRoot, readOnlyRootFilesystem, drop ALL capabilities, seccomp RuntimeDefault). CI/CD uses OIDC federation with zero stored secrets. Health endpoints expose no internal details.
+- **Verdict: ⚠️ APPROVED WITH NOTES.** Findings written to `.squad/decisions/inbox/cleveland-crm-api-review.md`.
