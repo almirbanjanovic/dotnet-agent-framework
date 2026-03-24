@@ -865,17 +865,32 @@ $CosmosDb       = az keyvault secret show --vault-name $KvName --name "COSMOSDB-
 $CosmosAccountName = ($CosmosEndpoint -replace 'https://', '' -replace '\.documents\.azure\.com.*', '')
 Write-Done "Cosmos DB: $CosmosEndpoint ($CosmosDb)"
 
-# Cosmos DB SQL role assignments (data-plane RBAC) propagate separately
-# from ARM RBAC. CLI commands can't test data-plane access, so we wait
-# for propagation. The seed-data tool also has built-in retry for 403s.
-Write-Wait -Seconds 30 -Message "Cosmos DB data-plane RBAC propagation"
+# Verify deployer has Cosmos DB RBAC before attempting seed
+Write-Step "Verifying Cosmos DB RBAC access..."
+$MaxRetries = 12
+$RbacVerified = $false
+for ($attempt = 1; $attempt -le $MaxRetries; $attempt++) {
+    $result = az cosmosdb sql database show --account-name $CosmosAccountName `
+        --resource-group $ResourceGroup --name $CosmosDb -o tsv 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        Write-Done "RBAC verified (attempt $attempt)"
+        $RbacVerified = $true
+        break
+    }
+    if ($attempt -eq $MaxRetries) {
+        Write-Host "    Cosmos DB RBAC not active after $($MaxRetries * 5)s" -ForegroundColor Red
+    } else {
+        Write-Host "`r    Waiting for RBAC... (attempt $attempt/$MaxRetries)" -NoNewline
+        Start-Sleep -Seconds 5
+    }
+}
 
 Write-Step "Running seed-data (dotnet run -- uses DefaultAzureCredential)"
 $SeedDataDir = Join-Path (Split-Path $ScriptDir) "src" "seed-data"
 Push-Location $SeedDataDir
 try {
-    $env:COSMOSDB_CRM_ENDPOINT = $CosmosEndpoint
-    $env:COSMOSDB_CRM_DATABASE = $CosmosDb
+    $env:CosmosDb__Endpoint = $CosmosEndpoint
+    $env:CosmosDb__DatabaseName = $CosmosDb
     $env:AzureAd__TenantId = $TenantId
     dotnet run
     if ($LASTEXITCODE -ne 0) { Write-Fail "seed-data failed"; exit 1 }
@@ -919,9 +934,9 @@ $EntraMapping = $EntraPairs -join ";"
 Write-Step "Linking Entra users to Cosmos DB Customers (dotnet run)"
 Push-Location $SeedDataDir
 try {
-    $env:COSMOSDB_CRM_ENDPOINT = $CosmosEndpoint
-    $env:COSMOSDB_CRM_DATABASE = $CosmosDb
-    $env:CRM_DATA_PATH = "/dev/null"
+    $env:CosmosDb__Endpoint = $CosmosEndpoint
+    $env:CosmosDb__DatabaseName = $CosmosDb
+    $env:CRM_DATA_PATH = "NUL"
     $env:ENTRA_MAPPING = $EntraMapping
     $env:AzureAd__TenantId = $TenantId
     dotnet run

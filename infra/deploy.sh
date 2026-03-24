@@ -123,6 +123,7 @@ phase() {
 
 step()  { echo -e "  → $1"; }
 done_() { echo -e "    ${G}✓ $1${W}"; }
+fail()  { echo -e "\n    ${R}✗ $1${W}"; exit 1; }
 info_() { echo -e "    ${D}ℹ $1${W}"; }
 
 wait_progress() {
