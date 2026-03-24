@@ -55,6 +55,7 @@ nunit-*.xml
 
 # Local development settings (contains real endpoints/secrets)
 appsettings.json
+appsettings.*.json
 
 # Legacy Python code
 python-old/
