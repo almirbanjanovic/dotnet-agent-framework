@@ -289,6 +289,73 @@ switch ($envChoice) {
 }
 Write-Done "Environment: $GitHubEnv"
 
+# ── Region ───────────────────────────────────────────────────────────────────
+Write-Step "Select Azure region"
+Write-Host ""
+Write-Host "    Azure Region Selection (grouped by data residency zone)" -ForegroundColor DarkGray
+Write-Host "    ─────────────────────────────────────────────────────────" -ForegroundColor DarkGray
+Write-Host "    United States:   eastus, eastus2, centralus, northcentralus," -ForegroundColor DarkGray
+Write-Host "                     southcentralus, westus, westus2, westus3" -ForegroundColor DarkGray
+Write-Host "    Canada:          canadacentral, canadaeast" -ForegroundColor DarkGray
+Write-Host "    Brazil:          brazilsouth" -ForegroundColor DarkGray
+Write-Host "    Europe:          westeurope, northeurope" -ForegroundColor DarkGray
+Write-Host "    France:          francecentral" -ForegroundColor DarkGray
+Write-Host "    Germany:         germanywestcentral" -ForegroundColor DarkGray
+Write-Host "    Norway:          norwayeast" -ForegroundColor DarkGray
+Write-Host "    Sweden:          swedencentral" -ForegroundColor DarkGray
+Write-Host "    Switzerland:     switzerlandnorth" -ForegroundColor DarkGray
+Write-Host "    United Kingdom:  uksouth" -ForegroundColor DarkGray
+Write-Host "    Italy:           italynorth" -ForegroundColor DarkGray
+Write-Host "    Spain:           spaincentral" -ForegroundColor DarkGray
+Write-Host "    Asia Pacific:    eastasia, southeastasia" -ForegroundColor DarkGray
+Write-Host "    Australia:       australiaeast" -ForegroundColor DarkGray
+Write-Host "    Japan:           japaneast" -ForegroundColor DarkGray
+Write-Host "    Korea:           koreacentral" -ForegroundColor DarkGray
+Write-Host "    India:           centralindia" -ForegroundColor DarkGray
+Write-Host "    UAE:             uaenorth" -ForegroundColor DarkGray
+Write-Host "    Qatar:           qatarcentral" -ForegroundColor DarkGray
+Write-Host "    South Africa:    southafricanorth" -ForegroundColor DarkGray
+Write-Host ""
+
+$validRegions = @(
+    'eastus','eastus2','centralus','northcentralus','southcentralus',
+    'westus','westus2','westus3',
+    'canadacentral','canadaeast',
+    'brazilsouth',
+    'westeurope','northeurope',
+    'francecentral',
+    'germanywestcentral',
+    'norwayeast',
+    'swedencentral',
+    'switzerlandnorth',
+    'uksouth',
+    'italynorth',
+    'spaincentral',
+    'eastasia','southeastasia',
+    'australiaeast',
+    'japaneast',
+    'koreacentral',
+    'centralindia',
+    'uaenorth',
+    'qatarcentral',
+    'southafricanorth'
+)
+
+while ($true) {
+    $regionInput = Read-Host "    Region (default: eastus2)"
+    if ([string]::IsNullOrWhiteSpace($regionInput)) {
+        $Location = "eastus2"
+        break
+    }
+    $regionInput = $regionInput.Trim().ToLower()
+    if ($validRegions -contains $regionInput) {
+        $Location = $regionInput
+        break
+    }
+    Write-Host "    ✗ Invalid region '$regionInput'. Please choose from the list above." -ForegroundColor Red
+}
+Write-Done "Region: $Location"
+
 # ── Recalculate derived names with final values ──────────────────────────────
 $ResourceGroup  = "rg-$BaseName-$GitHubEnv-$Location"
 $StorageAccount = ("st" + ($ResourceGroup -replace '^rg-', '' -replace '[^a-z0-9]', '').ToLower())
