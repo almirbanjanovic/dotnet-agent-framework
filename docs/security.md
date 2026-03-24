@@ -118,7 +118,7 @@ Terraform creates 5 customer test users in Entra ID, matching the pre-seeded cus
 | David Park | `david.park@{domain}` | 104 | Silver | 4 — Damaged item |
 | Lisa Torres | `lisa.torres@{domain}` | 105 | Bronze | 5 — Product recommendation |
 
-Passwords follow the pattern `Contoso-<Animal>-<4digits>!#` and are stored in Key Vault as `CUSTOMER-{NAME}-PASSWORD`. Each user's Entra object ID is linked to their customer record in the Cosmos DB Customers container (via the `entra_id` field) during deployment.
+Passwords follow the pattern `Contoso-<Animal>-<4digits>!#` and are stored in Key Vault as `Customer--{Name}Password` (PascalCase--Hierarchy convention, e.g., `Customer--EmmaPassword`, `Customer--JamesPassword`, `Customer--SarahPassword`). Each user's Entra object ID is linked to their customer record in the Cosmos DB Customers container (via the `entra_id` field) during deployment.
 
 ## User Authorization
 
@@ -618,6 +618,27 @@ Every data-plane Azure resource uses a **default deny** firewall with two contro
 
 The **deployer IP exception** is the public IP of the machine running `terraform apply`. It is added automatically during deployment and allows Terraform to reach service endpoints for provisioning. These rules can be removed post-deployment when all runtime access flows through private endpoints.
 
+### Kubernetes Network Policies
+
+In addition to Azure resource firewalls, the cluster enforces **pod-level network segmentation** using Kubernetes NetworkPolicy resources (Azure Network Policy provider). All policy manifests live in `infra/k8s/manifests/network-policies/`.
+
+**Default-deny posture:** `default-deny.yaml` blocks all ingress and egress traffic namespace-wide (pod selector `{}`, policy types Ingress + Egress). Every pod must have an explicit allow rule or it cannot send or receive any traffic.
+
+**Per-service allow rules** (one YAML per service):
+
+| Service | Ingress From | Egress To |
+| --- | --- | --- |
+| `blazor-ui` | `azure-alb-system` namespace → port 8080 | `kube-dns` (port 53) only — serves static files |
+| `bff-api` | `azure-alb-system` namespace → port 8080 | `kube-dns`, `orchestrator-agent:8080`, private endpoints (`10.0.3.0/24:443`) |
+| `orchestrator-agent` | `bff-api` → port 8080 | `kube-dns`, `crm-agent:8080`, `product-agent:8080`, private endpoints (`10.0.3.0/24:443`) |
+| `crm-agent` | `orchestrator-agent` → port 8080 | `kube-dns`, `crm-mcp:8080`, private endpoints (`10.0.3.0/24:443`) |
+| `product-agent` | `orchestrator-agent` → port 8080 | `kube-dns`, `knowledge-mcp:8080`, private endpoints (`10.0.3.0/24:443`) |
+| `crm-mcp` | `crm-agent` → port 8080 | `kube-dns`, `crm-api:8080`, private endpoints (`10.0.3.0/24:443`) |
+| `knowledge-mcp` | `product-agent` → port 8080 | `kube-dns`, private endpoints (`10.0.3.0/24:443`) |
+| `crm-api` | `crm-mcp` → port 8080 | `kube-dns`, private endpoints (`10.0.3.0/24:443`) |
+
+Traffic to Azure resources (Cosmos DB, Key Vault, OpenAI, AI Search) flows through private endpoints on the `10.0.3.0/24` subnet over port 443. DNS resolution is allowed via `kube-system/kube-dns` on port 53 (TCP/UDP). See `infra/k8s/manifests/network-policies/README.md` for full details.
+
 ## Image Security
 
 Product images are stored in a **private** Blob Storage container. The browser never gets a direct URL to Azure Storage (which would bypass authentication):
@@ -629,6 +650,66 @@ Product images are stored in a **private** Blob Storage container. The browser n
 5. BFF streams bytes to browser with `Content-Type: image/png`
 
 This pattern is extensible to private per-customer images (e.g., damage claim photos) in the future.
+
+## Container Hardening
+
+All services use the Helm base chart (`infra/templates/helm-base/`) which enforces a locked-down container security posture by default. Individual service charts inherit these settings.
+
+### Pod Security Context
+
+| Setting | Value | Purpose |
+| --- | --- | --- |
+| `runAsNonRoot` | `true` | Prevents container from running as root |
+| `runAsUser` | `1654` | `app` user from the `aspnet:9.0` base image |
+| `runAsGroup` | `1654` | Same non-root group |
+| `fsGroup` | `1654` | File system group for volume mounts |
+| `seccompProfile.type` | `RuntimeDefault` | Restricts system calls to the container runtime's default allowlist |
+
+### Container Security Context
+
+| Setting | Value | Purpose |
+| --- | --- | --- |
+| `allowPrivilegeEscalation` | `false` | Blocks `setuid`/`setgid` privilege escalation |
+| `readOnlyRootFilesystem` | `true` | Filesystem is immutable at runtime |
+| `capabilities.drop` | `[ALL]` | Drops all Linux capabilities |
+
+The only writable path is `/tmp` (an `emptyDir` volume, capped at 64Mi), used for ASP.NET temporary files. All services listen on non-privileged port **8080** (`.NET 9` default for non-root containers).
+
+## CRM API Error Handling
+
+The CRM API uses a `GlobalExceptionHandler` middleware (`src/crm-api/Middleware/GlobalExceptionHandler.cs`) to ensure no internal details leak to callers in production.
+
+### Standardized error responses
+
+All errors return [RFC 9457 ProblemDetails](https://www.rfc-editor.org/rfc/rfc9457) with consistent structure:
+
+| Field | Value |
+| --- | --- |
+| `type` | `https://httpstatuses.io/{statusCode}` |
+| `title` | Exception-specific (e.g., "Bad Request", "Not Found") |
+| `status` | HTTP status code |
+| `detail` | Environment-aware (see below) |
+| `instance` | `httpContext.Request.Path` |
+| `extensions.traceId` | `Activity.Current?.Id` (W3C distributed trace ID), fallback `httpContext.TraceIdentifier` |
+
+### Environment-aware detail suppression
+
+- **Development:** `detail` contains the full `exception.Message` — useful for debugging
+- **Production (all other environments):** `detail` is the generic string `"An unexpected error occurred."` — prevents leaking stack traces, connection strings, or internal paths
+
+### Exception → status code mapping
+
+| Exception | Status Code | Title |
+| --- | --- | --- |
+| `ArgumentException` | 400 | Bad Request |
+| `KeyNotFoundException` | 404 | Not Found |
+| `CosmosException` (404) | 404 | Not Found |
+| `CosmosException` (429) | 429 | Too Many Requests |
+| `CosmosException` (503) | 503 | Service Unavailable |
+| `OperationCanceledException` | 499 | Client Closed Request |
+| All others | 500 | Internal Server Error |
+
+The trace ID correlation (`Activity.Current?.Id`) enables linking error responses back to distributed traces across services.
 
 ## Key Vault
 
@@ -651,6 +732,64 @@ Key Vault uses Azure RBAC to control who can read and write secrets:
 - **Secrets Officer** → Terraform deployer (writes secrets during `terraform apply`)
 - **Secrets User** → all 7 workload identities + deployer (reads secrets at startup)
 - **Certificate User** → Reserved for AGC TLS integration (reads TLS cert for ingress)
+
+## Configuration Security Pipeline
+
+The `config-sync` tool (`src/config-sync/Program.cs`) bridges Key Vault secrets into per-component configuration files without exposing secrets in source control.
+
+### How it works
+
+1. Authenticates to Key Vault using `DefaultAzureCredential` (interactive `az login` locally, managed identity on AKS)
+2. Reads only the secrets each component needs (defined in a per-component manifest)
+3. Writes `appsettings.{Environment}.json` files into each component's `src/{component}/` directory
+4. All `appsettings.*.json` files are gitignored — secrets never enter source control
+
+### Least-privilege configuration
+
+Each component's manifest maps specific Key Vault secrets to local config keys. A component only receives the secrets it needs:
+
+| Component | Secrets Received | Example Mapping |
+| --- | --- | --- |
+| `crm-api` | 3 | `CosmosDb--CrmEndpoint` → `CosmosDb:Endpoint` |
+| `crm-mcp` | 2 | `CrmApi--BaseUrl` → `CrmApi:BaseUrl` |
+| `knowledge-mcp` | 6 | `Search--Endpoint` → `Search:Endpoint` |
+| `crm-agent` | 4 | `AzureOpenAi--Endpoint` → `AzureOpenAi:Endpoint` |
+| `product-agent` | 5 | `AzureOpenAi--DeploymentName` → `AzureOpenAi:DeploymentName` |
+| `orchestrator-agent` | 5 | `CrmAgent--BaseUrl` → `CrmAgent:BaseUrl` |
+| `bff-api` | 9 | `AzureAd--BffClientId` → `AzureAd:BffClientId` |
+| `blazor-ui` | 3 | `Bff--BaseUrl` → `Bff:BaseUrl` |
+
+### Key Vault naming convention
+
+Secrets use PascalCase--Hierarchy naming: `{Category}--{Name}` (e.g., `CosmosDb--CrmEndpoint`, `AzureOpenAi--DeploymentName`, `Customer--EmmaPassword`). The `--` separator maps to .NET's `:` configuration hierarchy when consumed by components.
+
+## Helm Secret Injection
+
+In production (AKS), secrets are injected as environment variables through Helm — the `appsettings.{Environment}.json` files generated by `config-sync` are not needed.
+
+### Injection chain
+
+```text
+Key Vault → External Secrets Operator / config-sync → Kubernetes Secret → Pod environment variable
+```
+
+### How it works
+
+Each service's Helm `values.yaml` defines a `secretRefs` section that maps Kubernetes secret keys to environment variable names. For example, from `src/crm-api/chart/values.yaml`:
+
+```yaml
+secretRefs:
+  - name: keyvault-secrets
+    keys:
+      - key: CosmosDb--CrmEndpoint
+        envVar: CosmosDb__Endpoint
+      - key: AzureAd--TenantId
+        envVar: AzureAd__TenantId
+```
+
+The Helm base chart (`infra/templates/helm-base/`) templates these `secretRefs` into `envFrom` or individual `env` entries in the Deployment spec. The double-underscore (`__`) in environment variable names is .NET's convention for representing the `:` hierarchy separator (e.g., `CosmosDb__Endpoint` maps to `CosmosDb:Endpoint` in configuration).
+
+The Kubernetes secrets referenced by `secretRefs` are not created by the Helm chart — they must already exist in the namespace, synced from Key Vault via the External Secrets Operator or CSI driver.
 
 ## Terraform Resources
 
