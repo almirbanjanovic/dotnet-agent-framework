@@ -162,6 +162,8 @@ data/
 docs/
   architecture.drawio             → Editable architecture diagram (draw.io)
   architecture.png                → Exported architecture diagram (PNG)
+  config-naming-standard.md       → Key Vault naming convention (PascalCase--Hierarchy)
+  implementation-plan.md          → Component-by-component build plan
   lab-0.md                        → Lab 0: Bootstrap (Terraform backend, Entra, CI/CD)
   lab-1.md                        → Lab 1: Infrastructure, Validation & Data Seeding
   security.md                     → Security architecture (auth, RBAC, network)
@@ -178,41 +180,27 @@ infra/
     Dockerfile.template           → Shared Dockerfile template
     helm-base/                    → Base Helm chart (Chart.yaml, values.yaml, templates/)
   terraform/                      → Terraform IaC (20 modules, versioned)
-    modules/                      → acr, agc, aks, cosmosdb, entra,
-                                    foundry, identity, keyvault, keyvault-secrets,
-                                    knowledge-source, private-dns-zones,
-                                    private-endpoint, rbac, search, storage,
-                                    storage-uploads, tls-cert, vnet,
-                                    workload-identity
-    main.tf, providers.tf, variables.tf, outputs.tf
+    modules/                      → acr, agc, agent-identity, aks, cosmosdb,
+                                    entra, foundry, identity, keyvault,
+                                    keyvault-secrets, knowledge-source,
+                                    private-dns-zones, private-endpoint, rbac,
+                                    search, storage, storage-uploads, tls-cert,
+                                    vnet, workload-identity
+    main.tf, providers.tf, variables.tf, outputs.tf, diagnostics.tf
 
 src/
   config-sync/                    → Tool: Key Vault → per-component appsettings.{Environment}.json
   seed-data/                      → Tool: CSV → Cosmos DB (runs during deploy phase 6)
   simple-agent/                   → Lab 1 validation (Azure OpenAI connectivity test)
 
-  crm-api/                        → Domain API: all CRM data (11 endpoints)
-  crm-api.tests/
-
+  crm-api/                        → Domain API: all CRM data (11 endpoints) ✅ BUILT
   crm-mcp/                        → MCP Server: 10 CRM tools → CRM API
-  crm-mcp.tests/
-
   knowledge-mcp/                  → MCP Server: knowledge search → AI Search SDK
-  knowledge-mcp.tests/
-
   crm-agent/                      → CRM specialist agent (customers, orders, tickets)
-  crm-agent.tests/
-
   product-agent/                  → Product specialist agent (catalog, promotions)
-  product-agent.tests/
-
   orchestrator-agent/             → Intent classifier + specialist routing
-  orchestrator-agent.tests/
-
   blazor-ui/                      → Blazor WebAssembly SPA (MudBlazor + MSAL + SignalR)
-
   bff-api/                        → BFF API (.NET): JWT validation, proxy, chat, image proxy
-  bff-api.tests/
 ```
 
 ## Prerequisites
@@ -241,4 +229,4 @@ See the lab guides in [`docs/`](docs/):
 ## Notes
 
 - Provider versions are pinned in `infra/terraform/providers.tf`.
-- `*.tfvars`, `backend.hcl`, and `appsettings.json` are gitignored.
+- `*.tfvars`, `backend.hcl`, `appsettings.json`, and `appsettings.*.json` are gitignored.
