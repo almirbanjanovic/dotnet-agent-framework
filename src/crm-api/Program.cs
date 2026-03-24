@@ -7,11 +7,6 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ── Configuration ──────────────────────────────────────────────────────────
-builder.Configuration
-    .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
-    .AddEnvironmentVariables();
-
 // ── Logging ────────────────────────────────────────────────────────────────
 builder.Logging.ClearProviders();
 builder.Logging.AddJsonConsole(options =>
