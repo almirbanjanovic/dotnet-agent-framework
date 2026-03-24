@@ -187,8 +187,7 @@ infra/
     main.tf, providers.tf, variables.tf, outputs.tf
 
 src/
-  appsettings.json                → Shared config (gitignored, populated by config-sync)
-  config-sync/                    → Tool: Key Vault → appsettings.json
+  config-sync/                    → Tool: Key Vault → per-component appsettings.{Environment}.json
   seed-data/                      → Tool: CSV → Cosmos DB (runs during deploy phase 6)
   simple-agent/                   → Lab 1 validation (Azure OpenAI connectivity test)
 
