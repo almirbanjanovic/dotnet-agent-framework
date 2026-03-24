@@ -4,14 +4,14 @@ using Azure.Identity;
 using Azure.Security.KeyVault.Secrets;
 
 // ---------------------------------------------------------------------------
-// Config Sync — pulls secrets from Azure Key Vault into per-component appsettings.json
+// Config Sync — pulls secrets from Azure Key Vault into per-component appsettings.Development.json
 // ---------------------------------------------------------------------------
 // Usage:
 //   dotnet run -- <key-vault-uri>
 //   dotnet run -- https://kv-agentic-ai-001.vault.azure.net/
 //
 // Authenticates via DefaultAzureCredential (az login locally, managed identity on AKS).
-// Writes a SEPARATE appsettings.json for each component under src/<component>/.
+// Writes a SEPARATE appsettings.Development.json for each component under src/<component>/.
 //
 // Key Vault naming convention: PascalCase--Hierarchy (double-hyphen = .NET : separator)
 //   e.g., CosmosDb--CrmEndpoint → { "CosmosDb": { "CrmEndpoint": "" } }
@@ -33,7 +33,7 @@ if (args.Length == 0 || string.IsNullOrWhiteSpace(args[0]))
 var keyVaultUri = args[0].Trim();
 
 Console.WriteLine("═══════════════════════════════════════════════════════════");
-Console.WriteLine("  Config Sync — Key Vault → per-component appsettings.json");
+Console.WriteLine("  Config Sync — Key Vault → per-component appsettings.Development.json");
 Console.WriteLine("═══════════════════════════════════════════════════════════");
 Console.WriteLine();
 Console.WriteLine($"  Key Vault: {keyVaultUri}");
@@ -155,7 +155,7 @@ Console.WriteLine();
 var srcDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
 var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
 
-Console.WriteLine("  Writing per-component appsettings.json files...");
+Console.WriteLine("  Writing per-component appsettings.Development.json files...");
 Console.WriteLine();
 
 foreach (var (component, entries) in componentManifest)
@@ -174,15 +174,15 @@ foreach (var (component, entries) in componentManifest)
         SetNestedValue(root, configKey, value);
     }
 
-    var outputPath = Path.Combine(componentDir, "appsettings.json");
+    var outputPath = Path.Combine(componentDir, "appsettings.Development.json");
     var json = root.ToJsonString(jsonOptions);
     await File.WriteAllTextAsync(outputPath, json + Environment.NewLine);
-    Console.WriteLine($"  ✓ {component}/appsettings.json ({entries.Length} keys)");
+    Console.WriteLine($"  ✓ {component}/appsettings.Development.json ({entries.Length} keys)");
 }
 
 Console.WriteLine();
 Console.WriteLine("═══════════════════════════════════════════════════════════");
-Console.WriteLine("  Done! Each component has its own appsettings.json.");
+Console.WriteLine("  Done! Each component has its own appsettings.Development.json.");
 Console.WriteLine("═══════════════════════════════════════════════════════════");
 
 // ── Helper: set a nested value in a JsonObject using : notation ───────────
