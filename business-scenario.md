@@ -158,9 +158,9 @@ These scenarios are seeded into the data and have deterministic expected outcome
 
 ## 4. MCP Server Design
 
-### Customer & Orders MCP Server
+### CRM MCP Server
 
-Tools for customer profiles, order management, and support tickets.
+All CRM tools in a single MCP server — wraps CRM API endpoints for customer profiles, order management, support tickets, product catalog, and promotions.
 
 | Tool | Description |
 | ------ | ------------- |
@@ -168,19 +168,12 @@ Tools for customer profiles, order management, and support tickets.
 | `get_customer_detail(customer_id)` | Full customer profile |
 | `get_customer_orders(customer_id)` | All orders for a customer |
 | `get_order_detail(order_id)` | Order with line items, shipping status, tracking number |
-| `get_support_tickets(customer_id, open_only?)` | Customer's support tickets |
-| `create_support_ticket(customer_id, order_id, category, priority, subject, description)` | Create a new support ticket |
-
-### Product Catalog MCP Server
-
-Tools for searching products and checking promotions.
-
-| Tool | Description |
-| ------ | ------------- |
-| `search_products(query?, category?, in_stock_only?)` | Search or browse products |
+| `get_products(query?, category?, in_stock_only?)` | Search or browse products |
 | `get_product_detail(product_id)` | Full product info including description, price, rating |
 | `get_promotions()` | All active promotions |
 | `get_eligible_promotions(customer_id)` | Promotions matching customer's loyalty tier |
+| `get_support_tickets(customer_id, open_only?)` | Customer's support tickets |
+| `create_support_ticket(customer_id, order_id, category, priority, subject, description)` | Create a new support ticket |
 
 ### Knowledge Base MCP Server
 
