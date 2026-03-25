@@ -141,56 +141,67 @@ output "agc_frontend_fqdn" {
 output "bff_identity_client_id" {
   description = "Client ID of the BFF workload identity"
   value       = module.identity.identities["bff"].client_id
+  sensitive   = true
 }
 
 output "crm_api_identity_client_id" {
   description = "Client ID of the CRM API workload identity"
   value       = module.identity.identities["crm_api"].client_id
+  sensitive   = true
 }
 
 output "crm_mcp_identity_client_id" {
   description = "Client ID of the CRM MCP workload identity"
   value       = module.identity.identities["crm_mcp"].client_id
+  sensitive   = true
 }
 
 output "know_mcp_identity_client_id" {
   description = "Client ID of the Knowledge MCP workload identity"
   value       = module.identity.identities["know_mcp"].client_id
+  sensitive   = true
 }
 
 output "crm_agent_identity_client_id" {
   description = "Client ID of the CRM Agent identity (Entra Agent ID)"
   value       = module.agent_identity.agents["crm_agent"].client_id
+  sensitive   = true
 }
 
 output "prod_agent_identity_client_id" {
   description = "Client ID of the Product Agent identity (Entra Agent ID)"
   value       = module.agent_identity.agents["prod_agent"].client_id
+  sensitive   = true
 }
 
 output "orch_agent_identity_client_id" {
   description = "Client ID of the Orchestrator Agent identity (Entra Agent ID)"
   value       = module.agent_identity.agents["orch_agent"].client_id
+  sensitive   = true
 }
 
 output "crm_agent_object_id" {
   description = "Object ID of the CRM Agent service principal (Entra Agent ID)"
   value       = module.agent_identity.agents["crm_agent"].object_id
+  sensitive   = true
 }
 
 output "prod_agent_object_id" {
   description = "Object ID of the Product Agent service principal (Entra Agent ID)"
   value       = module.agent_identity.agents["prod_agent"].object_id
+  sensitive   = true
 }
 
 output "orch_agent_object_id" {
   description = "Object ID of the Orchestrator Agent service principal (Entra Agent ID)"
   value       = module.agent_identity.agents["orch_agent"].object_id
+  sensitive   = true
 }
 
 output "kubelet_identity_client_id" {
   description = "Client ID of the kubelet identity"
   value       = module.identity.identities["kubelet"].client_id
+  sensitive   = true
 }
 
 # ---------------------------------------------------------------

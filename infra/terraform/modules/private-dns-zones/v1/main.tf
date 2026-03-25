@@ -11,7 +11,8 @@ resource "azurerm_private_dns_zone" "this" {
   tags                = var.tags
 
   lifecycle {
-    ignore_changes = [tags]
+    ignore_changes        = [tags]
+    create_before_destroy = true
   }
 }
 
