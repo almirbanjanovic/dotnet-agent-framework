@@ -604,12 +604,12 @@ module "keyvault_secrets" {
     "Agent--ProdAppObjectId" = module.agent_identity.agents["prod_agent"].app_object_id
     "Agent--OrchAppObjectId" = module.agent_identity.agents["orch_agent"].app_object_id
 
-    # Customer passwords (for lab use)
-    "Customer--EmmaPassword"  = nonsensitive(module.entra.test_user_passwords["emma"])
-    "Customer--JamesPassword" = nonsensitive(module.entra.test_user_passwords["james"])
-    "Customer--SarahPassword" = nonsensitive(module.entra.test_user_passwords["sarah"])
-    "Customer--DavidPassword" = nonsensitive(module.entra.test_user_passwords["david"])
-    "Customer--LisaPassword"  = nonsensitive(module.entra.test_user_passwords["lisa"])
+    # Customer passwords (for lab use — nonsensitive only in dev)
+    "Customer--EmmaPassword"  = var.environment == "dev" ? nonsensitive(module.entra.test_user_passwords["emma"]) : module.entra.test_user_passwords["emma"]
+    "Customer--JamesPassword" = var.environment == "dev" ? nonsensitive(module.entra.test_user_passwords["james"]) : module.entra.test_user_passwords["james"]
+    "Customer--SarahPassword" = var.environment == "dev" ? nonsensitive(module.entra.test_user_passwords["sarah"]) : module.entra.test_user_passwords["sarah"]
+    "Customer--DavidPassword" = var.environment == "dev" ? nonsensitive(module.entra.test_user_passwords["david"]) : module.entra.test_user_passwords["david"]
+    "Customer--LisaPassword"  = var.environment == "dev" ? nonsensitive(module.entra.test_user_passwords["lisa"]) : module.entra.test_user_passwords["lisa"]
 
     # Customer Entra object IDs (used by deploy script to link Entra users to Cosmos DB Customers container)
     "Customer--EmmaEntraOid"  = module.entra.test_user_object_ids["emma"]
