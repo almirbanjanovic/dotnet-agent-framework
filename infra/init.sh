@@ -670,47 +670,72 @@ else
     RBAC_STATUS="Contributor on $RESOURCE_GROUP"
 fi
 
-# ── RBAC: Storage Blob Data Contributor for deployer (Terraform state) ────────
-step "Granting Storage Blob Data Contributor to deployer on state storage"
+# ── Detect deployer identity (multi-method fallback) ─────────────────────────────
+step "Detecting deployer identity for RBAC assignments"
+DEPLOYER_OID=""
+
+# Method 1: signed-in user (standard az login)
 DEPLOYER_OID=$(az ad signed-in-user show --query id -o tsv 2>/dev/null || true)
-STORAGE_RBAC_STATUS="Manual assignment required"
-if [[ -n "$DEPLOYER_OID" ]]; then
-    ST_SCOPE=$(az storage account show --name "$STORAGE_ACCOUNT" --resource-group "$RESOURCE_GROUP" --query id -o tsv 2>/dev/null || true)
-    if [[ -n "$ST_SCOPE" ]]; then
-        BLOB_ROLE="Storage Blob Data Contributor"
-        EXISTS=$(az role assignment list --assignee "$DEPLOYER_OID" --role "$BLOB_ROLE" --scope "$ST_SCOPE" --query "[0].id" -o tsv 2>/dev/null || true)
-        if [[ -n "$EXISTS" ]]; then
-            skip_ "$BLOB_ROLE already assigned"
+
+# Method 2: get UPN/name from account token, look up in AD
+if [[ -z "$DEPLOYER_OID" ]]; then
+    ACCOUNT_NAME=$(az account show --query user.name -o tsv 2>/dev/null || true)
+    ACCOUNT_TYPE=$(az account show --query user.type -o tsv 2>/dev/null || true)
+    if [[ -n "$ACCOUNT_NAME" ]]; then
+        if [[ "$ACCOUNT_TYPE" == "servicePrincipal" ]]; then
+            DEPLOYER_OID=$(az ad sp show --id "$ACCOUNT_NAME" --query id -o tsv 2>/dev/null || true)
         else
-            az role assignment create --assignee-object-id "$DEPLOYER_OID" --assignee-principal-type User --role "$BLOB_ROLE" --scope "$ST_SCOPE" >/dev/null
-            done_ "$BLOB_ROLE granted on $STORAGE_ACCOUNT"
+            DEPLOYER_OID=$(az ad user show --id "$ACCOUNT_NAME" --query id -o tsv 2>/dev/null || true)
         fi
-        STORAGE_RBAC_STATUS="Blob Data Contributor on $STORAGE_ACCOUNT"
-    else
-        echo -e "    ${Y}\u26a0 Could not find storage account $STORAGE_ACCOUNT \u2014 assign Storage Blob Data Contributor manually${W}"
     fi
-else
-    echo -e "    ${Y}\u26a0 Could not determine deployer identity \u2014 assign roles manually${W}"
 fi
 
-# ── RBAC: Key Vault data-plane roles for deployer (current user) ─────────────
-step "Granting Key Vault data-plane roles to deployer"
-KV_RBAC_STATUS="Manual assignment required"
-if [[ -n "$DEPLOYER_OID" ]]; then
-    RG_SCOPE="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP"
-    for ROLE in "Key Vault Secrets Officer" "Key Vault Certificates Officer"; do
-        EXISTS=$(az role assignment list --assignee "$DEPLOYER_OID" --role "$ROLE" --scope "$RG_SCOPE" --query "[0].id" -o tsv 2>/dev/null || true)
-        if [[ -n "$EXISTS" ]]; then
-            skip_ "$ROLE already assigned"
-        else
-            az role assignment create --assignee-object-id "$DEPLOYER_OID" --assignee-principal-type User --role "$ROLE" --scope "$RG_SCOPE" >/dev/null
-            done_ "$ROLE granted on $RESOURCE_GROUP"
-        fi
-    done
-    KV_RBAC_STATUS="Secrets Officer + Certificates Officer"
-else
-    echo -e "    ${Y}\u26a0 Could not determine deployer identity \u2014 assign Key Vault roles manually${W}"
+if [[ -z "$DEPLOYER_OID" ]]; then
+    echo ""
+    echo -e "    ${R}\u2717 Could not determine deployer identity.${W}"
+    echo -e "    ${R}RBAC roles are required for Terraform to manage state and secrets.${W}"
+    echo ""
+    echo -e "    ${Y}Troubleshooting:${W}"
+    echo -e "    ${Y}  1. Ensure you're logged in: az login${W}"
+    echo -e "    ${Y}  2. Check your account: az account show${W}"
+    echo -e "    ${Y}  3. Try re-authenticating: az login --scope https://graph.microsoft.com/.default${W}"
+    echo ""
+    exit 1
 fi
+
+done_ "Deployer identity: $DEPLOYER_OID"
+
+# ── RBAC: Storage Blob Data Contributor for deployer (Terraform state) ────────────────
+step "Granting Storage Blob Data Contributor to deployer on state storage"
+STORAGE_RBAC_STATUS="Manual assignment required"
+ST_SCOPE=$(az storage account show --name "$STORAGE_ACCOUNT" --resource-group "$RESOURCE_GROUP" --query id -o tsv 2>/dev/null || true)
+if [[ -n "$ST_SCOPE" ]]; then
+    BLOB_ROLE="Storage Blob Data Contributor"
+    EXISTS=$(az role assignment list --assignee "$DEPLOYER_OID" --role "$BLOB_ROLE" --scope "$ST_SCOPE" --query "[0].id" -o tsv 2>/dev/null || true)
+    if [[ -n "$EXISTS" ]]; then
+        skip_ "$BLOB_ROLE already assigned"
+    else
+        az role assignment create --assignee-object-id "$DEPLOYER_OID" --assignee-principal-type User --role "$BLOB_ROLE" --scope "$ST_SCOPE" >/dev/null
+        done_ "$BLOB_ROLE granted on $STORAGE_ACCOUNT"
+    fi
+    STORAGE_RBAC_STATUS="Blob Data Contributor on $STORAGE_ACCOUNT"
+else
+    echo -e "    ${Y}\u26a0 Could not find storage account $STORAGE_ACCOUNT \u2014 assign Storage Blob Data Contributor manually${W}"
+fi
+
+# ── RBAC: Key Vault data-plane roles for deployer (current user) ───────────────
+step "Granting Key Vault data-plane roles to deployer"
+KV_RBAC_STATUS="Secrets Officer + Certificates Officer"
+RG_SCOPE="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP"
+for ROLE in "Key Vault Secrets Officer" "Key Vault Certificates Officer"; do
+    EXISTS=$(az role assignment list --assignee "$DEPLOYER_OID" --role "$ROLE" --scope "$RG_SCOPE" --query "[0].id" -o tsv 2>/dev/null || true)
+    if [[ -n "$EXISTS" ]]; then
+        skip_ "$ROLE already assigned"
+    else
+        az role assignment create --assignee-object-id "$DEPLOYER_OID" --assignee-principal-type User --role "$ROLE" --scope "$RG_SCOPE" >/dev/null
+        done_ "$ROLE granted on $RESOURCE_GROUP"
+    fi
+done
 
 phase_summary 4 \
     "Phase 5 — Generate ${GITHUB_ENV}.tfvars and backend.hcl configuration files" \

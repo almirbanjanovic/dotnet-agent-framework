@@ -631,48 +631,72 @@ $phase4Items = [ordered]@{
 }
 if (-not $LocalOnly) { $phase4Items["RBAC"] = "Contributor on $ResourceGroup" } else { $phase4Items["RBAC"] = "Skipped (local-only mode)" }
 
+# ── Detect deployer identity (multi-method fallback) ─────────────────────────
+Write-Step "Detecting deployer identity for RBAC assignments"
+$deployerOid = $null
+
+# Method 1: signed-in user (standard az login)
+$deployerOid = az ad signed-in-user show --query id -o tsv 2>$null
+
+# Method 2: get UPN/name from account token, look up in AD
+if (-not $deployerOid) {
+    $accountInfo = az account show --query "{name:user.name, type:user.type}" -o json 2>$null | ConvertFrom-Json
+    if ($accountInfo) {
+        if ($accountInfo.type -eq "servicePrincipal") {
+            $deployerOid = az ad sp show --id $accountInfo.name --query id -o tsv 2>$null
+        } elseif ($accountInfo.name) {
+            $deployerOid = az ad user show --id $accountInfo.name --query id -o tsv 2>$null
+        }
+    }
+}
+
+if (-not $deployerOid) {
+    Write-Host ""
+    Write-Host "    ✗ Could not determine deployer identity." -ForegroundColor Red
+    Write-Host "    RBAC roles are required for Terraform to manage state and secrets." -ForegroundColor Red
+    Write-Host ""
+    Write-Host "    Troubleshooting:" -ForegroundColor Yellow
+    Write-Host "      1. Ensure you're logged in: az login" -ForegroundColor Yellow
+    Write-Host "      2. Check your account: az account show" -ForegroundColor Yellow
+    Write-Host "      3. Try re-authenticating: az login --scope https://graph.microsoft.com/.default" -ForegroundColor Yellow
+    Write-Host ""
+    exit 1
+}
+
+Write-Done "Deployer identity: $deployerOid"
+
 # ── RBAC: Storage Blob Data Contributor for deployer (Terraform state) ────────
 Write-Step "Granting Storage Blob Data Contributor to deployer on state storage"
-$deployerOid = az ad signed-in-user show --query id -o tsv 2>$null
-if ($deployerOid) {
-    $stScope = az storage account show --name $StorageAccount --resource-group $ResourceGroup --query id -o tsv 2>$null
-    if ($stScope) {
-        $blobRole = "Storage Blob Data Contributor"
-        $exists = az role assignment list --assignee $deployerOid --role $blobRole --scope $stScope --query "[0].id" -o tsv 2>$null
-        if ($exists) {
-            Write-Skip "$blobRole already assigned"
-        } else {
-            az role assignment create --assignee-object-id $deployerOid --assignee-principal-type User --role $blobRole --scope $stScope 2>$null | Out-Null
-            Write-Done "$blobRole granted on $StorageAccount"
-        }
-        $phase4Items["Storage RBAC"] = "Blob Data Contributor on $StorageAccount"
+$stScope = az storage account show --name $StorageAccount --resource-group $ResourceGroup --query id -o tsv 2>$null
+if ($stScope) {
+    $blobRole = "Storage Blob Data Contributor"
+    $exists = az role assignment list --assignee $deployerOid --role $blobRole --scope $stScope --query "[0].id" -o tsv 2>$null
+    if ($exists) {
+        Write-Skip "$blobRole already assigned"
     } else {
-        Write-Host "    ⚠ Could not find storage account $StorageAccount — assign Storage Blob Data Contributor manually" -ForegroundColor Yellow
-        $phase4Items["Storage RBAC"] = "Manual assignment required"
+        az role assignment create --assignee-object-id $deployerOid --assignee-principal-type User --role $blobRole --scope $stScope 2>$null | Out-Null
+        Write-Done "$blobRole granted on $StorageAccount"
     }
+    $phase4Items["Storage RBAC"] = "Blob Data Contributor on $StorageAccount"
 } else {
-    Write-Host "    ⚠ Could not determine deployer identity — assign roles manually" -ForegroundColor Yellow
+    Write-Host "    ⚠ Could not find storage account $StorageAccount — assign Storage Blob Data Contributor manually" -ForegroundColor Yellow
+    $phase4Items["Storage RBAC"] = "Manual assignment required"
 }
 
 # ── RBAC: Key Vault data-plane roles for deployer (current user) ─────────────
 Write-Step "Granting Key Vault data-plane roles to deployer"
-if ($deployerOid) {
-    $rgScope = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup"
-    $kvRoles = @("Key Vault Secrets Officer", "Key Vault Certificates Officer")
-    foreach ($role in $kvRoles) {
-        $exists = az role assignment list --assignee $deployerOid --role $role --scope $rgScope --query "[0].id" -o tsv 2>$null
-        if ($exists) {
-            Write-Skip "$role already assigned"
-        } else {
-            az role assignment create --assignee-object-id $deployerOid --assignee-principal-type User --role $role --scope $rgScope 2>$null | Out-Null
-            Write-Done "$role granted on $ResourceGroup"
-        }
+$rgScope = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup"
+$kvRoles = @("Key Vault Secrets Officer", "Key Vault Certificates Officer")
+foreach ($role in $kvRoles) {
+    $exists = az role assignment list --assignee $deployerOid --role $role --scope $rgScope --query "[0].id" -o tsv 2>$null
+    if ($exists) {
+        Write-Skip "$role already assigned"
+    } else {
+        az role assignment create --assignee-object-id $deployerOid --assignee-principal-type User --role $role --scope $rgScope 2>$null | Out-Null
+        Write-Done "$role granted on $ResourceGroup"
     }
-    $phase4Items["KV RBAC"] = "Secrets Officer + Certificates Officer"
-} else {
-    Write-Host "    ⚠ Could not determine deployer identity — assign Key Vault roles manually" -ForegroundColor Yellow
-    $phase4Items["KV RBAC"] = "Manual assignment required"
 }
+$phase4Items["KV RBAC"] = "Secrets Officer + Certificates Officer"
 
 Write-PhaseSummary -Number 4 -NextPhase "Phase 5 — Generate $GitHubEnv.tfvars and backend.hcl configuration files" -Items $phase4Items
 
