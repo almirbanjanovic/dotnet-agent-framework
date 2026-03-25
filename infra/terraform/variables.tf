@@ -36,6 +36,11 @@ variable "resource_group_name" {
 variable "environment" {
   description = "Logical environment name (e.g., dev, staging, prod)"
   type        = string
+
+  validation {
+    condition     = contains(["dev", "staging", "production"], var.environment)
+    error_message = "Environment must be dev, staging, or production."
+  }
 }
 
 variable "base_name" {
@@ -46,6 +51,19 @@ variable "base_name" {
 variable "location" {
   description = "Azure location"
   type        = string
+
+  validation {
+    condition = contains([
+      "eastus", "eastus2", "centralus", "northcentralus", "southcentralus",
+      "westus", "westus2", "westus3", "canadacentral", "canadaeast",
+      "brazilsouth", "westeurope", "northeurope", "francecentral",
+      "germanywestcentral", "norwayeast", "swedencentral", "switzerlandnorth",
+      "uksouth", "italynorth", "spaincentral", "eastasia", "southeastasia",
+      "australiaeast", "japaneast", "koreacentral", "centralindia",
+      "uaenorth", "qatarcentral", "southafricanorth",
+    ], var.location)
+    error_message = "Location must be a supported Azure Foundry region."
+  }
 }
 
 # ---------------------------------------------------------------
@@ -144,6 +162,11 @@ variable "search_sku" {
   description = "Azure AI Search SKU (free, basic, standard)"
   type        = string
   default     = "standard"
+
+  validation {
+    condition     = contains(["free", "basic", "standard", "standard2", "standard3"], var.search_sku)
+    error_message = "Search SKU must be free, basic, standard, standard2, or standard3."
+  }
 }
 
 variable "search_index_name" {
@@ -179,6 +202,11 @@ variable "aks_kubernetes_version" {
   description = "Kubernetes version for AKS cluster (major.minor, e.g. '1.30'). Pinned to prevent silent upgrades."
   type        = string
   default     = "1.30"
+
+  validation {
+    condition     = can(regex("^[0-9]+\\.[0-9]+$", var.aks_kubernetes_version))
+    error_message = "Kubernetes version must be in X.Y format (e.g., 1.34)."
+  }
 }
 
 variable "aks_system_node_vm_size" {
