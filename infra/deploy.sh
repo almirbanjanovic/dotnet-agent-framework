@@ -679,13 +679,11 @@ pushd "$TERRAFORM_DIR" >/dev/null
 AKS_JSON=$(az aks show --name "$AKS_CLUSTER_NAME" --resource-group "$RESOURCE_GROUP" --query "{fqdn:fqdn, powerState:powerState.code}" -o json 2>/dev/null || true)
 if [[ -z "$AKS_JSON" ]]; then
     echo ""
-    echo -e "    ${R}AKS cluster '${AKS_CLUSTER_NAME}' not found in Azure.${W}"
+    info_ "AKS cluster '${AKS_CLUSTER_NAME}' not found — first-time deploy."
+    info_ "Terraform will create it. kubectl resources will apply on subsequent runs."
+    done_ "Skipping AKS reachability check (cluster will be created)"
     echo ""
-    echo -e "    ${Y}If this is a fresh deploy, create the cluster first with:${W}"
-    echo -e "    ${C}  terraform apply -target=module.aks${W}"
-    echo ""
-    fail "AKS cluster does not exist. Cannot proceed."
-fi
+else
 
 AKS_POWER_STATE=$(echo "$AKS_JSON" | jq -r '.powerState // empty')
 AKS_FQDN=$(echo "$AKS_JSON" | jq -r '.fqdn // empty')
@@ -728,6 +726,7 @@ else
     echo ""
     fail "AKS FQDN unavailable. Check cluster health in the Azure portal."
 fi
+fi # end else (AKS exists)
 popd >/dev/null
 
 # ═══════════════════════════════════════════════════════════════════════════════

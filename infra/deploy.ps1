@@ -708,14 +708,11 @@ try {
     $aksJson = az aks show --name $AksClusterName --resource-group $ResourceGroup --query "{fqdn:fqdn, powerState:powerState.code}" -o json 2>$null
     if (-not $aksJson) {
         Write-Host ""
-        Write-Host "    AKS cluster '$AksClusterName' not found in Azure." -ForegroundColor Red
+        Write-Info "AKS cluster '$AksClusterName' not found — first-time deploy."
+        Write-Info "Terraform will create it. kubectl resources will apply on subsequent runs."
+        Write-Done "Skipping AKS reachability check (cluster will be created)"
         Write-Host ""
-        Write-Host "    If this is a fresh deploy, create the cluster first with:" -ForegroundColor Yellow
-        Write-Host "      terraform apply -target=module.aks" -ForegroundColor Cyan
-        Write-Host ""
-        Write-Fail "AKS cluster does not exist. Cannot proceed."
-        exit 1
-    }
+    } else {
 
     $aks = $aksJson | ConvertFrom-Json
 
@@ -765,6 +762,7 @@ try {
         Write-Fail "AKS FQDN unavailable. Check cluster health in the Azure portal."
         exit 1
     }
+    } # end else (AKS exists)
 } finally {
     Pop-Location
 }
