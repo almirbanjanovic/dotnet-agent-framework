@@ -192,13 +192,48 @@ read_hcl_value() {
 
 # ── Load deployment configuration ────────────────────────────────────────────
 
-DEPLOY_ENV_FILE="$SCRIPT_DIR/deploy.env"
+DEPLOYMENTS_DIR="$SCRIPT_DIR/deployments"
 
-if [[ ! -f "$DEPLOY_ENV_FILE" ]]; then
-    echo "deploy.env not found. Run init first: ./init.sh"; exit 1
+if [[ ! -d "$DEPLOYMENTS_DIR" ]]; then
+    echo "No deployments found. Run init first: ./init.sh"; exit 1
 fi
 
-# Parse deploy.env key=value pairs (skip comments and blank lines)
+mapfile -t ENV_FILES < <(find "$DEPLOYMENTS_DIR" -maxdepth 1 -name '*.env' -type f | sort)
+
+if [[ ${#ENV_FILES[@]} -eq 0 ]]; then
+    echo "No deployments found. Run init first: ./init.sh"; exit 1
+fi
+
+if [[ ${#ENV_FILES[@]} -eq 1 ]]; then
+    DEPLOY_ENV_FILE="${ENV_FILES[0]}"
+else
+    echo ""
+    echo -e "    Available Deployments"
+    echo -e "    ${D}─────────────────────${W}"
+    for i in "${!ENV_FILES[@]}"; do
+        f="${ENV_FILES[$i]}"
+        fname=$(basename "$f" .env)
+        env_name="${fname%%-*}"
+        region_name="${fname#*-}"
+        date_str=""
+        first_line=$(head -1 "$f")
+        if [[ "$first_line" =~ ([0-9]{4}-[0-9]{2}-[0-9]{2}) ]]; then
+            date_str="${BASH_REMATCH[1]}"
+        fi
+        num=$((i + 1))
+        printf "     %2d) %-25s (%s)\n" "$num" "$env_name — $region_name" "$date_str"
+    done
+    echo ""
+    read -p "    Select deployment [1]: " selection
+    selection="${selection:-1}"
+    idx=$((selection - 1))
+    if [[ $idx -lt 0 || $idx -ge ${#ENV_FILES[@]} ]]; then
+        echo "Invalid selection: $selection"; exit 1
+    fi
+    DEPLOY_ENV_FILE="${ENV_FILES[$idx]}"
+fi
+
+# Parse deployment config key=value pairs (skip comments and blank lines)
 ENVIRONMENT=""
 LOCATION=""
 BASE_NAME=""
@@ -215,7 +250,7 @@ while IFS='=' read -r key value; do
 done < <(grep -E '^\s*[A-Z_]+=.+' "$DEPLOY_ENV_FILE")
 
 if [[ -z "$ENVIRONMENT" || -z "$LOCATION" || -z "$BASE_NAME" || -z "$RESOURCE_GROUP" ]]; then
-    echo "deploy.env is incomplete. Re-run init: ./init.sh"; exit 1
+    echo "Deployment config is incomplete. Re-run init: ./init.sh"; exit 1
 fi
 
 banner
@@ -427,7 +462,7 @@ fi
 # ── Display deployment configuration ─────────────────────────────────────────
 
 echo ""
-echo -e "    Deployment Configuration (from deploy.env)"
+echo -e "    Deployment Configuration"
 echo -e "    ${D}──────────────────────────────────────────${W}"
 echo -e "    Environment:    ${C}${ENVIRONMENT}${W}"
 echo -e "    Region:         ${C}${LOCATION}${W}"
