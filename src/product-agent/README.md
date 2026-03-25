@@ -16,3 +16,16 @@ Required config keys (populated by config-sync from Key Vault):
 | `AzureAd:TenantId` | Entra tenant ID for DefaultAzureCredential |
 
 Run config-sync to populate: `cd src/config-sync && dotnet run -- <key-vault-uri> [environment]`
+
+## How to run locally
+
+Implementation pending. Once built:
+
+```bash
+cd src/product-agent
+dotnet run
+```
+
+## Architecture role
+
+Product Agent is a specialist LLM agent for catalog browsing, promotions, recommendations, and sizing guides. The orchestrator-agent routes product-related intents here. It connects to both knowledge-mcp (semantic search) and crm-mcp (customer context) and uses Azure OpenAI for reasoning.

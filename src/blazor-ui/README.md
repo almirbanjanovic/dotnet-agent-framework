@@ -14,3 +14,16 @@ Required config keys (populated by config-sync from Key Vault):
 | `AzureAd:TenantId` | Entra tenant ID for DefaultAzureCredential |
 
 Run config-sync to populate: `cd src/config-sync && dotnet run -- <key-vault-uri> [environment]`
+
+## How to run locally
+
+Implementation pending. Once built:
+
+```bash
+cd src/blazor-ui
+dotnet run
+```
+
+## Architecture role
+
+Blazor UI is the user-facing single-page application. It authenticates users via MSAL (Entra ID), connects to the BFF API over SignalR for real-time chat, and renders agent responses including markdown-formatted product images. It runs entirely in the browser as a WebAssembly app.
