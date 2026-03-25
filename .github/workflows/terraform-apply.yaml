@@ -124,11 +124,22 @@ jobs:
       run: |
         TF_DIR="${{ vars.TERRAFORM_WORKING_DIRECTORY }}"
 
-        # Agent Identity sponsor: resolve SP object ID (not an import — always set)
-        SP_OID=$(az ad sp show --id "${{ secrets.azureClientId }}" --query id -o tsv 2>/dev/null || true)
-        if [ -n "$SP_OID" ]; then
-          echo "TF_VAR_agent_identity_sponsor_id=$SP_OID" >> "$GITHUB_ENV"
-          echo "Agent Identity sponsor: $SP_OID"
+        # Agent Identity sponsor: Graph beta requires a User as sponsor (not a
+        # ServicePrincipal). In CI/CD, use the SP's owner (a User) as the sponsor.
+        SP_OWNER_OID=$(az ad sp show --id "${{ secrets.azureClientId }}" \
+          --query "owners[0].id // empty" -o tsv 2>/dev/null || true)
+        if [ -z "$SP_OWNER_OID" ]; then
+          # Fallback: query the app registration owners
+          APP_OBJ_ID=$(az ad app show --id "${{ secrets.azureClientId }}" --query id -o tsv 2>/dev/null || true)
+          if [ -n "$APP_OBJ_ID" ]; then
+            SP_OWNER_OID=$(az ad app owner list --id "$APP_OBJ_ID" --query "[0].id" -o tsv 2>/dev/null || true)
+          fi
+        fi
+        if [ -n "$SP_OWNER_OID" ]; then
+          echo "TF_VAR_agent_identity_sponsor_id=$SP_OWNER_OID" >> "$GITHUB_ENV"
+          echo "Agent Identity sponsor (owner): $SP_OWNER_OID"
+        else
+          echo "::warning::Could not determine SP owner for Agent Identity sponsor"
         fi
 
         # Get current state to avoid importing resources already managed by TF
@@ -163,6 +174,21 @@ jobs:
         done
         if [ "$EXISTING" != '{}' ]; then
           echo "TF_VAR_existing_user_ids=$EXISTING" >> "$GITHUB_ENV"
+        fi
+
+        # Detect existing Key Vault diagnostic setting
+        if ! echo "$STATE_LIST" | grep -qF "azurerm_monitor_diagnostic_setting.keyvault"; then
+          KV_ID=$(az keyvault list --resource-group "${{ vars.RESOURCE_GROUP }}" --query "[0].id" -o tsv 2>/dev/null || true)
+          if [ -n "$KV_ID" ]; then
+            DIAG_ID=$(az monitor diagnostic-settings list --resource "$KV_ID" \
+              --query "[?name=='diag-keyvault-to-law'].id | [0]" -o tsv 2>/dev/null || true)
+            if [ -n "$DIAG_ID" ]; then
+              echo "TF_VAR_import_diag_keyvault_id=${KV_ID}|diag-keyvault-to-law" >> "$GITHUB_ENV"
+              echo "Diagnostic setting (Key Vault): exists outside TF state — will import"
+            fi
+          fi
+        else
+          echo "Diagnostic setting (Key Vault): already in Terraform state"
         fi
       env:
         ARM_CLIENT_ID: ${{ secrets.azureClientId }}

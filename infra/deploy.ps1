@@ -671,13 +671,20 @@ try {
 Write-Step "Detecting existing resources for idempotent import..."
 $ImportCount = 0
 
-# Agent Identity sponsor: resolve SP object ID for blueprint sponsor requirement
-# (Not an import — always set so blueprints include the required sponsor field)
+# Agent Identity sponsor: the signed-in user (Graph beta requires a User sponsor,
+# ServicePrincipal objects are not valid for the sponsors reference)
 if ($SpClientId) {
     $SpObjectId = az ad sp show --id "$SpClientId" --query id -o tsv 2>$null
     if ($SpObjectId) {
-        $env:TF_VAR_agent_identity_sponsor_id = $SpObjectId.Trim()
-        Write-Done "Agent Identity sponsor: $($SpObjectId.Trim())"
+        Write-Info "SP object ID: $($SpObjectId.Trim()) (not used as sponsor — must be User)"
+    }
+    # Use the signed-in deployer's user OID as the blueprint sponsor
+    $DeployerUserOid = az ad signed-in-user show --query id -o tsv 2>$null
+    if ($DeployerUserOid) {
+        $env:TF_VAR_agent_identity_sponsor_id = $DeployerUserOid.Trim()
+        Write-Done "Agent Identity sponsor (user): $($DeployerUserOid.Trim())"
+    } else {
+        Write-Info "Could not determine signed-in user — blueprints may fail if sponsor is required"
     }
 }
 
@@ -731,6 +738,23 @@ if ($ExistingUsers.Count -gt 0) {
     Write-Info "No users to import"
 }
 
+# Detect existing diagnostic setting for Key Vault
+$diagInState = $StateList | Where-Object { $_ -eq "azurerm_monitor_diagnostic_setting.keyvault" }
+if (-not $diagInState) {
+    $kvId = az keyvault list --resource-group $ResourceGroup --query "[0].id" -o tsv 2>$null
+    if ($kvId) {
+        $diagExists = az monitor diagnostic-settings list --resource $kvId.Trim() `
+            --query "[?name=='diag-keyvault-to-law'].id | [0]" -o tsv 2>$null
+        if ($diagExists) {
+            $env:TF_VAR_import_diag_keyvault_id = "$($kvId.Trim())|diag-keyvault-to-law"
+            Write-Done "Diagnostic setting (Key Vault): exists outside TF state (will import)"
+            $ImportCount++
+        }
+    }
+} else {
+    Write-Info "Diagnostic setting (Key Vault): already in Terraform state"
+}
+
 Write-PhaseSummary -Number 2 -NextPhase "Phase 3 — terraform validate (check configuration syntax)" -Items ([ordered]@{
     "Backend" = "azurerm ($StorageAccount/tfstate/$Environment.tfstate)"
     "Imports" = "$ImportCount existing resource(s) detected"
@@ -757,6 +781,32 @@ try {
 Write-PhaseSummary -Number 3 -NextPhase "Phase 4 — terraform plan (preview infrastructure changes)" -Items ([ordered]@{
     "Status" = "Valid"
 })
+
+# ── Purge soft-deleted resources before plan ─────────────────────────────────
+# Cognitive Services and Key Vaults use soft-delete by default. If a prior
+# deployment was destroyed, the soft-deleted resources block re-creation.
+Write-Step "Purging soft-deleted resources (if any)..."
+
+$softCog = az cognitiveservices account list-deleted `
+    --query "[?contains(id, '$ResourceGroup')].[name]" -o tsv 2>$null
+foreach ($acct in ($softCog -split "`n" | Where-Object { $_ })) {
+    $acct = $acct.Trim()
+    az cognitiveservices account purge --location $Location `
+        --resource-group $ResourceGroup --name $acct 2>$null | Out-Null
+    Write-Done "Purged Cognitive Services: $acct"
+}
+
+$softKv = az keyvault list-deleted `
+    --query "[?properties.vaultId && contains(properties.vaultId, '$ResourceGroup')].[name]" -o tsv 2>$null
+foreach ($kv in ($softKv -split "`n" | Where-Object { $_ })) {
+    $kv = $kv.Trim()
+    az keyvault purge --name $kv --no-wait 2>$null | Out-Null
+    Write-Done "Purged Key Vault: $kv"
+}
+
+if (-not $softCog -and -not $softKv) {
+    Write-Info "No soft-deleted resources to purge"
+}
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 4 — terraform plan

@@ -39,7 +39,7 @@ resource "msgraph_resource" "blueprint" {
     # won't cause plan drift — the provider only flags response-only differences.
     var.sponsor_id != "" ? {
       "sponsors@odata.bind" = [
-        "https://graph.microsoft.com/beta/servicePrincipals/${var.sponsor_id}"
+        "https://graph.microsoft.com/beta/users/${var.sponsor_id}"
       ]
     } : {}
   )

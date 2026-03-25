@@ -261,6 +261,12 @@ variable "import_service_networking_id" {
   default     = ""
 }
 
+variable "import_diag_keyvault_id" {
+  description = "Azure resource ID for Key Vault diagnostic setting if it already exists"
+  type        = string
+  default     = ""
+}
+
 variable "agent_identity_sponsor_id" {
   description = "SP object ID to set as Agent Identity Blueprint sponsor (required by Graph beta API)"
   type        = string
