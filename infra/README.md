@@ -12,6 +12,7 @@ infra/
 ├── init.sh                    # One-time bootstrap: backend + Entra + GitHub CI/CD (Bash)
 ├── deploy.ps1                 # Deploy infrastructure + seed data (PowerShell)
 ├── deploy.sh                  # Deploy infrastructure + seed data (Bash)
+├── deployments/               # Per-environment config files written by init ({env}-{region}.env)
 ├── templates/                 # Reference Dockerfile + Helm chart patterns for all services
 │   ├── Dockerfile.template
 │   ├── README.md
@@ -22,10 +23,12 @@ infra/
 │       ├── service-account.yaml
 │       └── network-policies/  # NetworkPolicy YAMLs (applied manually via kubectl)
 └── terraform/
-    ├── main.tf                # Root module — wires all child modules
-    ├── variables.tf           # Root input variables (no defaults)
+    ├── main.tf                # Root module — wires all child modules + common_tags locals
+    ├── variables.tf           # Root input variables (with validations on environment, location)
     ├── outputs.tf             # Root outputs (endpoints, keys, names)
-    ├── providers.tf           # Provider versions and backend config
+    ├── providers.tf           # Provider versions and backend config (http, time providers declared)
+    ├── checks.tf              # Post-apply health checks (AKS OIDC, Key Vault, AI Search)
+    ├── diagnostics.tf         # Diagnostic settings — audit logs to Log Analytics
     ├── dev.tfvars             # Your environment values (gitignored, name matches env)
     ├── backend.hcl            # Remote state config (gitignored)
     │
@@ -181,6 +184,22 @@ Each module lives under a `v1/` folder. When a breaking change is needed, create
 - `*.tfvars`, `backend.hcl`, and `*.backend.hcl` are gitignored under `infra/.gitignore`.
 - The bootstrap scripts and workflow disable storage public network access after setup; ensure your network can reach the storage account when running Terraform locally.
 - The resource group is created by the bootstrap scripts / workflow, not by Terraform. The name is passed into `main.tf` via `resource_group_name`.
+
+## Init script behavior
+
+| Feature | Description |
+| --- | --- |
+| **Region selection** | Presents 30 Azure regions in a numbered list (1–30), grouped by Azure Geography (United States, Canada, Brazil, Europe, France, etc.). Users enter a number or region name; defaults to `eastus2`. |
+| **Multi-environment configs** | Writes deployment config to `infra/deployments/{env}-{region}.env` (e.g., `dev-eastus2.env`). Supports multiple environments/regions side by side. |
+| **Storage firewall ordering** | Creates the storage account with `--default-action Deny`, immediately adds the deployer IP via `network-rule add`, then creates the `tfstate` container. This ordering ensures the firewall is locked from creation, but the deployer can still reach it. |
+| **VM size** | Default AKS node VM size is `Standard_D2s_v3` (for both system and workload node pools). |
+
+## Deploy script behavior
+
+| Feature | Description |
+| --- | --- |
+| **Deployment selection** | Reads from `infra/deployments/` directory. If multiple `.env` files exist, presents a numbered selection menu. |
+| **AKS stopped cluster** | If the AKS cluster is in a `Stopped` power state, prompts the user to start it (rather than hard-failing). Starting takes 3–5 minutes. |
 
 ## Deploy script safety features
 
