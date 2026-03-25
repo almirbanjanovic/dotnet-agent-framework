@@ -258,15 +258,15 @@ function Add-DeployerFirewallRules {
     }
     Write-Host "`r    ✓ Cosmos DB ($cosmosCount)    " -ForegroundColor Green
 
-    # Cognitive Services
-    Write-Host "    ⠋ Cognitive Services" -ForegroundColor DarkGray -NoNewline
+    # Foundry
+    Write-Host "    ⠋ Foundry" -ForegroundColor DarkGray -NoNewline
     $cogNames = az cognitiveservices account list --resource-group $ResourceGroup --query "[].name" -o tsv 2>$null
     $cogItems = @($cogNames -split "`n" | Where-Object { $_ })
     $cogCount = $cogItems.Count
     foreach ($cog in $cogItems) {
         az cognitiveservices account network-rule add --resource-group $ResourceGroup --name $cog.Trim() --ip-address "$DeployerIp/32" 2>$null | Out-Null
     }
-    Write-Host "`r    ✓ Cognitive Services ($cogCount)    " -ForegroundColor Green
+    Write-Host "`r    ✓ Foundry ($cogCount)    " -ForegroundColor Green
 
     # AI Search
     Write-Host "    ⠋ AI Search" -ForegroundColor DarkGray -NoNewline
@@ -322,13 +322,13 @@ function Remove-DeployerFirewallRules {
     }
     Write-Host "`r    ✓ Cosmos DB    " -ForegroundColor Green
 
-    # Cognitive Services
-    Write-Host "    ⠋ Cognitive Services" -ForegroundColor DarkGray -NoNewline
+    # Foundry
+    Write-Host "    ⠋ Foundry" -ForegroundColor DarkGray -NoNewline
     $cogNames = az cognitiveservices account list --resource-group $ResourceGroup --query "[].name" -o tsv 2>$null
     foreach ($cog in ($cogNames -split "`n" | Where-Object { $_ })) {
         az cognitiveservices account network-rule remove --resource-group $ResourceGroup --name $cog.Trim() --ip-address "$DeployerIp/32" 2>$null | Out-Null
     }
-    Write-Host "`r    ✓ Cognitive Services    " -ForegroundColor Green
+    Write-Host "`r    ✓ Foundry    " -ForegroundColor Green
 
     # AI Search
     Write-Host "    ⠋ AI Search" -ForegroundColor DarkGray -NoNewline

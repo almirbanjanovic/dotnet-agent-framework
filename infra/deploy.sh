@@ -513,8 +513,8 @@ add_deployer_firewall_rules() {
     done
     echo " done"
 
-    # Cognitive Services
-    echo -ne "    Cognitive Services..."
+    # Foundry
+    echo -ne "     Foundry..."
     for cog in $(az cognitiveservices account list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
       az cognitiveservices account network-rule add --resource-group "$RG" --name "$cog" --ip-address "$IP/32" 2>/dev/null || true
     done
@@ -566,8 +566,8 @@ cleanup_deployer_ip() {
     done
     echo " done"
 
-    # Cognitive Services
-    echo -ne "    Cognitive Services..."
+    # Foundry
+    echo -ne "     Foundry..."
     for cog in $(az cognitiveservices account list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
       az cognitiveservices account network-rule remove --resource-group "$RG" --name "$cog" --ip-address "$IP/32" 2>/dev/null || true
     done

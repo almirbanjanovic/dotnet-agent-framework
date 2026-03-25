@@ -79,7 +79,7 @@ infra/
             │   └── v1/
             ├── cosmosdb/      # Cosmos DB Data Contributor
             │   └── v1/
-            ├── foundry/       # Cognitive Services OpenAI User
+            ├── foundry/       # Foundry OpenAI User
             │   └── v1/
             ├── keyvault/      # Key Vault Secrets Officer + User + Certificates Officer
             │   └── v1/
