@@ -41,7 +41,7 @@ The script performs 5 phases in order:
 | **2** | Creates Entra app registration with service principal and OIDC federated credential for GitHub Actions |
 | **3** | Creates GitHub environment, sets repository secrets (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`) and environment variables |
 | **4** | Creates Azure resource group, storage account, blob container for Terraform remote state, grants Contributor RBAC, then locks down public access |
-| **5** | Generates `dev.tfvars` (or `{env}.tfvars`) and `backend.hcl` configuration files |
+| **5** | Generates `dev.tfvars` (or `{env}.tfvars`), `backend.hcl`, and `deployments/{env}-{region}.env` configuration files |
 
 ### Why `*.tfvars` and `backend.hcl` are gitignored
 
@@ -56,6 +56,7 @@ The script is idempotent — it checks for existing resources and skips what's a
 - [ ] Terraform remote state storage account exists in Azure
 - [ ] `infra/terraform/dev.tfvars` (or `{env}.tfvars`) exists with your infrastructure configuration
 - [ ] `infra/terraform/backend.hcl` exists with your remote state storage account details
+- [ ] `infra/deployments/{env}-{region}.env` exists with your deployment configuration (environment, location, base name, resource group)
 - [ ] App registration exists in Entra with a federated credential for your GitHub repo
 - [ ] `gh secret list` shows `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`
 - [ ] `gh variable list --env dev` shows all infrastructure variables
