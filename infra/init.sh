@@ -670,35 +670,27 @@ else
     RBAC_STATUS="Contributor on $RESOURCE_GROUP"
 fi
 
-# ── Detect deployer identity (multi-method fallback) ─────────────────────────────
-step "Detecting deployer identity for RBAC assignments"
+# ── Deployer identity (from ARM token — no Graph API required) ───────────────
+step "Determining deployer identity"
 DEPLOYER_OID=""
-
-# Method 1: signed-in user (standard az login)
-DEPLOYER_OID=$(az ad signed-in-user show --query id -o tsv 2>/dev/null || true)
-
-# Method 2: get UPN/name from account token, look up in AD
-if [[ -z "$DEPLOYER_OID" ]]; then
-    ACCOUNT_NAME=$(az account show --query user.name -o tsv 2>/dev/null || true)
-    ACCOUNT_TYPE=$(az account show --query user.type -o tsv 2>/dev/null || true)
-    if [[ -n "$ACCOUNT_NAME" ]]; then
-        if [[ "$ACCOUNT_TYPE" == "servicePrincipal" ]]; then
-            DEPLOYER_OID=$(az ad sp show --id "$ACCOUNT_NAME" --query id -o tsv 2>/dev/null || true)
-        else
-            DEPLOYER_OID=$(az ad user show --id "$ACCOUNT_NAME" --query id -o tsv 2>/dev/null || true)
-        fi
-    fi
+TOKEN=$(az account get-access-token --query accessToken -o tsv 2>/dev/null)
+if [[ -n "$TOKEN" ]]; then
+    PAYLOAD=$(echo "$TOKEN" | cut -d. -f2)
+    # Fix base64 padding
+    MOD=$((${#PAYLOAD} % 4))
+    if [[ $MOD -eq 2 ]]; then PAYLOAD="${PAYLOAD}=="; elif [[ $MOD -eq 3 ]]; then PAYLOAD="${PAYLOAD}="; fi
+    DEPLOYER_OID=$(echo "$PAYLOAD" | base64 -d 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('oid',''))" 2>/dev/null || \
+                   echo "$PAYLOAD" | base64 -d 2>/dev/null | jq -r '.oid // empty' 2>/dev/null || true)
 fi
 
 if [[ -z "$DEPLOYER_OID" ]]; then
     echo ""
-    echo -e "    ${R}\u2717 Could not determine deployer identity.${W}"
+    echo -e "    ${R}\u2717 Could not determine deployer identity from access token.${W}"
     echo -e "    ${R}RBAC roles are required for Terraform to manage state and secrets.${W}"
     echo ""
     echo -e "    ${Y}Troubleshooting:${W}"
     echo -e "    ${Y}  1. Ensure you're logged in: az login${W}"
     echo -e "    ${Y}  2. Check your account: az account show${W}"
-    echo -e "    ${Y}  3. Try re-authenticating: az login --scope https://graph.microsoft.com/.default${W}"
     echo ""
     exit 1
 fi

@@ -631,34 +631,30 @@ $phase4Items = [ordered]@{
 }
 if (-not $LocalOnly) { $phase4Items["RBAC"] = "Contributor on $ResourceGroup" } else { $phase4Items["RBAC"] = "Skipped (local-only mode)" }
 
-# ── Detect deployer identity (multi-method fallback) ─────────────────────────
-Write-Step "Detecting deployer identity for RBAC assignments"
+# ── Deployer identity (from ARM token — no Graph API required) ───────────────
+Write-Step "Determining deployer identity"
 $deployerOid = $null
-
-# Method 1: signed-in user (standard az login)
-$deployerOid = az ad signed-in-user show --query id -o tsv 2>$null
-
-# Method 2: get UPN/name from account token, look up in AD
-if (-not $deployerOid) {
-    $accountInfo = az account show --query "{name:user.name, type:user.type}" -o json 2>$null | ConvertFrom-Json
-    if ($accountInfo) {
-        if ($accountInfo.type -eq "servicePrincipal") {
-            $deployerOid = az ad sp show --id $accountInfo.name --query id -o tsv 2>$null
-        } elseif ($accountInfo.name) {
-            $deployerOid = az ad user show --id $accountInfo.name --query id -o tsv 2>$null
-        }
+try {
+    $token = az account get-access-token --query accessToken -o tsv 2>$null
+    if ($token) {
+        $parts = $token.Split('.')
+        $payload = $parts[1]
+        switch ($payload.Length % 4) { 2 { $payload += '==' }; 3 { $payload += '=' } }
+        $decoded = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($payload)) | ConvertFrom-Json
+        $deployerOid = $decoded.oid
     }
+} catch {
+    # Token decode failed — fall through to error
 }
 
 if (-not $deployerOid) {
     Write-Host ""
-    Write-Host "    ✗ Could not determine deployer identity." -ForegroundColor Red
+    Write-Host "    ✗ Could not determine deployer identity from access token." -ForegroundColor Red
     Write-Host "    RBAC roles are required for Terraform to manage state and secrets." -ForegroundColor Red
     Write-Host ""
     Write-Host "    Troubleshooting:" -ForegroundColor Yellow
     Write-Host "      1. Ensure you're logged in: az login" -ForegroundColor Yellow
     Write-Host "      2. Check your account: az account show" -ForegroundColor Yellow
-    Write-Host "      3. Try re-authenticating: az login --scope https://graph.microsoft.com/.default" -ForegroundColor Yellow
     Write-Host ""
     exit 1
 }
