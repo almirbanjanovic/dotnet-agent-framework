@@ -611,20 +611,26 @@ if ! az storage account show --resource-group "$RESOURCE_GROUP" --name "$STORAGE
     az storage account create \
         --resource-group "$RESOURCE_GROUP" --name "$STORAGE_ACCOUNT" \
         --sku "Standard_LRS" --encryption-services blob \
-        --min-tls-version "TLS1_2" --location "$LOCATION" \
-        --default-action Deny >/dev/null
+        --min-tls-version "TLS1_2" --location "$LOCATION" >/dev/null
     echo "    Waiting ${WAIT_TIME}s for storage account..."
     sleep $WAIT_TIME
     done_ "Created $STORAGE_ACCOUNT"
 else
     skip_ "$STORAGE_ACCOUNT already exists"
-    az storage account update --name "$STORAGE_ACCOUNT" --resource-group "$RESOURCE_GROUP" --default-action Deny -o none 2>/dev/null
     sleep $WAIT_TIME
 fi
 
+step "Allowing deployer IP through storage firewall"
+DEPLOYER_IP=$(curl -s --max-time 10 https://api.ipify.org)
+az storage account network-rule add --account-name "$STORAGE_ACCOUNT" --resource-group "$RESOURCE_GROUP" --ip-address "$DEPLOYER_IP" -o none 2>/dev/null
+done_ "Added $DEPLOYER_IP to storage firewall"
+
 CONTAINER_NAME="tfstate"
 if ! az storage container show --name "$CONTAINER_NAME" --account-name "$STORAGE_ACCOUNT" --auth-mode login &>/dev/null; then
-    az storage container create --name "$CONTAINER_NAME" --account-name "$STORAGE_ACCOUNT" --auth-mode login >/dev/null
+    if ! az storage container create --name "$CONTAINER_NAME" --account-name "$STORAGE_ACCOUNT" --auth-mode login >/dev/null; then
+        echo "    ✗ Failed to create tfstate container. Check storage account network rules."
+        exit 1
+    fi
     done_ "Created container $CONTAINER_NAME"
 else
     skip_ "Container $CONTAINER_NAME already exists"

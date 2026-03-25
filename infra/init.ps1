@@ -573,21 +573,28 @@ if ($LASTEXITCODE -ne 0) {
     az storage account create `
         --resource-group $ResourceGroup --name $StorageAccount `
         --sku "Standard_LRS" --encryption-services blob `
-        --min-tls-version "TLS1_2" --location $Location `
-        --default-action Deny | Out-Null
+        --min-tls-version "TLS1_2" --location $Location | Out-Null
     Write-Host "    Waiting ${WaitTime}s for storage account..."
     Start-Sleep -Seconds $WaitTime
     Write-Done "Created $StorageAccount"
 } else {
     Write-Skip "$StorageAccount already exists"
-    az storage account update --name $StorageAccount --resource-group $ResourceGroup --default-action Deny -o none 2>$null
     Start-Sleep -Seconds $WaitTime
 }
+
+Write-Step "Allowing deployer IP through storage firewall"
+$DeployerIp = (Invoke-RestMethod -Uri "https://api.ipify.org" -TimeoutSec 10).Trim()
+az storage account network-rule add --account-name $StorageAccount --resource-group $ResourceGroup --ip-address $DeployerIp -o none 2>$null
+Write-Done "Added $DeployerIp to storage firewall"
 
 $ContainerName = "tfstate"
 $null = az storage container show --name $ContainerName --account-name $StorageAccount --auth-mode login 2>&1
 if ($LASTEXITCODE -ne 0) {
     az storage container create --name $ContainerName --account-name $StorageAccount --auth-mode login | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "    ✗ Failed to create tfstate container. Check storage account network rules." -ForegroundColor Red
+        exit 1
+    }
     Write-Done "Created container $ContainerName"
 } else {
     Write-Skip "Container $ContainerName already exists"
