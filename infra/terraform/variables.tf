@@ -24,7 +24,8 @@ variable "msgraph_tenant_id" {
 }
 
 variable "tags" {
-  type = map(string)
+  description = "Additional tags to apply to all resources (merged with default_tags)"
+  type        = map(string)
 }
 
 variable "resource_group_name" {

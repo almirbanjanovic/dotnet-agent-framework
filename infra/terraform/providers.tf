@@ -82,6 +82,14 @@ provider "azurerm" {
   storage_use_azuread = true
 
   resource_provider_registrations = "extended"
+
+  default_tags {
+    tags = {
+      project     = "dotnet-agent-framework"
+      managed-by  = "terraform"
+      environment = var.environment
+    }
+  }
 }
 
 # Register resource providers that may not be registered by default
