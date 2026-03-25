@@ -566,6 +566,10 @@ if ($LASTEXITCODE -ne 0) {
     Write-Skip "$ResourceGroup already exists"
 }
 
+Write-Step "Detecting deployer IP"
+$DeployerIp = (Invoke-RestMethod -Uri "https://api.ipify.org" -TimeoutSec 10).Trim()
+Write-Done "Deployer IP is $DeployerIp"
+
 Write-Step "Creating storage account for Terraform state"
 $WaitTime = 30
 $null = az storage account show --resource-group $ResourceGroup --name $StorageAccount 2>&1
@@ -573,19 +577,21 @@ if ($LASTEXITCODE -ne 0) {
     az storage account create `
         --resource-group $ResourceGroup --name $StorageAccount `
         --sku "Standard_LRS" --encryption-services blob `
-        --min-tls-version "TLS1_2" --location $Location | Out-Null
+        --min-tls-version "TLS1_2" --location $Location `
+        --default-action Deny | Out-Null
     Write-Host "    Waiting ${WaitTime}s for storage account..."
     Start-Sleep -Seconds $WaitTime
-    Write-Done "Created $StorageAccount"
+    Write-Done "Created $StorageAccount (default-action Deny)"
 } else {
     Write-Skip "$StorageAccount already exists"
+    az storage account update --name $StorageAccount --resource-group $ResourceGroup --default-action Deny -o none 2>$null
     Start-Sleep -Seconds $WaitTime
 }
 
 Write-Step "Allowing deployer IP through storage firewall"
-$DeployerIp = (Invoke-RestMethod -Uri "https://api.ipify.org" -TimeoutSec 10).Trim()
 az storage account network-rule add --account-name $StorageAccount --resource-group $ResourceGroup --ip-address $DeployerIp -o none 2>$null
-Write-Done "Added $DeployerIp to storage firewall"
+Write-Done "Deployer IP $DeployerIp added to storage firewall"
+Start-Sleep -Seconds 5
 
 $ContainerName = "tfstate"
 $null = az storage container show --name $ContainerName --account-name $StorageAccount --auth-mode login 2>&1
@@ -599,10 +605,6 @@ if ($LASTEXITCODE -ne 0) {
 } else {
     Write-Skip "Container $ContainerName already exists"
 }
-
-Write-Step "Locking down state storage"
-az storage account update --name $StorageAccount --resource-group $ResourceGroup --default-action Deny -o none 2>$null
-Write-Done "Default network action set to Deny"
 
 # ── RBAC: Contributor scoped to resource group (least privilege) ───────────
 if (-not $LocalOnly -and $AppClientId) {
