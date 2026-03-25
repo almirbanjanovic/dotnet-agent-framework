@@ -7,6 +7,12 @@ variable "aks_oidc_issuer_url" {
   type        = string
 }
 
+variable "sponsor_id" {
+  description = "SP object ID to set as Agent Identity Blueprint sponsor (required by Graph beta API)"
+  type        = string
+  default     = ""
+}
+
 variable "agents" {
   description = <<-EOT
     Map of agent identities to create. Each entry creates:

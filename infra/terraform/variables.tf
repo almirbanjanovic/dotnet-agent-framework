@@ -243,3 +243,26 @@ variable "k8s_namespace" {
   type        = string
   default     = "contoso"
 }
+
+# ---------------------------------------------------------------
+# Idempotent Import Support
+# Detected by deploy scripts / CI; empty defaults mean "create new".
+# ---------------------------------------------------------------
+
+variable "existing_user_ids" {
+  description = "Map of test user key → Entra object ID for existing users (import instead of create)"
+  type        = map(string)
+  default     = {}
+}
+
+variable "import_service_networking_id" {
+  description = "Azure resource ID for Microsoft.ServiceNetworking provider if already registered"
+  type        = string
+  default     = ""
+}
+
+variable "agent_identity_sponsor_id" {
+  description = "SP object ID to set as Agent Identity Blueprint sponsor (required by Graph beta API)"
+  type        = string
+  default     = ""
+}

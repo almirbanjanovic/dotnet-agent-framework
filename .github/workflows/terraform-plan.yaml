@@ -129,6 +129,60 @@ jobs:
         AZURE_DISABLE_CAE: "true"
         HAMILTON_DISABLE_CAE: "true"
 
+    - name: Detect existing resources for idempotent import
+      run: |
+        TF_DIR="${{ vars.TERRAFORM_WORKING_DIRECTORY }}"
+
+        # Agent Identity sponsor: resolve SP object ID (not an import — always set)
+        SP_OID=$(az ad sp show --id "${{ secrets.azureClientId }}" --query id -o tsv 2>/dev/null || true)
+        if [ -n "$SP_OID" ]; then
+          echo "TF_VAR_agent_identity_sponsor_id=$SP_OID" >> "$GITHUB_ENV"
+          echo "Agent Identity sponsor: $SP_OID"
+        fi
+
+        # Get current state to avoid importing resources already managed by TF
+        STATE_LIST=$(terraform -chdir="$TF_DIR" state list 2>/dev/null || true)
+
+        # Detect Service Networking provider: import only if exists in Azure but not in state
+        if ! echo "$STATE_LIST" | grep -qF "azurerm_resource_provider_registration.service_networking"; then
+          SUB_ID=$(az account show --query id -o tsv)
+          REG_STATE=$(az provider show --namespace Microsoft.ServiceNetworking --query registrationState -o tsv 2>/dev/null || true)
+          if [ "$REG_STATE" = "Registered" ]; then
+            echo "TF_VAR_import_service_networking_id=/subscriptions/$SUB_ID/providers/Microsoft.ServiceNetworking" >> "$GITHUB_ENV"
+            echo "Service Networking: exists outside TF state — will import"
+          fi
+        else
+          echo "Service Networking: already in Terraform state"
+        fi
+
+        # Detect Entra test users: import only if exist in Azure but not in state
+        EXISTING='{}'
+        for PAIR in "emma:emma.wilson" "james:james.chen" "sarah:sarah.miller" "david:david.park" "lisa:lisa.torres"; do
+          KEY="${PAIR%%:*}"
+          NICK="${PAIR##*:}"
+          if ! echo "$STATE_LIST" | grep -qF "module.entra.azuread_user.test[\"${KEY}\"]"; then
+            OID=$(az ad user list --filter "mailNickname eq '${NICK}'" --query "[0].id" -o tsv 2>/dev/null || true)
+            if [ -n "$OID" ]; then
+              EXISTING=$(echo "$EXISTING" | jq --arg k "$KEY" --arg v "$OID" '. + {($k): $v}')
+              echo "${NICK}: exists outside TF state ($OID) — will import"
+            fi
+          else
+            echo "${NICK}: already in Terraform state"
+          fi
+        done
+        if [ "$EXISTING" != '{}' ]; then
+          echo "TF_VAR_existing_user_ids=$EXISTING" >> "$GITHUB_ENV"
+        fi
+      env:
+        ARM_CLIENT_ID: ${{ secrets.azureClientId }}
+        ARM_TENANT_ID: ${{ secrets.azureTenantId }}
+        ARM_SUBSCRIPTION_ID: ${{ secrets.azureSubscriptionId }}
+        ARM_USE_OIDC: true
+        ARM_USE_AZUREAD: true
+        ARM_DISABLE_CAE: "true"
+        AZURE_DISABLE_CAE: "true"
+        HAMILTON_DISABLE_CAE: "true"
+
     - name: Terraform Validate
       id: validate
       run: terraform -chdir="${{ vars.TERRAFORM_WORKING_DIRECTORY }}" validate

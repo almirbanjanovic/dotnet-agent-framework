@@ -65,8 +65,8 @@ function Write-Phase {
         )}
         2 { @(
             "Connects Terraform to the remote state backend",
-            "(Azure Storage). Also imports existing Entra",
-            "test users to prevent recreation conflicts."
+            "(Azure Storage). Detects existing resources",
+            "(users, providers) for idempotent import."
         )}
         3 { @(
             "Checks all .tf files for syntax errors",
@@ -665,8 +665,75 @@ try {
     Pop-Location
 }
 
+# ── Detect existing resources for idempotent import ──────────────────────────
+# Only import resources that exist in Azure but NOT already in Terraform state.
+# This prevents importing resources that Terraform itself created in a prior run.
+Write-Step "Detecting existing resources for idempotent import..."
+$ImportCount = 0
+
+# Agent Identity sponsor: resolve SP object ID for blueprint sponsor requirement
+# (Not an import — always set so blueprints include the required sponsor field)
+if ($SpClientId) {
+    $SpObjectId = az ad sp show --id "$SpClientId" --query id -o tsv 2>$null
+    if ($SpObjectId) {
+        $env:TF_VAR_agent_identity_sponsor_id = $SpObjectId.Trim()
+        Write-Done "Agent Identity sponsor: $($SpObjectId.Trim())"
+    }
+}
+
+# Get current Terraform state to avoid importing resources already managed by TF
+Push-Location $TerraformDir
+$StateList = terraform state list 2>$null
+Pop-Location
+
+# Detect existing Service Networking provider registration
+$snInState = $StateList | Where-Object { $_ -eq "azurerm_resource_provider_registration.service_networking" }
+if (-not $snInState) {
+    $regState = az provider show --namespace Microsoft.ServiceNetworking --query "registrationState" -o tsv 2>$null
+    if ($regState -eq "Registered") {
+        $env:TF_VAR_import_service_networking_id = "/subscriptions/$SubscriptionId/providers/Microsoft.ServiceNetworking"
+        Write-Done "Service Networking provider: exists outside TF state (will import)"
+        $ImportCount++
+    } else {
+        Write-Info "Service Networking provider: not registered (will create)"
+    }
+} else {
+    Write-Info "Service Networking provider: already in Terraform state"
+}
+
+# Detect existing Entra test users not yet in state (filter by mailNickname)
+$TestUserNicknames = [ordered]@{
+    emma  = "emma.wilson"
+    james = "james.chen"
+    sarah = "sarah.miller"
+    david = "david.park"
+    lisa  = "lisa.torres"
+}
+$ExistingUsers = @{}
+foreach ($entry in $TestUserNicknames.GetEnumerator()) {
+    $stateAddr = "module.entra.azuread_user.test[`"$($entry.Key)`"]"
+    $inState = $StateList | Where-Object { $_ -eq $stateAddr }
+    if (-not $inState) {
+        $oid = az ad user list --filter "mailNickname eq '$($entry.Value)'" --query "[0].id" -o tsv 2>$null
+        if ($LASTEXITCODE -eq 0 -and $oid) {
+            $ExistingUsers[$entry.Key] = $oid.Trim()
+            Write-Done "  $($entry.Value): exists outside TF state ($($oid.Trim())) — will import"
+            $ImportCount++
+        }
+    } else {
+        Write-Info "  $($entry.Value): already in Terraform state"
+    }
+}
+if ($ExistingUsers.Count -gt 0) {
+    $env:TF_VAR_existing_user_ids = ($ExistingUsers | ConvertTo-Json -Compress)
+    Write-Done "$($ExistingUsers.Count) existing user(s) will be imported into state"
+} else {
+    Write-Info "No users to import"
+}
+
 Write-PhaseSummary -Number 2 -NextPhase "Phase 3 — terraform validate (check configuration syntax)" -Items ([ordered]@{
     "Backend" = "azurerm ($StorageAccount/tfstate/$Environment.tfstate)"
+    "Imports" = "$ImportCount existing resource(s) detected"
     "Status"  = "Initialized"
 })
 

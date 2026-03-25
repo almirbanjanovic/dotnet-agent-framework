@@ -25,14 +25,24 @@ resource "msgraph_resource" "blueprint" {
   url         = "applications"
   api_version = "beta"
 
-  body = {
-    # Use lowercase @odata.type to match what Graph API returns on GET.
-    # PascalCase (#Microsoft.Graph...) causes drift because the API
-    # normalizes it to lowercase (#microsoft.graph...) in responses.
-    "@odata.type"  = "#microsoft.graph.agentIdentityBlueprint"
-    displayName    = each.value.blueprint_display_name
-    signInAudience = "AzureADMyOrg"
-  }
+  body = merge(
+    {
+      # Use lowercase @odata.type to match what Graph API returns on GET.
+      # PascalCase (#Microsoft.Graph...) causes drift because the API
+      # normalizes it to lowercase (#microsoft.graph...) in responses.
+      "@odata.type"  = "#microsoft.graph.agentIdentityBlueprint"
+      displayName    = each.value.blueprint_display_name
+      signInAudience = "AzureADMyOrg"
+    },
+    # Graph beta requires at least one sponsor for AgentIdentityBlueprints.
+    # sponsors@odata.bind is write-only (not returned by GET $select), so it
+    # won't cause plan drift — the provider only flags response-only differences.
+    var.sponsor_id != "" ? {
+      "sponsors@odata.bind" = [
+        "https://graph.microsoft.com/beta/servicePrincipals/${var.sponsor_id}"
+      ]
+    } : {}
+  )
 
   # Only read back the properties we care about. Without this, Graph API
   # returns owners@odata.bind and sponsors@odata.bind on GET, which aren't
