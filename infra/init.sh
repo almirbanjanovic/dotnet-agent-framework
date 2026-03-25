@@ -291,14 +291,14 @@ echo ""
 echo -e "    ${D}Choose an environment for this deployment:${W}"
 echo -e "    ${D}  1. dev       (development — default)${W}"
 echo -e "    ${D}  2. staging   (pre-production)${W}"
-echo -e "    ${D}  3. prod      (production)${W}"
+echo -e "    ${D}  3. production (production)${W}"
 echo -e "    ${D}  4. custom    (enter your own name)${W}"
 echo ""
 read -p "    Select [1-4, or press Enter for dev]: " env_choice
 
 case "$env_choice" in
     2) GITHUB_ENV="staging" ;;
-    3) GITHUB_ENV="prod" ;;
+    3) GITHUB_ENV="production" ;;
     4) read -p "    Enter environment name: " GITHUB_ENV ;;
     *) ;; # keep the default or what was passed via --env
 esac

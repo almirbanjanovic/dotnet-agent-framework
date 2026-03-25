@@ -100,8 +100,8 @@ jobs:
       - name: Seed CRM data (uses DefaultAzureCredential — no key needed)
         run: dotnet run --project src/seed-data
         env:
-          COSMOSDB_CRM_ENDPOINT: ${{ steps.cosmos.outputs.endpoint }}
-          COSMOSDB_CRM_DATABASE: ${{ steps.cosmos.outputs.database }}
+          CosmosDb__Endpoint: ${{ steps.cosmos.outputs.endpoint }}
+          CosmosDb__DatabaseName: ${{ steps.cosmos.outputs.database }}
 
       - name: Link Entra users to Customers
         run: |
@@ -130,6 +130,6 @@ jobs:
 
           ENTRA_MAPPING="$ENTRA_PAIRS" dotnet run --project src/seed-data
         env:
-          COSMOSDB_CRM_ENDPOINT: ${{ steps.cosmos.outputs.endpoint }}
-          COSMOSDB_CRM_DATABASE: ${{ steps.cosmos.outputs.database }}
+          CosmosDb__Endpoint: ${{ steps.cosmos.outputs.endpoint }}
+          CosmosDb__DatabaseName: ${{ steps.cosmos.outputs.database }}
           CRM_DATA_PATH: /dev/null

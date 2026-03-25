@@ -276,14 +276,14 @@ Write-Host ""
 Write-Host "    Choose an environment for this deployment:" -ForegroundColor DarkGray
 Write-Host "      1. dev       (development — default)" -ForegroundColor DarkGray
 Write-Host "      2. staging   (pre-production)" -ForegroundColor DarkGray
-Write-Host "      3. prod      (production)" -ForegroundColor DarkGray
+Write-Host "      3. production (production)" -ForegroundColor DarkGray
 Write-Host "      4. custom    (enter your own name)" -ForegroundColor DarkGray
 Write-Host ""
 $envChoice = Read-Host "    Select [1-4, or press Enter for dev]"
 
 switch ($envChoice) {
     "2" { $GitHubEnv = "staging" }
-    "3" { $GitHubEnv = "prod" }
+    "3" { $GitHubEnv = "production" }
     "4" { $GitHubEnv = Read-Host "    Enter environment name" }
     default { } # keep the parameter default or what was passed
 }
