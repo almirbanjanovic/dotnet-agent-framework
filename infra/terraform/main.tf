@@ -16,6 +16,15 @@ locals {
   # These two values are passed separately to every module.
   name_base   = "${var.base_name}-${var.environment}"
   deployer_ip = chomp(data.http.deployer_ip.response_body)
+
+  common_tags = merge(
+    {
+      project     = "dotnet-agent-framework"
+      managed-by  = "terraform"
+      environment = var.environment
+    },
+    var.tags
+  )
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -225,7 +234,7 @@ module "aks" {
   kubelet_identity_object_id   = module.identity.identities["kubelet"].principal_id
   kubelet_identity_resource_id = module.identity.identities["kubelet"].id
 
-  tags = var.tags
+  tags = local.common_tags
 
   depends_on = [module.vnet]
 }
