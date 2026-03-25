@@ -14,5 +14,5 @@ import {
 import {
   for_each = var.existing_user_ids
   to       = module.entra.azuread_user.test[each.key]
-  id       = each.value
+  id       = "/users/${each.value}"
 }
