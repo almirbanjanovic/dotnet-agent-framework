@@ -591,19 +591,31 @@ if ($LASTEXITCODE -ne 0) {
 Write-Step "Allowing deployer IP through storage firewall"
 az storage account network-rule add --account-name $StorageAccount --resource-group $ResourceGroup --ip-address $DeployerIp -o none 2>$null
 Write-Done "Deployer IP $DeployerIp added to storage firewall"
-Start-Sleep -Seconds 5
+Write-Wait -Seconds 30 -Message "Storage firewall propagation"
 
 $ContainerName = "tfstate"
-$null = az storage container show --name $ContainerName --account-name $StorageAccount --auth-mode login 2>&1
-if ($LASTEXITCODE -ne 0) {
-    az storage container create --name $ContainerName --account-name $StorageAccount --auth-mode login | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "    ✗ Failed to create tfstate container. Check storage account network rules." -ForegroundColor Red
-        exit 1
+$ContainerReady = $false
+for ($attempt = 1; $attempt -le 6; $attempt++) {
+    $null = az storage container show --name $ContainerName --account-name $StorageAccount --auth-mode login 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        Write-Skip "Container $ContainerName already exists"
+        $ContainerReady = $true
+        break
     }
-    Write-Done "Created container $ContainerName"
-} else {
-    Write-Skip "Container $ContainerName already exists"
+    $null = az storage container create --name $ContainerName --account-name $StorageAccount --auth-mode login 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        Write-Done "Created container $ContainerName"
+        $ContainerReady = $true
+        break
+    }
+    if ($attempt -lt 6) {
+        Write-Host "    ⏳ Storage firewall not ready (attempt $attempt/6) — retrying in 15s" -ForegroundColor DarkGray
+        Start-Sleep -Seconds 15
+    }
+}
+if (-not $ContainerReady) {
+    Write-Host "    ✗ Failed to create tfstate container after retries. Check storage account network rules." -ForegroundColor Red
+    exit 1
 }
 
 # ── RBAC: Contributor scoped to resource group (least privilege) ───────────
