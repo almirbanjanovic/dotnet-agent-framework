@@ -654,6 +654,28 @@ Write-PhaseSummary -Number 1 -NextPhase "Phase 2 — terraform init (configure b
 
 Write-Phase -Number 2 -Title "terraform init"
 
+# ── Ensure deployer has Storage Blob Data Contributor on backend storage ──────
+Write-Step "Ensuring RBAC on backend storage account ($StorageAccount)..."
+$DeployerOid = az ad signed-in-user show --query id -o tsv 2>$null
+if ($DeployerOid) {
+    $StorageScope = az storage account show --name $StorageAccount --resource-group $ResourceGroup `
+        --query id -o tsv 2>$null
+    if ($StorageScope) {
+        $existingRole = az role assignment list --assignee $DeployerOid.Trim() `
+            --scope $StorageScope.Trim() --role "Storage Blob Data Contributor" `
+            --query "[0].id" -o tsv 2>$null
+        if (-not $existingRole) {
+            az role assignment create --assignee-object-id $DeployerOid.Trim() `
+                --assignee-principal-type User --role "Storage Blob Data Contributor" `
+                --scope $StorageScope.Trim() 2>$null | Out-Null
+            Write-Done "Storage Blob Data Contributor assigned — waiting 30s for propagation"
+            Write-Wait -Seconds 30 -Message "RBAC propagation"
+        } else {
+            Write-Done "Storage Blob Data Contributor: already assigned"
+        }
+    }
+}
+
 Write-Step "Initializing Terraform with backend config"
 
 Push-Location $TerraformDir
