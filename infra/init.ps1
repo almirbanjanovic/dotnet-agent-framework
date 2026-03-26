@@ -584,7 +584,8 @@ if ($LASTEXITCODE -ne 0) {
     Write-Done "Created $StorageAccount (default-action Deny)"
 } else {
     Write-Skip "$StorageAccount already exists"
-    az storage account update --name $StorageAccount --resource-group $ResourceGroup --default-action Deny -o none 2>$null
+    az storage account update --name $StorageAccount --resource-group $ResourceGroup `
+        --default-action Deny -o none 2>$null
     Start-Sleep -Seconds $WaitTime
 }
 
