@@ -1,0 +1,64 @@
+# NetworkPolicy for orchestrator-agent
+# Ingress: bff-api only
+# Egress:  crm-agent + product-agent (port 8080),
+#          Azure OpenAI + Key Vault (port 443 via PE), DNS
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-orchestrator-agent
+  namespace: contoso
+  labels:
+    app.kubernetes.io/part-of: contoso-outdoors
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: orchestrator-agent
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: bff-api
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    # DNS resolution (kube-dns)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # crm-agent (downstream)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: crm-agent
+      ports:
+        - protocol: TCP
+          port: 8080
+    # product-agent (downstream)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: product-agent
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Azure PaaS via private endpoints (Azure OpenAI, Key Vault)
+    - to:
+        - ipBlock:
+            cidr: 10.0.3.0/24
+      ports:
+        - protocol: TCP
+          port: 443

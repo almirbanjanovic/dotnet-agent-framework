@@ -1,0 +1,121 @@
+# =============================================================================
+# Multi-Stage Dockerfile Template for .NET 9 Services
+# =============================================================================
+# Usage:
+#   Copy this file to your service directory and replace the ARG defaults:
+#     PROJECT_NAME  = your .csproj filename (without extension)
+#     PROJECT_PATH  = relative path from repo root to the .csproj directory
+#
+#   Build:
+#     docker build -t <service-name>:latest \
+#       --build-arg PROJECT_NAME=Contoso.CrmApi \
+#       --build-arg PROJECT_PATH=src/Contoso.CrmApi \
+#       -f src/Contoso.CrmApi/Dockerfile .
+#
+#   The build context should be the repository root so that Directory.Build.props
+#   and any shared projects are accessible.
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Stage 1: Build — Restore, build, and publish the application
+# ---------------------------------------------------------------------------
+# Using the full SDK image for compilation. The SDK is ~900MB but is discarded
+# after this stage — only the published output carries forward.
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+
+# Build arguments — override these per service
+ARG PROJECT_NAME=Contoso.ServiceName
+ARG PROJECT_PATH=src/Contoso.ServiceName
+ARG BUILD_CONFIGURATION=Release
+
+WORKDIR /src
+
+# Copy solution-level build configuration first (improves layer caching).
+# These files change rarely, so Docker can cache the restore step.
+COPY Directory.Build.props ./
+COPY global.json ./
+COPY *.sln ./
+
+# Copy only the target project's csproj for restore (cache-friendly).
+# If the service has project references, copy those csproj files too.
+COPY ${PROJECT_PATH}/${PROJECT_NAME}.csproj ./${PROJECT_PATH}/
+
+# Restore NuGet packages as a separate layer — this is the slowest step
+# and benefits most from Docker layer caching.
+RUN dotnet restore "./${PROJECT_PATH}/${PROJECT_NAME}.csproj"
+
+# Copy the full source after restore to maximize cache hits
+COPY ${PROJECT_PATH}/ ./${PROJECT_PATH}/
+
+# ---------------------------------------------------------------------------
+# Stage 2: Publish — Produce a trimmed, self-contained output
+# ---------------------------------------------------------------------------
+FROM build AS publish
+
+ARG PROJECT_NAME=Contoso.ServiceName
+ARG PROJECT_PATH=src/Contoso.ServiceName
+ARG BUILD_CONFIGURATION=Release
+
+# Publish with optimizations:
+#   - Release configuration for optimized binaries
+#   - PublishTrimmed reduces final image size (remove unused assemblies)
+#   - PublishReadyToRun pre-compiles for faster cold start on AKS
+# Note: If your service uses reflection heavily, you may need to disable
+# trimming or configure trim roots in the .csproj.
+RUN dotnet publish "./${PROJECT_PATH}/${PROJECT_NAME}.csproj" \
+    -c ${BUILD_CONFIGURATION} \
+    -o /app/publish \
+    --no-restore \
+    /p:PublishReadyToRun=true
+
+# ---------------------------------------------------------------------------
+# Stage 3: Runtime — Minimal image for production
+# ---------------------------------------------------------------------------
+# Using the ASP.NET runtime image (~220MB) instead of SDK (~900MB).
+# For even smaller images, consider mcr.microsoft.com/dotnet/runtime-deps:9.0
+# with self-contained publishing, but this requires glibc compatibility.
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
+
+# OCI Image Specification labels — used by container registries and scanners
+# Override these at build time with --build-arg or --label
+ARG BUILD_VERSION=0.0.1
+ARG BUILD_DATE
+ARG VCS_REF
+
+LABEL org.opencontainers.image.title="${PROJECT_NAME}" \
+      org.opencontainers.image.description="Contoso Outdoors .NET 9 microservice" \
+      org.opencontainers.image.version="${BUILD_VERSION}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.vendor="Contoso" \
+      org.opencontainers.image.source="https://github.com/your-org/dotnet-agent-framework" \
+      org.opencontainers.image.licenses="MIT"
+
+# Security: .NET 9 aspnet images include a non-root 'app' user (UID 1654).
+# Running as non-root is required by our AKS pod security context
+# (runAsNonRoot: true) and is a container security best practice.
+WORKDIR /app
+
+# Copy published output from the build stage
+COPY --from=publish /app/publish .
+
+# .NET 9 defaults to port 8080 for non-root users (ASPNETCORE_HTTP_PORTS).
+# This aligns with our Kubernetes service and health probe configuration.
+EXPOSE 8080
+
+# Health check for standalone Docker usage (docker run, docker-compose).
+# In AKS, Kubernetes httpGet probes handle liveness/readiness checks directly —
+# this HEALTHCHECK is a fallback for non-orchestrated environments.
+# Using wget (available in Debian-based aspnet image) since curl is not included.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD ["sh", "-c", "wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1"]
+
+# Switch to non-root user for runtime — matches AKS securityContext.runAsNonRoot
+USER app
+
+# Use exec form (JSON array) so the dotnet process receives signals directly
+# (SIGTERM for graceful shutdown in Kubernetes).
+ENTRYPOINT ["dotnet", "Contoso.ServiceName.dll"]
+# ^ Replace "Contoso.ServiceName.dll" with your actual assembly name,
+#   or parameterize via: ENTRYPOINT ["dotnet", "${PROJECT_NAME}.dll"]
+#   (requires shell form or an entrypoint script)

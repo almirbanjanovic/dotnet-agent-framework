@@ -1,0 +1,47 @@
+# NetworkPolicy for crm-api
+# Ingress: crm-mcp only
+# Egress:  Cosmos DB + Key Vault (port 443 via PE), DNS
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-crm-api
+  namespace: contoso
+  labels:
+    app.kubernetes.io/part-of: contoso-outdoors
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: crm-api
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: crm-mcp
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    # DNS resolution (kube-dns)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Azure PaaS via private endpoints (Cosmos DB, Key Vault)
+    - to:
+        - ipBlock:
+            cidr: 10.0.3.0/24
+      ports:
+        - protocol: TCP
+          port: 443

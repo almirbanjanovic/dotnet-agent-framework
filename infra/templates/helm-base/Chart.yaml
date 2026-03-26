@@ -1,0 +1,24 @@
+apiVersion: v2
+name: service-name
+description: A Helm chart for a Contoso Outdoors .NET 9 microservice on AKS
+type: application
+
+# Chart version — increment on chart structure changes
+version: 0.1.0
+
+# Application version — should match the container image tag
+appVersion: "0.0.1"
+
+maintainers:
+  - name: Contoso Platform Team
+    email: platform@contoso.com
+
+keywords:
+  - dotnet
+  - microservice
+  - aks
+  - workload-identity
+
+# Annotations for documentation and source tracking
+annotations:
+  category: backend

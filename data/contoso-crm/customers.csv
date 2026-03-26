@@ -1,0 +1,11 @@
+id,first_name,last_name,email,phone,address,loyalty_tier,account_status,created_date
+101,Emma,Wilson,emma.wilson@email.com,555-0101,"742 Evergreen Trail, Portland OR 97201",Silver,active,2024-03-15
+102,James,Chen,james.chen@email.com,555-0102,"1580 Summit Ave, Denver CO 80202",Bronze,active,2024-06-22
+103,Sarah,Miller,sarah.miller@email.com,555-0103,"2901 Lakeside Dr, Seattle WA 98101",Gold,active,2023-11-08
+104,David,Park,david.park@email.com,555-0104,"455 Mountain View Rd, Boulder CO 80301",Silver,active,2024-01-12
+105,Lisa,Torres,lisa.torres@email.com,555-0105,"3322 Canyon Blvd, Moab UT 84532",Bronze,active,2025-01-05
+106,Mike,Johnson,mike.johnson@email.com,555-0106,"890 Forest Lane, Bend OR 97701",Gold,active,2023-08-20
+107,Anna,Roberts,anna.roberts@email.com,555-0107,"1200 River Walk, Asheville NC 28801",Bronze,active,2025-02-14
+108,Tom,Garcia,tom.garcia@email.com,555-0108,"567 Pine Ridge Dr, Flagstaff AZ 86001",Silver,active,2024-05-30
+109,Rachel,Kim,rachel.kim@email.com,555-0109,"4100 Coastal Hwy, San Diego CA 92101",Platinum,active,2022-07-10
+110,Carlos,Mendez,carlos.mendez@email.com,555-0110,"238 Aspen Way, Jackson WY 83001",Gold,active,2023-04-18

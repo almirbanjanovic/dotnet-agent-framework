@@ -1,0 +1,23 @@
+apiVersion: v2
+name: crm-api
+description: Contoso Outdoors CRM REST API — .NET 9 Minimal API serving all CRM data from Cosmos DB
+type: application
+
+version: 0.1.0
+
+appVersion: "0.0.1"
+
+maintainers:
+  - name: Contoso Platform Team
+    email: platform@contoso.com
+
+keywords:
+  - dotnet
+  - microservice
+  - aks
+  - workload-identity
+  - crm
+  - cosmos-db
+
+annotations:
+  category: backend

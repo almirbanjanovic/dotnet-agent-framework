@@ -1,0 +1,175 @@
+name: Terraform Plan, Approve, Apply, Seed Data
+on: 
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Select environment'
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+      region:
+        description: 'Azure region'
+        required: true
+        default: 'eastus2'
+        type: choice
+        options:
+          # United States
+          - eastus
+          - eastus2
+          - centralus
+          - northcentralus
+          - southcentralus
+          - westus
+          - westus2
+          - westus3
+          # Canada
+          - canadacentral
+          - canadaeast
+          # Brazil
+          - brazilsouth
+          # Europe
+          - westeurope
+          - northeurope
+          # France
+          - francecentral
+          # Germany
+          - germanywestcentral
+          # Norway
+          - norwayeast
+          # Sweden
+          - swedencentral
+          # Switzerland
+          - switzerlandnorth
+          # United Kingdom
+          - uksouth
+          # Italy
+          - italynorth
+          # Spain
+          - spaincentral
+          # Asia Pacific
+          - eastasia
+          - southeastasia
+          # Australia
+          - australiaeast
+          # Japan
+          - japaneast
+          # Korea
+          - koreacentral
+          # India
+          - centralindia
+          # UAE
+          - uaenorth
+          # Qatar
+          - qatarcentral
+          # South Africa
+          - southafricanorth
+
+permissions:
+  id-token: write
+  contents: read
+  issues: write
+
+jobs:
+
+  terraform-plan:
+    name: Terraform Plan
+    uses: ./.github/workflows/terraform-plan.yaml
+    with:
+      environment: ${{ inputs.environment }}
+      region: ${{ inputs.region }}
+    secrets:
+      azureClientId: ${{ secrets.AZURE_CLIENT_ID }}
+      azureTenantId: ${{ secrets.AZURE_TENANT_ID }}
+      azureSubscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  cleanup-after-plan:
+    name: Cleanup After Plan
+    needs: [terraform-plan]
+    if: always()
+    uses: ./.github/workflows/cleanup-deployer-ip.yaml
+    with:
+      environment: ${{ inputs.environment }}
+      deployer_ip: ${{ needs.terraform-plan.outputs.deployer_ip }}
+    secrets:
+      azureClientId: ${{ secrets.AZURE_CLIENT_ID }}
+      azureTenantId: ${{ secrets.AZURE_TENANT_ID }}
+      azureSubscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  
+  manual-approval:
+    name: Manual Approval
+    needs: [terraform-plan, cleanup-after-plan]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: trstringer/manual-approval@v1
+        with:
+          secret: ${{ github.TOKEN }}
+          approvers: ${{ github.repository_owner }}
+          minimum-approvals: 1
+          issue-title: "Approve deployment to ${{ inputs.environment }}"
+          issue-body: "Please approve or deny the deployment to ${{ inputs.environment }}."
+          fail-on-denial: true
+
+  purge-soft-deleted:
+    name: Purge Soft-Deleted Resources
+    needs: [manual-approval]
+    uses: ./.github/workflows/purge-soft-deleted.yaml
+    with:
+      environment: ${{ inputs.environment }}
+    secrets:
+      azureClientId: ${{ secrets.AZURE_CLIENT_ID }}
+      azureTenantId: ${{ secrets.AZURE_TENANT_ID }}
+      azureSubscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  terraform-apply:
+    name: Terraform Apply
+    needs: [purge-soft-deleted]
+    uses: ./.github/workflows/terraform-apply.yaml
+    with:
+      environment: ${{ inputs.environment }}
+      region: ${{ inputs.region }}
+    secrets:
+      azureClientId: ${{ secrets.AZURE_CLIENT_ID }}
+      azureTenantId: ${{ secrets.AZURE_TENANT_ID }}
+      azureSubscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  cleanup-after-apply:
+    name: Cleanup After Apply
+    needs: [terraform-apply]
+    if: always()
+    uses: ./.github/workflows/cleanup-deployer-ip.yaml
+    with:
+      environment: ${{ inputs.environment }}
+      deployer_ip: ${{ needs.terraform-apply.outputs.deployer_ip }}
+    secrets:
+      azureClientId: ${{ secrets.AZURE_CLIENT_ID }}
+      azureTenantId: ${{ secrets.AZURE_TENANT_ID }}
+      azureSubscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  seed-data:
+    name: Seed CRM Data
+    needs: [terraform-apply, cleanup-after-apply]
+    uses: ./.github/workflows/seed-data.yaml
+    with:
+      environment: ${{ inputs.environment }}
+    secrets:
+      azureClientId: ${{ secrets.AZURE_CLIENT_ID }}
+      azureTenantId: ${{ secrets.AZURE_TENANT_ID }}
+      azureSubscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  cleanup-after-seed:
+    name: Cleanup After Seed Data
+    needs: [seed-data]
+    if: always()
+    uses: ./.github/workflows/cleanup-deployer-ip.yaml
+    with:
+      environment: ${{ inputs.environment }}
+      deployer_ip: ${{ needs.seed-data.outputs.deployer_ip }}
+    secrets:
+      azureClientId: ${{ secrets.AZURE_CLIENT_ID }}
+      azureTenantId: ${{ secrets.AZURE_TENANT_ID }}
+      azureSubscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}

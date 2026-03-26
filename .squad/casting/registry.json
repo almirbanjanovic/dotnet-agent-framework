@@ -1,0 +1,60 @@
+{
+  "agents": [
+    {
+      "persistent_name": "Stewie",
+      "role": "Lead",
+      "universe": "Family Guy",
+      "created_at": "2026-03-19T15:05:40Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Brian",
+      "role": "Backend Dev",
+      "universe": "Family Guy",
+      "created_at": "2026-03-19T15:05:40Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Lois",
+      "role": "Frontend Dev",
+      "universe": "Family Guy",
+      "created_at": "2026-03-19T15:05:40Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Peter",
+      "role": "Tester",
+      "universe": "Family Guy",
+      "created_at": "2026-03-19T15:05:40Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Joe",
+      "role": "DevOps/Infra",
+      "universe": "Family Guy",
+      "created_at": "2026-03-19T15:05:40Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Cleveland",
+      "role": "Security Engineer",
+      "universe": "Family Guy",
+      "created_at": "2026-03-23T15:01:00Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Quagmire",
+      "role": "Work Monitor",
+      "universe": "Family Guy",
+      "created_at": "2026-03-19T15:05:40Z",
+      "legacy_named": false,
+      "status": "active"
+    }
+  ]
+}

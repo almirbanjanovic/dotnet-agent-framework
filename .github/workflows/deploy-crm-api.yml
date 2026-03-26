@@ -1,0 +1,195 @@
+name: Deploy CRM API
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/crm-api/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Select environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+      region:
+        description: 'Azure region'
+        required: true
+        default: 'eastus2'
+        type: choice
+        options:
+          # United States
+          - eastus
+          - eastus2
+          - centralus
+          - northcentralus
+          - southcentralus
+          - westus
+          - westus2
+          - westus3
+          # Canada
+          - canadacentral
+          - canadaeast
+          # Brazil
+          - brazilsouth
+          # Europe
+          - westeurope
+          - northeurope
+          # France
+          - francecentral
+          # Germany
+          - germanywestcentral
+          # Norway
+          - norwayeast
+          # Sweden
+          - swedencentral
+          # Switzerland
+          - switzerlandnorth
+          # United Kingdom
+          - uksouth
+          # Italy
+          - italynorth
+          # Spain
+          - spaincentral
+          # Asia Pacific
+          - eastasia
+          - southeastasia
+          # Australia
+          - australiaeast
+          # Japan
+          - japaneast
+          # Korea
+          - koreacentral
+          # India
+          - centralindia
+          # UAE
+          - uaenorth
+          # Qatar
+          - qatarcentral
+          # South Africa
+          - southafricanorth
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  DOTNET_VERSION: '9.0.x'
+  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  SERVICE_NAME: crm-api
+  NAMESPACE: contoso
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore src/crm-api/Contoso.CrmApi.csproj
+
+      - name: Build
+        run: dotnet build src/crm-api/Contoso.CrmApi.csproj --no-restore -c Release
+
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore src/crm-api/Contoso.CrmApi.csproj
+
+      - name: Test
+        run: |
+          if [ -f "src/crm-api.tests/Contoso.CrmApi.Tests.csproj" ]; then
+            dotnet test src/crm-api.tests/Contoso.CrmApi.Tests.csproj --no-restore --verbosity normal
+          else
+            echo "No test project found — skipping."
+          fi
+
+  docker-build-push:
+    runs-on: ubuntu-latest
+    needs: test
+    environment: ${{ inputs.environment || 'dev' }}
+    outputs:
+      image-tag: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set image metadata
+        id: meta
+        run: echo "version=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+        env:
+          AZURE_IDENTITY_DISABLE_CP1: "true"
+
+      - name: ACR Login
+        run: az acr login --name ${{ vars.ACR_NAME }}
+
+      - name: Build and push Docker image
+        run: |
+          IMAGE="${{ vars.ACR_NAME }}.azurecr.io/${{ env.SERVICE_NAME }}:${{ steps.meta.outputs.version }}"
+          docker build \
+            -t "$IMAGE" \
+            -f src/crm-api/Dockerfile \
+            --build-arg BUILD_VERSION="${{ steps.meta.outputs.version }}" \
+            --build-arg BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --build-arg VCS_REF="${{ github.sha }}" \
+            .
+          docker push "$IMAGE"
+
+  helm-deploy:
+    runs-on: ubuntu-latest
+    needs: docker-build-push
+    environment: ${{ inputs.environment || 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+        env:
+          AZURE_IDENTITY_DISABLE_CP1: "true"
+
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ vars.RESOURCE_GROUP }} \
+            --name aks-${{ vars.BASE_NAME }}-${{ vars.ENVIRONMENT }}-${{ vars.LOCATION }} \
+            --overwrite-existing
+
+      - name: Helm upgrade
+        run: |
+          helm upgrade --install ${{ env.SERVICE_NAME }} src/crm-api/chart/ \
+            --namespace ${{ env.NAMESPACE }} \
+            --create-namespace \
+            --set image.repository=${{ vars.ACR_NAME }}.azurecr.io/${{ env.SERVICE_NAME }} \
+            --set image.tag=${{ needs.docker-build-push.outputs.image-tag }} \
+            --wait \
+            --timeout 5m

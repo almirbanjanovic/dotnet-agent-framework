@@ -1,0 +1,13 @@
+id,customer_id,order_date,status,total_amount,shipping_address,tracking_number,estimated_delivery
+1001,101,2026-03-01,shipped,189.99,"742 Evergreen Trail, Portland OR 97201",TRK-29481,2026-03-08
+1002,102,2026-02-25,delivered,159.99,"1580 Summit Ave, Denver CO 80202",TRK-28734,2026-03-01
+1003,103,2026-02-20,delivered,349.99,"2901 Lakeside Dr, Seattle WA 98101",TRK-28190,2026-02-26
+1004,104,2026-02-18,delivered,279.99,"455 Mountain View Rd, Boulder CO 80301",TRK-27956,2026-02-24
+1005,105,2026-02-28,processing,425.00,"3322 Canyon Blvd, Moab UT 84532",,
+1006,106,2026-02-22,delivered,299.99,"890 Forest Lane, Bend OR 97701",TRK-28301,2026-02-28
+1007,107,2026-03-04,processing,134.50,"1200 River Walk, Asheville NC 28801",,
+1008,108,2026-01-15,returned,210.00,"567 Pine Ridge Dr, Flagstaff AZ 86001",TRK-25890,2026-01-21
+1009,109,2026-03-02,shipped,549.99,"4100 Coastal Hwy, San Diego CA 92101",TRK-29550,2026-03-09
+1010,110,2026-02-10,delivered,189.99,"238 Aspen Way, Jackson WY 83001",TRK-27400,2026-02-16
+1011,103,2026-01-05,delivered,129.99,"2901 Lakeside Dr, Seattle WA 98101",TRK-25100,2026-01-11
+1012,106,2026-01-20,delivered,89.99,"890 Forest Lane, Bend OR 97701",TRK-25650,2026-01-26

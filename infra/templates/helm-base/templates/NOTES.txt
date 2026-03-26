@@ -1,0 +1,33 @@
+================================================================================
+  {{ include "service.fullname" . }} deployed successfully!
+================================================================================
+
+Namespace:       {{ include "service.namespace" . }}
+Service Account: {{ include "service.serviceAccountName" . }}
+Service:         {{ include "service.fullname" . }}:{{ .Values.service.port }}
+
+1. Check pod status:
+   kubectl get pods -n {{ include "service.namespace" . }} -l "app.kubernetes.io/name={{ include "service.name" . }},app.kubernetes.io/instance={{ .Release.Name }}"
+
+2. Port-forward to the service:
+   kubectl port-forward -n {{ include "service.namespace" . }} svc/{{ include "service.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+
+3. Check health:
+   curl http://localhost:{{ .Values.service.port }}/health
+
+4. View logs:
+   kubectl logs -n {{ include "service.namespace" . }} -l "app.kubernetes.io/name={{ include "service.name" . }}" -f
+
+{{- if .Values.autoscaling.enabled }}
+
+Autoscaling is ENABLED ({{ .Values.autoscaling.minReplicas }}-{{ .Values.autoscaling.maxReplicas }} replicas).
+   kubectl get hpa -n {{ include "service.namespace" . }} {{ include "service.fullname" . }}
+{{- end }}
+
+{{- if .Values.ingress.enabled }}
+
+Ingress is ENABLED:
+{{- range .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,302 @@
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      region:
+        required: false
+        type: string
+    secrets:
+      azureClientId:
+        required: true
+      azureTenantId:
+        required: true
+      azureSubscriptionId:
+        required: true
+    outputs:
+      deployer_ip:
+        description: "Deployer public IP for firewall cleanup"
+        value: ${{ jobs.terraform-apply.outputs.deployer_ip }}
+
+env:
+  TF_VAR_tags: ${{ vars.TAGS }}
+  TF_VAR_resource_group_name: ${{ vars.RESOURCE_GROUP }}
+  TF_VAR_environment: ${{ vars.ENVIRONMENT }}
+  TF_VAR_base_name: ${{ vars.BASE_NAME }}
+  TF_VAR_location: ${{ inputs.region || vars.LOCATION || 'eastus2' }}
+  # Foundry
+  TF_VAR_cognitive_account_kind: ${{ vars.COGNITIVE_ACCOUNT_KIND }}
+  TF_VAR_oai_sku_name: ${{ vars.OAI_SKU_NAME }}
+  TF_VAR_oai_deployment_sku_name: ${{ vars.OAI_DEPLOYMENT_SKU_NAME }}
+  TF_VAR_oai_deployment_model_format: ${{ vars.OAI_DEPLOYMENT_MODEL_FORMAT }}
+  TF_VAR_oai_deployment_model_name: ${{ vars.OAI_DEPLOYMENT_MODEL_NAME }}
+  TF_VAR_oai_deployment_model_version: ${{ vars.OAI_DEPLOYMENT_MODEL_VERSION }}
+  TF_VAR_oai_version_upgrade_option: ${{ vars.OAI_VERSION_UPGRADE_OPTION }}
+  TF_VAR_create_embedding_deployment: ${{ vars.CREATE_EMBEDDING_DEPLOYMENT }}
+  TF_VAR_embedding_model_name: ${{ vars.EMBEDDING_MODEL_NAME }}
+  TF_VAR_embedding_model_version: ${{ vars.EMBEDDING_MODEL_VERSION }}
+  TF_VAR_embedding_sku_name: ${{ vars.EMBEDDING_SKU_NAME }}
+  TF_VAR_embedding_capacity: ${{ vars.EMBEDDING_CAPACITY }}
+  # Cosmos DB
+  TF_VAR_cosmos_agents_database_name: ${{ vars.COSMOS_AGENTS_DATABASE_NAME }}
+  TF_VAR_cosmos_agent_state_container_name: ${{ vars.COSMOS_AGENT_STATE_CONTAINER_NAME }}
+  TF_VAR_cosmos_crm_database_name: ${{ vars.COSMOS_CRM_DATABASE_NAME }}
+  # Storage
+  # AI Search
+  TF_VAR_search_sku: ${{ vars.SEARCH_SKU }}
+  TF_VAR_search_index_name: ${{ vars.SEARCH_INDEX_NAME }}
+  # ACR
+  TF_VAR_create_acr: ${{ vars.CREATE_ACR }}
+  TF_VAR_acr_sku: ${{ vars.ACR_SKU }}
+  TF_VAR_acr_name: ${{ vars.ACR_NAME }}
+  # AKS
+  TF_VAR_aks_kubernetes_version: ${{ vars.AKS_KUBERNETES_VERSION }}
+  TF_VAR_aks_system_node_vm_size: ${{ vars.AKS_SYSTEM_NODE_VM_SIZE }}
+  TF_VAR_aks_workload_node_vm_size: ${{ vars.AKS_WORKLOAD_NODE_VM_SIZE }}
+  TF_VAR_aks_auto_scaling_enabled: ${{ vars.AKS_AUTO_SCALING_ENABLED }}
+  TF_VAR_aks_os_disk_size_gb: ${{ vars.AKS_OS_DISK_SIZE_GB }}
+  TF_VAR_aks_log_retention_days: ${{ vars.AKS_LOG_RETENTION_DAYS }}
+
+jobs: 
+  terraform-apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment}}
+    outputs:
+      deployer_ip: ${{ steps.deployer.outputs.ip }}
+
+    defaults:
+        run:
+          shell: bash
+
+    steps:
+
+    - name: Checkout Repo
+      uses: actions/checkout@v4
+
+    - name: Login to Azure using OIDC
+      uses: azure/login@v2
+      with:
+        client-id: ${{ secrets.azureClientId }}
+        tenant-id: ${{ secrets.azureTenantId }}
+        subscription-id: ${{ secrets.azureSubscriptionId }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+
+    - name: Get deployer IP
+      id: deployer
+      run: |
+        DEPLOYER_IP=$(curl -s --max-time 10 https://api.ipify.org)
+        echo "ip=$DEPLOYER_IP" >> "$GITHUB_OUTPUT"
+        echo "Deployer IP: $DEPLOYER_IP"
+
+    - name: Add deployer IP to backend storage firewall
+      run: |
+        # Re-enable selected networks if a nightly policy disabled public access
+        PUB_ACCESS=$(az storage account show --name "${{ vars.STORAGE_ACCOUNT }}" \
+          --resource-group "${{ vars.RESOURCE_GROUP }}" \
+          --query publicNetworkAccess -o tsv 2>/dev/null || true)
+        if [ "$PUB_ACCESS" != "Enabled" ]; then
+          echo "Re-enabling selected network access (was: $PUB_ACCESS)"
+          az storage account update --name "${{ vars.STORAGE_ACCOUNT }}" \
+            --resource-group "${{ vars.RESOURCE_GROUP }}" \
+            --public-network-access Enabled --default-action Deny -o none
+          sleep 10
+        fi
+
+        az storage account network-rule add \
+          --account-name "${{ vars.STORAGE_ACCOUNT }}" \
+          --resource-group "${{ vars.RESOURCE_GROUP }}" \
+          --ip-address "${{ steps.deployer.outputs.ip }}"
+
+        echo "Waiting 30 seconds for firewall change to propagate."
+        sleep 30
+
+    - name: Terraform Init
+      id: init
+      run: |
+        terraform -chdir="${{ vars.TERRAFORM_WORKING_DIRECTORY }}" init -upgrade -reconfigure \
+        -backend-config="resource_group_name=${{ vars.RESOURCE_GROUP }}" \
+        -backend-config="storage_account_name=${{ vars.STORAGE_ACCOUNT }}" \
+        -backend-config="container_name=${{ vars.TERRAFORM_STATE_CONTAINER }}" \
+        -backend-config="key=${{ vars.TERRAFORM_STATE_BLOB }}"
+      env:
+        ARM_CLIENT_ID: ${{ secrets.azureClientId }}
+        ARM_TENANT_ID: ${{ secrets.azureTenantId }}
+        ARM_SUBSCRIPTION_ID: ${{ secrets.azureSubscriptionId }}
+        ARM_USE_OIDC: true
+        ARM_USE_AZUREAD: true
+        ARM_DISABLE_CAE: "true"
+        AZURE_DISABLE_CAE: "true"
+        HAMILTON_DISABLE_CAE: "true"
+
+    - name: Detect existing resources for idempotent import
+      run: |
+        TF_DIR="${{ vars.TERRAFORM_WORKING_DIRECTORY }}"
+
+        # Agent Identity sponsor: Graph beta requires a User as sponsor (not a
+        # ServicePrincipal). In CI/CD, use the SP's owner (a User) as the sponsor.
+        SP_OWNER_OID=$(az ad sp show --id "${{ secrets.azureClientId }}" \
+          --query "owners[0].id // empty" -o tsv 2>/dev/null || true)
+        if [ -z "$SP_OWNER_OID" ]; then
+          # Fallback: query the app registration owners
+          APP_OBJ_ID=$(az ad app show --id "${{ secrets.azureClientId }}" --query id -o tsv 2>/dev/null || true)
+          if [ -n "$APP_OBJ_ID" ]; then
+            SP_OWNER_OID=$(az ad app owner list --id "$APP_OBJ_ID" --query "[0].id" -o tsv 2>/dev/null || true)
+          fi
+        fi
+        if [ -n "$SP_OWNER_OID" ]; then
+          echo "TF_VAR_agent_identity_sponsor_id=$SP_OWNER_OID" >> "$GITHUB_ENV"
+          echo "Agent Identity sponsor (owner): $SP_OWNER_OID"
+        else
+          echo "::warning::Could not determine SP owner for Agent Identity sponsor"
+        fi
+
+        # Get current state to avoid importing resources already managed by TF
+        STATE_LIST=$(terraform -chdir="$TF_DIR" state list 2>/dev/null || true)
+
+        # Detect Service Networking provider: import only if exists in Azure but not in state
+        if ! echo "$STATE_LIST" | grep -qF "azurerm_resource_provider_registration.service_networking"; then
+          SUB_ID=$(az account show --query id -o tsv)
+          REG_STATE=$(az provider show --namespace Microsoft.ServiceNetworking --query registrationState -o tsv 2>/dev/null || true)
+          if [ "$REG_STATE" = "Registered" ]; then
+            echo "TF_VAR_import_service_networking_id=/subscriptions/$SUB_ID/providers/Microsoft.ServiceNetworking" >> "$GITHUB_ENV"
+            echo "Service Networking: exists outside TF state — will import"
+          fi
+        else
+          echo "Service Networking: already in Terraform state"
+        fi
+
+        # Detect Entra test users: import only if exist in Azure but not in state
+        EXISTING='{}'
+        for PAIR in "emma:emma.wilson" "james:james.chen" "sarah:sarah.miller" "david:david.park" "lisa:lisa.torres"; do
+          KEY="${PAIR%%:*}"
+          NICK="${PAIR##*:}"
+          if ! echo "$STATE_LIST" | grep -qF "module.entra.azuread_user.test[\"${KEY}\"]"; then
+            OID=$(az ad user list --filter "mailNickname eq '${NICK}'" --query "[0].id" -o tsv 2>/dev/null || true)
+            if [ -n "$OID" ]; then
+              EXISTING=$(echo "$EXISTING" | jq --arg k "$KEY" --arg v "$OID" '. + {($k): $v}')
+              echo "${NICK}: exists outside TF state ($OID) — will import"
+            fi
+          else
+            echo "${NICK}: already in Terraform state"
+          fi
+        done
+        if [ "$EXISTING" != '{}' ]; then
+          echo "TF_VAR_existing_user_ids=$EXISTING" >> "$GITHUB_ENV"
+        fi
+
+        # Detect existing Key Vault diagnostic setting
+        if ! echo "$STATE_LIST" | grep -qF "azurerm_monitor_diagnostic_setting.keyvault"; then
+          KV_ID=$(az keyvault list --resource-group "${{ vars.RESOURCE_GROUP }}" --query "[0].id" -o tsv 2>/dev/null || true)
+          if [ -n "$KV_ID" ]; then
+            DIAG_ID=$(az monitor diagnostic-settings list --resource "$KV_ID" \
+              --query "[?name=='diag-keyvault-to-law'].id | [0]" -o tsv 2>/dev/null || true)
+            if [ -n "$DIAG_ID" ]; then
+              echo "TF_VAR_import_diag_keyvault_id=${KV_ID}|diag-keyvault-to-law" >> "$GITHUB_ENV"
+              echo "Diagnostic setting (Key Vault): exists outside TF state — will import"
+            fi
+          fi
+        else
+          echo "Diagnostic setting (Key Vault): already in Terraform state"
+        fi
+      env:
+        ARM_CLIENT_ID: ${{ secrets.azureClientId }}
+        ARM_TENANT_ID: ${{ secrets.azureTenantId }}
+        ARM_SUBSCRIPTION_ID: ${{ secrets.azureSubscriptionId }}
+        ARM_USE_OIDC: true
+        ARM_USE_AZUREAD: true
+        ARM_DISABLE_CAE: "true"
+        AZURE_DISABLE_CAE: "true"
+        HAMILTON_DISABLE_CAE: "true"
+
+    - name: Download the plan
+      uses: actions/download-artifact@v4
+      with:
+        name: tf-plan
+        path: ${{ vars.TERRAFORM_WORKING_DIRECTORY }}/
+
+    - name: Apply the plan
+      id: apply
+      run: terraform -chdir="${{ vars.TERRAFORM_WORKING_DIRECTORY }}" apply -auto-approve out.tfplan
+      env:
+        ARM_CLIENT_ID: ${{ secrets.azureClientId }}
+        ARM_SUBSCRIPTION_ID: ${{ secrets.azureSubscriptionId }}
+        ARM_TENANT_ID: ${{ secrets.azureTenantId }}
+        ARM_USE_OIDC: true
+        ARM_USE_AZUREAD: true
+        ARM_DISABLE_CAE: "true"
+        AZURE_DISABLE_CAE: "true"
+        HAMILTON_DISABLE_CAE: "true"
+
+    - name: Policy diagnostic (on apply failure)
+      if: failure() && steps.apply.outcome == 'failure'
+      run: |
+        echo "::group::Azure Policy diagnostic"
+        echo "Listing deny-effect policies that may have blocked resource creation..."
+        echo ""
+
+        SUB_ID=$(az account show --query id -o tsv)
+        RG_SCOPE="/subscriptions/$SUB_ID/resourceGroups/${{ vars.RESOURCE_GROUP }}"
+        SEEN_IDS=""
+
+        for SCOPE_ARG in "--scope $RG_SCOPE" ""; do
+          while IFS=$'\t' read -r ASSIGN_ID POLICY_NAME POLICY_DEF_ID ENFORCEMENT; do
+            [ -z "$ASSIGN_ID" ] && continue
+            [ "$ENFORCEMENT" != "Default" ] && continue
+            echo "$SEEN_IDS" | grep -qF "$ASSIGN_ID" && continue
+            SEEN_IDS="$SEEN_IDS $ASSIGN_ID"
+
+            DEF_NAME=$(echo "$POLICY_DEF_ID" | awk -F'/' '{print $NF}')
+            IS_INITIATIVE=$(echo "$POLICY_DEF_ID" | grep -c 'policySetDefinitions' || true)
+            ASSIGN_EFFECT=$(az policy assignment show --name "$(echo "$ASSIGN_ID" | awk -F'/' '{print $NF}')" \
+              --query "parameters.effect.value" -o tsv 2>/dev/null || true)
+
+            if [ "$IS_INITIATIVE" -gt 0 ]; then
+              MEMBER_DEFS=$(az policy set-definition show --name "$DEF_NAME" \
+                --query "policyDefinitions[].policyDefinitionId" -o tsv 2>/dev/null || true)
+              while IFS= read -r MEMBER_DEF_ID; do
+                [ -z "$MEMBER_DEF_ID" ] && continue
+                M_NAME=$(echo "$MEMBER_DEF_ID" | awk -F'/' '{print $NF}')
+                M_EFFECT=$(az policy definition show --name "$M_NAME" \
+                  --query "policyRule.then.effect" -o tsv 2>/dev/null || true)
+                if [[ "$M_EFFECT" == *"parameters"* ]]; then
+                  if [ -n "$ASSIGN_EFFECT" ]; then
+                    M_EFFECT="$ASSIGN_EFFECT"
+                  else
+                    M_DEFAULT=$(az policy definition show --name "$M_NAME" \
+                      --query "parameters.effect.defaultValue" -o tsv 2>/dev/null || true)
+                    [ -n "$M_DEFAULT" ] && M_EFFECT="$M_DEFAULT"
+                  fi
+                fi
+                if [[ "${M_EFFECT,,}" == *"deny"* ]]; then
+                  M_DISPLAY=$(az policy definition show --name "$M_NAME" \
+                    --query "displayName" -o tsv 2>/dev/null || true)
+                  echo "::error::DENY policy: $M_DISPLAY (initiative: $POLICY_NAME)"
+                fi
+              done <<< "$MEMBER_DEFS"
+            else
+              EFFECT=$(az policy definition show --name "$DEF_NAME" \
+                --query "policyRule.then.effect" -o tsv 2>/dev/null || true)
+              if [[ "$EFFECT" == *"parameters"* ]]; then
+                if [ -n "$ASSIGN_EFFECT" ]; then
+                  EFFECT="$ASSIGN_EFFECT"
+                else
+                  DEFAULT_EFFECT=$(az policy definition show --name "$DEF_NAME" \
+                    --query "parameters.effect.defaultValue" -o tsv 2>/dev/null || true)
+                  [ -n "$DEFAULT_EFFECT" ] && EFFECT="$DEFAULT_EFFECT"
+                fi
+              fi
+              if [[ "${EFFECT,,}" == *"deny"* ]]; then
+                echo "::error::DENY policy: $POLICY_NAME"
+              fi
+            fi
+          done < <(az policy assignment list $SCOPE_ARG \
+            --query "[].[id, displayName, policyDefinitionId, enforcementMode]" -o tsv 2>/dev/null || true)
+        done
+
+        echo ""
+        echo "Fix your Terraform config to comply with the above policies, then re-run."
+        echo "::endgroup::"

@@ -1,0 +1,56 @@
+Layering Guide
+Contoso Outdoors
+
+The layering system is the foundation of outdoor comfort. By wearing multiple thin layers instead of one thick garment, you can regulate your temperature in changing conditions.
+
+1. The Three-Layer System
+
+| Layer | Purpose | Material | When to Use |
+|-------|---------|----------|-------------|
+| Base Layer | Moisture management — wicks sweat away from skin | Merino wool or synthetic polyester | Always. This is your foundation layer. |
+| Mid Layer | Insulation — traps body heat | Fleece, down, or synthetic insulation | Cold weather, rest stops, camp |
+| Outer Layer | Protection — blocks wind and rain | Waterproof-breathable shells (Gore-Tex, eVent) | Rain, wind, snow, exposed ridges |
+
+2. Base Layer Details
+
+The base layer is the most important layer. A wet base layer makes you cold regardless of what's on top.
+
+- Merino wool: Naturally odor-resistant, temperature-regulating, comfortable against skin. Slightly slower drying.
+- Synthetic (polyester): Dries fastest, most durable, lower cost. Can develop odor after multiple days.
+- Avoid cotton: Cotton absorbs moisture, dries slowly, and causes rapid heat loss. Never wear cotton as a base layer in the backcountry.
+
+Weight options:
+- Lightweight (150g/m²): Warm weather, high-output activities
+- Midweight (200g/m²): Cool weather, moderate activity (most versatile)
+- Heavyweight (250g/m²): Cold weather, low activity, sleeping
+
+3. Mid Layer Details
+
+Choose based on temperature and activity level:
+
+- Fleece (100-300 weight): Breathable, dries quickly, works well for active use. Not wind-resistant.
+- Down jacket: Best warmth-to-weight ratio. Packable. Loses insulation when wet.
+- Synthetic insulation: Nearly as warm as down, retains warmth when wet. Slightly heavier and bulkier.
+
+4. Outer Layer Details
+
+Your shell protects against wind and precipitation:
+
+- Hardshell: Fully waterproof and windproof. Best for extended rain, snow, or harsh conditions.
+- Softshell: Water-resistant, highly breathable. Best for active use in light precipitation or wind.
+- Rain jacket: Lightweight waterproof option for warm-weather rain protection. Packs small.
+
+5. Layering by Activity and Temperature
+
+| Conditions | Base | Mid | Outer |
+|-----------|------|-----|-------|
+| Summer hiking (60-80°F) | Lightweight synthetic | None | Pack a rain shell |
+| Spring/fall hiking (40-60°F) | Midweight merino | Light fleece | Softshell or rain shell |
+| Cold hiking (20-40°F) | Midweight merino | Fleece + down vest | Hardshell |
+| Winter / below 20°F | Heavyweight merino | Heavy fleece + down jacket | Hardshell |
+
+6. Tips
+
+- Ventilate before you sweat: Open zips of your outer/mid layers at the start of a climb
+- Layer down at rest stops: Add your insulation layer as soon as you stop moving
+- Keep your dry layers dry: Store your down jacket in a waterproof stuff sack inside your pack
