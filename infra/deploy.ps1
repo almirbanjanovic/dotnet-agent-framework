@@ -231,13 +231,19 @@ function Add-DeployerFirewallRules {
     }
     Write-Host "`r    ✓ Key Vaults ($kvCount)" -ForegroundColor Green
 
-    # Storage accounts
+    # Storage accounts (re-enable selected networks if a nightly policy disabled public access)
     Write-Host "    ⠋ Storage accounts" -ForegroundColor DarkGray -NoNewline
     $stNames = az storage account list --resource-group $ResourceGroup --query "[].name" -o tsv 2>$null
     $stItems = @($stNames -split "`n" | Where-Object { $_ })
     $stCount = $stItems.Count
     foreach ($st in $stItems) {
-        az storage account network-rule add --resource-group $ResourceGroup --account-name $st.Trim() --ip-address $DeployerIp 2>$null | Out-Null
+        $st = $st.Trim()
+        $pubAccess = az storage account show --name $st --resource-group $ResourceGroup --query "publicNetworkAccess" -o tsv 2>$null
+        if ($pubAccess -ne "Enabled") {
+            az storage account update --name $st --resource-group $ResourceGroup `
+                --public-network-access Enabled --default-action Deny -o none 2>$null
+        }
+        az storage account network-rule add --resource-group $ResourceGroup --account-name $st --ip-address $DeployerIp 2>$null | Out-Null
     }
     Write-Host "`r    ✓ Storage accounts ($stCount)" -ForegroundColor Green
 

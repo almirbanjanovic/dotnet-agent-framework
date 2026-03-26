@@ -589,6 +589,18 @@ if ($LASTEXITCODE -ne 0) {
     Start-Sleep -Seconds $WaitTime
 }
 
+Write-Step "Ensuring storage account allows selected networks"
+$publicAccess = az storage account show --name $StorageAccount --resource-group $ResourceGroup `
+    --query "publicNetworkAccess" -o tsv 2>$null
+if ($publicAccess -ne "Enabled") {
+    az storage account update --name $StorageAccount --resource-group $ResourceGroup `
+        --public-network-access Enabled --default-action Deny -o none 2>$null
+    Write-Done "Re-enabled selected network access (was: $publicAccess)"
+    Start-Sleep -Seconds 10
+} else {
+    Write-Done "Public network access: Enabled (selected networks)"
+}
+
 Write-Step "Allowing deployer IP through storage firewall"
 az storage account network-rule add --account-name $StorageAccount --resource-group $ResourceGroup --ip-address $DeployerIp -o none 2>$null
 Write-Done "Deployer IP $DeployerIp added to storage firewall"

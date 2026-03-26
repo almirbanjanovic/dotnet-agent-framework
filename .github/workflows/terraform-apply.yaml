@@ -94,6 +94,18 @@ jobs:
 
     - name: Add deployer IP to backend storage firewall
       run: |
+        # Re-enable selected networks if a nightly policy disabled public access
+        PUB_ACCESS=$(az storage account show --name "${{ vars.STORAGE_ACCOUNT }}" \
+          --resource-group "${{ vars.RESOURCE_GROUP }}" \
+          --query publicNetworkAccess -o tsv 2>/dev/null || true)
+        if [ "$PUB_ACCESS" != "Enabled" ]; then
+          echo "Re-enabling selected network access (was: $PUB_ACCESS)"
+          az storage account update --name "${{ vars.STORAGE_ACCOUNT }}" \
+            --resource-group "${{ vars.RESOURCE_GROUP }}" \
+            --public-network-access Enabled --default-action Deny -o none
+          sleep 10
+        fi
+
         az storage account network-rule add \
           --account-name "${{ vars.STORAGE_ACCOUNT }}" \
           --resource-group "${{ vars.RESOURCE_GROUP }}" \
