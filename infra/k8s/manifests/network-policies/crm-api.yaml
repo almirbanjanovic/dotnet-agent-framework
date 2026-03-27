@@ -1,5 +1,5 @@
 # NetworkPolicy for crm-api
-# Ingress: crm-mcp only
+# Ingress: crm-mcp and bff-api
 # Egress:  Cosmos DB + Key Vault (port 443 via PE), DNS
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -21,6 +21,9 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: crm-mcp
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: bff-api
       ports:
         - protocol: TCP
           port: 8080

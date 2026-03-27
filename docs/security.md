@@ -629,13 +629,13 @@ In addition to Azure resource firewalls, the cluster enforces **pod-level networ
 | Service | Ingress From | Egress To |
 | --- | --- | --- |
 | `blazor-ui` | `azure-alb-system` namespace → port 8080 | `kube-dns` (port 53) only — serves static files |
-| `bff-api` | `azure-alb-system` namespace → port 8080 | `kube-dns`, `orchestrator-agent:8080`, private endpoints (`10.0.3.0/24:443`) |
+| `bff-api` | `azure-alb-system` namespace → port 8080 | `kube-dns`, `orchestrator-agent:8080`, `crm-api:8080`, private endpoints (`10.0.3.0/24:443`) |
 | `orchestrator-agent` | `bff-api` → port 8080 | `kube-dns`, `crm-agent:8080`, `product-agent:8080`, private endpoints (`10.0.3.0/24:443`) |
-| `crm-agent` | `orchestrator-agent` → port 8080 | `kube-dns`, `crm-mcp:8080`, private endpoints (`10.0.3.0/24:443`) |
-| `product-agent` | `orchestrator-agent` → port 8080 | `kube-dns`, `knowledge-mcp:8080`, private endpoints (`10.0.3.0/24:443`) |
-| `crm-mcp` | `crm-agent` → port 8080 | `kube-dns`, `crm-api:8080`, private endpoints (`10.0.3.0/24:443`) |
-| `knowledge-mcp` | `product-agent` → port 8080 | `kube-dns`, private endpoints (`10.0.3.0/24:443`) |
-| `crm-api` | `crm-mcp` → port 8080 | `kube-dns`, private endpoints (`10.0.3.0/24:443`) |
+| `crm-agent` | `orchestrator-agent` → port 8080 | `kube-dns`, `crm-mcp:8080`, `knowledge-mcp:8080`, private endpoints (`10.0.3.0/24:443`) |
+| `product-agent` | `orchestrator-agent` → port 8080 | `kube-dns`, `crm-mcp:8080`, `knowledge-mcp:8080`, private endpoints (`10.0.3.0/24:443`) |
+| `crm-mcp` | `crm-agent`, `product-agent` → port 8080 | `kube-dns`, `crm-api:8080`, private endpoints (`10.0.3.0/24:443`) |
+| `knowledge-mcp` | `crm-agent`, `product-agent` → port 8080 | `kube-dns`, private endpoints (`10.0.3.0/24:443`) |
+| `crm-api` | `crm-mcp`, `bff-api` → port 8080 | `kube-dns`, private endpoints (`10.0.3.0/24:443`) |
 
 Traffic to Azure resources (Cosmos DB, Key Vault, OpenAI, AI Search) flows through private endpoints on the `10.0.3.0/24` subnet over port 443. DNS resolution is allowed via `kube-system/kube-dns` on port 53 (TCP/UDP). See `infra/k8s/manifests/network-policies/README.md` for full details.
 

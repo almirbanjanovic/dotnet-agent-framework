@@ -11,7 +11,7 @@ This lab stands up the full Azure environment, validates connectivity, and seeds
 
 | Resource | Purpose |
 | ---------- | --------- |
-| **Azure AI Foundry** | AI Services account with chat model (gpt-4.1) and embedding model (text-embedding-ada-002) |
+| **Azure AI Foundry** | AI Services account with chat model (gpt-4.1) and embedding model (text-embedding-3-small) |
 | **Cosmos DB** (×2 accounts) | CRM (operational data) + Agents (state persistence) |
 | **Azure AI Search** | Knowledge base search — indexes PDFs via Knowledge Source API (Standard tier, semantic ranker) |
 | **Storage Account** | Product images + SharePoint documents blob storage — uploaded automatically during `terraform apply` |

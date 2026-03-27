@@ -1,6 +1,6 @@
 # NetworkPolicy for bff-api
 # Ingress: AGC ingress controller (azure-alb-system namespace)
-# Egress:  orchestrator-agent (port 8080), Key Vault (port 443 via PE), DNS
+# Egress:  orchestrator-agent (port 8080), crm-api (port 8080), Azure PaaS (port 443 via PE), DNS
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -39,7 +39,7 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
-    # orchestrator-agent (downstream)
+    # orchestrator-agent (downstream — agent chat path)
     - to:
         - podSelector:
             matchLabels:
@@ -47,7 +47,15 @@ spec:
       ports:
         - protocol: TCP
           port: 8080
-    # Azure PaaS via private endpoints (Key Vault)
+    # crm-api (downstream — direct data path for UI proxy)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: crm-api
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Azure PaaS via private endpoints (Cosmos DB, Blob Storage, Key Vault)
     - to:
         - ipBlock:
             cidr: 10.0.3.0/24

@@ -1,5 +1,5 @@
 # NetworkPolicy for crm-mcp
-# Ingress: crm-agent only
+# Ingress: crm-agent and product-agent
 # Egress:  crm-api (port 8080), Key Vault (port 443 via PE), DNS
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -21,6 +21,9 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: crm-agent
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: product-agent
       ports:
         - protocol: TCP
           port: 8080

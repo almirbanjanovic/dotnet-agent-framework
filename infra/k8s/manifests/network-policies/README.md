@@ -14,12 +14,15 @@ can communicate freely. These policies close that gap (security finding **F-01**
 ```
 Internet → AGC Ingress ──┬── blazor-ui (static WASM)
                          └── bff-api
-                              └── orchestrator-agent
-                                   ├── crm-agent
-                                   │    └── crm-mcp
-                                   │         └── crm-api ──→ Cosmos DB (PE)
-                                   └── product-agent
-                                        └── knowledge-mcp ──→ AI Search (PE)
+                              ├── orchestrator-agent
+                              │    ├── crm-agent
+                              │    │    ├── crm-mcp
+                              │    │    │    └── crm-api ──→ Cosmos DB (PE)
+                              │    │    └── knowledge-mcp ──→ AI Search (PE)
+                              │    └── product-agent
+                              │         ├── crm-mcp ──→ (shared, see above)
+                              │         └── knowledge-mcp ──→ (shared, see above)
+                              └── crm-api (direct data proxy for UI)
 
 All agents ──→ Azure OpenAI (PE)
 All services ──→ Key Vault (PE)
@@ -30,14 +33,14 @@ All services ──→ Key Vault (PE)
 | File | Pod Selector | Ingress From | Egress To |
 |---|---|---|---|
 | `default-deny.yaml` | `{}` (all pods) | ✗ all denied | ✗ all denied |
-| `bff-api.yaml` | `app.kubernetes.io/name: bff-api` | AGC namespace | orchestrator-agent, PE subnet, DNS |
+| `bff-api.yaml` | `app.kubernetes.io/name: bff-api` | AGC namespace | orchestrator-agent, crm-api, PE subnet, DNS |
 | `blazor-ui.yaml` | `app.kubernetes.io/name: blazor-ui` | AGC namespace | DNS only |
 | `orchestrator-agent.yaml` | `app.kubernetes.io/name: orchestrator-agent` | bff-api | crm-agent, product-agent, PE subnet, DNS |
-| `crm-agent.yaml` | `app.kubernetes.io/name: crm-agent` | orchestrator-agent | crm-mcp, PE subnet, DNS |
-| `product-agent.yaml` | `app.kubernetes.io/name: product-agent` | orchestrator-agent | knowledge-mcp, PE subnet, DNS |
-| `crm-mcp.yaml` | `app.kubernetes.io/name: crm-mcp` | crm-agent | crm-api, PE subnet, DNS |
-| `knowledge-mcp.yaml` | `app.kubernetes.io/name: knowledge-mcp` | product-agent | PE subnet, DNS |
-| `crm-api.yaml` | `app.kubernetes.io/name: crm-api` | crm-mcp | PE subnet, DNS |
+| `crm-agent.yaml` | `app.kubernetes.io/name: crm-agent` | orchestrator-agent | crm-mcp, knowledge-mcp, PE subnet, DNS |
+| `product-agent.yaml` | `app.kubernetes.io/name: product-agent` | orchestrator-agent | crm-mcp, knowledge-mcp, PE subnet, DNS |
+| `crm-mcp.yaml` | `app.kubernetes.io/name: crm-mcp` | crm-agent, product-agent | crm-api, PE subnet, DNS |
+| `knowledge-mcp.yaml` | `app.kubernetes.io/name: knowledge-mcp` | crm-agent, product-agent | PE subnet, DNS |
+| `crm-api.yaml` | `app.kubernetes.io/name: crm-api` | crm-mcp, bff-api | PE subnet, DNS |
 
 ## Design Decisions
 

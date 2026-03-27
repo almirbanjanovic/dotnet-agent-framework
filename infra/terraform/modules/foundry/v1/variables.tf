@@ -64,7 +64,7 @@ variable "create_embedding_deployment" {
 }
 
 variable "embedding_model_name" {
-  description = "Embedding model name (e.g., text-embedding-ada-002)"
+  description = "Embedding model name (e.g., text-embedding-3-small)"
   type        = string
 }
 

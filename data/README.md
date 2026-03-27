@@ -16,7 +16,7 @@ The key insight: you can't search unstructured text (like a PDF policy document)
 
 | Model | Role | Used when |
 |-------|------|-----------|
-| **Embedding model** (text-embedding-ada-002) | Converts text → 1536-dim vector | Indexing (via AI Search skillset) and query time (via AI Search integrated vectorization) |
+| **Embedding model** (text-embedding-3-small) | Converts text → 1536-dim vector | Indexing (via AI Search skillset) and query time (via AI Search integrated vectorization) |
 | **Chat model** (gpt-4.1) | Generates natural language answers | Query time — receives user question + retrieved documents as context |
 
 ### The RAG flow
@@ -54,7 +54,7 @@ User: "What is your return policy?"
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        Azure AI Foundry                            │
 │  ┌──────────────────────┐    ┌───────────────────────────────┐     │
-│  │  Chat Model (gpt-4.1)│    │  Embedding Model (ada-002)    │     │
+│  │  Chat Model (gpt-4.1)│    │  Embedding Model (emb-3-small)│     │
 │  │  "The Brain"         │    │  "The Translator"             │     │
 │  └──────────┬───────────┘    └──────────────┬────────────────┘     │
 └─────────────┼───────────────────────────────┼──────────────────────┘
@@ -99,7 +99,7 @@ User: "What is your return policy?"
 
 1. **Extracts text** from each PDF (built-in document cracking)
 2. **Chunks the text** into ~500-token segments (Text Split skill)
-3. **Generates a vector** for each chunk via the Azure OpenAI Embedding skill (`text-embedding-ada-002`, 1536 dimensions)
+3. **Generates a vector** for each chunk via the Azure OpenAI Embedding skill (`text-embedding-3-small`, 1536 dimensions)
 4. **Indexes each chunk** in the `knowledge-documents` search index
 
 The AI Search index is configured with:
@@ -145,7 +145,7 @@ contoso-sharepoint/**/*.pdf
         │
         ├──► Document cracking (extract text from PDF)
         ├──► Text Split skill (chunk ~500 tokens, 200 overlap)
-        ├──► Azure OpenAI Embedding skill (ada-002 → 1536-dim vector)
+        ├──► Azure OpenAI Embedding skill (text-embedding-3-small → 1536-dim vector)
         └──► Index in knowledge-documents
 ```
 

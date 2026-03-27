@@ -1,6 +1,6 @@
 # NetworkPolicy for product-agent
 # Ingress: orchestrator-agent only
-# Egress:  knowledge-mcp (port 8080), Azure OpenAI + Key Vault (port 443 via PE), DNS
+# Egress:  crm-mcp + knowledge-mcp (port 8080), Azure OpenAI + Key Vault (port 443 via PE), DNS
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -38,7 +38,15 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
-    # knowledge-mcp (downstream)
+    # crm-mcp (downstream — product catalog, promotions, customer context)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: crm-mcp
+      ports:
+        - protocol: TCP
+          port: 8080
+    # knowledge-mcp (downstream — sizing guides, policies, gear care)
     - to:
         - podSelector:
             matchLabels:

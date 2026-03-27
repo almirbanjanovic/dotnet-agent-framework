@@ -19,7 +19,7 @@
 - `cosmosdb` — Cosmos DB account + database + containers (used twice: CRM + Agents)
 - `entra` — Entra app registration (SPA/PKCE), Customer app role, 5 test users
 - `eventgrid` — Event Grid system topic + Logic App bridge → triggers AI Search indexer on blob upload
-- `foundry` — AI Services account + GPT-4.1 chat + text-embedding-ada-002 deployments
+- `foundry` — AI Services account + GPT-4.1 chat + text-embedding-3-small deployments
 - `identity` — User-assigned managed identities (5: bff, crm_api, crm_mcp, know_mcp, kubelet)
 - `keyvault` — Key Vault (RBAC auth, soft-delete, network ACLs)
 - `keyvault-secrets` — Bulk secret writer (40+ secrets including endpoints, keys, identity client IDs)

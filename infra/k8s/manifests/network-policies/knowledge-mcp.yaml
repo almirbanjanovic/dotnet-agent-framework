@@ -1,5 +1,5 @@
 # NetworkPolicy for knowledge-mcp
-# Ingress: product-agent only
+# Ingress: crm-agent and product-agent
 # Egress:  AI Search + Key Vault (port 443 via PE), DNS
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -18,6 +18,9 @@ spec:
     - Egress
   ingress:
     - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: crm-agent
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: product-agent

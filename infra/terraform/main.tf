@@ -131,6 +131,10 @@ module "cosmosdb_agents" {
       name                = "conversations"
       partition_key_paths = ["/sessionId"]
     }
+    consent_records = {
+      name                = "consent-records"
+      partition_key_paths = ["/userId"]
+    }
   }
 }
 
@@ -595,7 +599,7 @@ module "keyvault_secrets" {
     # Entra ID (Blazor WASM SPA authentication)
     "AzureAd--BffClientId" = module.entra.bff_client_id
     "AzureAd--TenantId"    = module.entra.tenant_id
-    "Bff--Hostname"         = module.agc.frontend_fqdn
+    "Bff--Hostname"        = module.agc.frontend_fqdn
 
     # Workload identity client IDs (used by Helm at deploy time)
     "Identity--BffClientId"       = module.identity.identities["bff"].client_id

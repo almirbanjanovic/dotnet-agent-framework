@@ -97,7 +97,7 @@ CSV files in `data/contoso-crm/` are parsed by the seed tool and upserted into *
 
 #### Unstructured data (SharePoint → Azure AI Search)
 
-PDF documents in `data/contoso-sharepoint/` are uploaded to Azure Blob Storage by Terraform. The AI Search Knowledge Source automatically creates the full indexing pipeline: text extraction → chunking → embedding via `text-embedding-ada-002` → indexed for semantic search. The auto-generated indexer runs on a 5-minute schedule. Agents search via the Knowledge MCP Server which calls the Azure AI Search SDK directly.
+PDF documents in `data/contoso-sharepoint/` are uploaded to Azure Blob Storage by Terraform. The AI Search Knowledge Source automatically creates the full indexing pipeline: text extraction → chunking → embedding via `text-embedding-3-small` → indexed for semantic search. The auto-generated indexer runs on a 5-minute schedule. Agents search via the Knowledge MCP Server which calls the Azure AI Search SDK directly.
 
 #### Product images (Azure Blob Storage)
 
@@ -107,7 +107,7 @@ Product images in `data/contoso-images/` are uploaded to a private `product-imag
 
 | Resource | Purpose |
 | ---------- | --------- |
-| **Azure AI Foundry** | AI Services account with chat model (gpt-4.1) and embedding model (text-embedding-ada-002) |
+| **Azure AI Foundry** | AI Services account with chat model (gpt-4.1) and embedding model (text-embedding-3-small) |
 | **Cosmos DB** (CRM) | Operational CRM data — 6 containers |
 | **Cosmos DB** (Agents) | Conversation history + agent session state (Eventual consistency) |
 | **Azure AI Search** | Knowledge base — indexes PDFs via Knowledge Source API (Standard tier, semantic ranker) |

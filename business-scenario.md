@@ -122,6 +122,7 @@ These scenarios are seeded into the data and have deterministic expected outcome
 3. Provide waterproofing, cleaning, and storage recommendations from the guide
 
 **Systems accessed:** Customer Database, Order Management, Knowledge Base (gear care guide)
+**Agent route:** Orchestrator → CRM Agent
 
 ---
 
