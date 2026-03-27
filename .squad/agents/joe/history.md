@@ -300,3 +300,17 @@ Firewall bracket pattern (try/finally + trap EXIT), OIDC everywhere (zero stored
 - Backward compatible: `default=true` means existing CI/CD and manual deploys that don't pass the variable work exactly as before.
 
 **Files changed:** `infra/terraform/variables.tf`, `infra/terraform/providers.tf`, `infra/terraform/main.tf`, `infra/deploy.ps1`, `infra/deploy.sh`
+
+### 2025-07-25 — Fix: Embedding deployment SKU mismatch in centralus
+
+**Problem:** `terraform apply` failed with 400 Bad Request — `text-embedding-3-small` model does not support SKU `"Standard"` in `centralus` region. The chat model deployment already used `"GlobalStandard"` and worked fine.
+
+**Fix:** Changed `embedding_sku_name` from `"Standard"` to `"GlobalStandard"` in `infra/terraform/dev.tfvars` (line 18).
+
+**Verification:** The foundry module (`infra/terraform/modules/foundry/v1/main.tf`, line 71) correctly passes `var.embedding_sku_name` to the embedding deployment's `sku.name` block — no module wiring issue.
+
+**Key learning:**
+- In `centralus`, Azure OpenAI embedding models (e.g., `text-embedding-3-small`) require `GlobalStandard` SKU, not `Standard`. This is a region-specific constraint.
+- When adding new model deployments, always verify SKU availability for the target region via `az cognitiveservices account list-skus` or the Azure docs model availability matrix.
+
+**Files changed:** `infra/terraform/dev.tfvars`

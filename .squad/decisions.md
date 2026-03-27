@@ -485,3 +485,29 @@ infra/
 
 **Status:** Accepted workshop pattern, documented in `docs/security.md` under "Known Gaps"
 
+---
+
+# Decision: Use GlobalStandard SKU for embedding deployments in centralus
+
+**Date:** 2025-07-25  
+**Author:** Joe (DevOps/Infra)  
+**Status:** Applied
+
+## Context
+
+`terraform apply` failed with a 400 Bad Request when deploying the `text-embedding-3-small` model in `centralus` with SKU `"Standard"`. The chat model (`gpt-4.1`) already used `"GlobalStandard"` successfully.
+
+## Decision
+
+Changed `embedding_sku_name` from `"Standard"` to `"GlobalStandard"` in `infra/terraform/dev.tfvars`.
+
+## Rationale
+
+Azure OpenAI embedding models in `centralus` do not support the `Standard` SKU — they require `GlobalStandard`. This aligns with the existing chat model deployment config.
+
+## Impact
+
+- `infra/terraform/dev.tfvars` updated (single line change)
+- No module changes needed — foundry module correctly propagates the SKU variable
+- Other environments (staging, prod) should also use `GlobalStandard` for embeddings if targeting `centralus`
+
