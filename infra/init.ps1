@@ -56,6 +56,7 @@ function Write-Phase {
 function Write-Step  { param([string]$Message) Write-Host "  → $Message" -ForegroundColor White }
 function Write-Done  { param([string]$Message) Write-Host "    ✓ $Message" -ForegroundColor Green }
 function Write-Skip  { param([string]$Message) Write-Host "    · $Message" -ForegroundColor DarkGray }
+function Write-Wait  { param([int]$Seconds, [string]$Message) Write-Host "    ⏳ Waiting ${Seconds}s — $Message..." -ForegroundColor DarkYellow; Start-Sleep -Seconds $Seconds }
 
 function Write-PhaseSummary {
     param([int]$Number, [hashtable]$Items, [string]$NextPhase)
