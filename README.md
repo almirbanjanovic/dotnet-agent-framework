@@ -15,7 +15,7 @@
 | **Blazor WASM UI** | SPA (.NET, MudBlazor) | User interface, MSAL auth, chat panel, SignalR streaming | BFF API (HTTP + SignalR) | *(none)* |
 | **BFF API** | .NET Minimal API | JWT validation, CRM API proxy, image proxy (blob bytes), chat, conversation persistence | CRM API, Orchestrator, Blob Storage, Cosmos DB | `id-bff` |
 | **CRM API** | .NET Minimal API | All CRM data: customers, orders, products, promotions, support tickets (11 endpoints) | Cosmos DB (CRM) | `id-crm-api` |
-| **CRM MCP** | MCP Server | 10 tools wrapping all CRM API endpoints | CRM API (HTTP) | `id-crm-mcp` |
+| **CRM MCP** | MCP Server | 11 tools wrapping all CRM API endpoints | CRM API (HTTP) | `id-crm-mcp` |
 | **Knowledge MCP** | MCP Server | 1 tool: `search_knowledge_base` | AI Search (SDK direct) | `id-know-mcp` |
 | **CRM Agent** | Agent | CRM specialist: customers, orders, billing, tickets, policies | CRM MCP + Knowledge MCP, Azure OpenAI | Contoso CRM Agent (agent identity) |
 | **Product Agent** | Agent | Product specialist: catalog, promotions, recommendations, guides | CRM MCP + Knowledge MCP, Azure OpenAI | Contoso Product Agent (agent identity) |
@@ -41,7 +41,7 @@ Each [MCP Server](https://modelcontextprotocol.io/docs/concepts/tools) translate
 
 | MCP Server | Tools | Backend |
 | --- | --- | --- |
-| **CRM MCP** | `get_all_customers`, `get_customer_detail`, `get_customer_orders`, `get_order_detail`, `get_products`, `get_product_detail`, `get_promotions`, `get_eligible_promotions`, `get_support_tickets`, `create_support_ticket` | CRM API (HTTP) |
+| **CRM MCP** | `get_all_customers`, `get_customer_detail`, `get_customer_orders`, `get_order_detail`, `get_order_items`, `get_products`, `get_product_detail`, `get_promotions`, `get_eligible_promotions`, `get_support_tickets`, `create_support_ticket` | CRM API (HTTP) |
 | **Knowledge MCP** | `search_knowledge_base` | Azure AI Search (SDK direct) |
 
 #### 4. BFF owns conversation persistence; agents are stateless
@@ -197,7 +197,7 @@ src/
   simple-agent/                   → Lab 1 validation (Azure OpenAI connectivity test)
 
   crm-api/                        → Domain API: all CRM data (11 endpoints) ✅ BUILT
-  crm-mcp/                        → MCP Server: 10 CRM tools → CRM API
+  crm-mcp/                        → MCP Server: 11 CRM tools → CRM API
   knowledge-mcp/                  → MCP Server: knowledge search → AI Search SDK
   crm-agent/                      → CRM specialist agent (customers, orders, tickets)
   product-agent/                  → Product specialist agent (catalog, promotions)

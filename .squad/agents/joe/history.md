@@ -343,3 +343,13 @@ Audited `docs/lab-0.md`, `docs/lab-1.md`, `infra/README.md`, `docs/security.md`,
 - infra/README.md: Directory tree and all module descriptions verified accurate.
 - docs/security.md: Key terms, three auth flows, two-flow example — all accurate.
 - docs/config-naming-standard.md: KV "--" separator and config-sync nested JSON conversion — both verified in code.
+
+### Fix: Blazor UI Network Policy Port Mismatch (F-06)
+
+**Problem:** `infra/k8s/manifests/network-policies/blazor-ui.yaml` allowed ingress on port 8080, but blazor-ui runs nginx which listens on port 80. This would cause AGC health probes and traffic to be blocked by the network policy.
+
+**Fix:** Changed ingress port from 8080 to 80 and added `# nginx HTTP` comment for clarity.
+
+**Scope check:** No other network policy references blazor-ui as an egress target (blazor-ui only receives ingress from AGC). The other services correctly use port 8080 (Kestrel default for .NET containers). The README doesn't mention per-service ports, so no README update needed.
+
+**Files changed:** `infra/k8s/manifests/network-policies/blazor-ui.yaml`

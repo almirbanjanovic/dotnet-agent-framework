@@ -209,6 +209,20 @@ src/crm-api/
 
 **Lesson:** `WebApplication.CreateBuilder()` in ASP.NET Core automatically calls `AddJsonFile("appsettings.json")`, `AddJsonFile("appsettings.{Environment}.json")`, and `AddEnvironmentVariables()`. Don't add them again in `Program.cs` — it creates duplicate config sources.
 
+### 2026-03-24 — Fix: Config-sync missing key mappings + README CRM MCP tool count (F-03)
+
+**What:** Two audit-driven fixes:
+
+1. **config-sync manifest gaps** — Added 2 missing Key Vault secret mappings:
+   - `crm-agent`: added `KnowledgeMcp--BaseUrl` → `KnowledgeMcp:BaseUrl` (CRM Agent calls Knowledge MCP for policy lookups; product-agent already had this mapping)
+   - `bff-api`: added `CrmApi--BaseUrl` → `CrmApi:BaseUrl` (BFF proxies CRM API endpoints)
+
+   **Note:** Neither `KnowledgeMcp--BaseUrl` nor `CrmApi--BaseUrl` exist as Terraform-managed secrets yet (they're runtime service discovery URLs set during deployment). The config-sync mappings are correct — the KV secrets will be provisioned separately.
+
+2. **README.md CRM MCP tool count** — Updated from 10 → 11 tools to reflect the addition of `get_order_items`. Changed in 3 places: component table, MCP tools table (added the tool name), and repo structure listing.
+
+**Build result:** `dotnet build dotnet-agent-framework.sln` — 0 errors, 0 warnings.
+
 ### 2026-03-24 — Backend Documentation Accuracy Audit
 
 **Scope:** Verified every backend-related factual claim in README.md, docs/config-naming-standard.md against actual code.

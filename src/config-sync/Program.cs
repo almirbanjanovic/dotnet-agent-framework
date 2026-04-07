@@ -117,6 +117,7 @@ var componentManifest = new Dictionary<string, (string KvSecret, string ConfigKe
         ("AzureOpenAi--Endpoint",       "AzureOpenAi:Endpoint"),
         ("AzureOpenAi--DeploymentName", "AzureOpenAi:DeploymentName"),
         ("CrmMcp--BaseUrl",             "CrmMcp:BaseUrl"),
+        ("KnowledgeMcp--BaseUrl",       "KnowledgeMcp:BaseUrl"),
         ("AzureAd--TenantId",           "AzureAd:TenantId"),
     ],
     ["product-agent"] =
@@ -138,6 +139,7 @@ var componentManifest = new Dictionary<string, (string KvSecret, string ConfigKe
     ["bff-api"] =
     [
         ("Orchestrator--BaseUrl",       "Orchestrator:BaseUrl"),
+        ("CrmApi--BaseUrl",             "CrmApi:BaseUrl"),
         ("CosmosDb--AgentsEndpoint",    "CosmosDb:AgentsEndpoint"),
         ("CosmosDb--AgentsDatabase",    "CosmosDb:AgentsDatabase"),
         ("Storage--ImagesEndpoint",     "Storage:ImagesEndpoint"),

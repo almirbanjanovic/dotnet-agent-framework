@@ -9,29 +9,28 @@ This plan covers the implementation of all 8 services in dependency order, desig
 **Dependency DAG:**
 
 ```
-                    ┌──────────────┐
-                    │  CRM API (1) │ ← Nothing works without this
-                    └──────┬───────┘
-                           │
-              ┌────────────┼────────────┐
-              ▼            ▼            │
-       ┌──────────┐ ┌──────────────┐   │
-       │CRM MCP(2)│ │Know. MCP (3) │   │
-       └────┬─────┘ └──────┬───────┘   │
-            │              │           │
-            ▼              ▼           │
-       ┌──────────┐ ┌──────────────┐   │
-       │CRM       │ │Product       │   │
-       │Agent (4) │ │Agent (5)     │   │
-       └────┬─────┘ └──────┬───────┘   │
-            │              │           │
-            └──────┬───────┘           │
-                   ▼                   │
-          ┌─────────────────┐          │
-          │Orchestrator (6) │          │
-          └────────┬────────┘          │
-                   │                   │
-                   ▼                   ▼
+   ┌──────────────┐          ┌──────────────┐
+   │  CRM API (1) │          │Know. MCP (3) │ ← Independent (AI Search)
+   └──────┬───────┘          └──────┬───────┘
+          │                         │
+          ▼                         │
+   ┌──────────┐                     │
+   │CRM MCP(2)│                     │
+   └────┬─────┘                     │
+        │                           │
+        ▼                           ▼
+   ┌──────────┐              ┌──────────────┐
+   │CRM       │              │Product       │
+   │Agent (4) │              │Agent (5)     │
+   └────┬─────┘              └──────┬───────┘
+        │                           │
+        └──────────┬────────────────┘
+                   ▼
+          ┌─────────────────┐
+          │Orchestrator (6) │
+          └────────┬────────┘
+                   │
+                   ▼
             ┌────────────┐      ┌───────────┐
             │ BFF API (7) │─────│Blazor UI(8)│
             └────────────┘      └───────────┘
@@ -261,7 +260,7 @@ AzureAd:TenantId         → Tenant for DefaultAzureCredential
 > **Protocol adapter — translates MCP tool calls into CRM API HTTP requests.** Agents discover these tools at runtime and use them to access CRM data. No business logic lives here.
 
 ### What It Does
-An MCP server exposing 10 tools that map 1:1 to CRM API endpoints. Uses the ModelContextProtocol C# SDK with Streamable HTTP transport. Agents connect to this server, discover tools, and invoke them to get customer/order/product data.
+An MCP server exposing 11 tools that map 1:1 to CRM API endpoints. Uses the ModelContextProtocol C# SDK with Streamable HTTP transport. Agents connect to this server, discover tools, and invoke them to get customer/order/product data.
 
 ### Key Files/Folders
 ```
@@ -270,7 +269,7 @@ src/crm-mcp/
 ├── crm-mcp.csproj
 ├── Tools/
 │   ├── CustomerTools.cs          # get_all_customers, get_customer_detail
-│   ├── OrderTools.cs             # get_customer_orders, get_order_detail
+│   ├── OrderTools.cs             # get_customer_orders, get_order_detail, get_order_items
 │   ├── ProductTools.cs           # get_products, get_product_detail
 │   ├── PromotionTools.cs         # get_promotions, get_eligible_promotions
 │   └── SupportTicketTools.cs     # get_support_tickets, create_support_ticket
@@ -286,13 +285,14 @@ src/crm-mcp.tests/
 └── Integration/                  # End-to-end MCP protocol tests
 ```
 
-### MCP Tools (10 total)
+### MCP Tools (11 total)
 | Tool Name | CRM API Endpoint | Description |
 |-----------|-----------------|-------------|
 | `get_all_customers` | GET /api/v1/customers | List all customers |
 | `get_customer_detail` | GET /api/v1/customers/{id} | Full customer profile |
 | `get_customer_orders` | GET /api/v1/customers/{id}/orders | Customer's orders |
 | `get_order_detail` | GET /api/v1/orders/{id} | Order with line items |
+| `get_order_items` | GET /api/v1/orders/{id}/items | Returns line items for a specific order |
 | `get_products` | GET /api/v1/products | Search/list products |
 | `get_product_detail` | GET /api/v1/products/{id} | Full product info |
 | `get_promotions` | GET /api/v1/promotions | Active promotions |
@@ -320,7 +320,7 @@ Thin adapter layer — each tool is a method that calls an HTTP endpoint and ret
 
 ### Configuration Keys
 ```
-CRM_API_BASE_URL         → CRM API internal URL (e.g., http://crm-api.contoso.svc.cluster.local)
+CrmApi:BaseUrl               → CRM API internal URL (e.g., http://crm-api.contoso.svc.cluster.local)
 AzureAd:TenantId         → Tenant for DefaultAzureCredential
 ```
 
@@ -331,7 +331,7 @@ AzureAd:TenantId         → Tenant for DefaultAzureCredential
 - [ ] **Protocol verification:** Confirm tool discovery (list_tools) returns correct schemas with parameter types and descriptions
 
 ### "Done" Checklist
-- [ ] All 10 tools registered and discoverable via MCP protocol
+- [ ] All 11 tools registered and discoverable via MCP protocol
 - [ ] Each tool returns correct data matching CRM API responses
 - [ ] `create_support_ticket` tool creates a real ticket through CRM API
 - [ ] Error handling: CRM API errors are translated to MCP error responses
@@ -357,7 +357,7 @@ AzureAd:TenantId         → Tenant for DefaultAzureCredential
 - [ ] Customize `Chart.yaml` (name: `crm-mcp`, description: "CRM MCP Server — protocol adapter for CRM API")
 - [ ] Customize `values.yaml`:
   - Image repository/tag for crm-mcp
-  - Environment variables: `CRM_API_BASE_URL`, `AzureAd__TenantId`
+  - Environment variables: `CrmApi:BaseUrl`, `AzureAd:TenantId`
   - Resource limits: 128Mi memory request / 256Mi limit, 50m CPU request / 200m limit (thin adapter — lightweight profile)
   - Service account name matching Terraform-provisioned SA
   - Liveness probe: `/health`, Readiness probe: `/ready`
@@ -422,8 +422,8 @@ Single tool, single SDK call. The main work is configuring the `SearchClient` wi
 
 ### Configuration Keys
 ```
-SEARCH_ENDPOINT          → AI Search service endpoint
-SEARCH_INDEX_NAME        → Index name (e.g., "knowledge-documents")
+Search:Endpoint              → AI Search service endpoint
+Search:IndexName             → Index name (e.g., "knowledge-documents")
 AzureAd:TenantId         → Tenant for DefaultAzureCredential
 ```
 
@@ -459,7 +459,7 @@ AzureAd:TenantId         → Tenant for DefaultAzureCredential
 - [ ] Customize `Chart.yaml` (name: `knowledge-mcp`, description: "Knowledge Base MCP Server — semantic search over policies and guides")
 - [ ] Customize `values.yaml`:
   - Image repository/tag for knowledge-mcp
-  - Environment variables: `SEARCH_ENDPOINT`, `SEARCH_INDEX_NAME`, `AzureAd__TenantId`
+  - Environment variables: `Search:Endpoint`, `Search:IndexName`, `AzureAd:TenantId`
   - Resource limits: 128Mi memory request / 256Mi limit, 50m CPU request / 200m limit (single-tool server — lightweight profile)
   - Service account name matching Terraform-provisioned SA for AI Search access
   - Liveness probe: `/health`, Readiness probe: `/ready`
@@ -533,10 +533,10 @@ Agent construction with `Microsoft.Agents.AI` (RC2 — potential API instability
 
 ### Configuration Keys
 ```
-AZURE_OPENAI_ENDPOINT           → Azure OpenAI endpoint
-AZURE_OPENAI_DEPLOYMENT_NAME    → Chat model deployment (gpt-4.1)
-CRM_MCP_BASE_URL                → CRM MCP server URL
-KNOWLEDGE_MCP_BASE_URL          → Knowledge MCP server URL
+AzureOpenAi:Endpoint            → Azure OpenAI endpoint
+AzureOpenAi:DeploymentName      → Chat model deployment (gpt-4.1)
+CrmMcp:BaseUrl                  → CRM MCP server URL
+KnowledgeMcp:BaseUrl            → Knowledge MCP server URL
 AzureAd:TenantId                → Tenant for DefaultAzureCredential
 ```
 
@@ -574,7 +574,7 @@ AzureAd:TenantId                → Tenant for DefaultAzureCredential
 - [ ] Customize `Chart.yaml` (name: `crm-agent`, description: "CRM Specialist Agent — orders, returns, billing, and support")
 - [ ] Customize `values.yaml`:
   - Image repository/tag for crm-agent
-  - Environment variables: `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT_NAME`, `CRM_MCP_BASE_URL`, `KNOWLEDGE_MCP_BASE_URL`, `AzureAd__TenantId`
+  - Environment variables: `AzureOpenAi:Endpoint`, `AzureOpenAi:DeploymentName`, `CrmMcp:BaseUrl`, `KnowledgeMcp:BaseUrl`, `AzureAd:TenantId`
   - Resource limits: 256Mi memory request / 512Mi limit, 200m CPU request / 500m limit (agent — higher profile for LLM orchestration overhead)
   - Service account name matching Terraform-provisioned SA for Azure OpenAI access
   - Liveness probe: `/health`, Readiness probe: `/ready`
@@ -638,8 +638,8 @@ Same agent framework complexity as CRM Agent plus product recommendation logic i
 ### Configuration Keys
 Same as CRM Agent:
 ```
-AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_DEPLOYMENT_NAME
-CRM_MCP_BASE_URL, KNOWLEDGE_MCP_BASE_URL
+AzureOpenAi:Endpoint, AzureOpenAi:DeploymentName
+CrmMcp:BaseUrl, KnowledgeMcp:BaseUrl
 AzureAd:TenantId
 ```
 
@@ -674,7 +674,7 @@ AzureAd:TenantId
 - [ ] Customize `Chart.yaml` (name: `product-agent`, description: "Product Specialist Agent — catalog, recommendations, and promotions")
 - [ ] Customize `values.yaml`:
   - Image repository/tag for product-agent
-  - Environment variables: `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT_NAME`, `CRM_MCP_BASE_URL`, `KNOWLEDGE_MCP_BASE_URL`, `AzureAd__TenantId`
+  - Environment variables: `AzureOpenAi:Endpoint`, `AzureOpenAi:DeploymentName`, `CrmMcp:BaseUrl`, `KnowledgeMcp:BaseUrl`, `AzureAd:TenantId`
   - Resource limits: 256Mi memory request / 512Mi limit, 200m CPU request / 500m limit (agent — higher profile for LLM orchestration overhead)
   - Service account name matching Terraform-provisioned SA for Azure OpenAI access
   - Liveness probe: `/health`, Readiness probe: `/ready`
@@ -745,9 +745,9 @@ Simpler than specialist agents — no MCP tool calls, just intent classification
 
 ### Configuration Keys
 ```
-AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_DEPLOYMENT_NAME
-CRM_AGENT_BASE_URL               → CRM Agent URL
-PRODUCT_AGENT_BASE_URL            → Product Agent URL
+AzureOpenAi:Endpoint, AzureOpenAi:DeploymentName
+CrmAgent:BaseUrl                 → CRM Agent URL
+ProductAgent:BaseUrl             → Product Agent URL
 AzureAd:TenantId
 ```
 
@@ -782,7 +782,7 @@ AzureAd:TenantId
 - [ ] Customize `Chart.yaml` (name: `orchestrator-agent`, description: "Orchestrator Agent — intent classification and agent routing")
 - [ ] Customize `values.yaml`:
   - Image repository/tag for orchestrator-agent
-  - Environment variables: `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT_NAME`, `CRM_AGENT_BASE_URL`, `PRODUCT_AGENT_BASE_URL`, `AzureAd__TenantId`
+  - Environment variables: `AzureOpenAi:Endpoint`, `AzureOpenAi:DeploymentName`, `CrmAgent:BaseUrl`, `ProductAgent:BaseUrl`, `AzureAd:TenantId`
   - Resource limits: 128Mi memory request / 256Mi limit, 100m CPU request / 250m limit (routing agent — lighter than specialist agents, no MCP tool calls)
   - Service account name matching Terraform-provisioned SA for Azure OpenAI access
   - Polly resilience config for outbound HTTP to specialist agents
@@ -821,7 +821,7 @@ src/bff-api/
 │   ├── RateLimitingConfig.cs     # Rate limiting on /api/v1/chat
 │   └── ExceptionHandler.cs
 ├── Hubs/
-│   └── ChatHub.cs                # SignalR hub for streaming responses (stretch goal)
+│   └── ChatHub.cs                # SignalR hub for streaming responses
 ├── Dockerfile
 └── chart/
     ├── Chart.yaml
@@ -869,17 +869,17 @@ src/bff-api.tests/
 - **Unblocks:** Blazor UI (Component 8)
 
 ### Estimated Complexity: **Complex**
-Most responsibilities of any single service: auth, proxy, chat orchestration, conversation persistence, image proxy, rate limiting, CORS, SignalR (stretch). Security boundary between public internet and internal services.
+Most responsibilities of any single service: auth, proxy, chat orchestration, conversation persistence, image proxy, rate limiting, CORS, SignalR. Security boundary between public internet and internal services.
 
 ### Configuration Keys
 ```
-COSMOSDB_AGENTS_ENDPOINT, COSMOSDB_AGENTS_DATABASE
-COSMOSDB_CRM_ENDPOINT (for readiness check)
-STORAGE_IMAGES_ENDPOINT, STORAGE_IMAGES_CONTAINER
-CRM_API_BASE_URL
-ORCHESTRATOR_AGENT_BASE_URL
+CosmosDb:AgentsEndpoint, CosmosDb:AgentsDatabase
+CosmosDb:CrmEndpoint (for readiness check)
+Storage:ImagesEndpoint, Storage:ImagesContainer
+CrmApi:BaseUrl
+Orchestrator:BaseUrl
 AzureAd:ClientId, AzureAd:TenantId
-BFF_HOSTNAME
+Bff:Hostname
 ```
 
 ### Testing Strategy
@@ -916,7 +916,7 @@ BFF_HOSTNAME
 - [ ] Customize `Chart.yaml` (name: `bff-api`, description: "Backend-for-Frontend API — auth gateway, chat orchestration, and data proxy")
 - [ ] Customize `values.yaml`:
   - Image repository/tag for bff-api
-  - Environment variables: `COSMOSDB_AGENTS_ENDPOINT`, `COSMOSDB_AGENTS_DATABASE`, `STORAGE_IMAGES_ENDPOINT`, `STORAGE_IMAGES_CONTAINER`, `CRM_API_BASE_URL`, `ORCHESTRATOR_AGENT_BASE_URL`, `AzureAd__ClientId`, `AzureAd__TenantId`, `BFF_HOSTNAME`
+  - Environment variables: `CosmosDb:AgentsEndpoint`, `CosmosDb:AgentsDatabase`, `Storage:ImagesEndpoint`, `Storage:ImagesContainer`, `CrmApi:BaseUrl`, `Orchestrator:BaseUrl`, `AzureAd:ClientId`, `AzureAd:TenantId`, `Bff:Hostname`
   - Resource limits: 256Mi memory request / 512Mi limit, 200m CPU request / 500m limit (gateway — handles auth, proxying, and SignalR connections)
   - Service account name matching Terraform-provisioned SA for Cosmos DB + Blob Storage access
   - Liveness probe: `/health`, Readiness probe: `/ready`
@@ -934,7 +934,7 @@ BFF_HOSTNAME
 > **The user's window into the system.** A Blazor WebAssembly SPA with MudBlazor components, MSAL authentication, and a chat panel that renders agent markdown responses with product images.
 
 ### What It Does
-A single-page application where customers log in (MSAL/Entra ID), view their orders/profile, and chat with AI agents. The chat panel renders markdown responses (via Markdig), rewrites image URLs to BFF proxy paths, and will eventually support streaming via SignalR.
+A single-page application where customers log in (MSAL/Entra ID), view their orders/profile, and chat with AI agents. The chat panel renders markdown responses (via Markdig), rewrites image URLs to BFF proxy paths, and supports streaming via SignalR.
 
 ### Key Files/Folders
 ```
@@ -986,7 +986,7 @@ src/blazor-ui/
 - **Unblocks:** Nothing — this is the top of the dependency chain
 
 ### Estimated Complexity: **Medium-High**
-Blazor WASM with MSAL auth, MudBlazor theming, markdown rendering with custom image URL rewriting, state management, and eventually SignalR streaming. Different Dockerfile pattern (nginx or static file server).
+Blazor WASM with MSAL auth, MudBlazor theming, markdown rendering with custom image URL rewriting, state management, and SignalR streaming. Different Dockerfile pattern (nginx or static file server).
 
 ### Configuration
 ```
