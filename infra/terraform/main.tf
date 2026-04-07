@@ -446,6 +446,12 @@ module "rbac_search" {
 # 3. Index existing PDFs on first run
 #--------------------------------------------------------------------------------------------------------------------------------
 
+# Wait for Search → AI Services RBAC to propagate before creating knowledge source
+resource "time_sleep" "wait_for_foundry_rbac" {
+  depends_on      = [module.rbac_foundry]
+  create_duration = "60s"
+}
+
 module "knowledge_source" {
   source = "./modules/knowledge-source/v1"
 
@@ -461,7 +467,7 @@ module "knowledge_source" {
   depends_on = [
     module.search,
     module.rbac_storage,
-    module.rbac_foundry,
+    time_sleep.wait_for_foundry_rbac,
     module.storage_uploads,
   ]
 }
