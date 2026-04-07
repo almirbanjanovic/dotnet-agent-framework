@@ -17,8 +17,3 @@ import {
   id       = "/users/${each.value}"
 }
 
-import {
-  for_each = var.import_diag_keyvault_id != "" ? toset([var.import_diag_keyvault_id]) : toset([])
-  to       = azurerm_monitor_diagnostic_setting.keyvault
-  id       = each.value
-}

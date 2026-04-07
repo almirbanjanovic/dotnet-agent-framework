@@ -29,6 +29,7 @@ infra/
     ├── providers.tf           # Provider versions and backend config (http, time providers declared)
     ├── checks.tf              # Post-apply health checks (AKS OIDC, Key Vault, AI Search)
     ├── diagnostics.tf         # Diagnostic settings — audit logs to Log Analytics
+    ├── imports.tf             # Idempotent resource imports (detect-and-import pattern)
     ├── dev.tfvars             # Your environment values (gitignored, name matches env)
     ├── backend.hcl            # Remote state config (gitignored)
     │

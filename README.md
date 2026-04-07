@@ -23,6 +23,8 @@
 
 Each component is fully independent — own models, own Dockerfile, own Helm chart, own test project. No shared project references. Communication between services is HTTP/JSON only.
 
+> **Implementation status:** CRM API is fully implemented. All other components are architecturally defined and scaffolded — implementation follows the [build plan](docs/implementation-plan.md).
+
 ### Key architectural decisions
 
 #### 1. Each agent is its own container with its own identity
@@ -187,7 +189,7 @@ infra/
                                     private-dns-zones, private-endpoint, rbac,
                                     search, storage, storage-uploads, tls-cert,
                                     vnet, workload-identity
-    main.tf, providers.tf, variables.tf, outputs.tf, diagnostics.tf, checks.tf
+    main.tf, providers.tf, variables.tf, outputs.tf, diagnostics.tf, checks.tf, imports.tf
 
 src/
   config-sync/                    → Tool: Key Vault → per-component appsettings.{Environment}.json

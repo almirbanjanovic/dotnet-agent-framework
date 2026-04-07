@@ -780,7 +780,7 @@ oai_version_upgrade_option   = "NoAutoUpgrade"
 create_embedding_deployment  = true
 embedding_model_name         = "text-embedding-3-small"
 embedding_model_version      = "1"
-embedding_sku_name           = "Standard"
+embedding_sku_name           = "GlobalStandard"
 embedding_capacity           = 10
 
 # Cosmos DB (1 account: agents session state)

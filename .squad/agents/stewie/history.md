@@ -78,3 +78,18 @@
 **Minor notes:** Two unused NuGet packages (Newtonsoft.Json, Microsoft.Extensions.Http.Resilience) should be removed. `GetAllPromotionsAsync` only returns active promotions — naming could be clearer.
 
 **Full review:** `.squad/decisions/inbox/stewie-crm-api-review.md`
+
+### 2025-07-25 — Documentation Accuracy Audit (README.md + implementation-plan.md)
+
+**Scope:** Full factual verification of every claim in README.md and the first 100 lines of docs/implementation-plan.md against the actual codebase.
+
+**Key findings:**
+- README is ~90% accurate. Most numeric claims (11 endpoints, 10 tools, 15 PNGs, 6 CSVs, 20 modules, 8 phases) are correct.
+- **DAG error in implementation-plan.md:** Knowledge MCP shown as depending on CRM API — it depends only on AI Search (confirmed by network policy, README traffic paths, and knowledge-mcp README). This is misleading.
+- **DAG incomplete:** BFF API → CRM API direct dependency (Traffic Path 1) not shown in the DAG.
+- **Module count discrepancy:** README says "20 modules" (correct for module directories), but main.tf has 34 module blocks (includes RBAC, private-endpoint, and other parameterized instantiations). history.md's "22 modules" claim is also wrong.
+- **contoso-sharepoint structure:** README says "TXT + PDF" flat, but actual structure has 3 subdirectories (guides/, policies/, procedures/) with 12 PDFs + 12 TXTs.
+- **Terraform files understated:** README lists 6 .tf files but imports.tf also exists (not listed).
+- **"8 managed identities" is technically correct** (5 managed + 3 agent = 8) but the table doesn't mention id-kubelet.
+- **SA mismatch noted in history.md is resolved** — crm-api Helm chart now correctly uses sa-crm-api.
+- **history.md "7-phase deployment" is stale** — actual implementation has 8 phases (0-7).

@@ -146,7 +146,7 @@ Expected output:
   ✓ AzureOpenAi--Endpoint
   ...
 
-  Fetched 20/20 secrets
+  Fetched 21/21 secrets
 
   Writing per-component appsettings.Development.json files...
 

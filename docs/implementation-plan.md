@@ -37,6 +37,8 @@ This plan covers the implementation of all 8 services in dependency order, desig
             └────────────┘      └───────────┘
 ```
 
+> *This DAG shows build order, not runtime dependencies. Knowledge MCP is runtime-independent of CRM API — it calls Azure AI Search directly.*
+
 ---
 
 ## Phase 0 — Pre-Implementation Tasks

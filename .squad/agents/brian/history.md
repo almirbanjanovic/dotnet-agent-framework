@@ -208,3 +208,20 @@ src/crm-api/
 **Lesson:** When config-sync writes per-component files, the KV secret name (globally unique, e.g., `CosmosDb--CrmEndpoint`) can differ from the component's local config key (e.g., `CosmosDb:Endpoint`). The manifest handles this mapping — each component only knows about its own config keys, while KV names disambiguate globally (CRM vs Agents Cosmos DB).
 
 **Lesson:** `WebApplication.CreateBuilder()` in ASP.NET Core automatically calls `AddJsonFile("appsettings.json")`, `AddJsonFile("appsettings.{Environment}.json")`, and `AddEnvironmentVariables()`. Don't add them again in `Program.cs` — it creates duplicate config sources.
+
+### 2026-03-24 — Backend Documentation Accuracy Audit
+
+**Scope:** Verified every backend-related factual claim in README.md, docs/config-naming-standard.md against actual code.
+
+**Findings (10 checks):**
+
+1. **CRM API "11 endpoints"** — ✅ Verified. 11 MapGet/MapPost registrations across 5 endpoint files.
+2. **CRM MCP "10 tools"** — ⚠️ Cannot verify. `src/crm-mcp/` contains only a README.md placeholder — no code exists yet.
+3. **Knowledge MCP "1 tool: search_knowledge_base"** — ⚠️ Cannot verify. `src/knowledge-mcp/` contains only a README.md placeholder.
+4. **Agent descriptions** — ⚠️ Cannot verify. `src/crm-agent/`, `src/product-agent/`, `src/orchestrator-agent/` all contain only README.md placeholders.
+5. **BFF API features** — ⚠️ Cannot verify. `src/bff-api/` contains only a README.md placeholder.
+6. **"Each component is fully independent"** — ✅ No shared ProjectReferences in any .csproj. Dockerfile exists only for crm-api. Helm chart exists only for crm-api. ❌ No test projects exist (zero `.Tests.csproj` files). ❌ Only crm-api has Dockerfile/Helm — the other 7 components do not.
+7. **"HTTP/JSON only"** — ✅ Verified. No gRPC references. No shared libraries. No cross-service DB access.
+8. **Config naming standard** — ✅ Verified. Terraform uses PascalCase--Hierarchy (30 secrets). config-sync maps `--` → `:`. CRM API reads `:` keys. Convention is consistent end-to-end.
+9. **Build status** — ❌ README says only `crm-api → ✅ BUILT`. Correct — only crm-api has real code. But 7 other components (crm-mcp, knowledge-mcp, crm-agent, product-agent, orchestrator-agent, bff-api, blazor-ui) are listed without status markers, which is accurate (they're not built). However, README lists them in repo structure as if they exist as code — they're just README placeholders.
+10. **Package references** — ✅ Partial. crm-api has Azure.Identity + Microsoft.Azure.Cosmos (matches). simple-agent has Microsoft.Agents.AI, Azure.AI.OpenAI (matches). ⚠️ ModelContextProtocol SDK, MudBlazor, Markdig, SignalR.Client, bUnit, FluentAssertions, NSubstitute — none referenced yet (no code for those components).

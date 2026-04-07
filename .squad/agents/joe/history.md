@@ -329,3 +329,17 @@ The Key Vault diagnostic setting is declared in `diagnostics.tf` and fully manag
 - The detect-and-import pattern is only for resources that may exist outside Terraform. Terraform-managed resources need no import logic.
 
 **Files changed:** `infra/init.ps1`, `infra/init.sh`, `infra/deploy.ps1`, `infra/terraform/imports.tf`, `infra/terraform/variables.tf`
+
+### Doc Accuracy Audit — Infra & Lab Docs
+
+Audited `docs/lab-0.md`, `docs/lab-1.md`, `infra/README.md`, `docs/security.md`, `docs/config-naming-standard.md` against actual codebase.
+
+**Findings:**
+- lab-0.md: 100% accurate (5 phases, 3 secrets, 3 generated files all match).
+- lab-1.md: Two discrepancies found:
+  - config-sync says "Fetched 20/20 secrets" but actual unique KV secrets in Program.cs is 21 (Bff--BaseUrl was likely added later).
+  - GitHub Actions section says "four stages" but lists 5 bullet points (Plan, Manual approval, Purge, Apply, Seed Data). Actual workflow has 8 jobs (5 stages + 3 cleanup).
+- lab-1.md: Deploy phases (8, 0-7), identity counts (5+3), data files (15 png, 12 pdf), 6 CRM containers, gpt-4.1 deployment name, firewall commands — all accurate.
+- infra/README.md: Directory tree and all module descriptions verified accurate.
+- docs/security.md: Key terms, three auth flows, two-flow example — all accurate.
+- docs/config-naming-standard.md: KV "--" separator and config-sync nested JSON conversion — both verified in code.
