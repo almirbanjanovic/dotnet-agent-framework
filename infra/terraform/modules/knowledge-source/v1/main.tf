@@ -25,7 +25,15 @@ locals {
             resourceUri  = var.openai_endpoint
             deploymentId = var.openai_embedding_deployment
             modelName    = var.openai_embedding_model
+            # apiKey and authIdentity intentionally omitted —
+            # per Azure docs, this triggers system-assigned managed identity.
           }
+        }
+        # Provide AI Services endpoint WITHOUT apiKey so the auto-generated
+        # skillset uses managed identity (AIServicesByIdentity) instead of
+        # trying to discover/use a disabled API key (local_auth_enabled=false).
+        aiServices = {
+          uri = var.openai_endpoint
         }
       }
     }
