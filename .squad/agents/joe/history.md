@@ -314,3 +314,18 @@ Firewall bracket pattern (try/finally + trap EXIT), OIDC everywhere (zero stored
 - When adding new model deployments, always verify SKU availability for the target region via `az cognitiveservices account list-skus` or the Azure docs model availability matrix.
 
 **Files changed:** `infra/terraform/dev.tfvars`
+
+
+### 2025-07-25 — Fix: Embedding SKU bug in init scripts + Remove unnecessary KV diagnostic import
+
+**Issue 1 — Embedding SKU in init scripts:**
+Both `infra/init.ps1` (line 767) and `infra/init.sh` (line 783) had `embedding_sku_name = "Standard"` hardcoded in the tfvars template. This was the root cause of the `text-embedding-3-small` SKU error — the prior fix to `dev.tfvars` would be overwritten on next `init.ps1` run. Changed both to `GlobalStandard`.
+
+**Issue 2 — Unnecessary KV diagnostic import logic:**
+The Key Vault diagnostic setting is declared in `diagnostics.tf` and fully managed by Terraform. Removed detect-and-import logic from `deploy.ps1`, `imports.tf`, and `variables.tf`. `deploy.sh` did not have this logic.
+
+**Key learnings:**
+- Init scripts that generate tfvars files are the source of truth for default values. Fixing only the generated tfvars is insufficient.
+- The detect-and-import pattern is only for resources that may exist outside Terraform. Terraform-managed resources need no import logic.
+
+**Files changed:** `infra/init.ps1`, `infra/init.sh`, `infra/deploy.ps1`, `infra/terraform/imports.tf`, `infra/terraform/variables.tf`
