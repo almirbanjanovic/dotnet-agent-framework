@@ -142,8 +142,8 @@ Expected output:
 
   ✓ AzureAd--BffClientId
   ✓ AzureAd--TenantId
-  ✓ AzureOpenAi--DeploymentName
-  ✓ AzureOpenAi--Endpoint
+  ✓ Foundry--DeploymentName
+  ✓ Foundry--Endpoint
   ...
 
   Fetched 21/21 secrets
@@ -223,7 +223,7 @@ If you see an error, check:
 
 - `az login` is authenticated
 - `az login` is authenticated with an account that has the **Cognitive Services OpenAI User** role on the AI Foundry account
-- `AzureOpenAi:Endpoint` and `AzureOpenAi:DeploymentName` are set in `src/simple-agent/appsettings.json` or via environment variables (`AzureOpenAi__Endpoint`, `AzureOpenAi__DeploymentName`)
+- `Foundry:Endpoint` and `Foundry:DeploymentName` are set in `src/simple-agent/appsettings.Development.json` or via environment variables (`Foundry__Endpoint`, `Foundry__DeploymentName`)
 - The AI Foundry deployment exists in the Azure portal
 
 ## Verification checklist

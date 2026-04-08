@@ -753,15 +753,15 @@ Each component's manifest maps specific Key Vault secrets to local config keys. 
 | `crm-api` | 3 | `CosmosDb--CrmEndpoint` → `CosmosDb:Endpoint` |
 | `crm-mcp` | 2 | `CrmApi--BaseUrl` → `CrmApi:BaseUrl` |
 | `knowledge-mcp` | 6 | `Search--Endpoint` → `Search:Endpoint` |
-| `crm-agent` | 4 | `AzureOpenAi--Endpoint` → `AzureOpenAi:Endpoint` |
-| `product-agent` | 5 | `AzureOpenAi--DeploymentName` → `AzureOpenAi:DeploymentName` |
+| `crm-agent` | 4 | `Foundry--Endpoint` → `Foundry:Endpoint` |
+| `product-agent` | 5 | `Foundry--DeploymentName` → `Foundry:DeploymentName` |
 | `orchestrator-agent` | 5 | `CrmAgent--BaseUrl` → `CrmAgent:BaseUrl` |
 | `bff-api` | 9 | `AzureAd--BffClientId` → `AzureAd:BffClientId` |
 | `blazor-ui` | 3 | `Bff--BaseUrl` → `Bff:BaseUrl` |
 
 ### Key Vault naming convention
 
-Secrets use PascalCase--Hierarchy naming: `{Category}--{Name}` (e.g., `CosmosDb--CrmEndpoint`, `AzureOpenAi--DeploymentName`, `Customer--EmmaPassword`). The `--` separator maps to .NET's `:` configuration hierarchy when consumed by components.
+Secrets use PascalCase--Hierarchy naming: `{Category}--{Name}` (e.g., `CosmosDb--CrmEndpoint`, `Foundry--DeploymentName`, `Customer--EmmaPassword`). The `--` separator maps to .NET's `:` configuration hierarchy when consumed by components.
 
 ## Helm Secret Injection
 

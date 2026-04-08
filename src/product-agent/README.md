@@ -9,8 +9,8 @@ Required config keys (populated by config-sync from Key Vault):
 
 | Key | Description |
 |-----|-------------|
-| `AzureOpenAi:Endpoint` | Azure OpenAI service endpoint |
-| `AzureOpenAi:DeploymentName` | Model deployment name |
+| `Foundry:Endpoint` | AI Foundry service endpoint |
+| `Foundry:DeploymentName` | Model deployment name |
 | `KnowledgeMcp:BaseUrl` | Knowledge MCP server base URL |
 | `CrmMcp:BaseUrl` | CRM MCP server base URL |
 | `AzureAd:TenantId` | Entra tenant ID for DefaultAzureCredential |

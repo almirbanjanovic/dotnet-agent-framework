@@ -533,8 +533,8 @@ Agent construction with `Microsoft.Agents.AI` (RC2 — potential API instability
 
 ### Configuration Keys
 ```
-AzureOpenAi:Endpoint            → Azure OpenAI endpoint
-AzureOpenAi:DeploymentName      → Chat model deployment (gpt-4.1)
+Foundry:Endpoint            → AI Foundry endpoint
+Foundry:DeploymentName      → Chat model deployment (gpt-4.1)
 CrmMcp:BaseUrl                  → CRM MCP server URL
 KnowledgeMcp:BaseUrl            → Knowledge MCP server URL
 AzureAd:TenantId                → Tenant for DefaultAzureCredential
@@ -574,9 +574,9 @@ AzureAd:TenantId                → Tenant for DefaultAzureCredential
 - [ ] Customize `Chart.yaml` (name: `crm-agent`, description: "CRM Specialist Agent — orders, returns, billing, and support")
 - [ ] Customize `values.yaml`:
   - Image repository/tag for crm-agent
-  - Environment variables: `AzureOpenAi:Endpoint`, `AzureOpenAi:DeploymentName`, `CrmMcp:BaseUrl`, `KnowledgeMcp:BaseUrl`, `AzureAd:TenantId`
+  - Environment variables: `Foundry:Endpoint`, `Foundry:DeploymentName`, `CrmMcp:BaseUrl`, `KnowledgeMcp:BaseUrl`, `AzureAd:TenantId`
   - Resource limits: 256Mi memory request / 512Mi limit, 200m CPU request / 500m limit (agent — higher profile for LLM orchestration overhead)
-  - Service account name matching Terraform-provisioned SA for Azure OpenAI access
+  - Service account name matching Terraform-provisioned SA for AI Foundry access
   - Liveness probe: `/health`, Readiness probe: `/ready`
 - [ ] Add MCP server URLs and Azure OpenAI config to `templates/configmap.yaml`
 - [ ] Verify: `helm lint src/crm-agent/chart/`
@@ -638,7 +638,7 @@ Same agent framework complexity as CRM Agent plus product recommendation logic i
 ### Configuration Keys
 Same as CRM Agent:
 ```
-AzureOpenAi:Endpoint, AzureOpenAi:DeploymentName
+Foundry:Endpoint, Foundry:DeploymentName
 CrmMcp:BaseUrl, KnowledgeMcp:BaseUrl
 AzureAd:TenantId
 ```
@@ -674,9 +674,9 @@ AzureAd:TenantId
 - [ ] Customize `Chart.yaml` (name: `product-agent`, description: "Product Specialist Agent — catalog, recommendations, and promotions")
 - [ ] Customize `values.yaml`:
   - Image repository/tag for product-agent
-  - Environment variables: `AzureOpenAi:Endpoint`, `AzureOpenAi:DeploymentName`, `CrmMcp:BaseUrl`, `KnowledgeMcp:BaseUrl`, `AzureAd:TenantId`
+  - Environment variables: `Foundry:Endpoint`, `Foundry:DeploymentName`, `CrmMcp:BaseUrl`, `KnowledgeMcp:BaseUrl`, `AzureAd:TenantId`
   - Resource limits: 256Mi memory request / 512Mi limit, 200m CPU request / 500m limit (agent — higher profile for LLM orchestration overhead)
-  - Service account name matching Terraform-provisioned SA for Azure OpenAI access
+  - Service account name matching Terraform-provisioned SA for AI Foundry access
   - Liveness probe: `/health`, Readiness probe: `/ready`
 - [ ] Add MCP server URLs and Azure OpenAI config to `templates/configmap.yaml`
 - [ ] Verify: `helm lint src/product-agent/chart/`
@@ -745,7 +745,7 @@ Simpler than specialist agents — no MCP tool calls, just intent classification
 
 ### Configuration Keys
 ```
-AzureOpenAi:Endpoint, AzureOpenAi:DeploymentName
+Foundry:Endpoint, Foundry:DeploymentName
 CrmAgent:BaseUrl                 → CRM Agent URL
 ProductAgent:BaseUrl             → Product Agent URL
 AzureAd:TenantId
@@ -782,12 +782,12 @@ AzureAd:TenantId
 - [ ] Customize `Chart.yaml` (name: `orchestrator-agent`, description: "Orchestrator Agent — intent classification and agent routing")
 - [ ] Customize `values.yaml`:
   - Image repository/tag for orchestrator-agent
-  - Environment variables: `AzureOpenAi:Endpoint`, `AzureOpenAi:DeploymentName`, `CrmAgent:BaseUrl`, `ProductAgent:BaseUrl`, `AzureAd:TenantId`
+  - Environment variables: `Foundry:Endpoint`, `Foundry:DeploymentName`, `CrmAgent:BaseUrl`, `ProductAgent:BaseUrl`, `AzureAd:TenantId`
   - Resource limits: 128Mi memory request / 256Mi limit, 100m CPU request / 250m limit (routing agent — lighter than specialist agents, no MCP tool calls)
-  - Service account name matching Terraform-provisioned SA for Azure OpenAI access
+  - Service account name matching Terraform-provisioned SA for AI Foundry access
   - Polly resilience config for outbound HTTP to specialist agents
   - Liveness probe: `/health`, Readiness probe: `/ready`
-- [ ] Add specialist agent URLs and Azure OpenAI config to `templates/configmap.yaml`
+- [ ] Add specialist agent URLs and AI Foundry config to `templates/configmap.yaml`
 - [ ] Verify: `helm lint src/orchestrator-agent/chart/`
 - [ ] Verify: `helm template orchestrator-agent src/orchestrator-agent/chart/` renders valid YAML
 

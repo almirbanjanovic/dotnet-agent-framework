@@ -589,9 +589,9 @@ module "keyvault_secrets" {
 
   secrets = {
     # App-consumed secrets (PascalCase--Hierarchy → .NET Section:Key)
-    "AzureOpenAi--Endpoint"            = module.foundry.endpoint
-    "AzureOpenAi--DeploymentName"      = module.foundry.deployment_name
-    "AzureOpenAi--EmbeddingDeployment" = module.foundry.embedding_deployment_name
+    "Foundry--Endpoint"            = module.foundry.endpoint
+    "Foundry--DeploymentName"      = module.foundry.deployment_name
+    "Foundry--EmbeddingDeployment" = module.foundry.embedding_deployment_name
     "CosmosDb--AgentsEndpoint"         = module.cosmosdb_agents.endpoint
     "CosmosDb--AgentsDatabase"         = module.cosmosdb_agents.database_name
     "CosmosDb--CrmEndpoint"            = module.cosmosdb_crm.endpoint

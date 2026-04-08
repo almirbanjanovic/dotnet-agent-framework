@@ -9,8 +9,8 @@ Required config keys (set via environment variables or a local `appsettings.json
 
 | Key | Description |
 |-----|-------------|
-| `AzureOpenAi:Endpoint` | AI Foundry project endpoint (Azure AI Services URL) |
-| `AzureOpenAi:DeploymentName` | Model deployment name (passed to `GetResponsesClient()`) |
+| `Foundry:Endpoint` | AI Foundry project endpoint (Azure AI Services URL) |
+| `Foundry:DeploymentName` | Model deployment name (passed to `AsAIAgent()`) |
 | `AzureAd:TenantId` | Entra tenant ID for DefaultAzureCredential (optional) |
 
 > **Note:** simple-agent is not in the config-sync manifest. Copy the relevant keys from another component's generated `appsettings.{Environment}.json`, or set the values as environment variables.

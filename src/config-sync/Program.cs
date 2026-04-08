@@ -114,24 +114,24 @@ var componentManifest = new Dictionary<string, (string KvSecret, string ConfigKe
     ],
     ["crm-agent"] =
     [
-        ("AzureOpenAi--Endpoint",       "AzureOpenAi:Endpoint"),
-        ("AzureOpenAi--DeploymentName", "AzureOpenAi:DeploymentName"),
+        ("Foundry--Endpoint",       "Foundry:Endpoint"),
+        ("Foundry--DeploymentName", "Foundry:DeploymentName"),
         ("CrmMcp--BaseUrl",             "CrmMcp:BaseUrl"),
         ("KnowledgeMcp--BaseUrl",       "KnowledgeMcp:BaseUrl"),
         ("AzureAd--TenantId",           "AzureAd:TenantId"),
     ],
     ["product-agent"] =
     [
-        ("AzureOpenAi--Endpoint",       "AzureOpenAi:Endpoint"),
-        ("AzureOpenAi--DeploymentName", "AzureOpenAi:DeploymentName"),
+        ("Foundry--Endpoint",       "Foundry:Endpoint"),
+        ("Foundry--DeploymentName", "Foundry:DeploymentName"),
         ("KnowledgeMcp--BaseUrl",       "KnowledgeMcp:BaseUrl"),
         ("CrmMcp--BaseUrl",             "CrmMcp:BaseUrl"),
         ("AzureAd--TenantId",           "AzureAd:TenantId"),
     ],
     ["orchestrator-agent"] =
     [
-        ("AzureOpenAi--Endpoint",       "AzureOpenAi:Endpoint"),
-        ("AzureOpenAi--DeploymentName", "AzureOpenAi:DeploymentName"),
+        ("Foundry--Endpoint",       "Foundry:Endpoint"),
+        ("Foundry--DeploymentName", "Foundry:DeploymentName"),
         ("CrmAgent--BaseUrl",           "CrmAgent:BaseUrl"),
         ("ProductAgent--BaseUrl",       "ProductAgent:BaseUrl"),
         ("AzureAd--TenantId",           "AzureAd:TenantId"),
@@ -157,8 +157,8 @@ var componentManifest = new Dictionary<string, (string KvSecret, string ConfigKe
     ],
     ["simple-agent"] =
     [
-        ("AzureOpenAi--Endpoint",       "AzureOpenAi:Endpoint"),
-        ("AzureOpenAi--DeploymentName", "AzureOpenAi:DeploymentName"),
+        ("Foundry--Endpoint",       "Foundry:Endpoint"),
+        ("Foundry--DeploymentName", "Foundry:DeploymentName"),
         ("AzureAd--TenantId",           "AzureAd:TenantId"),
     ],
 };

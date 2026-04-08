@@ -43,12 +43,12 @@ All generated `appsettings.*.json` files are gitignored and never committed.
 | crm-api | 3 | CosmosDb--CrmEndpoint, CosmosDb--CrmDatabase, AzureAd--TenantId |
 | crm-mcp | 2 | CrmApi--BaseUrl, AzureAd--TenantId |
 | knowledge-mcp | 6 | Search--Endpoint, Search--IndexName, Storage--ImagesEndpoint, Storage--ImagesAccountName, Storage--ImagesContainer, AzureAd--TenantId |
-| crm-agent | 4 | AzureOpenAi--Endpoint, AzureOpenAi--DeploymentName, CrmMcp--BaseUrl, AzureAd--TenantId |
-| product-agent | 5 | AzureOpenAi--Endpoint, AzureOpenAi--DeploymentName, KnowledgeMcp--BaseUrl, CrmMcp--BaseUrl, AzureAd--TenantId |
-| orchestrator-agent | 5 | AzureOpenAi--Endpoint, AzureOpenAi--DeploymentName, CrmAgent--BaseUrl, ProductAgent--BaseUrl, AzureAd--TenantId |
+| crm-agent | 4 | Foundry--Endpoint, Foundry--DeploymentName, CrmMcp--BaseUrl, AzureAd--TenantId |
+| product-agent | 5 | Foundry--Endpoint, Foundry--DeploymentName, KnowledgeMcp--BaseUrl, CrmMcp--BaseUrl, AzureAd--TenantId |
+| orchestrator-agent | 5 | Foundry--Endpoint, Foundry--DeploymentName, CrmAgent--BaseUrl, ProductAgent--BaseUrl, AzureAd--TenantId |
 | bff-api | 9 | Orchestrator--BaseUrl, CosmosDb--AgentsEndpoint, CosmosDb--AgentsDatabase, Storage--ImagesEndpoint, Storage--ImagesAccountName, Storage--ImagesContainer, AzureAd--TenantId, AzureAd--BffClientId, Bff--Hostname |
 | blazor-ui | 3 | Bff--BaseUrl, AzureAd--BffClientId, AzureAd--TenantId |
-| simple-agent | 3 | AzureOpenAi--Endpoint, AzureOpenAi--DeploymentName, AzureAd--TenantId |
+| simple-agent | 3 | Foundry--Endpoint, Foundry--DeploymentName, AzureAd--TenantId |
 
 ## Architecture role
 

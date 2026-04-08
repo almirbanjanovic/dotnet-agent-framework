@@ -13,8 +13,8 @@ var configuration = new ConfigurationBuilder()
     .AddEnvironmentVariables()
     .Build();
 
-var endpoint = configuration["AzureOpenAi:Endpoint"] ?? throw new InvalidOperationException("AzureOpenAi:Endpoint is not set.");
-var deploymentName = configuration["AzureOpenAi:DeploymentName"] ?? throw new InvalidOperationException("AzureOpenAi:DeploymentName is not set.");
+var endpoint = configuration["Foundry:Endpoint"] ?? throw new InvalidOperationException("Foundry:Endpoint is not set.");
+var deploymentName = configuration["Foundry:DeploymentName"] ?? throw new InvalidOperationException("Foundry:DeploymentName is not set.");
 var tenantId = configuration["AzureAd:TenantId"];
 
 Console.WriteLine($"Using AI Foundry project endpoint: {endpoint}");
