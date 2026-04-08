@@ -259,10 +259,10 @@ function Add-DeployerFirewallRules {
         if (-not $alreadyPresent) {
             $newIps = @($existing -split "`n" | Where-Object { $_ }) + @($DeployerIp)
             $ipFilter = ($newIps | ForEach-Object { $_.Trim() } | Where-Object { $_ }) -join ","
-            az cosmosdb update --name $c --resource-group $ResourceGroup --ip-range-filter $ipFilter 2>$null | Out-Null
+            az cosmosdb update --name $c --resource-group $ResourceGroup --ip-range-filter $ipFilter --no-wait 2>$null | Out-Null
         }
     }
-    Write-Host "`r    ✓ Cosmos DB ($cosmosCount)    " -ForegroundColor Green
+    Write-Host "`r    ✓ Cosmos DB ($cosmosCount, async)" -ForegroundColor Green
 
     # Foundry
     Write-Host "    ⠋ Foundry" -ForegroundColor DarkGray -NoNewline

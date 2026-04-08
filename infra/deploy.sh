@@ -508,10 +508,10 @@ add_deployer_firewall_rules() {
       EXISTING=$(az cosmosdb show --name "$c" --resource-group "$RG" --query "ipRules[].ipAddressOrRange" -o tsv 2>/dev/null || true)
       if ! echo "$EXISTING" | grep -qF "$IP"; then
           NEW_IPS=$(echo -e "${EXISTING}\n${IP}" | grep -v '^$' | paste -sd, -)
-          az cosmosdb update --name "$c" --resource-group "$RG" --ip-range-filter "$NEW_IPS" 2>/dev/null || true
+          az cosmosdb update --name "$c" --resource-group "$RG" --ip-range-filter "$NEW_IPS" --no-wait 2>/dev/null || true
       fi
     done
-    echo " done"
+    echo " done (async)"
 
     # Foundry
     echo -ne "     Foundry..."
