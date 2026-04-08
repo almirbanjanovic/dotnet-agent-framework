@@ -166,23 +166,23 @@ Expected output:
 
 ## Step 3 — Validate infrastructure
 
-The **simple-agent** project creates a minimal AI agent that calls Azure OpenAI. This confirms your endpoint, deployment, and credentials are all working. Since Azure OpenAI (Cognitive Services) has a firewall, you need to temporarily open it.
+The **simple-agent** project creates a minimal AI agent that calls AI Foundry. This confirms your endpoint, deployment, and credentials are all working. Since AI Foundry (Cognitive Services) has a firewall, you need to temporarily open it.
 
 ```powershell
 # PowerShell
-$COG = (az cognitiveservices account list --resource-group $RG --query "[0].name" -o tsv)
+$FOUNDRY = (az cognitiveservices account list --resource-group $RG --query "[0].name" -o tsv)
 ```
 
 ```bash
 # Bash / WSL / macOS
-COG=$(az cognitiveservices account list --resource-group "$RG" --query "[0].name" -o tsv)
+FOUNDRY=$(az cognitiveservices account list --resource-group "$RG" --query "[0].name" -o tsv)
 ```
 
-Open the AI Services firewall, run simple-agent, then close it. Run from the **repository root**:
+Open the AI Foundry firewall, run simple-agent, then close it. Run from the **repository root**:
 
 ```powershell
-# PowerShell — Open (no /32 suffix — Cognitive Services doesn't accept CIDR notation)
-az cognitiveservices account network-rule add --resource-group $RG --name $COG --ip-address $DEPLOYER_IP
+# PowerShell — Open (no /32 suffix — Foundry doesn't accept CIDR notation)
+az cognitiveservices account network-rule add --resource-group $RG --name $FOUNDRY --ip-address $DEPLOYER_IP
 Start-Sleep 15
 
 # Validate
@@ -191,12 +191,12 @@ dotnet run
 Pop-Location
 
 # Close
-az cognitiveservices account network-rule remove --resource-group $RG --name $COG --ip-address $DEPLOYER_IP
+az cognitiveservices account network-rule remove --resource-group $RG --name $FOUNDRY --ip-address $DEPLOYER_IP
 ```
 
 ```bash
-# Bash / WSL / macOS — Open (no /32 suffix — Cognitive Services doesn't accept CIDR notation)
-az cognitiveservices account network-rule add --resource-group "$RG" --name "$COG" --ip-address "$DEPLOYER_IP"
+# Bash / WSL / macOS — Open (no /32 suffix — Foundry doesn't accept CIDR notation)
+az cognitiveservices account network-rule add --resource-group "$RG" --name "$FOUNDRY" --ip-address "$DEPLOYER_IP"
 sleep 15
 
 # Validate
@@ -205,13 +205,13 @@ dotnet run
 popd
 
 # Close
-az cognitiveservices account network-rule remove --resource-group "$RG" --name "$COG" --ip-address "$DEPLOYER_IP"
+az cognitiveservices account network-rule remove --resource-group "$RG" --name "$FOUNDRY" --ip-address "$DEPLOYER_IP"
 ```
 
 Expected output (the joke will differ on each run — it's AI-generated):
 
 ```text
-Using Azure OpenAI endpoint: https://<your-openai-endpoint>/
+Using AI Foundry endpoint: https://<your-foundry-endpoint>/
 Deployment name: gpt-4.1
 
 Agent response:
@@ -222,17 +222,17 @@ Agent response:
 If you see an error, check:
 
 - `az login` is authenticated
-- `az login` is authenticated with an account that has the **Cognitive Services OpenAI User** role on the AI Services account
+- `az login` is authenticated with an account that has the **Cognitive Services OpenAI User** role on the AI Foundry account
 - `AzureOpenAi:Endpoint` and `AzureOpenAi:DeploymentName` are set in `src/simple-agent/appsettings.json` or via environment variables (`AzureOpenAi__Endpoint`, `AzureOpenAi__DeploymentName`)
-- The AI Services deployment exists in the Azure portal
+- The AI Foundry deployment exists in the Azure portal
 
 ## Verification checklist
 
 After completing all steps, verify:
 
 - [ ] Infrastructure resources are visible in the Azure portal (or `terraform output` shows all endpoints)
-- [ ] 8 per-component `appsettings.Development.json` files exist under `src/` with non-empty values
-- [ ] `simple-agent` returns a joke from Azure OpenAI
+- [ ] 9 per-component `appsettings.Development.json` files exist under `src/` with non-empty values
+- [ ] `simple-agent` returns a joke from AI Foundry
 - [ ] Cosmos DB CRM account has 6 containers with data (Customers, Orders, etc.)
 - [ ] Azure AI Search index has vectorized document chunks (check indexer status in Azure portal)
 - [ ] Azure Blob Storage `product-images` container has 15 `.png` files

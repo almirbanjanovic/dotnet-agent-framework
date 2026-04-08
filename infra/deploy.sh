@@ -562,9 +562,9 @@ cleanup_deployer_ip() {
     for c in $(az cosmosdb list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
       EXISTING=$(az cosmosdb show --name "$c" --resource-group "$RG" --query "ipRules[].ipAddressOrRange" -o tsv 2>/dev/null || true)
       FILTERED=$(echo "$EXISTING" | grep -v "^${IP}\(/32\)\?$" | paste -sd, - 2>/dev/null || true)
-      az cosmosdb update --name "$c" --resource-group "$RG" --ip-range-filter "$FILTERED" 2>/dev/null || true
+      az cosmosdb update --name "$c" --resource-group "$RG" --ip-range-filter "$FILTERED" --no-wait 2>/dev/null || true
     done
-    echo " done"
+    echo " done (async)"
 
     # Foundry
     echo -ne "     Foundry..."

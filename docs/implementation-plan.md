@@ -508,16 +508,16 @@ src/crm-agent.tests/
 ### External Dependencies
 | Dependency | NuGet Package | Version |
 |------------|---------------|---------|
-| Agent Framework | `Microsoft.Agents.AI` | 1.0.0-rc2 |
-| Agent + OpenAI | `Microsoft.Agents.AI.OpenAI` | 1.0.0-rc2 |
+| Agent Framework | `Microsoft.Agents.AI` | 1.0.0 |
+| Agent + OpenAI | `Microsoft.Agents.AI.OpenAI` | 1.0.0 |
 | Azure OpenAI | `Azure.AI.OpenAI` | 2.1.0 |
-| Extensions.AI | `Microsoft.Extensions.AI` | 10.4.1 ⚠️ pin explicitly |
-| Extensions.AI.Abstractions | `Microsoft.Extensions.AI.Abstractions` | 10.4.1 ⚠️ pin explicitly |
+| Extensions.AI | `Microsoft.Extensions.AI` | 10.4.1 |
+| Extensions.AI.Abstractions | `Microsoft.Extensions.AI.Abstractions` | 10.4.1 |
 | Extensions.AI.OpenAI | `Microsoft.Extensions.AI.OpenAI` | 10.4.1 |
 | MCP SDK | `ModelContextProtocol` | latest stable |
 | Azure Identity | `Azure.Identity` | 1.19.0 |
 
-> ⚠️ **Critical:** Pin `Microsoft.Extensions.AI` and `Microsoft.Extensions.AI.Abstractions` to 10.4.1 explicitly. Without explicit pins, `Microsoft.Agents.AI` 1.0.0-rc2 resolves to 10.3.0 transitively, causing `TypeLoadException` at runtime. See decisions.md.
+> **Note:** `Microsoft.Extensions.AI` and `Microsoft.Extensions.AI.Abstractions` are pinned to 10.4.1. This was required with 1.0.0-rc2 to avoid a transitive `TypeLoadException`. With 1.0.0 GA these pins may no longer be needed — verify and remove if dependency resolution is clean.
 
 ### Azure Services
 - **Azure OpenAI** — gpt-4.1 deployment for chat completions
@@ -621,7 +621,7 @@ src/product-agent.tests/
 | GET | `/ready` | Readiness probe |
 
 ### External Dependencies
-Same NuGet packages as CRM Agent (Microsoft.Agents.AI 1.0.0-rc2, Azure.AI.OpenAI 2.1.0, MCP SDK, etc.) with the same version pinning requirements.
+Same NuGet packages as CRM Agent (Microsoft.Agents.AI 1.0.0, Azure.AI.OpenAI 2.1.0, MCP SDK, etc.) with the same version pinning requirements.
 
 ### Azure Services
 - **Azure OpenAI** — gpt-4.1 deployment
@@ -725,7 +725,7 @@ src/orchestrator-agent.tests/
 ### External Dependencies
 | Dependency | NuGet Package | Version |
 |------------|---------------|---------|
-| Agent Framework | `Microsoft.Agents.AI` | 1.0.0-rc2 |
+| Agent Framework | `Microsoft.Agents.AI` | 1.0.0 |
 | Azure OpenAI | `Azure.AI.OpenAI` | 2.1.0 |
 | HTTP Resilience | `Microsoft.Extensions.Http.Resilience` | latest |
 | Azure Identity | `Azure.Identity` | 1.19.0 |

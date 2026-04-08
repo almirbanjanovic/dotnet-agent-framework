@@ -324,9 +324,9 @@ function Remove-DeployerFirewallRules {
         $c = $c.Trim()
         $existing = az cosmosdb show --name $c --resource-group $ResourceGroup --query "ipRules[].ipAddressOrRange" -o tsv 2>$null
         $filtered = ($existing -split "`n" | Where-Object { $_ -and $_.Trim() -ne $DeployerIp -and $_.Trim() -ne "$DeployerIp/32" }) -join ","
-        az cosmosdb update --name $c --resource-group $ResourceGroup --ip-range-filter $filtered 2>$null | Out-Null
+        az cosmosdb update --name $c --resource-group $ResourceGroup --ip-range-filter $filtered --no-wait 2>$null | Out-Null
     }
-    Write-Host "`r    ✓ Cosmos DB    " -ForegroundColor Green
+    Write-Host "`r    ✓ Cosmos DB (async)" -ForegroundColor Green
 
     # Foundry
     Write-Host "    ⠋ Foundry" -ForegroundColor DarkGray -NoNewline

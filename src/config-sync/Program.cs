@@ -155,6 +155,12 @@ var componentManifest = new Dictionary<string, (string KvSecret, string ConfigKe
         ("AzureAd--BffClientId",        "AzureAd:BffClientId"),
         ("AzureAd--TenantId",           "AzureAd:TenantId"),
     ],
+    ["simple-agent"] =
+    [
+        ("AzureOpenAi--Endpoint",       "AzureOpenAi:Endpoint"),
+        ("AzureOpenAi--DeploymentName", "AzureOpenAi:DeploymentName"),
+        ("AzureAd--TenantId",           "AzureAd:TenantId"),
+    ],
 };
 
 // ── Collect unique KV secrets ─────────────────────────────────────────────

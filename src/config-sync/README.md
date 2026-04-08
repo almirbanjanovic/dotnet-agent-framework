@@ -48,6 +48,7 @@ All generated `appsettings.*.json` files are gitignored and never committed.
 | orchestrator-agent | 5 | AzureOpenAi--Endpoint, AzureOpenAi--DeploymentName, CrmAgent--BaseUrl, ProductAgent--BaseUrl, AzureAd--TenantId |
 | bff-api | 9 | Orchestrator--BaseUrl, CosmosDb--AgentsEndpoint, CosmosDb--AgentsDatabase, Storage--ImagesEndpoint, Storage--ImagesAccountName, Storage--ImagesContainer, AzureAd--TenantId, AzureAd--BffClientId, Bff--Hostname |
 | blazor-ui | 3 | Bff--BaseUrl, AzureAd--BffClientId, AzureAd--TenantId |
+| simple-agent | 3 | AzureOpenAi--Endpoint, AzureOpenAi--DeploymentName, AzureAd--TenantId |
 
 ## Architecture role
 
