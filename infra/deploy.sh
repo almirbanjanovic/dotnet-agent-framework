@@ -502,13 +502,13 @@ add_deployer_firewall_rules() {
     done
     echo " done"
 
-    # Cosmos DB (--no-wait: the ARM operation is slow but the firewall rule takes effect immediately)
+    # Cosmos DB
     echo -ne "    Cosmos DB..."
     for c in $(az cosmosdb list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
       EXISTING=$(az cosmosdb show --name "$c" --resource-group "$RG" --query "ipRules[].ipAddressOrRange" -o tsv 2>/dev/null || true)
       if ! echo "$EXISTING" | grep -qF "$IP"; then
           NEW_IPS=$(echo -e "${EXISTING}\n${IP}" | grep -v '^$' | paste -sd, -)
-          az cosmosdb update --name "$c" --resource-group "$RG" --ip-range-filter "$NEW_IPS" --no-wait 2>/dev/null || true
+          az cosmosdb update --name "$c" --resource-group "$RG" --ip-range-filter "$NEW_IPS" 2>/dev/null || true
       fi
     done
     echo " done"
@@ -557,19 +557,21 @@ cleanup_deployer_ip() {
     done
     echo " done"
 
-    # Cosmos DB (--no-wait: the ARM operation is slow but the firewall rule takes effect immediately)
+    # Cosmos DB
     echo -ne "    Cosmos DB..."
     for c in $(az cosmosdb list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
       EXISTING=$(az cosmosdb show --name "$c" --resource-group "$RG" --query "ipRules[].ipAddressOrRange" -o tsv 2>/dev/null || true)
-      FILTERED=$(echo "$EXISTING" | grep -v "^${IP}$" | paste -sd, - 2>/dev/null || true)
-      az cosmosdb update --name "$c" --resource-group "$RG" --ip-range-filter "$FILTERED" --no-wait 2>/dev/null || true
+      FILTERED=$(echo "$EXISTING" | grep -v "^${IP}\(/32\)\?$" | paste -sd, - 2>/dev/null || true)
+      az cosmosdb update --name "$c" --resource-group "$RG" --ip-range-filter "$FILTERED" 2>/dev/null || true
     done
     echo " done"
 
     # Foundry
     echo -ne "     Foundry..."
     for cog in $(az cognitiveservices account list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
+      # Try both CIDR and plain formats — Azure may store either way depending on how the rule was added
       az cognitiveservices account network-rule remove --resource-group "$RG" --name "$cog" --ip-address "$IP/32" 2>/dev/null || true
+      az cognitiveservices account network-rule remove --resource-group "$RG" --name "$cog" --ip-address "$IP" 2>/dev/null || true
     done
     echo " done"
 
@@ -577,7 +579,7 @@ cleanup_deployer_ip() {
     echo -ne "    AI Search..."
     for s in $(az search service list --resource-group "$RG" --query "[].name" -o tsv 2>/dev/null); do
       CURRENT=$(az search service show --name "$s" --resource-group "$RG" --query "networkRuleSet.ipRules[].value" -o tsv 2>/dev/null || true)
-      FILTERED=$(echo "$CURRENT" | grep -v "^${IP}$" || true)
+      FILTERED=$(echo "$CURRENT" | grep -v "^${IP}\(/32\)\?$" || true)
       if [ -n "$FILTERED" ]; then
         RULES=$(echo "$FILTERED" | jq -Rn '[inputs | {value: .}]')
       else

@@ -368,3 +368,23 @@ Audited `docs/lab-0.md`, `docs/lab-1.md`, `infra/README.md`, `docs/security.md`,
 **Confirmed correct:** `infra/terraform/main.tf` (40+ secrets), `src/config-sync/Program.cs` (22 entries), `deploy.ps1` CosmosDb reads (lines 951–952), `deploy.sh` CosmosDb reads (lines 796–797).
 
 **Files changed:** `infra/deploy.ps1`, `infra/deploy.sh`, `.github/workflows/seed-data.yaml`
+
+### Fix: Deployer IP Firewall Cleanup — Three Root Causes
+
+**Problem:** After deploy, the deployer IP persisted in AI Search, Cosmos DB (both CRM and Agents accounts), and Foundry (AI Services) firewalls despite `Remove-DeployerFirewallRules` running in the finally block.
+
+**Root causes found:**
+
+1. **Cosmos DB `--no-wait`:** Both Add and Remove functions used `az cosmosdb update --no-wait`, making the IP removal fire-and-forget. The script exited before Azure finished processing the update, so the IP was never actually removed.
+
+2. **CIDR format mismatch (AI Search + Cosmos DB):** The Remove function filtered IPs by exact string match (`$_.Trim() -ne $DeployerIp`), comparing plain IP `1.2.3.4`. But Azure may store the IP as `1.2.3.4/32` (CIDR notation) depending on how it was added (Terraform uses plain IPs in `allowed_ips`, but Azure normalizes differently per service). The filter missed CIDR-formatted entries.
+
+3. **Foundry CIDR mismatch:** The Remove function only tried `az cognitiveservices account network-rule remove --ip-address "$IP/32"`. Terraform's foundry module sets `ip_rules = var.allowed_ips` with plain IPs (no CIDR). Azure stored the rule without CIDR, so the `/32` removal didn't match anything and failed silently (errors suppressed by `2>$null`).
+
+**Fixes applied (both deploy.ps1 and deploy.sh):**
+- Removed `--no-wait` from Cosmos DB updates in both Add and Remove functions
+- Made Cosmos DB and AI Search IP filters CIDR-aware: filter both `$DeployerIp` and `$DeployerIp/32`
+- Added second Foundry removal attempt with plain IP format (try `/32` then plain)
+- Made Add function CIDR-aware too (prevents duplicates if Azure stored previous IP with CIDR)
+
+**Files changed:** `infra/deploy.ps1`, `infra/deploy.sh`

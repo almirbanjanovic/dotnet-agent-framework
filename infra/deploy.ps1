@@ -255,11 +255,11 @@ function Add-DeployerFirewallRules {
     foreach ($c in $cosmosItems) {
         $c = $c.Trim()
         $existing = az cosmosdb show --name $c --resource-group $ResourceGroup --query "ipRules[].ipAddressOrRange" -o tsv 2>$null
-        $alreadyPresent = ($existing -split "`n" | Where-Object { $_.Trim() -eq $DeployerIp })
+        $alreadyPresent = ($existing -split "`n" | Where-Object { $_.Trim() -eq $DeployerIp -or $_.Trim() -eq "$DeployerIp/32" })
         if (-not $alreadyPresent) {
             $newIps = @($existing -split "`n" | Where-Object { $_ }) + @($DeployerIp)
             $ipFilter = ($newIps | ForEach-Object { $_.Trim() } | Where-Object { $_ }) -join ","
-            az cosmosdb update --name $c --resource-group $ResourceGroup --ip-range-filter $ipFilter --no-wait 2>$null | Out-Null
+            az cosmosdb update --name $c --resource-group $ResourceGroup --ip-range-filter $ipFilter 2>$null | Out-Null
         }
     }
     Write-Host "`r    ✓ Cosmos DB ($cosmosCount)    " -ForegroundColor Green
@@ -282,7 +282,7 @@ function Add-DeployerFirewallRules {
     foreach ($s in $searchItems) {
         $s = $s.Trim()
         $currentIps = az search service show --name $s --resource-group $ResourceGroup --query "networkRuleSet.ipRules[].value" -o tsv 2>$null
-        $alreadyPresent = ($currentIps -split "`n" | Where-Object { $_.Trim() -eq $DeployerIp })
+        $alreadyPresent = ($currentIps -split "`n" | Where-Object { $_.Trim() -eq $DeployerIp -or $_.Trim() -eq "$DeployerIp/32" })
         if (-not $alreadyPresent) {
             $newRules = @($currentIps -split "`n" | Where-Object { $_ } | ForEach-Object { @{value=$_.Trim()} }) + @(@{value=$DeployerIp})
             $ipRules = ConvertTo-Json -InputObject $newRules -Compress
@@ -323,8 +323,8 @@ function Remove-DeployerFirewallRules {
     foreach ($c in ($cosmosNames -split "`n" | Where-Object { $_ })) {
         $c = $c.Trim()
         $existing = az cosmosdb show --name $c --resource-group $ResourceGroup --query "ipRules[].ipAddressOrRange" -o tsv 2>$null
-        $filtered = ($existing -split "`n" | Where-Object { $_ -and $_.Trim() -ne $DeployerIp }) -join ","
-        az cosmosdb update --name $c --resource-group $ResourceGroup --ip-range-filter $filtered --no-wait 2>$null | Out-Null
+        $filtered = ($existing -split "`n" | Where-Object { $_ -and $_.Trim() -ne $DeployerIp -and $_.Trim() -ne "$DeployerIp/32" }) -join ","
+        az cosmosdb update --name $c --resource-group $ResourceGroup --ip-range-filter $filtered 2>$null | Out-Null
     }
     Write-Host "`r    ✓ Cosmos DB    " -ForegroundColor Green
 
@@ -332,7 +332,9 @@ function Remove-DeployerFirewallRules {
     Write-Host "    ⠋ Foundry" -ForegroundColor DarkGray -NoNewline
     $cogNames = az cognitiveservices account list --resource-group $ResourceGroup --query "[].name" -o tsv 2>$null
     foreach ($cog in ($cogNames -split "`n" | Where-Object { $_ })) {
+        # Try both CIDR and plain formats — Azure may store either way depending on how the rule was added
         az cognitiveservices account network-rule remove --resource-group $ResourceGroup --name $cog.Trim() --ip-address "$DeployerIp/32" 2>$null | Out-Null
+        az cognitiveservices account network-rule remove --resource-group $ResourceGroup --name $cog.Trim() --ip-address "$DeployerIp" 2>$null | Out-Null
     }
     Write-Host "`r    ✓ Foundry    " -ForegroundColor Green
 
@@ -342,7 +344,7 @@ function Remove-DeployerFirewallRules {
     foreach ($s in ($searchNames -split "`n" | Where-Object { $_ })) {
         $s = $s.Trim()
         $currentIps = az search service show --name $s --resource-group $ResourceGroup --query "networkRuleSet.ipRules[].value" -o tsv 2>$null
-        $filtered = @($currentIps -split "`n" | Where-Object { $_ -and $_.Trim() -ne $DeployerIp })
+        $filtered = @($currentIps -split "`n" | Where-Object { $_ -and $_.Trim() -ne $DeployerIp -and $_.Trim() -ne "$DeployerIp/32" })
         $ipRules = if ($filtered.Count -gt 0) { (ConvertTo-Json -InputObject @($filtered | ForEach-Object { @{value=$_.Trim()} }) -Compress) } else { "[]" }
         az search service update --name $s --resource-group $ResourceGroup --ip-rules $ipRules 2>$null | Out-Null
     }
