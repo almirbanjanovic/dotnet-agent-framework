@@ -353,3 +353,18 @@ Audited `docs/lab-0.md`, `docs/lab-1.md`, `infra/README.md`, `docs/security.md`,
 **Scope check:** No other network policy references blazor-ui as an egress target (blazor-ui only receives ingress from AGC). The other services correctly use port 8080 (Kestrel default for .NET containers). The README doesn't mention per-service ports, so no README update needed.
 
 **Files changed:** `infra/k8s/manifests/network-policies/blazor-ui.yaml`
+
+### Key Vault Secret Name Audit — PascalCase--Hierarchy Compliance
+
+**Audit scope:** Every file in the repo that references Key Vault secret names — deploy scripts, Terraform, CI/CD workflows, config-sync.
+
+**Violations found (17 total, SCREAMING-KEBAB-CASE):**
+- `infra/deploy.ps1` lines 1003–1007: 5× `CUSTOMER-*-ENTRA-OID` → `Customer--*EntraOid`
+- `infra/deploy.sh` lines 852–856: 5× `CUSTOMER-*-ENTRA-OID` → `Customer--*EntraOid`
+- `.github/workflows/seed-data.yaml` line 84: `COSMOSDB-CRM-ENDPOINT` → `CosmosDb--CrmEndpoint`
+- `.github/workflows/seed-data.yaml` line 85: `COSMOSDB-CRM-DATABASE` → `CosmosDb--CrmDatabase`
+- `.github/workflows/seed-data.yaml` lines 111–115: 5× `CUSTOMER-*-ENTRA-OID` → `Customer--*EntraOid`
+
+**Confirmed correct:** `infra/terraform/main.tf` (40+ secrets), `src/config-sync/Program.cs` (22 entries), `deploy.ps1` CosmosDb reads (lines 951–952), `deploy.sh` CosmosDb reads (lines 796–797).
+
+**Files changed:** `infra/deploy.ps1`, `infra/deploy.sh`, `.github/workflows/seed-data.yaml`
