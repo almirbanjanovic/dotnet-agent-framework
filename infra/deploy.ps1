@@ -948,8 +948,8 @@ Write-Phase -Number 6 -Title "Seed CRM data"
 Write-Step "Resolving infrastructure endpoints from Key Vault"
 $KvName = az keyvault list --resource-group $ResourceGroup --query "[0].name" -o tsv
 if (-not $KvName) { throw "No Key Vault found in $ResourceGroup" }
-$CosmosEndpoint = az keyvault secret show --vault-name $KvName --name "COSMOSDB-CRM-ENDPOINT" --query value -o tsv
-$CosmosDb       = az keyvault secret show --vault-name $KvName --name "COSMOSDB-CRM-DATABASE" --query value -o tsv
+$CosmosEndpoint = az keyvault secret show --vault-name $KvName --name "CosmosDb--CrmEndpoint" --query value -o tsv
+$CosmosDb       = az keyvault secret show --vault-name $KvName --name "CosmosDb--CrmDatabase" --query value -o tsv
 $CosmosAccountName = ($CosmosEndpoint -replace 'https://', '' -replace '\.documents\.azure\.com.*', '')
 Write-Done "Cosmos DB: $CosmosEndpoint ($CosmosDb)"
 
@@ -1000,11 +1000,11 @@ Write-Phase -Number 7 -Title "Link Entra users to Customers"
 Write-Step "Reading Entra object IDs from Key Vault"
 
 $CustomerMapping = @(
-    @{ CustomerId = "101"; SecretName = "CUSTOMER-EMMA-ENTRA-OID";  Name = "Emma Wilson" }
-    @{ CustomerId = "102"; SecretName = "CUSTOMER-JAMES-ENTRA-OID"; Name = "James Chen" }
-    @{ CustomerId = "103"; SecretName = "CUSTOMER-SARAH-ENTRA-OID"; Name = "Sarah Miller" }
-    @{ CustomerId = "104"; SecretName = "CUSTOMER-DAVID-ENTRA-OID"; Name = "David Park" }
-    @{ CustomerId = "105"; SecretName = "CUSTOMER-LISA-ENTRA-OID";  Name = "Lisa Torres" }
+    @{ CustomerId = "101"; SecretName = "Customer--EmmaEntraOid";  Name = "Emma Wilson" }
+    @{ CustomerId = "102"; SecretName = "Customer--JamesEntraOid"; Name = "James Chen" }
+    @{ CustomerId = "103"; SecretName = "Customer--SarahEntraOid"; Name = "Sarah Miller" }
+    @{ CustomerId = "104"; SecretName = "Customer--DavidEntraOid"; Name = "David Park" }
+    @{ CustomerId = "105"; SecretName = "Customer--LisaEntraOid";  Name = "Lisa Torres" }
 )
 
 $EntraPairs = @()

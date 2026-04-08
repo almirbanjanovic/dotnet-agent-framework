@@ -81,8 +81,8 @@ jobs:
         id: cosmos
         run: |
           KV="${{ steps.keyvault.outputs.name }}"
-          echo "endpoint=$(az keyvault secret show --vault-name "$KV" --name COSMOSDB-CRM-ENDPOINT --query value -o tsv)" >> "$GITHUB_OUTPUT"
-          echo "database=$(az keyvault secret show --vault-name "$KV" --name COSMOSDB-CRM-DATABASE --query value -o tsv)" >> "$GITHUB_OUTPUT"
+          echo "endpoint=$(az keyvault secret show --vault-name "$KV" --name "CosmosDb--CrmEndpoint" --query value -o tsv)" >> "$GITHUB_OUTPUT"
+          echo "database=$(az keyvault secret show --vault-name "$KV" --name "CosmosDb--CrmDatabase" --query value -o tsv)" >> "$GITHUB_OUTPUT"
 
       - name: Grant OIDC SP Cosmos DB data-plane access
         run: |
@@ -108,11 +108,11 @@ jobs:
           KV="${{ steps.keyvault.outputs.name }}"
 
           declare -A CUSTOMERS=(
-            ["101"]="CUSTOMER-EMMA-ENTRA-OID"
-            ["102"]="CUSTOMER-JAMES-ENTRA-OID"
-            ["103"]="CUSTOMER-SARAH-ENTRA-OID"
-            ["104"]="CUSTOMER-DAVID-ENTRA-OID"
-            ["105"]="CUSTOMER-LISA-ENTRA-OID"
+            ["101"]="Customer--EmmaEntraOid"
+            ["102"]="Customer--JamesEntraOid"
+            ["103"]="Customer--SarahEntraOid"
+            ["104"]="Customer--DavidEntraOid"
+            ["105"]="Customer--LisaEntraOid"
           )
 
           ENTRA_PAIRS=""

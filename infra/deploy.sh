@@ -793,8 +793,8 @@ phase 6 "Seed CRM data"
 step "Resolving infrastructure endpoints from Key Vault"
 KV_NAME=$(az keyvault list --resource-group "$RESOURCE_GROUP" --query "[0].name" -o tsv)
 if [[ -z "$KV_NAME" ]]; then echo "No Key Vault found in $RESOURCE_GROUP"; exit 1; fi
-COSMOS_ENDPOINT=$(az keyvault secret show --vault-name "$KV_NAME" --name "COSMOSDB-CRM-ENDPOINT" --query value -o tsv)
-COSMOS_DB=$(az keyvault secret show --vault-name "$KV_NAME" --name "COSMOSDB-CRM-DATABASE" --query value -o tsv)
+COSMOS_ENDPOINT=$(az keyvault secret show --vault-name "$KV_NAME" --name "CosmosDb--CrmEndpoint" --query value -o tsv)
+COSMOS_DB=$(az keyvault secret show --vault-name "$KV_NAME" --name "CosmosDb--CrmDatabase" --query value -o tsv)
 COSMOS_ACCOUNT_NAME=$(echo "$COSMOS_ENDPOINT" | sed 's|https://||;s|\.documents\.azure\.com.*||')
 done_ "Cosmos DB: $COSMOS_ENDPOINT ($COSMOS_DB)"
 
@@ -849,11 +849,11 @@ info_ ""
 step "Reading Entra object IDs from Key Vault"
 
 declare -A CUSTOMER_MAPPING=(
-    ["101"]="CUSTOMER-EMMA-ENTRA-OID"
-    ["102"]="CUSTOMER-JAMES-ENTRA-OID"
-    ["103"]="CUSTOMER-SARAH-ENTRA-OID"
-    ["104"]="CUSTOMER-DAVID-ENTRA-OID"
-    ["105"]="CUSTOMER-LISA-ENTRA-OID"
+    ["101"]="Customer--EmmaEntraOid"
+    ["102"]="Customer--JamesEntraOid"
+    ["103"]="Customer--SarahEntraOid"
+    ["104"]="Customer--DavidEntraOid"
+    ["105"]="Customer--LisaEntraOid"
 )
 
 ENTRA_PAIRS=""
