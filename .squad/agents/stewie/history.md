@@ -93,3 +93,18 @@
 - **"8 managed identities" is technically correct** (5 managed + 3 agent = 8) but the table doesn't mention id-kubelet.
 - **SA mismatch noted in history.md is resolved** — crm-api Helm chart now correctly uses sa-crm-api.
 - **history.md "7-phase deployment" is stale** — actual implementation has 8 phases (0-7).
+
+### 2025-07-25 — Foundry-Only Deployment Architecture Analysis
+
+**Context:** Almir requested analysis of a minimal Azure deployment — Foundry only, everything else local. Full analysis produced in `docs/foundry-only-deployment.md`.
+
+**Key findings:**
+- **Only Foundry has no local alternative.** Every other Azure service (Cosmos DB, Storage, Key Vault, AKS, Entra ID) has a viable local emulator or can be eliminated.
+- **AI Search is the critical decision point.** No local emulator exists. Three options analyzed: (A) deploy AI Search alongside Foundry (~$7.50/day Standard, $2.50/day Basic), (B) local vector search via embeddings + in-memory index, (C) local file search (BM25/keyword). Option A recommended for workshop fidelity.
+- **"Foundry + AI Search" hybrid is the sweet spot.** 3-4 Azure resources vs 14+, 5-10 min deploy vs 45-60 min, ~$75-250/month vs $1,500-3,000/month. Full search fidelity preserved.
+- **Auth model changes significantly.** `DefaultAzureCredential` → API keys for Foundry, connection strings for emulators. Every service client needs dual-mode auth (config-driven, not compile-time).
+- **`AIProjectClient` doesn't support API key auth.** Must use `AzureOpenAIClient` directly for local dev. This changes the agent construction pattern for all agents.
+- **Cosmos DB emulator limitation:** MultiHash v2 partition keys (used by `agent-state` container) may not be supported. Fallback to single partition key `/id` needed.
+- **config-sync is eliminated** in local mode — config provided directly via `appsettings.Local.json` or env vars.
+- **docker-compose.yml needed** with Cosmos emulator, Azurite, all 8 app containers, seed-data init container.
+- **Migration path is clean:** Local → Foundry-only → Foundry+Search → Full Azure. Only configuration changes between tiers, no code changes (if dual-mode auth is implemented correctly).

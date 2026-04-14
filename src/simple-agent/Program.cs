@@ -3,11 +3,7 @@ using Azure.Identity;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.Configuration;
 
-// Configuration priority (last wins):
-// 1. appsettings.json      - local dev settings (populated by config-sync from Key Vault)
-// 2. Environment variables  - used in AKS/Helm deployments (Section__Key format)
 var configuration = new ConfigurationBuilder()
-    .AddJsonFile("appsettings.json", optional: true)
     .AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? "Development"}.json", optional: true)
     .AddEnvironmentVariables()
     .Build();
