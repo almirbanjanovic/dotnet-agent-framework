@@ -10,17 +10,11 @@ var configuration = new ConfigurationBuilder()
 
 var endpoint = configuration["Foundry:Endpoint"] ?? throw new InvalidOperationException("Foundry:Endpoint is not set.");
 var deploymentName = configuration["Foundry:DeploymentName"] ?? throw new InvalidOperationException("Foundry:DeploymentName is not set.");
-var tenantId = configuration["AzureAd:TenantId"];
 
 Console.WriteLine($"Using AI Foundry project endpoint: {endpoint}");
 Console.WriteLine($"Model deployment: {deploymentName}");
-Console.WriteLine($"Tenant ID: {(string.IsNullOrEmpty(tenantId) ? "(not set — using default credential)" : tenantId)}");
 
-// Pin to the project tenant when AzureAd:TenantId is available (populated by
-// config-sync from Key Vault secret AzureAd--TenantId).
-var credential = string.IsNullOrEmpty(tenantId)
-    ? new DefaultAzureCredential()
-    : new DefaultAzureCredential(new DefaultAzureCredentialOptions { TenantId = tenantId });
+var credential = new DefaultAzureCredential();
 
 AIAgent agent = new AIProjectClient(new Uri(endpoint), credential)
     .AsAIAgent(
