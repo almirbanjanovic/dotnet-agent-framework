@@ -1,7 +1,6 @@
 ﻿using Azure.AI.Projects;
 using Azure.Identity;
 using Microsoft.Agents.AI;
-using Microsoft.Agents.AI.Foundry;
 using Microsoft.Extensions.Configuration;
 
 // Configuration priority (last wins):

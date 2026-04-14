@@ -388,3 +388,32 @@ Audited `docs/lab-0.md`, `docs/lab-1.md`, `infra/README.md`, `docs/security.md`,
 - Made Add function CIDR-aware too (prevents duplicates if Azure stored previous IP with CIDR)
 
 **Files changed:** `infra/deploy.ps1`, `infra/deploy.sh`
+
+### 2025-07-26 — Foundry Hosted Agent Private Networking Research
+
+**Question:** Can we deploy a hosted agent (containerized .NET code) to Foundry Agent Service with BYO VNet injection for private networking?
+
+**Verdict: NO — Hosted agents do NOT support VNet injection or private networking today.**
+
+**Evidence from Microsoft docs (multiple sources, all consistent):**
+1. Foundry network isolation limitations table: "Hosted Agents | Not supported | Hosted Agents do not have virtual network support yet." (configure-private-link#limitations-and-considerations)
+2. Foundry Agent Service overview: "Private networking is available for prompt agents and workflow agents. Hosted agents don't currently support private networking during preview." (agents/overview#enterprise-capabilities)
+3. Hosted agents concept page: "You can't create hosted agents by using the standard setup for network isolation within network-isolated Foundry resources." (agents/concepts/hosted-agents#limits-pricing-and-availability-preview)
+4. Capability host for hosted agents requires `enablePublicHostingEnvironment: true` — the API literally requires public hosting.
+
+**What the `Microsoft.App/environments` subnet delegation is actually for:**
+- It's for the Foundry platform's internal "Agent client" runtime (prompt agents / standard agents), NOT for hosted agent containers.
+- The "container injection" language in docs refers to the platform injecting its agent runtime into your VNet subnet, not your hosted agent containers.
+- Hosted agents run on Microsoft-managed Container Apps infrastructure that is NOT injected into your VNet.
+
+**What DOES work with VNet today (prompt agents):**
+- Prompt agents with Standard Setup + Private Networking support full VNet injection
+- MCP tools work through VNet subnet (confirmed in tool support table: "MCP Tool (Private MCP) | Supported | Through your VNet subnet")
+- Azure AI Search, Code Interpreter, Function Calling all work behind VNet
+- Template 15 (fully private) and Template 19 (hybrid private resources) both support this
+
+**Alternatives for Product Agent deployment:**
+1. Prompt Agent + MCP tools on VNet (Template 19 pattern)
+2. Self-host in AKS (full network control, no Foundry hosting benefits)
+3. Wait for GA (no timeline given, billing deferred to April 2026)
+4. Hybrid: Prompt agent + private MCP servers in Container Apps on VNet
