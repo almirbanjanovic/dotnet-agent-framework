@@ -1,0 +1,195 @@
+@page "/"
+@page "/chat"
+@implements IDisposable
+@inject BffApiClient BffApiClient
+@inject AuthStateProvider AuthStateProvider
+@inject IJSRuntime JsRuntime
+
+<PageTitle>Chat</PageTitle>
+
+<MudStack Spacing="3">
+    <MudPaper Class="pa-4">
+        <MudText Typo="Typo.h6">Customer Context</MudText>
+        @if (AuthStateProvider.SelectedCustomer is not null)
+        {
+            <MudText Typo="Typo.subtitle2">
+                @AuthStateProvider.SelectedCustomer.Name (@AuthStateProvider.SelectedCustomer.Id)
+            </MudText>
+        }
+        else
+        {
+            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Select a customer to begin.</MudText>
+        }
+    </MudPaper>
+
+    <MudPaper Class="pa-4 chat-panel">
+        <div id="@ScrollContainerId" class="chat-messages">
+            @if (_messages.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Start the conversation when you're ready.</MudText>
+            }
+            else
+            {
+                @foreach (var message in _messages)
+                {
+                    <MudPaper Class="@GetMessageClass(message)" Elevation="0">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            @GetRoleLabel(message.Role) · @message.Timestamp.ToLocalTime().ToString("g")
+                        </MudText>
+                        <div class="markdown-body">@RenderMarkdown(message.Content)</div>
+                    </MudPaper>
+                }
+            }
+        </div>
+    </MudPaper>
+
+    <MudPaper Class="pa-4">
+        <MudTextField @bind-Value="_currentMessage"
+                      Label="Message"
+                      Lines="3"
+                      Disabled="@_isSending"
+                      Placeholder="Ask about your orders, returns, or gear recommendations..." />
+        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Spacing="2" Style="margin-top: 1rem;">
+            @if (_isSending)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Info" Style="flex: 1;" />
+            }
+            else
+            {
+                <MudSpacer />
+            }
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       OnClick="SendAsync"
+                       Disabled="@IsSendDisabled">
+                Send
+            </MudButton>
+        </MudStack>
+        @if (!string.IsNullOrWhiteSpace(_errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Style="margin-top: 1rem;">@_errorMessage</MudAlert>
+        }
+    </MudPaper>
+</MudStack>
+
+@code {
+    private const string ScrollContainerId = "chat-scroll-container";
+    private static readonly MarkdownPipeline MarkdownPipeline =
+        new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
+    private static readonly HtmlSanitizer Sanitizer = new();
+    private static readonly Regex ImageRegex = new("!\\[(?<alt>[^\\]]*)\\]\\((?<url>[^)]+)\\)", RegexOptions.Compiled);
+
+    private readonly List<ChatMessage> _messages = new();
+    private string? _conversationId;
+    private string _currentMessage = string.Empty;
+    private string? _errorMessage;
+    private bool _isSending;
+    private bool _scrollPending;
+
+    private bool IsSendDisabled =>
+        _isSending ||
+        string.IsNullOrWhiteSpace(_currentMessage) ||
+        AuthStateProvider.SelectedCustomer is null;
+
+    protected override void OnInitialized()
+    {
+        AuthStateProvider.CustomerChanged += HandleCustomerChanged;
+    }
+
+    private async Task SendAsync()
+    {
+        if (IsSendDisabled)
+        {
+            return;
+        }
+
+        _errorMessage = null;
+        var message = _currentMessage.Trim();
+        _currentMessage = string.Empty;
+
+        _messages.Add(new ChatMessage("user", message, DateTimeOffset.UtcNow));
+        _scrollPending = true;
+        _isSending = true;
+
+        try
+        {
+            var response = await BffApiClient.SendChatAsync(new ChatRequest(message, _conversationId));
+            _conversationId = response.ConversationId;
+            _messages.Add(new ChatMessage("assistant", response.Response, DateTimeOffset.UtcNow));
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Unable to send message: {ex.Message}";
+        }
+        finally
+        {
+            _isSending = false;
+            _scrollPending = true;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_scrollPending)
+        {
+            _scrollPending = false;
+            await JsRuntime.InvokeVoidAsync("scrollChatToBottom", ScrollContainerId);
+        }
+    }
+
+    private static MarkupString RenderMarkdown(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return new MarkupString(string.Empty);
+        }
+
+        var rewritten = RewriteImageUrls(content);
+        var html = Markdig.Markdown.ToHtml(rewritten, MarkdownPipeline);
+        var sanitized = Sanitizer.Sanitize(html);
+        return new MarkupString(sanitized);
+    }
+
+    private static string RewriteImageUrls(string markdown)
+    {
+        return ImageRegex.Replace(markdown, match =>
+        {
+            var alt = match.Groups["alt"].Value;
+            var url = match.Groups["url"].Value.Trim();
+
+            if (Uri.TryCreate(url, UriKind.Absolute, out _) || url.StartsWith("/"))
+            {
+                return match.Value;
+            }
+
+            var fileName = url.Split('?')[0];
+            fileName = fileName.Replace("\\", "/");
+            var lastSegment = fileName.Split('/').LastOrDefault() ?? fileName;
+
+            return $"![{alt}](/api/v1/images/{lastSegment})";
+        });
+    }
+
+    private static string GetRoleLabel(string role) =>
+        string.Equals(role, "user", StringComparison.OrdinalIgnoreCase) ? "You" : "Assistant";
+
+    private static string GetMessageClass(ChatMessage message) =>
+        string.Equals(message.Role, "user", StringComparison.OrdinalIgnoreCase)
+            ? "chat-message user"
+            : "chat-message assistant";
+
+    private void HandleCustomerChanged()
+    {
+        _conversationId = null;
+        _messages.Clear();
+        _errorMessage = null;
+        _currentMessage = string.Empty;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        AuthStateProvider.CustomerChanged -= HandleCustomerChanged;
+    }
+
+}

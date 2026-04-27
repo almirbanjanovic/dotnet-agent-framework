@@ -16,7 +16,7 @@ resource "azurerm_cognitive_account" "this" {
   location              = var.location
   resource_group_name   = var.resource_group_name
   kind                  = var.account_kind
-  local_auth_enabled    = false
+  local_auth_enabled    = var.local_auth_enabled
   sku_name              = var.sku_name
   custom_subdomain_name = local.subdomain
   tags                  = var.tags

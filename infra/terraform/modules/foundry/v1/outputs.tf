@@ -22,3 +22,9 @@ output "embedding_deployment_name" {
   description = "Name of the deployed embedding model"
   value       = var.create_embedding_deployment ? azurerm_cognitive_deployment.embedding[0].name : null
 }
+
+output "primary_access_key" {
+  description = "Primary access key for API key authentication (only functional when local_auth_enabled = true)"
+  value       = azurerm_cognitive_account.this.primary_access_key
+  sensitive   = true
+}

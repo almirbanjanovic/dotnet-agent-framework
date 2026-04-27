@@ -82,3 +82,7 @@ backend.hcl
 
 # Terraform init artifacts (stale working dirs)
 infra/terraform/infra/
+
+# Local dev Terraform state (explicit)
+infra/terraform/local-dev/.terraform/
+infra/terraform/local-dev/terraform.tfstate*

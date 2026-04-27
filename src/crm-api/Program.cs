@@ -2,10 +2,14 @@ using Azure.Identity;
 using Contoso.CrmApi.Endpoints;
 using Contoso.CrmApi.Middleware;
 using Contoso.CrmApi.Services;
+using Contoso.ServiceDefaults;
 using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ── Aspire Service Defaults (OpenTelemetry, Resilience, Service Discovery) ─
+builder.AddServiceDefaults();
 
 // ── Logging ────────────────────────────────────────────────────────────────
 builder.Logging.ClearProviders();
@@ -22,42 +26,59 @@ var credential = new DefaultAzureCredential(new DefaultAzureCredentialOptions
     TenantId = tenantId
 });
 
-// ── Cosmos DB ──────────────────────────────────────────────────────────────
-var cosmosEndpoint = builder.Configuration["CosmosDb:Endpoint"]
-    ?? throw new InvalidOperationException("CosmosDb:Endpoint configuration is required.");
-
-builder.Services.AddSingleton(sp =>
+// ── Data Mode (InMemory vs Cosmos) ─────────────────────────────────────────
+var dataMode = builder.Configuration["DataMode"];
+if (string.Equals(dataMode, "InMemory", StringComparison.OrdinalIgnoreCase))
 {
-    var clientOptions = new CosmosClientOptions
+    builder.Services.AddSingleton<ICosmosService, InMemoryCrmDataService>();
+}
+else
+{
+    // ── Cosmos DB ──────────────────────────────────────────────────────────
+    var cosmosEndpoint = builder.Configuration["CosmosDb:Endpoint"]
+        ?? throw new InvalidOperationException("CosmosDb:Endpoint configuration is required.");
+
+    builder.Services.AddSingleton(sp =>
     {
-        SerializerOptions = new CosmosSerializationOptions
+        var clientOptions = new CosmosClientOptions
         {
-            PropertyNamingPolicy = CosmosPropertyNamingPolicy.CamelCase
-        },
-        ConnectionMode = ConnectionMode.Direct,
-        ApplicationName = "Contoso.CrmApi"
-    };
+            SerializerOptions = new CosmosSerializationOptions
+            {
+                PropertyNamingPolicy = CosmosPropertyNamingPolicy.CamelCase
+            },
+            ConnectionMode = ConnectionMode.Direct,
+            ApplicationName = "Contoso.CrmApi"
+        };
 
-    return new CosmosClient(cosmosEndpoint, credential, clientOptions);
-});
+        return new CosmosClient(cosmosEndpoint, credential, clientOptions);
+    });
 
-builder.Services.AddScoped<ICosmosService, CosmosService>();
+    builder.Services.AddScoped<ICosmosService, CosmosService>();
+}
 
 // ── Error Handling ─────────────────────────────────────────────────────────
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
 // ── Health Checks ──────────────────────────────────────────────────────────
-builder.Services.AddHealthChecks()
-    .Add(new HealthCheckRegistration(
-        "cosmos-db",
-        sp =>
-        {
-            var cosmos = sp.GetRequiredService<ICosmosService>();
-            return new CosmosHealthCheck(cosmos);
-        },
-        failureStatus: HealthStatus.Unhealthy,
-        tags: ["ready"]));
+if (string.Equals(dataMode, "InMemory", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddHealthChecks()
+        .AddCheck("in-memory-crm", () => HealthCheckResult.Healthy("In-memory CRM data service."), tags: ["ready"]);
+}
+else
+{
+    builder.Services.AddHealthChecks()
+        .Add(new HealthCheckRegistration(
+            "cosmos-db",
+            sp =>
+            {
+                var cosmos = sp.GetRequiredService<ICosmosService>();
+                return new CosmosHealthCheck(cosmos);
+            },
+            failureStatus: HealthStatus.Unhealthy,
+            tags: ["ready"]));
+}
 
 var app = builder.Build();
 

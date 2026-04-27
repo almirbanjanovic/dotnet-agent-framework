@@ -21,3 +21,34 @@
 ### 2026-03-19 — Cross-Team Finding: Full Codebase Analysis Complete
 
 **Team Update (from all 5 agents):** Architecture is fully specced and infrastructure is provisioned, but **zero application code exists yet.** This is the intended state at end of Phase 1 (infrastructure/tooling complete). All 5 agents confirm: tests must land with code (never after). CrmSeeder should be tested immediately (guards critical data path). When components are built, test priority: CRM API → BFF API → Orchestrator Agent. No fundamental re-design needed. All decisions merged into `.squad/decisions.md` with full consensus.
+
+### 2026-03-24 — Task C2: E2E Verification Checklist Created
+
+**Deliverable:** `docs/e2e-verification.md` — comprehensive end-to-end scenario verification document.
+
+**What was built:**
+- Mapped all 8 business scenarios (Emma Wilson → David Lee) to executable test steps
+- Created structured verification format for each scenario: prerequisites, routing verification, MCP tool validation, expected data checks, pass/fail criteria
+- Added smoke test section (7 checks before scenario execution): service health, API responsiveness, MCP connectivity, auth UI
+- Included troubleshooting guide for common failures
+- Added data reference appendix with customer IDs, order mappings, service ports
+- Provided execution log template and summary results sheet for test runs
+
+**Key features:**
+- Each scenario includes: customer ID, query text, expected agent route, tool calls, data verification, pass/fail criteria
+- Verification steps are pragmatic (curl commands, log inspection, UI validation) — not theoretical
+- Acknowledges that seed data will need verification (orders.csv, customers.csv format and content)
+- Includes advanced multi-intent scenario for future Orchestrator capability
+- Formatted for human execution (checkbox-based, time tracking, manual result recording)
+
+**Test scenario references verified against:**
+- Scenario 1: Emma Wilson (101) → "Where's my order?" → CRM Agent → Order 1001, TRK-29481
+- Scenario 2: James Chen (102) → return request → CRM + Knowledge MCP (policy/sizing)
+- Scenario 3: Sarah Johnson (103) → tent deals → Product Agent + promotions
+- Scenario 4: Michael Brown (104) → damaged jacket → CRM + warranty policy + ticket creation
+- Scenario 5: Lisa Anderson (105) → backpack recommendation → Product Agent + backpack fitting guide
+- Scenario 6: Tom Garcia (106) → tent care → CRM + gear care knowledge base
+- Scenario 7: Rachel Kim (107) → order cancellation → CRM + ticket creation
+- Scenario 8: David Lee (108) → refund status → CRM + tickets + return policy
+
+**Ready for:** Developers to build CRM API, MCP servers, agents. Testers to execute and validate scenarios as code lands.

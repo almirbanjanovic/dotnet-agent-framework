@@ -199,6 +199,18 @@ src/crm-api/
 
 1. **config-sync rewrite** — Replaced flat single-file output with per-component manifest. Each of the 8 components (crm-api, crm-mcp, knowledge-mcp, crm-agent, product-agent, orchestrator-agent, bff-api, blazor-ui) gets its own `appsettings.json` with only its required secrets. KV secrets use new `PascalCase--Hierarchy` naming (e.g., `CosmosDb--CrmEndpoint`). The manifest maps KV secrets to local config keys with override support (e.g., `CosmosDb--CrmEndpoint` → `CosmosDb:Endpoint` in crm-api, while `CosmosDb--AgentsEndpoint` → `CosmosDb:Endpoint` in bff-api). Nested JSON output via `SetNestedValue` helper.
 
+### 2026-04-22 — BFF API (Component 7) Implemented
+
+**What:** Built the BFF API gateway with DataMode switching (InMemory vs Cosmos/Blob), chat orchestration to the Orchestrator Agent, CRM proxy endpoints, image proxy, conversation persistence, CORS, and auth handling (header bypass for local dev, JWT validation in prod). Added health checks for readiness, wired the project into AppHost and the solution.
+
+**Key files:** `src/bff-api/Program.cs`, `src/bff-api/Services/*`, `src/bff-api/Models/*`, `src/bff-api/Contoso.BffApi.csproj`.
+
+**Verification:** `dotnet build dotnet-agent-framework.sln`
+
+### 2026-04-20 — In-Memory CRM Repository Pattern
+
+**What:** Added `InMemoryCrmDataService` and `CsvDataLoader` to load CRM seed data from CSV into `ConcurrentDictionary` stores, with a `DataMode` DI switch in `crm-api` to run without Cosmos DB. Health checks now report healthy in InMemory mode while keeping the Cosmos path unchanged for production.
+
 2. **CRM API config fix** — Renamed `appsettings.template.json` → `appsettings.Development.json` (checked into git with safe defaults). Removed redundant `.AddJsonFile("appsettings.json")` and `.AddEnvironmentVariables()` from `Program.cs` — `WebApplication.CreateBuilder()` already loads these automatically. Config keys (`CosmosDb:Endpoint`, `CosmosDb:DatabaseName`, `AzureAd:TenantId`) were already hierarchical — no code changes needed.
 
 3. **simple-agent + seed-data migration** — Updated config keys: `AZURE_OPENAI_ENDPOINT` → `AzureOpenAi:Endpoint`, `AZURE_OPENAI_DEPLOYMENT_NAME` → `AzureOpenAi:DeploymentName`, `COSMOSDB_CRM_ENDPOINT` → `CosmosDb:Endpoint`, `COSMOSDB_CRM_DATABASE` → `CosmosDb:DatabaseName`. Removed `AzureAd__TenantId` fallback (redundant with proper `:` binding). Updated csproj files to reference own `appsettings.json` instead of shared `../appsettings.json`. Updated deploy scripts (`deploy.ps1`, `deploy.sh`) env vars to match: `CosmosDb__Endpoint`, `CosmosDb__DatabaseName`.
@@ -239,3 +251,100 @@ src/crm-api/
 8. **Config naming standard** — ✅ Verified. Terraform uses PascalCase--Hierarchy (30 secrets). config-sync maps `--` → `:`. CRM API reads `:` keys. Convention is consistent end-to-end.
 9. **Build status** — ❌ README says only `crm-api → ✅ BUILT`. Correct — only crm-api has real code. But 7 other components (crm-mcp, knowledge-mcp, crm-agent, product-agent, orchestrator-agent, bff-api, blazor-ui) are listed without status markers, which is accurate (they're not built). However, README lists them in repo structure as if they exist as code — they're just README placeholders.
 10. **Package references** — ✅ Partial. crm-api has Azure.Identity + Microsoft.Azure.Cosmos (matches). simple-agent has Microsoft.Agents.AI, Azure.AI.OpenAI (matches). ⚠️ ModelContextProtocol SDK, MudBlazor, Markdig, SignalR.Client, bUnit, FluentAssertions, NSubstitute — none referenced yet (no code for those components).
+
+### 2026-04-22 — A4: Dual-Auth Support in simple-agent (API Key + DefaultAzureCredential)
+
+**What:** Added dual authentication support to `src/simple-agent/Program.cs`. When `Foundry:ApiKey` is present in config, the agent uses `AzureOpenAIClient` with `AzureKeyCredential` (local dev). When absent, it falls back to the existing `AIProjectClient` + `DefaultAzureCredential` path (production).
+
+**Code changes:**
+- `Program.cs` — Reads `Foundry:ApiKey` from configuration. Branches into API key path (`AzureOpenAIClient` → `GetChatClient` → `AsAIAgent`) or credential path (`AIProjectClient` → `AsAIAgent`). Credential setup (`DefaultAzureCredential` + tenant pinning) only executes in the production branch. Console log distinguishes auth mode.
+- Added `using Azure;`, `using Azure.AI.OpenAI;`, `using OpenAI.Chat;` imports.
+
+**NuGet changes (simple-agent.csproj):**
+- Added `Azure.AI.OpenAI` 2.1.0 (provides `AzureOpenAIClient`)
+- Added `Microsoft.Agents.AI.OpenAI` 1.2.0 (provides `ChatClient.AsAIAgent()` extension in `OpenAI.Chat` namespace)
+- Updated `Microsoft.Agents.AI` 1.0.0 → **1.2.0** (required by AI.OpenAI 1.2.0)
+- Updated `Microsoft.Agents.AI.Foundry` 1.0.0 → **1.2.0** (aligned with AI package family)
+- Updated `Azure.Identity` 1.20.0 → **1.21.0** (required by Foundry 1.2.0)
+
+**Key discovery:** `ChatClient.AsAIAgent()` lives in `OpenAI.Chat.OpenAIChatClientExtensions` (from `Microsoft.Agents.AI.OpenAI` package) and requires `using OpenAI.Chat;` to resolve. Without that using, the compiler only finds the `AIProjectClient` overload from `Microsoft.Agents.AI.Foundry` and gives a misleading CS7036 error. The `ChatClient` overload signature is `AsAIAgent(ChatClient, string instructions, string name, string description, ...)` — no `model` parameter (model is baked into the `ChatClient` instance).
+
+**Build result:** `dotnet build dotnet-agent-framework.sln` — 0 errors, 0 warnings.
+
+### 2026-04-22 — A6: Aspire AppHost Project
+
+**What:** Created .NET Aspire AppHost and ServiceDefaults projects for local development orchestration.
+
+**Projects created:**
+- `src/AppHost/Contoso.AppHost.csproj` — Aspire orchestrator (`Aspire.Hosting.AppHost` 13.2.3, `Aspire.AppHost.Sdk` 9.0.0). Registers `crm-api` with HTTP endpoint on port 5001. simple-agent intentionally excluded (console app, not web).
+- `src/ServiceDefaults/Contoso.ServiceDefaults.csproj` — Shared OpenTelemetry, resilience, and service discovery defaults (`Microsoft.Extensions.Http.Resilience`, `Microsoft.Extensions.ServiceDiscovery`, OpenTelemetry stack).
+
+**Changes to existing code:**
+- `src/crm-api/Program.cs` — Added `using Contoso.ServiceDefaults;` and `builder.AddServiceDefaults();` early in pipeline (OpenTelemetry tracing+metrics, resilience handlers, service discovery).
+- `src/crm-api/Contoso.CrmApi.csproj` — Added project reference to ServiceDefaults.
+- `dotnet-agent-framework.sln` — Both AppHost and ServiceDefaults added to solution.
+
+**Key learnings:**
+- Aspire workload (`dotnet workload install aspire`) was required — templates weren't pre-installed. Workload installed as SDK 8.2.2.
+- `Aspire.AppHost.Sdk` v9.0.0 must be declared in the csproj (`<Sdk Name="Aspire.AppHost.Sdk" Version="9.0.0" />`) or build fails with ASPIRE007.
+- NuGet package `Aspire.Hosting.AppHost` 13.2.3 is the latest stable and works with .NET 9 + workload 8.2.2.
+- `IsAspireHost=true` property required in AppHost csproj.
+- ServiceDefaults is a local project (not a NuGet package) providing `AddServiceDefaults()` extension method.
+
+**Build result:** `dotnet build dotnet-agent-framework.sln` — 6 projects, 0 errors, 0 warnings.
+
+### 2026-04-23 — B1: CRM MCP Server (Component 2)
+
+**What:** Implemented the CRM MCP Server as a .NET 9 MCP HTTP service. Added `src/crm-mcp` with ModelContextProtocol.AspNetCore, Http resilience, and ServiceDefaults integration; created typed `CrmApiClient`, duplicated CRM models, and registered 11 MCP tools (customers, orders, products, promotions, support tickets) with JSON responses. Added `/health` and `/ready` checks, configured Kestrel on port 5002, and wired `crm-mcp` into the Aspire AppHost and solution.
+
+**Build result:** `dotnet build dotnet-agent-framework.sln` — 0 errors, 0 warnings.
+
+### 2026-04-24 — B2: Knowledge MCP Server (Component 3)
+
+**What:** Built `src/knowledge-mcp` as a .NET 9 MCP server exposing `search_knowledge_base`. Added `ISearchService` with Azure AI Search and in-memory (Foundry embeddings) implementations, lazy embedding cache of SharePoint TXT docs, and formatted tool responses. Configured Kestrel on port 5003, added health checks, registered the service in AppHost, and added it to the solution.
+
+**Build result:** `dotnet build dotnet-agent-framework.sln` — 0 errors, 0 warnings.
+
+### 2026-04-24 — B3: CRM Agent (Component 4)
+
+**What:** Implemented crm-agent .NET 9 minimal API with /api/v1/chat, /health, /ready, dual auth (API key vs DefaultAzureCredential), MCP HTTP client connections to crm-mcp/knowledge-mcp, system prompt loading, tool-call extraction, and readiness checks for MCP + Foundry. Added ServiceDefaults reference, AppHost registration, solution entry, and updated crm-agent README/appsettings.
+
+**Build result:** dotnet build dotnet-agent-framework.sln — 0 errors, 0 warnings.
+
+### 2026-04-24 — B4: Product Agent (Component 5)
+
+**What:** Implemented product-agent with the same architecture as crm-agent (dual-auth Foundry, MCP client connections to crm-mcp + knowledge-mcp, /api/v1/chat, health checks, tool-call extraction). Added product system prompt, new csproj with ServiceDefaults reference, wired product-agent into AppHost and solution.
+
+**Build result:** dotnet build dotnet-agent-framework.sln — 0 errors, 0 warnings.
+
+### 2026-04-24 — B5: Orchestrator Agent (Component 6)
+
+**What:** Implemented orchestrator-agent .NET 9 minimal API with /api/v1/chat, LLM intent classification, and routing to CRM/Product agents via resilient typed HTTP clients. Added IntentClassifier/AgentRouter services, system prompt, dual-auth Foundry support, health checks for CRM/Product/Foundry, ServiceDefaults reference, AppHost registration, and solution entry.
+
+**Build result:** dotnet build dotnet-agent-framework.sln — 0 errors, 0 warnings.
+
+
+### 2026-03-24 — Solution File Organization (C3)
+
+**What:** Reorganized the solution file (dotnet-agent-framework.sln) into logical solution folders for improved navigation and IDE experience.
+
+**Before:** Flat project list with scattered folder containers (some nested, some not).
+
+**After:** Clean hierarchical structure with 6 solution folders:
+- **Tools** — config-sync, seed-data, simple-agent
+- **Domain APIs** — crm-api
+- **MCP Servers** — crm-mcp, knowledge-mcp
+- **Agents** — crm-agent, product-agent, orchestrator-agent
+- **Frontend** — bff-api, blazor-ui
+- **Infrastructure** — AppHost, ServiceDefaults
+
+**Changes made:**
+1. Removed duplicate folder containers (src, crm-api, crm-mcp, AppHost, ServiceDefaults, bff-api were all separate folder entries).
+2. Reorganized project declarations to appear before the Global section for clarity.
+3. Updated GlobalSection(NestedProjects) to map all 11 projects to their new solution folders (removed old mappings).
+4. Removed unused Tests folder.
+
+**Build verification:** dotnet build dotnet-agent-framework.sln — **Build succeeded in 1.3s** (0 errors, 0 warnings). All 10 projects compile successfully.
+
+**Why this matters:** Solution folders improve IDE navigation (F# style, cleaner Solution Explorer), make it easier for new team members to understand component grouping, and support future tooling (custom analyzers targeting folders). The solution is now self-documenting.
+

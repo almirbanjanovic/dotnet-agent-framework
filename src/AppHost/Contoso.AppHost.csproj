@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Sdk Name="Aspire.AppHost.Sdk" Version="9.0.0" />
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsAspireHost>true</IsAspireHost>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="13.2.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\crm-api\Contoso.CrmApi.csproj" />
+    <ProjectReference Include="..\crm-mcp\Contoso.CrmMcp.csproj" />
+    <ProjectReference Include="..\crm-agent\Contoso.CrmAgent.csproj" />
+    <ProjectReference Include="..\knowledge-mcp\Contoso.KnowledgeMcp.csproj" />
+    <ProjectReference Include="..\product-agent\Contoso.ProductAgent.csproj" />
+    <ProjectReference Include="..\orchestrator-agent\Contoso.OrchestratorAgent.csproj" />
+    <ProjectReference Include="..\bff-api\Contoso.BffApi.csproj" />
+    <ProjectReference Include="..\blazor-ui\Contoso.BlazorUi.csproj" />
+  </ItemGroup>
+
+</Project>

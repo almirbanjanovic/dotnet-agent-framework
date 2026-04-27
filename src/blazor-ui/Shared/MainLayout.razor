@@ -1,0 +1,56 @@
+@inherits LayoutComponentBase
+@inject AuthStateProvider AuthStateProvider
+
+<MudLayout>
+    <MudAppBar Color="Color.Primary" Elevation="1">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="ToggleDrawer" />
+        <MudText Typo="Typo.h6">Contoso Outdoors</MudText>
+        <MudSpacer />
+        @if (AuthStateProvider.UseDevAuth)
+        {
+            <MudSelect T="CustomerOption"
+                       Value="AuthStateProvider.SelectedCustomer"
+                       ValueChanged="OnCustomerChanged"
+                       Dense="true"
+                       Variant="Variant.Outlined"
+                       Class="customer-select"
+                       Label="Customer">
+                @foreach (var customer in AuthStateProvider.Customers)
+                {
+                    <MudSelectItem Value="@customer">@customer.Name (@customer.Id)</MudSelectItem>
+                }
+            </MudSelect>
+        }
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="_drawerOpen"
+               Variant="DrawerVariant.Responsive"
+               Elevation="1"
+               Class="mud-width-260">
+        <MudDrawerHeader>
+            <MudText Typo="Typo.subtitle1" Style="margin-left: 1rem;">Navigation</MudText>
+        </MudDrawerHeader>
+        <NavMenu />
+    </MudDrawer>
+
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.False" Class="pa-4">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private bool _drawerOpen = true;
+
+    private void ToggleDrawer()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    private Task OnCustomerChanged(CustomerOption? customer)
+    {
+        AuthStateProvider.SetCustomer(customer);
+        return Task.CompletedTask;
+    }
+}

@@ -1,0 +1,21 @@
+{
+  "Orchestrator": {
+    "BaseUrl": "http://localhost:5006"
+  },
+  "CrmApi": {
+    "BaseUrl": "http://localhost:5001"
+  },
+  "Storage": {
+    "ImagesEndpoint": "",
+    "ImagesAccountName": "",
+    "ImagesContainer": "product-images"
+  },
+  "Kestrel": {
+    "Endpoints": {
+      "Http": { "Url": "http://localhost:5007" }
+    }
+  },
+  "Logging": {
+    "LogLevel": { "Default": "Information" }
+  }
+}

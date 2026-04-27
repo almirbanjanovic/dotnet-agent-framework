@@ -38,7 +38,6 @@ public static class SupportTicketEndpoints
 
             var ticket = new SupportTicket
             {
-                Id = $"ST-{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}",
                 CustomerId = request.CustomerId,
                 OrderId = request.OrderId,
                 Category = request.Category,

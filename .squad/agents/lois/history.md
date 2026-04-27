@@ -46,3 +46,7 @@
 ### 2026-03-19 — Cross-Team Finding: Full Codebase Analysis Complete
 
 **Team Update (from all 5 agents):** Architecture is fully specced and infrastructure is provisioned, but **zero application code exists yet.** This is the intended state at end of Phase 1 (infrastructure/tooling complete). All 5 agents confirm the critical path: CRM API is the foundation. Blazor UI depends on BFF API, which depends on CRM API and Orchestrator. Implementation order: CRM API → MCP Servers → Agents → BFF → UI. No fundamental re-design needed. All decisions merged into `.squad/decisions.md` with consensus.
+
+### 2026-04-23 — Blazor WASM UI Implemented (Component 8)
+
+**Finding:** Added the Contoso.BlazorUi WebAssembly frontend with MudBlazor layout, chat experience, orders/profile pages, and Markdig markdown rendering with image rewrite support. A dev auth selector now injects `X-Customer-Id` headers, and the UI is wired into the Aspire AppHost on port 5008 with BFF CORS default updated accordingly.

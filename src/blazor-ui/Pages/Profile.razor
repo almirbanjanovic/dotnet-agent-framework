@@ -1,0 +1,88 @@
+@page "/profile"
+@implements IDisposable
+@inject BffApiClient BffApiClient
+@inject AuthStateProvider AuthStateProvider
+
+<PageTitle>Profile</PageTitle>
+
+<MudStack Spacing="3">
+    <MudText Typo="Typo.h5">Customer Profile</MudText>
+
+    @if (_isLoading)
+    {
+        <MudProgressCircular Indeterminate="true" Size="Size.Large" />
+    }
+    else if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <MudAlert Severity="Severity.Error">@_errorMessage</MudAlert>
+    }
+    else if (_customer is null)
+    {
+        <MudText Typo="Typo.body1" Color="Color.Secondary">Select a customer to view their profile.</MudText>
+    }
+    else
+    {
+        <MudPaper Class="pa-4">
+            <MudText Typo="Typo.h6">@_customer.FirstName @_customer.LastName</MudText>
+            <MudText Typo="Typo.body2">@_customer.Email</MudText>
+
+            <MudStack Row="true" Spacing="2" Style="margin-top: 1rem;">
+                <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined">
+                    Loyalty: @_customer.LoyaltyTier
+                </MudChip>
+                <MudChip T="string" Color="Color.Secondary" Variant="Variant.Outlined">
+                    Status: @_customer.AccountStatus
+                </MudChip>
+            </MudStack>
+        </MudPaper>
+    }
+</MudStack>
+
+@code {
+    private Customer? _customer;
+    private bool _isLoading = true;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        AuthStateProvider.CustomerChanged += HandleCustomerChanged;
+        await LoadCustomerAsync();
+    }
+
+    private async Task LoadCustomerAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        _customer = null;
+
+        try
+        {
+            if (AuthStateProvider.SelectedCustomer is null)
+            {
+                _isLoading = false;
+                return;
+            }
+
+            _customer = await BffApiClient.GetCustomerAsync(AuthStateProvider.SelectedCustomer.Id);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Unable to load profile: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async void HandleCustomerChanged()
+    {
+        await InvokeAsync(LoadCustomerAsync);
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        AuthStateProvider.CustomerChanged -= HandleCustomerChanged;
+    }
+}

@@ -220,6 +220,26 @@ src/
 - [GitHub CLI](https://cli.github.com/) (GitHub Actions path)
 - [Terraform >= 1.14.7](https://developer.hashicorp.com/terraform/install)
 
+## Local Development
+
+Run the entire system locally with just `dotnet run`:
+
+```bash
+./infra/setup-local.ps1                    # one-time: deploy Foundry to Azure
+dotnet run --project src/AppHost           # start all components + dashboard
+```
+
+See [Local Development Guide](docs/local-development.md) for details — prerequisites, troubleshooting, and architecture overview.
+
+The system will:
+- Deploy minimal Foundry resources to Azure (~$1–5/day)
+- Load CRM data from CSVs into memory (no emulators)
+- Search knowledge base via in-memory vectors + Foundry embeddings
+- Start all 8 components + Aspire dashboard at `https://localhost:15000`
+- Provide a dev customer selector in the UI (no MSAL needed)
+
+---
+
 ## Getting started
 
 See the lab guides in [`docs/`](docs/):

@@ -1,0 +1,21 @@
+{
+  "Foundry": {
+    "Endpoint": "{{FOUNDRY_ENDPOINT}}",
+    "ApiKey": "{{FOUNDRY_API_KEY}}",
+    "DeploymentName": "{{CHAT_DEPLOYMENT_NAME}}"
+  },
+  "CrmMcp": {
+    "BaseUrl": "http://localhost:5002"
+  },
+  "KnowledgeMcp": {
+    "BaseUrl": "http://localhost:5003"
+  },
+  "Kestrel": {
+    "Endpoints": {
+      "Http": { "Url": "http://localhost:5004" }
+    }
+  },
+  "Logging": {
+    "LogLevel": { "Default": "Information" }
+  }
+}

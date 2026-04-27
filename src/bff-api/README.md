@@ -1,7 +1,7 @@
 # BFF API
 > Backend-for-frontend API handling JWT validation, chat orchestration, image proxy, and Cosmos DB conversation persistence.
 
-Implementation pending. See docs/implementation-plan.md for details.
+Implements the gateway API for Blazor UI with chat orchestration, CRM proxying, image proxy, and conversation persistence.
 
 ## Configuration
 
@@ -18,17 +18,21 @@ Required config keys (populated by config-sync from Key Vault):
 | `AzureAd:TenantId` | Entra tenant ID for DefaultAzureCredential |
 | `AzureAd:BffClientId` | Entra app registration client ID for BFF |
 | `Bff:Hostname` | BFF public hostname (for CORS/redirects) |
+| `BlazorUi:Origin` | Optional CORS origin override (default: http://localhost:5001) |
+| `DataMode` | Set to `InMemory` for local dev (header-based auth + local images) |
 
 Run config-sync to populate: `cd src/config-sync && dotnet run -- <key-vault-uri> [environment]`
 
 ## How to run locally
 
-Implementation pending. Once built:
-
 ```bash
 cd src/bff-api
 dotnet run
 ```
+
+### Local dev auth
+- Set `DataMode=InMemory`.
+- Include `X-Customer-Id` header on chat/conversation requests.
 
 ## Architecture role
 

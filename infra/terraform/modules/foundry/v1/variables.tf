@@ -101,3 +101,9 @@ variable "public_network_access_enabled" {
   default     = false
 }
 
+variable "local_auth_enabled" {
+  description = "Enable local (API key) authentication. Set true for local dev, false for production."
+  type        = bool
+  default     = false
+}
+

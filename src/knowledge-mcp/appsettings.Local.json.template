@@ -1,0 +1,24 @@
+{
+  "Foundry": {
+    "Endpoint": "{{FOUNDRY_ENDPOINT}}",
+    "ApiKey": "{{FOUNDRY_API_KEY}}",
+    "EmbeddingDeploymentName": "{{EMBEDDING_DEPLOYMENT_NAME}}"
+  },
+  "Search": {
+    "Endpoint": "",
+    "IndexName": "knowledge-documents-index"
+  },
+  "Storage": {
+    "ImagesEndpoint": "",
+    "ImagesAccountName": "",
+    "ImagesContainer": "product-images"
+  },
+  "Kestrel": {
+    "Endpoints": {
+      "Http": { "Url": "http://localhost:5003" }
+    }
+  },
+  "Logging": {
+    "LogLevel": { "Default": "Information" }
+  }
+}

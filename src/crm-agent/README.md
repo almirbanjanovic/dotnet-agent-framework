@@ -1,7 +1,7 @@
 # CRM Agent
 > CRM specialist agent using Azure OpenAI with CRM MCP tools for customer data operations.
 
-Implementation pending. See docs/implementation-plan.md for details.
+Implements `POST /api/v1/chat` plus `/health` and `/ready` endpoints. See docs/implementation-plan.md for details.
 
 ## Configuration
 
@@ -17,8 +17,6 @@ Required config keys (populated by config-sync from Key Vault):
 Run config-sync to populate: `cd src/config-sync && dotnet run -- <key-vault-uri> [environment]`
 
 ## How to run locally
-
-Implementation pending. Once built:
 
 ```bash
 cd src/crm-agent

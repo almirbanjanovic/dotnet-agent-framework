@@ -1,7 +1,7 @@
 # Orchestrator Agent
 > Intent classification and routing agent that delegates to CRM Agent and Product Agent.
 
-Implementation pending. See docs/implementation-plan.md for details.
+Implemented as a .NET 9 minimal API with LLM-based intent classification and HTTP routing to specialist agents.
 
 ## Configuration
 
@@ -19,12 +19,15 @@ Run config-sync to populate: `cd src/config-sync && dotnet run -- <key-vault-uri
 
 ## How to run locally
 
-Implementation pending. Once built:
-
 ```bash
 cd src/orchestrator-agent
 dotnet run
 ```
+
+### Endpoints
+- POST `/api/v1/chat` — routes to CRM or Product agent
+- GET `/health` — liveness
+- GET `/ready` — readiness (CRM agent, Product agent, Foundry)
 
 ## Architecture role
 

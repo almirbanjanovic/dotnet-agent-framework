@@ -98,6 +98,23 @@
 
 **Team Update (from all 5 agents):** Architecture is fully specced and infrastructure is provisioned, but **zero application code exists yet.** This is the intended state at end of Phase 1 (infrastructure/tooling complete). All 5 agents confirm: Dockerfiles and Helm charts are the next gate before AKS deployment. Infrastructure itself is production-grade (dual identity model, network isolation, RBAC). No fundamental re-design of Terraform modules needed. All decisions merged into `.squad/decisions.md` with full team consensus. All agents aligned on critical path: containerization, then application build in dependency order.
 
+### 2025-07-26 — Final Infra Audit: In-Memory Pivot Impact
+
+**Context:** Plan rewritten — in-memory repositories replace all Docker/emulators. Audited all infra docs, Terraform modules, scripts, and CI/CD against the new plan.
+
+**Key findings:**
+
+1. **infra/README.md is clean.** No stale references, no mention of local dev. Will need a small addition post-implementation to reference `infra/terraform/local-dev/` and `setup-local.ps1`.
+2. **Other infra .md files clean.** templates/README.md and network-policies/README.md are production-path docs, untouched by local dev changes.
+3. **docs/foundry-only-deployment.md is 70% stale.** The entire document was written for the emulator-based approach (Cosmos Emulator, Azurite, dual-mode ConnectionString auth). With the in-memory pivot, §3 (Emulators), §4 (Component dual-auth code), §5 (Templates with ConnectionString), and §6 (setup-local.ps1 with emulator startup/healthcheck) all need rewriting. §2 (Terraform foundry-only) is ~90% salvageable. §8 (LocalVectorSearchService) folded into repository pattern.
+4. **Foundry module verified.** `local_auth_enabled = false` IS hardcoded on main.tf line 19. `primary_access_key` output does NOT exist. `local_auth_enabled` variable does NOT exist. All three additions needed per plan are confirmed zero-impact to existing deployment (default = false, root main.tf doesn't pass the variable).
+5. **init.ps1, deploy.ps1, init.sh, deploy.sh: ZERO references** to local-dev, setup-local, or in-memory. Truly untouched.
+6. **CI/CD workflows: ZERO impact.** deploy-crm-api.yml is production-path (Docker/Helm/AKS). Squad workflows are management only. No workflow triggers on `infra/terraform/local-dev/**`.
+7. **Multi-dev collision gap persists.** Default `rg-dotnetagent-localdev` has no user suffix. Two devs in same subscription will fight over same RG. Recommend username-based suffix in setup-local.ps1.
+8. **setup-local.ps1 design gaps under new plan:** Script in spec is entirely stale (emulator-centric). New version needs only: prereq checks (az, terraform, dotnet), az login verify, terraform init/apply, retrieve outputs, generate appsettings.Local.json (Foundry-only keys), print instructions. No emulator start, no npm, no seed data step (in-memory self-seeds).
+
+**Terraform module status:** All 20 modules untouched. Foundry module gets 3 small additive changes. No other module needed for local-dev.
+
 ### 2025-07-25 — Infrastructure Cleanup: .gitignore + EventGrid Removal
 
 **`.gitignore` hardened:** Added a `# Terraform` section with 11 patterns (`*.tfstate`, `*.tfstate.*`, `.terraform/`, `.terraform.lock.hcl`, `override.tf`, `override.tf.json`, `*_override.tf`, `*_override.tf.json`, `*.tfvars`, `*.tfvars.json`, `backend.hcl`). These prevent accidental commits of state files, local overrides, variable files with secrets, and backend configs. Existing patterns were preserved.
@@ -417,3 +434,258 @@ Audited `docs/lab-0.md`, `docs/lab-1.md`, `infra/README.md`, `docs/security.md`,
 2. Self-host in AKS (full network control, no Foundry hosting benefits)
 3. Wait for GA (no timeline given, billing deferred to April 2026)
 4. Hybrid: Prompt agent + private MCP servers in Container Apps on VNet
+### 2025-07-26 — Audit: Script Boundary Report (init / deploy / setup-local)
+
+**Requested by:** Almir Banjanovic
+**Context:** Almir clarified that init scripts, deploy scripts, and setup-local.ps1 are three coexisting scripts with distinct purposes. This audit documents what each does and identifies guard rails for setup-local.ps1.
+
+---
+
+#### 1. What does init.ps1/sh do?
+
+Creates resources for Terraform remote state backend and (optionally) GitHub CI/CD integration. Runs once per environment.
+
+**Resources created (Phase 4):**
+- **Resource Group:** `rg-{baseName}-{env}-{location}` (e.g., `rg-dotnetagent-dev-centralus`) — `init.ps1:564`, `init.sh:602`
+- **Storage Account:** `st{baseName}{env}{location}` truncated to 24 chars, `--default-action Deny` — `init.ps1:578-582`, `init.sh:615-619`
+- **Blob Container:** `tfstate` in that storage account — `init.ps1:610-633`, `init.sh:634-643`
+- **RBAC:** Storage Blob Data Contributor on storage account for deployer OID — `init.ps1:700-715`, `init.sh:708-724`
+- **RBAC:** Key Vault Secrets Officer + Certificates Officer on RG for deployer — `init.ps1:717-730`, `init.sh:726-738`
+
+**Entra + GitHub (Phases 2-3, skipped in "local-only" mode):**
+- **Entra app registration:** `github-actions-{repoName}` — `init.ps1:424-443`
+- **Service principal + OIDC federated credential** — `init.ps1:445-470`
+- **3 GitHub repo secrets:** `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` — `init.ps1:489-495`
+- **~35 GitHub environment variables** (resource group, storage, AKS config, model params, etc.) — `init.ps1:499-544`
+- **Contributor RBAC** on RG for the app registration — `init.ps1:636-658`
+
+### A3 — Terraform Local-Dev Root Module
+
+Created `infra/terraform/local-dev/` — a standalone root module that deploys only Foundry + model deployments using a local backend. Purpose: let developers `terraform apply` from their machine to get a personal Azure OpenAI instance with API key auth, no AKS/CosmosDB/AKV/Search overhead.
+
+**Files created:**
+- `providers.tf` — azurerm ~> 4.63, local backend, cognitive_account purge + RG force-delete features
+- `variables.tf` — 8 variables with sensible defaults (location=centralus, base_name=dotnetagent, environment=localdev, gpt-4.1 @ 2025-04-14, text-embedding-3-small @ v1); resource_group_name defaults null for TF_VAR override
+- `main.tf` — creates RG + invokes `../modules/foundry/v1` with local_auth_enabled=true, public_network_access_enabled=true, empty allowed_ips, embedding_capacity=120
+- `outputs.tf` — exposes foundry_endpoint, foundry_api_key (sensitive), chat_deployment_name, embedding_deployment_name
+
+**Validation:** `terraform init -backend=false` + `terraform validate` both passed. All required foundry module variables supplied. Model versions match dev.tfvars (gpt-4.1=2025-04-14, embedding=1).
+
+**Config files generated (Phase 5):**
+- `infra/terraform/backend.hcl` — remote state config — `init.ps1:740-746`
+- `infra/terraform/{env}.tfvars` — all Terraform variables — `init.ps1:749-793`
+- `infra/deployments/{env}-{location}.env` — consumed by deploy scripts — `init.ps1:797-808`
+
+**NO Key Vault is created by init.** Key Vault is created by Terraform during deploy. Init only grants KV RBAC roles pre-emptively so Terraform can write secrets when it creates the KV.
+
+---
+
+#### 2. What does deploy.ps1/sh do?
+
+Runs Terraform apply against the full 20+ module infrastructure. **Assumes init has already run.**
+
+**Hard dependencies on init:**
+- Requires `infra/deployments/*.env` files (created by init Phase 5) — `deploy.ps1:361-369`, `deploy.sh:197-205`
+- Requires `infra/terraform/backend.hcl` (created by init Phase 5) — `deploy.ps1:603-605`, `deploy.sh:452-454`
+- Reads `storage_account_name` from backend.hcl to open firewalls — `deploy.ps1:607-610`, `deploy.sh:456-459`
+
+**Terraform init pattern:** `terraform init -upgrade -reconfigure -backend-config=backend.hcl` — `deploy.ps1:691`, `deploy.sh:640`
+
+**Additional deploy-only work:**
+- Phase 0: Agent Identity SP creation (msgraph provider credentials) — `deploy.ps1:465-550`
+- Phase 1: Opens firewalls on KV, Storage, Cosmos, Foundry, AI Search — `deploy.ps1:640-652`
+- Phase 2: `terraform init -backend-config=backend.hcl` — `deploy.ps1:691`
+- Phases 3-5: validate, plan, apply
+- Phase 6: Seed CRM data via `dotnet run` of seed-data tool
+- Phase 7: Link Entra users to Customer documents in Cosmos
+- Cleanup: Always removes deployer IP from all firewalls — `deploy.ps1:298-355`
+
+---
+
+#### 3. Does setup-local.ps1 need any of init's outputs?
+
+**NO. Confirmed.** Almir's claim is correct.
+
+Evidence: The spec's `providers.tf` at `docs/foundry-only-deployment.md:293-294` declares `backend "local" {}`. The setup-local script runs `terraform init -input=false` in `infra/terraform/local-dev/` (spec line 1284) with no `-backend-config`. It never reads backend.hcl, never reads `infra/deployments/*.env`, and never touches the remote storage account.
+
+The local-dev root module creates its own resource group (`rg-dotnetagent-localdev`) — a completely different RG from the one init creates.
+
+---
+
+#### 4. Does init create GitHub environment secrets?
+
+**YES.** Phase 3 creates:
+- 3 **repository secrets**: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID — `init.ps1:489-495`
+- ~35 **environment variables** under the GitHub environment (e.g., `dev`) — `init.ps1:499-544`
+- 1 **GitHub environment** created via `gh api --method PUT` — `init.ps1:486`
+
+Does setup-local need anything analogous? **No.** Local dev has no CI/CD pipeline, no GitHub Actions, no OIDC federation. Everything runs on the developer's machine.
+
+---
+
+#### 5. Does setup-local need to touch infra/deployments/*.env?
+
+**No.** The `infra/deployments/*.env` files are consumed exclusively by deploy.ps1/sh to load `ENVIRONMENT`, `LOCATION`, `BASE_NAME`, `RESOURCE_GROUP`. Setup-local has its own hardcoded/prompted values and writes `appsettings.Local.json` directly to each `src/*/` directory. It does not write to or read from `infra/deployments/`.
+
+---
+
+#### 6. Bash + PowerShell parity — is the missing setup-local.sh a gap?
+
+The plan only specifies `setup-local.ps1`. This is **intentional** because:
+- Cosmos DB Emulator is Windows-only (no Linux/macOS native emulator)
+- The script checks for `$env:ProgramFiles\Azure Cosmos DB Emulator\` (spec line 1254)
+- Azurite is cross-platform but Cosmos Emulator is the blocker
+
+**However:** Docker-based Cosmos Emulator exists for Linux. A future `setup-local.sh` that uses the Docker emulator image is possible but not in scope for v1.
+
+---
+
+#### 7. Risk: could deploy.ps1 clobber local state or vice versa?
+
+**Low risk, but not zero.** The two Terraform root modules use different directories:
+- deploy.ps1 operates in `infra/terraform/` with `backend "azurerm"` → remote state in Azure Storage
+- setup-local.ps1 operates in `infra/terraform/local-dev/` with `backend "local"` → local `.terraform.tfstate` file
+
+**They cannot share state** because they are different root module directories with different backends. Running `deploy.ps1` after `setup-local.ps1` will not affect local-dev state and vice versa.
+
+**Remaining risk:** A developer confused about which script to run could:
+1. Run setup-local expecting it to deploy full infra (it won't — only 4 resources)
+2. Run deploy.ps1 intending local dev (it will deploy 14+ Azure services and cost $50-100/day)
+
+**No code-level guard rails exist today.** Both scripts run without checking for the other's artifacts.
+
+---
+
+#### 8. Does deploy.ps1 have backend-config patterns to follow?
+
+**Yes.** Deploy.ps1 uses:
+```
+terraform init -upgrade -reconfigure -backend-config=backend.hcl
+```
+(deploy.ps1:691, deploy.sh:640)
+
+Setup-local.ps1 should **NOT** follow this pattern. It uses:
+```
+terraform init -input=false
+```
+(spec line 1284)
+
+This is correct because `providers.tf` in `local-dev/` declares `backend "local" {}` — no backend config file is needed.
+
+---
+
+#### Recommended Guard Rails for setup-local.ps1
+
+1. **Check for remote .terraform directory:** Before running `terraform init` in `local-dev/`, check if `infra/terraform/.terraform/` exists with a remote backend. If it does, that's fine — it's a different directory. But if someone accidentally copied `.terraform/` into `local-dev/`, warn and abort.
+
+2. **Verify working directory:** setup-local.ps1 should assert it's operating in `infra/terraform/local-dev/`, not `infra/terraform/`. Add:
+   ```powershell
+   if (Test-Path "$TerraformDir\backend.hcl") {
+       Write-Error "SAFETY: Found backend.hcl in $TerraformDir. This looks like the full deployment directory. setup-local.ps1 should use infra/terraform/local-dev/."
+       exit 1
+   }
+   ```
+
+3. **Check for existing remote state in local-dev:** If `infra/terraform/local-dev/.terraform/terraform.tfstate` exists and contains `"backend": {"type": "azurerm"}`, refuse to run — someone manually ran `terraform init` with a remote backend in the local-dev dir.
+
+4. **Environment label in Foundry resource:** The local-dev Terraform module uses `rg-dotnetagent-localdev` as its resource group name. This naming makes it visually distinct from `rg-dotnetagent-dev-{region}`. Good.
+
+5. **Warn about cost if deploy.ps1 is detected:** Not practical to add to setup-local, but deploy.ps1 could add a check: if `infra/terraform/local-dev/terraform.tfstate` exists and shows resources, warn: "You have a local dev environment running. Running full deploy will create separate Azure resources at ~$50-100/day."
+
+6. **No shared .env files:** setup-local should never write to `infra/deployments/` — this directory is exclusively for init→deploy pipeline.
+
+**Files examined:** init.ps1, init.sh, deploy.ps1, deploy.sh, infra/deployments/dev-centralus.env, infra/README.md, docs/foundry-only-deployment.md (providers.tf spec at line 275, setup-local spec at line 1183)
+
+### 2025-07-26 — Second-Pass Script & setup-local Audit (Opus 4.6 1M)
+
+**Requested by:** Almir Banjanovic
+**Scope:** Re-audit of init/deploy scripts + setup-local.ps1 design review from foundry-only-deployment.md spec + CI/CD workflow inventory + cross-script collision analysis.
+
+**Confirmed from prior audit (4 items):**
+1. Three scripts (init, deploy, setup-local) cleanly separated — different TF working directories, different backends, different resource targets
+2. init creates remote state backend (Azure blob) + GitHub secrets (3 repo secrets + 35 env variables)
+3. setup-local has zero dependencies on init outputs — no backend.hcl, no deployments/*.env, no GitHub CLI
+4. CI/CD workflows have zero triggers on `infra/terraform/local-dev/**` paths
+
+**Disputed / corrected (1 item):**
+- Prior audit's guard rail "refuse if .terraform points to remote backend" — scope narrowed: only check `infra/terraform/local-dev/.terraform/terraform.tfstate`, not the parent directory's .terraform (which is *expected* to have remote backend)
+
+**NEW findings (3 items):**
+1. **Multi-dev collision:** Two developers running setup-local.ps1 with defaults in same subscription collide on `rg-dotnetagent-localdev`. Fix: inject username into default RG name (`rg-dotnetagent-localdev-{username}`)
+2. **No emulator teardown:** No way to stop Cosmos Emulator + Azurite cleanly. Recommend `--Cleanup` flag on setup-local.ps1 that runs `terraform destroy` + stops emulator processes
+3. **init.sh retry parity gap:** init.ps1 retries tfstate container creation 6×15s (lines 612-633); init.sh tries once (lines 635-643). Could silently fail on slow firewalls
+
+**Recommended guard rails (3 concrete snippets):**
+1. Remote backend detection: check `local-dev/.terraform/terraform.tfstate` backend.type != "local" → hard stop
+2. Multi-dev avoidance: auto-detect `$env:USERNAME` and embed in default RG name via TF_VAR
+3. Cleanup convenience: `--Cleanup` switch that runs terraform destroy + kills emulator processes
+
+**Full audit written to:** `.squad/decisions/inbox/joe-script-reaudit-opus46-1m.md` (10 numbered findings with line:file evidence)
+
+**Files examined:** init.ps1 (854 lines), init.sh (808 lines), deploy.ps1 (1097 lines), deploy.sh (full), infra/deployments/dev-centralus.env, infra/README.md, infra/terraform/providers.tf, docs/foundry-only-deployment.md (2001 lines, focused on sections 2, 6, 9, 10), plan.md (session state), all 11 .github/workflows/ files (triggers verified via grep)
+
+### 2026-04-20 — Cross-Platform + Docker Emulator Audit (v3)
+
+**Requested by:** Almir Banjanovic
+**Directives:** (1) No Windows MSI — Cosmos DB Emulator must be Docker-based, all scripts cross-platform. (2) Self-contained config (appsettings.{env}.json only, no layering).
+
+**Scope:** Re-evaluate setup-local script strategy, Docker-based Cosmos DB Emulator, docker-compose for emulators, init/deploy parity audit, multi-dev collision fix, teardown story, prerequisites list.
+
+**Key Recommendations:**
+
+1. **Hybrid script strategy:** docker-compose.yml for emulators (Cosmos + Azurite) + paired scripts (setup-local.ps1 + setup-local.sh) for Terraform/config/seeding. Matches existing init/deploy pattern. Rejected pwsh-only (adds dependency) and Makefile (foreign pattern).
+
+2. **Cosmos DB Emulator image:** `mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:vnext-preview` — next-gen Linux emulator. Only 2 ports (8081 gateway + 1234 explorer), supports ARM64 (M1/M2 Macs), must use `--protocol https` for .NET SDK. Old image (10250-10255 ports) is deprecated.
+
+3. **docker-compose.local.yml:** Two services (cosmosdb + azurite), health checks, persistent volume for Azurite, named containers. Replaces MSI install + npm global install + platform-specific process management. Single command: `docker compose up -d`.
+
+4. **Prerequisites reduced:** Docker replaces both Node.js (Azurite) and Cosmos MSI. Final list: az CLI, Terraform, Docker (with Compose V2), .NET 9 SDK. Four tools, all cross-platform.
+
+5. **Multi-dev collision:** Username suffix via `TF_VAR_resource_group_name` — `rg-dotnetagent-localdev-{username}`. Detected via `[Environment]::UserName` (PS) / `whoami` (bash).
+
+6. **Teardown:** `-Cleanup` flag on setup-local scripts. Runs `docker compose down -v` + `terraform destroy` + removes appsettings.Local.json files. Not a separate script (no precedent in project).
+
+**Script parity gaps found:**
+- init.sh: single-attempt tfstate container creation (ps1 has 6×15s retry)
+- init.sh: 5s firewall wait after IP add (ps1 has 30s)
+- Both init scripts: GitHub env var `EMBEDDING_SKU_NAME="Standard"` but tfvars use `"GlobalStandard"` — CI/CD would get wrong SKU
+- deploy.ps1: Phase 7 uses `/dev/null` (Unix path on Windows)
+- deploy.ps1: inconsistent `cmd /c` usage for terraform commands
+
+**Prior findings status:** All 5 prior findings still valid. "No setup-local.sh" upgraded from defensible to gap per Almir's directive. Two new parity gaps found (EMBEDDING_SKU_NAME env var, firewall wait times).
+
+**Full audit written to:** `.squad/decisions/inbox/joe-audit-v3-crossplatform-docker.md`
+
+**Files examined:** init.ps1, init.sh, deploy.ps1, deploy.sh, infra/README.md, docs/foundry-only-deployment.md (sections 3, 6, full setup-local.ps1 spec), plan.md, all .github/workflows/ files, Microsoft Cosmos DB emulator Linux docs (learn.microsoft.com), Azurite docs (learn.microsoft.com)
+
+### A1 — Foundry Module: local_auth_enabled Variable
+
+- Added `local_auth_enabled` variable (bool, default `false`) to foundry module `variables.tf`
+- Changed `main.tf` line 19 from hardcoded `false` to `var.local_auth_enabled`
+- Added `primary_access_key` sensitive output to `outputs.tf`
+- Default `false` ensures zero impact on existing deployments — root `main.tf` doesn't pass this variable, so it inherits the safe default
+- This enables local dev scenarios (API key auth) while keeping production locked to Entra/managed identity
+
+### A5 — Config Templates + Setup Scripts
+
+**Deliverables (13 files):**
+
+- Created 9 `appsettings.Local.json.template` files (one per component: crm-api, simple-agent, crm-mcp, knowledge-mcp, crm-agent, product-agent, orchestrator-agent, bff-api, blazor-ui)
+- Created `infra/setup-local.ps1` — PowerShell script: prereq checks (dotnet, az, terraform), `az account show` login check, username-based RG suffix, terraform init/apply, output retrieval, template → appsettings.Local.json generation with placeholder replacement, port map summary, `-Cleanup` switch for teardown
+- Created `infra/setup-local.sh` — Bash equivalent with identical logic, LF line endings verified
+- Updated `.gitignore` — added explicit `infra/terraform/local-dev/.terraform/` and `infra/terraform/local-dev/terraform.tfstate*` patterns (note: `appsettings.*.json` was already covered by existing glob)
+
+**Template design:**
+- Self-contained per environment (no base config layering) per decisions.md
+- `DataMode=InMemory` on crm-api (the only component with InMemory support)
+- Foundry placeholders (`{{FOUNDRY_ENDPOINT}}`, `{{FOUNDRY_API_KEY}}`, `{{CHAT_DEPLOYMENT_NAME}}`, `{{EMBEDDING_DEPLOYMENT_NAME}}`) on 5 components that use AI services
+- Static templates (crm-api, crm-mcp, bff-api, blazor-ui) copied as-is without replacement
+- Kestrel URL bindings match port map: 5001–5008
+- Inter-service URLs hardcoded to localhost with correct ports (e.g., crm-mcp → crm-api on 5001)
+
+**Script design:**
+- Cross-platform: paired .ps1/.sh with identical logic and output
+- No Docker, no emulators — uses Terraform local-dev root to provision only Azure AI Services
+- Cleanup mode destroys Terraform resources and removes all generated appsettings.Local.json files
+- Both scripts verified for syntax (PowerShell parser + bash -n)
+

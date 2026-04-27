@@ -1,7 +1,7 @@
 # Knowledge MCP Server
 > MCP Server providing search_knowledge_base tool backed by Azure AI Search.
 
-Implementation pending. See docs/implementation-plan.md for details.
+Knowledge MCP Server exposes semantic search over policies, guides, and procedures using Azure AI Search or an in-memory embedding store for local development.
 
 ## Configuration
 
@@ -20,7 +20,7 @@ Run config-sync to populate: `cd src/config-sync && dotnet run -- <key-vault-uri
 
 ## How to run locally
 
-Implementation pending. Once built:
+Run the MCP server:
 
 ```bash
 cd src/knowledge-mcp

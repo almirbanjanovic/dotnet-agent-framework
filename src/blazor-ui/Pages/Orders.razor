@@ -1,0 +1,145 @@
+@page "/orders"
+@implements IDisposable
+@inject BffApiClient BffApiClient
+@inject AuthStateProvider AuthStateProvider
+
+<PageTitle>Orders</PageTitle>
+
+<MudStack Spacing="3">
+    <MudText Typo="Typo.h5">Order History</MudText>
+
+    @if (_isLoading)
+    {
+        <MudProgressCircular Indeterminate="true" Size="Size.Large" />
+    }
+    else if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <MudAlert Severity="Severity.Error">@_errorMessage</MudAlert>
+    }
+    else if (_orders.Count == 0)
+    {
+        <MudText Typo="Typo.body1" Color="Color.Secondary">No orders available for this customer.</MudText>
+    }
+    else
+    {
+        <MudGrid>
+            @foreach (var order in _orders)
+            {
+                <MudItem xs="12" md="6" lg="4">
+                    <MudCard>
+                        <MudCardHeader>
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Style="width: 100%;">
+                                <MudText Typo="Typo.subtitle1">Order @order.Id</MudText>
+                                <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined">
+                                    @order.Status
+                                </MudChip>
+                            </MudStack>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudText Typo="Typo.body2">
+                                Order Date: @FormatDate(order.OrderDate)
+                            </MudText>
+                            <MudText Typo="Typo.body2">
+                                Total: @order.TotalAmount.ToString("C")
+                            </MudText>
+                            @if (!string.IsNullOrWhiteSpace(order.TrackingNumber))
+                            {
+                                <MudText Typo="Typo.body2">
+                                    Tracking: @order.TrackingNumber
+                                </MudText>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(order.EstimatedDelivery))
+                            {
+                                <MudText Typo="Typo.body2">
+                                    Estimated delivery: @order.EstimatedDelivery
+                                </MudText>
+                            }
+
+                            <MudDivider Style="margin: 1rem 0;" />
+                            <MudText Typo="Typo.subtitle2">Items</MudText>
+                            @if (order.Items?.Count > 0)
+                            {
+                                <MudList T="string" Dense="true">
+                                    @foreach (var item in order.Items)
+                                    {
+                                        <MudListItem T="string" Value="@item.ProductName">
+                                            <MudText Typo="Typo.body2">
+                                                @item.ProductName (x@item.Quantity)
+                                            </MudText>
+                                        </MudListItem>
+                                    }
+                                </MudList>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    Items are not available in this view.
+                                </MudText>
+                            }
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+</MudStack>
+
+@code {
+    private readonly List<Order> _orders = new();
+    private bool _isLoading = true;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        AuthStateProvider.CustomerChanged += HandleCustomerChanged;
+        await LoadOrdersAsync();
+    }
+
+    private async Task LoadOrdersAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        _orders.Clear();
+
+        try
+        {
+            if (AuthStateProvider.SelectedCustomer is null)
+            {
+                _isLoading = false;
+                return;
+            }
+
+            var orders = await BffApiClient.GetOrdersAsync(AuthStateProvider.SelectedCustomer.Id);
+            _orders.AddRange(orders);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Unable to load orders: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private string FormatDate(string? value)
+    {
+        if (DateTime.TryParse(value, out var parsed))
+        {
+            return parsed.ToString("d");
+        }
+
+        return value ?? "N/A";
+    }
+
+    private async void HandleCustomerChanged()
+    {
+        await InvokeAsync(LoadOrdersAsync);
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        AuthStateProvider.CustomerChanged -= HandleCustomerChanged;
+    }
+}
