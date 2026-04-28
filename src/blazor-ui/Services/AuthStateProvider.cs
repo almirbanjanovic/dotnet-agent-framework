@@ -19,7 +19,7 @@ public sealed class AuthStateProvider
 
     public AuthStateProvider(IConfiguration configuration, IWebAssemblyHostEnvironment environment)
     {
-        UseDevAuth = !string.IsNullOrWhiteSpace(configuration["DataMode"]) || environment.IsDevelopment();
+        UseDevAuth = BlazorUiConfiguration.IsDevAuthEnabled(configuration, environment);
         Customers = _customers;
 
         if (UseDevAuth)

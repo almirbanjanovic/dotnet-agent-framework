@@ -14,7 +14,7 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 builder.Services.AddMudServices();
 builder.Services.AddScoped<AuthStateProvider>();
 
-var bffBaseUrl = builder.Configuration["Bff:BaseUrl"] ?? "http://localhost:5007";
+var bffBaseUrl = BlazorUiConfiguration.GetBffBaseUrl(builder.Configuration);
 builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri(bffBaseUrl) });
 builder.Services.AddScoped<BffApiClient>();
 

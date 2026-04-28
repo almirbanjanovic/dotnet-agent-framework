@@ -134,3 +134,6 @@ internal sealed class FoundryHealthCheck(IntentClassifier classifier) : IHealthC
         }
     }
 }
+
+// Make Program accessible for integration tests
+public partial class Program { }

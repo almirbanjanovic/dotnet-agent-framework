@@ -181,7 +181,7 @@ internal sealed class CrmAgentFactory
     }
 }
 
-internal abstract class McpClientProvider
+internal abstract class McpClientProvider : IAsyncDisposable
 {
     private readonly ILoggerFactory _loggerFactory;
     private readonly string _baseUrl;
@@ -221,7 +221,7 @@ internal abstract class McpClientProvider
         }
     }
 
-    private async Task<McpClient> CreateClientAsync(CancellationToken cancellationToken)
+    protected virtual async Task<McpClient> CreateClientAsync(CancellationToken cancellationToken)
     {
         var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
@@ -230,6 +230,32 @@ internal abstract class McpClientProvider
         }, _loggerFactory);
 
         return await McpClient.CreateAsync(transport, loggerFactory: _loggerFactory, cancellationToken: cancellationToken);
+    }
+
+    protected virtual async ValueTask DisposeClientAsync(McpClient client)
+    {
+        if (client is IAsyncDisposable asyncDisposable)
+        {
+            await asyncDisposable.DisposeAsync();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _semaphore.WaitAsync();
+        try
+        {
+            if (_client is not null)
+            {
+                await DisposeClientAsync(_client);
+                _client = null;
+            }
+        }
+        finally
+        {
+            _semaphore.Release();
+            _semaphore.Dispose();
+        }
     }
 }
 

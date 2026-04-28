@@ -294,9 +294,6 @@ static async Task<IResult> ProxyResponseAsync(HttpResponseMessage response, Canc
     return Results.Content(payload, contentType, statusCode: (int)response.StatusCode);
 }
 
-static string GetConfigOrDefault(IConfiguration config, string key, string defaultValue)
-    => config[key] is { Length: > 0 } value ? value : defaultValue;
-
 internal sealed record AgentChatResponse(string Response, IReadOnlyList<ToolCallInfo> ToolCalls);
 
 internal sealed class CosmosHealthCheck(CosmosClient client) : IHealthCheck
@@ -357,4 +354,8 @@ internal sealed class OrchestratorHealthCheck(OrchestratorClient orchestratorCli
     }
 }
 
-public partial class Program { }
+public partial class Program
+{
+    internal static string GetConfigOrDefault(IConfiguration config, string key, string defaultValue)
+        => config[key] is { Length: > 0 } value ? value : defaultValue;
+}

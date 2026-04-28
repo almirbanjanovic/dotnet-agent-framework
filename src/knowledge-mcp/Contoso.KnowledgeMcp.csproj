@@ -14,5 +14,9 @@
   <ItemGroup>
     <ProjectReference Include="..\ServiceDefaults\Contoso.ServiceDefaults.csproj" />
   </ItemGroup>
+  
+  <ItemGroup>
+    <InternalsVisibleTo Include="Contoso.KnowledgeMcp.Tests" />
+  </ItemGroup>
 
 </Project>

@@ -20,8 +20,7 @@ internal sealed class IntentClassifier
         Customer message: {0}
         """;
 
-    private readonly AIAgent _agent;
-    private readonly ChatClientAgentRunOptions _runOptions;
+    private readonly IIntentClassifierClient _client;
 
     public IntentClassifier(
         IConfiguration configuration,
@@ -29,20 +28,19 @@ internal sealed class IntentClassifier
         ILoggerFactory loggerFactory,
         IServiceProvider services)
     {
-        _agent = BuildAgent(configuration, promptProvider.Prompt, loggerFactory, services);
-        _runOptions = new ChatClientAgentRunOptions(new ChatOptions
-        {
-            MaxOutputTokens = 5,
-            Temperature = 0,
-            ToolMode = ChatToolMode.None
-        });
+        var agent = BuildAgent(configuration, promptProvider.Prompt, loggerFactory, services);
+        _client = new AIAgentIntentClassifierClient(agent);
+    }
+
+    internal IntentClassifier(IIntentClassifierClient client)
+    {
+        _client = client;
     }
 
     public async Task<string> ClassifyAsync(string message, CancellationToken cancellationToken)
     {
         var prompt = string.Format(ClassificationTemplate, message);
-        var response = await _agent.RunAsync(prompt, options: _runOptions, cancellationToken: cancellationToken);
-        var intent = response.ToString().Trim();
+        var intent = (await _client.RunAsync(prompt, cancellationToken)).Trim();
 
         if (intent.Contains("PRODUCT", StringComparison.OrdinalIgnoreCase))
         {
@@ -93,5 +91,33 @@ internal sealed class IntentClassifier
             description: "Classifies customer intent for routing to CRM or Product agents.",
             loggerFactory: loggerFactory,
             services: services);
+    }
+}
+
+internal interface IIntentClassifierClient
+{
+    Task<string> RunAsync(string prompt, CancellationToken cancellationToken);
+}
+
+internal sealed class AIAgentIntentClassifierClient : IIntentClassifierClient
+{
+    private readonly AIAgent _agent;
+    private readonly ChatClientAgentRunOptions _runOptions;
+
+    public AIAgentIntentClassifierClient(AIAgent agent)
+    {
+        _agent = agent;
+        _runOptions = new ChatClientAgentRunOptions(new ChatOptions
+        {
+            MaxOutputTokens = 5,
+            Temperature = 0,
+            ToolMode = ChatToolMode.None
+        });
+    }
+
+    public async Task<string> RunAsync(string prompt, CancellationToken cancellationToken)
+    {
+        var response = await _agent.RunAsync(prompt, options: _runOptions, cancellationToken: cancellationToken);
+        return response.ToString();
     }
 }

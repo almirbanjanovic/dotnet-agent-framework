@@ -36,7 +36,7 @@
                         <MudText Typo="Typo.caption" Color="Color.Secondary">
                             @GetRoleLabel(message.Role) · @message.Timestamp.ToLocalTime().ToString("g")
                         </MudText>
-                        <div class="markdown-body">@RenderMarkdown(message.Content)</div>
+                        <div class="markdown-body">@ChatMarkdownRenderer.RenderMarkdown(message.Content)</div>
                     </MudPaper>
                 }
             }
@@ -74,11 +74,6 @@
 
 @code {
     private const string ScrollContainerId = "chat-scroll-container";
-    private static readonly MarkdownPipeline MarkdownPipeline =
-        new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
-    private static readonly HtmlSanitizer Sanitizer = new();
-    private static readonly Regex ImageRegex = new("!\\[(?<alt>[^\\]]*)\\]\\((?<url>[^)]+)\\)", RegexOptions.Compiled);
-
     private readonly List<ChatMessage> _messages = new();
     private string? _conversationId;
     private string _currentMessage = string.Empty;
@@ -135,39 +130,6 @@
             _scrollPending = false;
             await JsRuntime.InvokeVoidAsync("scrollChatToBottom", ScrollContainerId);
         }
-    }
-
-    private static MarkupString RenderMarkdown(string content)
-    {
-        if (string.IsNullOrWhiteSpace(content))
-        {
-            return new MarkupString(string.Empty);
-        }
-
-        var rewritten = RewriteImageUrls(content);
-        var html = Markdig.Markdown.ToHtml(rewritten, MarkdownPipeline);
-        var sanitized = Sanitizer.Sanitize(html);
-        return new MarkupString(sanitized);
-    }
-
-    private static string RewriteImageUrls(string markdown)
-    {
-        return ImageRegex.Replace(markdown, match =>
-        {
-            var alt = match.Groups["alt"].Value;
-            var url = match.Groups["url"].Value.Trim();
-
-            if (Uri.TryCreate(url, UriKind.Absolute, out _) || url.StartsWith("/"))
-            {
-                return match.Value;
-            }
-
-            var fileName = url.Split('?')[0];
-            fileName = fileName.Replace("\\", "/");
-            var lastSegment = fileName.Split('/').LastOrDefault() ?? fileName;
-
-            return $"![{alt}](/api/v1/images/{lastSegment})";
-        });
     }
 
     private static string GetRoleLabel(string role) =>

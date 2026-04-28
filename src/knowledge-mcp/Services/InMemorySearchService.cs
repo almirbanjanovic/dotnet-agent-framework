@@ -7,6 +7,7 @@ namespace Contoso.KnowledgeMcp.Services;
 public sealed class InMemorySearchService : ISearchService
 {
     private readonly EmbeddingClient _embeddingClient;
+    private readonly Func<string, CancellationToken, Task<float[]>>? _embeddingGenerator;
     private readonly ILogger<InMemorySearchService> _logger;
     private readonly string _dataPath;
     private readonly List<StoredChunk> _chunks = [];
@@ -27,6 +28,17 @@ public sealed class InMemorySearchService : ISearchService
         var client = new AzureOpenAIClient(new Uri(endpoint), new AzureKeyCredential(apiKey));
         _embeddingClient = client.GetEmbeddingClient(deploymentName);
         _dataPath = ResolveDataPath();
+    }
+
+    internal InMemorySearchService(
+        Func<string, CancellationToken, Task<float[]>> embeddingGenerator,
+        ILogger<InMemorySearchService> logger,
+        string dataPath)
+    {
+        _embeddingGenerator = embeddingGenerator ?? throw new ArgumentNullException(nameof(embeddingGenerator));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _dataPath = dataPath ?? throw new ArgumentNullException(nameof(dataPath));
+        _embeddingClient = null!;
     }
 
     public async Task<IReadOnlyList<SearchResult>> SearchAsync(
@@ -106,7 +118,7 @@ public sealed class InMemorySearchService : ISearchService
         _logger.LogInformation("Embedded {Count} knowledge chunks.", _chunks.Count);
     }
 
-    private IEnumerable<string> ChunkDocument(string content)
+    internal static IEnumerable<string> ChunkDocument(string content)
     {
         var normalized = content.Replace("\r\n", "\n");
         var chunks = normalized.Split("\n\n", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -124,11 +136,16 @@ public sealed class InMemorySearchService : ISearchService
 
     private async Task<float[]> GenerateEmbeddingAsync(string text, CancellationToken ct)
     {
+        if (_embeddingGenerator is not null)
+        {
+            return await _embeddingGenerator(text, ct);
+        }
+
         var response = await _embeddingClient.GenerateEmbeddingAsync(text, cancellationToken: ct);
         return response.Value.ToFloats().Span.ToArray();
     }
 
-    private static double CosineSimilarity(float[] a, float[] b)
+    internal static double CosineSimilarity(float[] a, float[] b)
     {
         if (a.Length == 0 || b.Length == 0)
         {
@@ -155,7 +172,7 @@ public sealed class InMemorySearchService : ISearchService
         return dot / (Math.Sqrt(normA) * Math.Sqrt(normB));
     }
 
-    private static string ResolveDataPath()
+    internal static string ResolveDataPath()
     {
         var contentRoot = Directory.GetCurrentDirectory();
         var candidates = new[]

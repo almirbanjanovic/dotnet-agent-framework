@@ -5,6 +5,7 @@ using Azure.Identity;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.Configuration;
 using OpenAI.Chat;
+using simple_agent;
 
 var configuration = new ConfigurationBuilder()
     .AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? "Development"}.json", optional: true)
@@ -14,16 +15,18 @@ var configuration = new ConfigurationBuilder()
 var endpoint = configuration["Foundry:Endpoint"] ?? throw new InvalidOperationException("Foundry:Endpoint is not set.");
 var deploymentName = configuration["Foundry:DeploymentName"] ?? throw new InvalidOperationException("Foundry:DeploymentName is not set.");
 var apiKey = configuration["Foundry:ApiKey"];
+var tenantId = configuration["AzureAd:TenantId"];
 
 Console.WriteLine($"Using AI Foundry project endpoint: {endpoint}");
 Console.WriteLine($"Model deployment: {deploymentName}");
 
 AIAgent agent;
-if (!string.IsNullOrEmpty(apiKey))
+var authContext = SimpleAgentAuth.CreateAuthContext(apiKey, tenantId);
+if (authContext.UseApiKey)
 {
     // Local dev: API key auth
     Console.WriteLine("Auth mode: API Key");
-    var client = new AzureOpenAIClient(new Uri(endpoint), new AzureKeyCredential(apiKey));
+    var client = new AzureOpenAIClient(new Uri(endpoint), authContext.ApiKeyCredential!);
     agent = client.GetChatClient(deploymentName).AsAIAgent(
         name: "Joker",
         instructions: "You are a helpful and funny assistant who tells short jokes."
@@ -32,14 +35,8 @@ if (!string.IsNullOrEmpty(apiKey))
 else
 {
     // Production: DefaultAzureCredential
-    var tenantId = configuration["AzureAd:TenantId"];
     Console.WriteLine($"Auth mode: DefaultAzureCredential (Tenant: {(string.IsNullOrEmpty(tenantId) ? "default" : tenantId)})");
-
-    var credential = string.IsNullOrEmpty(tenantId)
-        ? new DefaultAzureCredential()
-        : new DefaultAzureCredential(new DefaultAzureCredentialOptions { TenantId = tenantId });
-
-    agent = new AIProjectClient(new Uri(endpoint), credential)
+    agent = new AIProjectClient(new Uri(endpoint), authContext.TokenCredential!)
         .AsAIAgent(
             model: deploymentName,
             instructions: "You are a helpful and funny assistant who tells short jokes.",
