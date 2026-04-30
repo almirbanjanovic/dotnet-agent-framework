@@ -181,12 +181,24 @@ var chatEndpoint = api.MapPost("/chat", async (
         }
     }
 
+    // Snapshot prior turns BEFORE appending the new user message so the
+    // orchestrator sees history as context, not duplicated alongside the
+    // current turn.
+    var historyForOrchestrator = conversation.Messages
+        .Where(m => !string.IsNullOrEmpty(m.Content))
+        .Select(m => new OrchestratorHistoryMessage(m.Role, m.Content))
+        .ToArray();
+
     await conversationStore.AddMessageAsync(
         conversation.Id,
         new ChatMessage("user", request.Message, DateTimeOffset.UtcNow),
         cancellationToken);
 
-    using var response = await orchestratorClient.SendAsync(customerId, request.Message, cancellationToken);
+    using var response = await orchestratorClient.SendAsync(
+        customerId,
+        request.Message,
+        historyForOrchestrator,
+        cancellationToken);
     var payload = await response.Content.ReadAsStringAsync(cancellationToken);
 
     if (!response.IsSuccessStatusCode)

@@ -18,7 +18,7 @@ Required config keys (populated by config-sync from Key Vault):
 | `AzureAd:TenantId` | Entra tenant ID for DefaultAzureCredential |
 | `AzureAd:BffClientId` | Entra app registration client ID for BFF |
 | `Bff:Hostname` | BFF public hostname (for CORS/redirects) |
-| `BlazorUi:Origin` | Optional CORS origin override (default: http://localhost:5001) |
+| `BlazorUi:Origin` | Optional CORS origin override (default: http://localhost:5008) |
 | `DataMode` | Set to `InMemory` for local dev (header-based auth + local images) |
 
 Run config-sync to populate: `cd src/config-sync && dotnet run -- <key-vault-uri> [environment]`
@@ -36,4 +36,4 @@ dotnet run
 
 ## Architecture role
 
-BFF API is the backend-for-frontend that sits between the Blazor UI and all backend services. It handles JWT validation (MSAL/Entra), proxies chat messages to the orchestrator-agent via SignalR, serves product images from Blob Storage, proxies direct CRM data requests to crm-api, and persists conversation history in a dedicated Cosmos DB agents database.
+BFF API is the backend-for-frontend that sits between the Blazor UI and all backend services. It handles JWT validation (MSAL/Entra), forwards chat messages (and prior conversation history) to the orchestrator-agent over HTTP/JSON, serves product images from Blob Storage, proxies direct CRM data requests to crm-api, and persists conversation history in a dedicated Cosmos DB agents database.

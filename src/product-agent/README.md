@@ -1,7 +1,7 @@
 # Product Agent
-> Product specialist agent using Azure OpenAI with Knowledge MCP and CRM MCP tools.
+> Product specialist agent using Azure AI Foundry chat with Knowledge MCP and CRM MCP tools.
 
-Implementation pending. See docs/implementation-plan.md for details.
+ASP.NET Core Minimal API exposing `POST /api/v1/chat`. Builds an `AIAgent` from `Microsoft.Agents.AI`, attaches both MCP toolsets, and forwards prior turns from the orchestrator's `history` field so multi-turn context is preserved.
 
 ## Configuration
 
@@ -19,13 +19,14 @@ Run config-sync to populate: `cd src/config-sync && dotnet run -- <key-vault-uri
 
 ## How to run locally
 
-Implementation pending. Once built:
-
 ```bash
 cd src/product-agent
 dotnet run
 ```
 
+The agent listens on the URL bound by `ASPNETCORE_URLS` (Aspire AppHost binds 5005 in local dev).
+
 ## Architecture role
 
-Product Agent is a specialist LLM agent for catalog browsing, promotions, recommendations, and sizing guides. The orchestrator-agent routes product-related intents here. It connects to both knowledge-mcp (semantic search) and crm-mcp (customer context) and uses Azure OpenAI for reasoning.
+Product Agent is a specialist LLM agent for catalog browsing, promotions, recommendations, and sizing guides. The orchestrator-agent routes product-related intents here. It connects to both knowledge-mcp (semantic search) and crm-mcp (customer context) and uses Azure AI Foundry for reasoning.
+

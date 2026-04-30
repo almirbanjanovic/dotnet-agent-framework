@@ -144,6 +144,45 @@ public class ChatPipelineIntegrationTests
         conversations.Should().OnlyContain(c => c.CustomerId == "cust-a");
     }
 
+    [Fact]
+    public async Task ChatEndpoint_SecondTurn_ForwardsPriorMessagesAsHistory()
+    {
+        var capturedPayloads = new List<string>();
+        using var factory = new BffApiWebApplicationFactory(request =>
+        {
+            capturedPayloads.Add(request.Content!.ReadAsStringAsync().GetAwaiter().GetResult());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(BuildAgentResponse("ok"), Encoding.UTF8, "application/json")
+            };
+        });
+        var client = factory.CreateClient();
+
+        var first = await SendChatAsync(client, "cust-1", "first question");
+
+        var follow = new HttpRequestMessage(HttpMethod.Post, "/api/v1/chat")
+        {
+            Content = JsonContent.Create(new ChatRequest("second question", first.ConversationId))
+        };
+        follow.Headers.Add("X-Customer-Id", "cust-1");
+        var followResponse = await client.SendAsync(follow);
+        followResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        capturedPayloads.Should().HaveCount(2);
+
+        using var firstDoc = JsonDocument.Parse(capturedPayloads[0]);
+        firstDoc.RootElement.GetProperty("history").GetArrayLength().Should().Be(0);
+
+        using var secondDoc = JsonDocument.Parse(capturedPayloads[1]);
+        var history = secondDoc.RootElement.GetProperty("history");
+        history.GetArrayLength().Should().Be(2);
+        history[0].GetProperty("role").GetString().Should().Be("user");
+        history[0].GetProperty("content").GetString().Should().Be("first question");
+        history[1].GetProperty("role").GetString().Should().Be("assistant");
+        history[1].GetProperty("content").GetString().Should().Be("ok");
+        secondDoc.RootElement.GetProperty("message").GetString().Should().Be("second question");
+    }
+
     private static string BuildAgentResponse(string response) =>
         JsonSerializer.Serialize(new { response, toolCalls = Array.Empty<object>() });
 

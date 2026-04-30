@@ -67,8 +67,8 @@ app.MapPost("/api/v1/chat", async (
     tools.AddRange(await knowledgeClient.ListToolsAsync(cancellationToken: cancellationToken));
 
     var agent = agentFactory.CreateAgent(promptProvider.Prompt, tools);
-    var userMessage = new ChatMessage(ChatRole.User, $"CustomerId: {request.CustomerId}\nMessage: {request.Message}");
-    var response = await agent.RunAsync(userMessage, cancellationToken: cancellationToken);
+    var messages = ChatHistoryBinder.Build(request.History, request.CustomerId, request.Message);
+    var response = await agent.RunAsync(messages, cancellationToken: cancellationToken);
 
     var toolCalls = ToolCallExtractor.Extract(response);
 
@@ -77,11 +77,41 @@ app.MapPost("/api/v1/chat", async (
 
 app.Run();
 
-internal sealed record ChatRequest(string CustomerId, string Message);
+internal sealed record ChatRequest(
+    string CustomerId,
+    string Message,
+    IReadOnlyList<HistoryMessage>? History = null);
+
+internal sealed record HistoryMessage(string Role, string Content);
 
 internal sealed record ChatResponse(string Response, IReadOnlyList<ToolCallInfo> ToolCalls);
 
 internal sealed record ToolCallInfo(string Name, IReadOnlyDictionary<string, object?> Arguments);
+
+internal static class ChatHistoryBinder
+{
+    public static IList<ChatMessage> Build(
+        IReadOnlyList<HistoryMessage>? history,
+        string customerId,
+        string message)
+    {
+        var messages = new List<ChatMessage>();
+
+        if (history is { Count: > 0 })
+        {
+            foreach (var entry in history)
+            {
+                var role = string.Equals(entry.Role, "assistant", StringComparison.OrdinalIgnoreCase)
+                    ? ChatRole.Assistant
+                    : ChatRole.User;
+                messages.Add(new ChatMessage(role, entry.Content));
+            }
+        }
+
+        messages.Add(new ChatMessage(ChatRole.User, $"CustomerId: {customerId}\nMessage: {message}"));
+        return messages;
+    }
+}
 
 internal static class ToolCallExtractor
 {

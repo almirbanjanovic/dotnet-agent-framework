@@ -820,8 +820,6 @@ src/bff-api/
 │   ├── CorrelationIdMiddleware.cs
 │   ├── RateLimitingConfig.cs     # Rate limiting on /api/v1/chat
 │   └── ExceptionHandler.cs
-├── Hubs/
-│   └── ChatHub.cs                # SignalR hub for streaming responses
 ├── Dockerfile
 └── chart/
     ├── Chart.yaml
@@ -853,7 +851,6 @@ src/bff-api.tests/
 | JWT/Auth | `Microsoft.Identity.Web` | latest |
 | Cosmos DB | `Microsoft.Azure.Cosmos` | 3.46.1 |
 | Blob Storage | `Azure.Storage.Blobs` | latest |
-| SignalR | `Microsoft.AspNetCore.SignalR` | (built-in) |
 | Rate Limiting | `System.Threading.RateLimiting` | (built-in .NET 9) |
 | HTTP Resilience | `Microsoft.Extensions.Http.Resilience` | latest |
 | Azure Identity | `Azure.Identity` | 1.19.0 |
@@ -869,7 +866,7 @@ src/bff-api.tests/
 - **Unblocks:** Blazor UI (Component 8)
 
 ### Estimated Complexity: **Complex**
-Most responsibilities of any single service: auth, proxy, chat orchestration, conversation persistence, image proxy, rate limiting, CORS, SignalR. Security boundary between public internet and internal services.
+Most responsibilities of any single service: auth, proxy, chat orchestration, conversation persistence, image proxy, rate limiting, CORS. Security boundary between public internet and internal services.
 
 ### Configuration Keys
 ```
@@ -917,7 +914,7 @@ Bff:Hostname
 - [ ] Customize `values.yaml`:
   - Image repository/tag for bff-api
   - Environment variables: `CosmosDb:AgentsEndpoint`, `CosmosDb:AgentsDatabase`, `Storage:ImagesEndpoint`, `Storage:ImagesContainer`, `CrmApi:BaseUrl`, `Orchestrator:BaseUrl`, `AzureAd:ClientId`, `AzureAd:TenantId`, `Bff:Hostname`
-  - Resource limits: 256Mi memory request / 512Mi limit, 200m CPU request / 500m limit (gateway — handles auth, proxying, and SignalR connections)
+  - Resource limits: 256Mi memory request / 512Mi limit, 200m CPU request / 500m limit (gateway — handles auth, proxying, and chat orchestration)
   - Service account name matching Terraform-provisioned SA for Cosmos DB + Blob Storage access
   - Liveness probe: `/health`, Readiness probe: `/ready`
   - **Ingress configuration**: Enable Application Gateway for Containers (AGC) ingress with TLS termination, public hostname, and path-based routing
@@ -934,7 +931,7 @@ Bff:Hostname
 > **The user's window into the system.** A Blazor WebAssembly SPA with MudBlazor components, MSAL authentication, and a chat panel that renders agent markdown responses with product images.
 
 ### What It Does
-A single-page application where customers log in (MSAL/Entra ID), view their orders/profile, and chat with AI agents. The chat panel renders markdown responses (via Markdig), rewrites image URLs to BFF proxy paths, and supports streaming via SignalR.
+A single-page application where customers log in (MSAL/Entra ID), view their orders/profile, and chat with AI agents. The chat panel renders markdown responses (via Markdig) and rewrites image URLs to BFF proxy paths. Each chat turn is a single HTTPS request/response — there is no streaming protocol between the UI and the BFF.
 
 ### Key Files/Folders
 ```
@@ -976,7 +973,6 @@ src/blazor-ui/
 | MudBlazor | `MudBlazor` | latest |
 | MSAL | `Microsoft.Authentication.WebAssembly.Msal` | latest |
 | Markdown | `Markdig` | latest |
-| SignalR Client | `Microsoft.AspNetCore.SignalR.Client` | latest |
 
 ### Azure Services
 - **BFF API** (HTTP — all backend access goes through BFF)
@@ -986,7 +982,7 @@ src/blazor-ui/
 - **Unblocks:** Nothing — this is the top of the dependency chain
 
 ### Estimated Complexity: **Medium-High**
-Blazor WASM with MSAL auth, MudBlazor theming, markdown rendering with custom image URL rewriting, state management, and SignalR streaming. Different Dockerfile pattern (nginx or static file server).
+Blazor WASM with MSAL auth, MudBlazor theming, markdown rendering with custom image URL rewriting, and state management. Different Dockerfile pattern from the other services (nginx static-file container).
 
 ### Configuration
 ```
@@ -1055,7 +1051,7 @@ These are addressed alongside component implementation, not as separate phases.
 
 ### CORS Policy
 - **When:** Implement with BFF API (Component 7)
-- **How:** `builder.Services.AddCors()` with Blazor UI origin allowed. In dev: `localhost:5001` (UI) → `localhost:5000` (BFF). In AKS: both behind the same AGC ingress (CORS may not be needed if same-origin).
+- **How:** `builder.Services.AddCors()` with Blazor UI origin allowed. In dev: `localhost:5008` (UI) → `localhost:5001` (BFF). In AKS: both behind the same AGC ingress (CORS may not be needed if same-origin).
 - **Pattern:** Named CORS policy, applied via `app.UseCors("BlazorUI")`
 
 ### Rate Limiting

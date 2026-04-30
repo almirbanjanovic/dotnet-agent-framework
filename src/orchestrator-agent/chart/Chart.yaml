@@ -1,0 +1,22 @@
+apiVersion: v2
+name: orchestrator-agent
+description: Contoso Outdoors Orchestrator Agent - intent classification + routing to specialists
+type: application
+
+version: 0.1.0
+
+appVersion: "0.0.1"
+
+maintainers:
+  - name: Contoso Platform Team
+    email: platform@contoso.com
+
+keywords:
+  - dotnet
+  - agent
+  - foundry
+  - aks
+  - workload-identity
+
+annotations:
+  category: agent

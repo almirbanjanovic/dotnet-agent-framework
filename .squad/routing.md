@@ -10,7 +10,7 @@ How to decide who handles what.
 | Backend APIs & BFF | Brian | CRM API, BFF API, endpoints, data access, Cosmos DB |
 | MCP servers & tools | Brian | CRM MCP, Knowledge MCP, tool definitions |
 | AI agents | Brian | CRM Agent, Product Agent, Orchestrator Agent |
-| Frontend & UI | Lois | Blazor WASM, MudBlazor, chat panel, MSAL auth, SignalR |
+| Frontend & UI | Lois | Blazor WASM, MudBlazor, chat panel, MSAL auth |
 | Code review | Stewie | Review PRs, check quality, suggest improvements |
 | Testing | Peter | Write tests, find edge cases, verify fixes |
 | Infrastructure | Joe | Terraform, AKS, Helm, Docker, identities, RBAC |
