@@ -11,50 +11,48 @@ namespace Contoso.AgentCommon.Tests;
 public sealed class AgentFactoryTests
 {
     [Fact]
-    public void CrmAgentFactory_ApiKeyPresent_UsesAzureOpenAIClient()
+    public void CrmAgentFactory_UsesAIProjectClientWithDefaultAzureCredential()
     {
         var factory = new CrmAgent::CrmAgentFactory(
-            CreateConfiguration("api-key"),
+            CreateConfiguration(),
             NullLoggerFactory.Instance,
             new ServiceCollection().BuildServiceProvider());
 
-        GetField(factory, "_chatClient").Should().NotBeNull();
-        GetField(factory, "_projectClient").Should().BeNull();
-    }
-
-    [Fact]
-    public void CrmAgentFactory_NoApiKey_UsesAIProjectClient()
-    {
-        var factory = new CrmAgent::CrmAgentFactory(
-            CreateConfiguration(null),
-            NullLoggerFactory.Instance,
-            new ServiceCollection().BuildServiceProvider());
-
-        GetField(factory, "_chatClient").Should().BeNull();
+        // The factory always builds an AIProjectClient (DefaultAzureCredential).
+        // No API-key path exists anymore — agents are keyless end-to-end.
         GetField(factory, "_projectClient").Should().NotBeNull();
     }
 
     [Fact]
-    public void ProductAgentFactory_ApiKeyPresent_UsesAzureOpenAIClient()
+    public void CrmAgentFactory_TenantIdConfigured_StillBuildsProjectClient()
     {
-        var factory = new ProductAgentFactory(
-            CreateConfiguration("api-key"),
+        var factory = new CrmAgent::CrmAgentFactory(
+            CreateConfiguration(tenantId: "tenant-1"),
             NullLoggerFactory.Instance,
             new ServiceCollection().BuildServiceProvider());
 
-        GetField(factory, "_chatClient").Should().NotBeNull();
-        GetField(factory, "_projectClient").Should().BeNull();
+        GetField(factory, "_projectClient").Should().NotBeNull();
     }
 
     [Fact]
-    public void ProductAgentFactory_NoApiKey_UsesAIProjectClient()
+    public void ProductAgentFactory_UsesAIProjectClientWithDefaultAzureCredential()
     {
         var factory = new ProductAgentFactory(
-            CreateConfiguration(null),
+            CreateConfiguration(),
             NullLoggerFactory.Instance,
             new ServiceCollection().BuildServiceProvider());
 
-        GetField(factory, "_chatClient").Should().BeNull();
+        GetField(factory, "_projectClient").Should().NotBeNull();
+    }
+
+    [Fact]
+    public void ProductAgentFactory_TenantIdConfigured_StillBuildsProjectClient()
+    {
+        var factory = new ProductAgentFactory(
+            CreateConfiguration(tenantId: "tenant-1"),
+            NullLoggerFactory.Instance,
+            new ServiceCollection().BuildServiceProvider());
+
         GetField(factory, "_projectClient").Should().NotBeNull();
     }
 
@@ -62,7 +60,7 @@ public sealed class AgentFactoryTests
     public void CrmAgentFactory_CreateAgent_ReturnsAgent()
     {
         var factory = new CrmAgent::CrmAgentFactory(
-            CreateConfiguration("api-key"),
+            CreateConfiguration(),
             NullLoggerFactory.Instance,
             new ServiceCollection().BuildServiceProvider());
 
@@ -71,13 +69,64 @@ public sealed class AgentFactoryTests
         agent.Should().NotBeNull();
     }
 
-    private static IConfiguration CreateConfiguration(string? apiKey)
+    [Fact]
+    public void ProductAgentFactory_CreateAgent_ReturnsAgent()
+    {
+        var factory = new ProductAgentFactory(
+            CreateConfiguration(),
+            NullLoggerFactory.Instance,
+            new ServiceCollection().BuildServiceProvider());
+
+        var agent = factory.CreateAgent("prompt", new List<Microsoft.Extensions.AI.AITool>());
+
+        agent.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void CrmAgentFactory_MissingDeploymentName_Throws()
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["Foundry:Endpoint"] = "https://example.com"
+        };
+
+        var config = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+
+        var act = () => new CrmAgent::CrmAgentFactory(
+            config,
+            NullLoggerFactory.Instance,
+            new ServiceCollection().BuildServiceProvider());
+
+        act.Should().Throw<InvalidOperationException>()
+           .WithMessage("*Foundry:DeploymentName*");
+    }
+
+    [Fact]
+    public void CrmAgentFactory_MissingEndpoint_Throws()
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["Foundry:DeploymentName"] = "deployment"
+        };
+
+        var config = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+
+        var act = () => new CrmAgent::CrmAgentFactory(
+            config,
+            NullLoggerFactory.Instance,
+            new ServiceCollection().BuildServiceProvider());
+
+        act.Should().Throw<InvalidOperationException>()
+           .WithMessage("*Foundry:Endpoint*");
+    }
+
+    private static IConfiguration CreateConfiguration(string? tenantId = null)
     {
         var values = new Dictionary<string, string?>
         {
             ["Foundry:DeploymentName"] = "deployment",
             ["Foundry:Endpoint"] = "https://example.com",
-            ["Foundry:ApiKey"] = apiKey
+            ["AzureAd:TenantId"] = tenantId
         };
 
         return new ConfigurationBuilder()

@@ -9,7 +9,7 @@ public sealed class AuthStateProvider
     [
         new CustomerOption("101", "Emma Wilson"),
         new CustomerOption("102", "James Chen"),
-        new CustomerOption("103", "Sarah Johnson"),
+        new CustomerOption("103", "Sarah Miller"),
         new CustomerOption("104", "David Park"),
         new CustomerOption("105", "Lisa Torres"),
         new CustomerOption("106", "Mike Johnson"),

@@ -218,11 +218,13 @@ Identity flow:
   Emma (Entra user)      --JWT-->  BFF validates, extracts oid
   Orch Agent (agent ID)  --token-->  Azure OpenAI (intent classification)
   CRM Agent (agent ID)   --token-->  Azure OpenAI (tool selection)
-  id-crm-mcp (managed)   --token-->  Cosmos DB (execute get_orders tool)
+  CRM Agent              --HTTP+X-Customer-Entra-Id-->  CRM MCP
+  CRM MCP                --HTTP+X-Customer-Entra-Id-->  CRM API
+  id-crm-api (managed)   --token-->  Cosmos DB (executes filtered query)
 
 Identities used:
   ✓ User identity    — Emma's JWT (determines WHOSE orders to retrieve)
-  ✓ Managed identity — id-crm-mcp (CRM MCP connects to Cosmos DB)
+  ✓ Managed identity — id-crm-api (CRM API connects to Cosmos DB)
   ✓ Agent identity   — Orchestrator + CRM Agent (call Azure OpenAI for reasoning)
 
 Why agent identity here?
@@ -260,7 +262,7 @@ Identity flow:
   CRM Agent (agent ID)     --token-->  Azure OpenAI -> decides cancel_order
   CRM Agent                --returns consent_required to BFF
   BFF                      --checks consent records in Cosmos DB (Agents account)
-  id-crm-mcp (managed)     --token-->  Cosmos DB (execute cancel_order after approval)
+  id-crm-api (managed)     --token-->  Cosmos DB (execute cancel_order after approval)
 
 Why agent identity is critical here:
   The consent dialog shows "Contoso CRM Agent wants to..." — this name
@@ -360,7 +362,7 @@ Non-agent services use standard Azure managed identities:
 | --- | --- | --- |
 | `id-bff` | BFF API | Access Cosmos DB (CRM + conversations), read Blob Storage (image proxy), read Key Vault |
 | `id-crm-api` | CRM API | Access Cosmos DB (CRM), read Key Vault |
-| `id-crm-mcp` | CRM MCP Server | Access Cosmos DB (CRM), read Key Vault |
+| `id-crm-mcp` | CRM MCP Server | Read Key Vault (no Cosmos access — calls CRM API over HTTP) |
 | `id-know-mcp` | Knowledge MCP Server | Read AI Search index, read Key Vault |
 | `id-kubelet` | AKS kubelet | Pull images from ACR |
 
@@ -390,12 +392,17 @@ Each identity is granted **only** the permissions it needs (least privilege). Th
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `id-bff` | Managed | ✓ | ✓ | | ✓ | | ✓ | |
 | `id-crm-api` | Managed | ✓ | ✓ | | | | | |
-| `id-crm-mcp` | Managed | ✓ | ✓ | | | | | |
+| `id-crm-mcp` | Managed | ✓ | | | | | | |
 | `id-know-mcp` | Managed | ✓ | | | | ✓ | | |
+| Search service identity | Managed | | | ✓ | | | ✓ | |
 | Contoso CRM Agent | Agent | ✓ | | ✓ | ✓ | | | |
 | Contoso Product Agent | Agent | ✓ | | ✓ | ✓ | | | |
 | Contoso Orchestrator Agent | Agent | ✓ | | ✓ | ✓ | | | |
 | `id-kubelet` | Managed | | | | | | | ✓ |
+
+**Notes:**
+- `id-crm-mcp` has no Cosmos DB access — the CRM MCP server is an HTTP client that calls the CRM API; only `id-crm-api` queries Cosmos DB directly.
+- The Search service identity has `OpenAI User` (to call Foundry embeddings during integrated vectorization) and `Blob Data Reader` (to read PDFs from the SharePoint container). It is the auto-generated system-assigned identity on the AI Search resource, not a workload identity.
 
 Each identity has **only** the permissions it needs. For example, the CRM API can access Cosmos DB (CRM) and Key Vault but cannot call Azure OpenAI — only the agent identities can do that. If one service is compromised, the blast radius is limited to its specific permissions. Agent identities receive the same RBAC roles as the managed identities they replaced — the difference is in how they're represented in Entra (as agent objects, not generic managed identities).
 

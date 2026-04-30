@@ -123,8 +123,7 @@ internal sealed class CrmAgentFactory
     private readonly string _deploymentName;
     private readonly ILoggerFactory _loggerFactory;
     private readonly IServiceProvider _services;
-    private readonly OpenAI.Chat.ChatClient? _chatClient;
-    private readonly AIProjectClient? _projectClient;
+    private readonly AIProjectClient _projectClient;
 
     public CrmAgentFactory(IConfiguration configuration, ILoggerFactory loggerFactory, IServiceProvider services)
     {
@@ -136,22 +135,16 @@ internal sealed class CrmAgentFactory
         var endpoint = configuration["Foundry:Endpoint"]
             ?? throw new InvalidOperationException("Foundry:Endpoint is not set.");
 
-        var apiKey = configuration["Foundry:ApiKey"];
+        // Always authenticate via DefaultAzureCredential — no API keys.
+        // Local: deployer's `az login` token (granted Cognitive Services
+        // OpenAI User by setup-local Terraform). AKS: workload identity
+        // backed by an Entra Agent ID for the CRM Agent.
+        var tenantId = configuration["AzureAd:TenantId"];
+        var credential = string.IsNullOrEmpty(tenantId)
+            ? new DefaultAzureCredential()
+            : new DefaultAzureCredential(new DefaultAzureCredentialOptions { TenantId = tenantId });
 
-        if (!string.IsNullOrEmpty(apiKey))
-        {
-            var client = new AzureOpenAIClient(new Uri(endpoint), new AzureKeyCredential(apiKey));
-            _chatClient = client.GetChatClient(_deploymentName);
-        }
-        else
-        {
-            var tenantId = configuration["AzureAd:TenantId"];
-            var credential = string.IsNullOrEmpty(tenantId)
-                ? new DefaultAzureCredential()
-                : new DefaultAzureCredential(new DefaultAzureCredentialOptions { TenantId = tenantId });
-
-            _projectClient = new AIProjectClient(new Uri(endpoint), credential);
-        }
+        _projectClient = new AIProjectClient(new Uri(endpoint), credential);
     }
 
     public AIAgent CreateAgent(string instructions, IList<AITool> tools)
@@ -159,18 +152,7 @@ internal sealed class CrmAgentFactory
         const string agentName = "CRM Agent";
         const string description = "Contoso Outdoors customer service agent for orders, returns, and support tickets.";
 
-        if (_chatClient is not null)
-        {
-            return _chatClient.AsAIAgent(
-                instructions: instructions,
-                name: agentName,
-                description: description,
-                tools: tools,
-                loggerFactory: _loggerFactory,
-                services: _services);
-        }
-
-        return _projectClient!.AsAIAgent(
+        return _projectClient.AsAIAgent(
             model: _deploymentName,
             instructions: instructions,
             name: agentName,

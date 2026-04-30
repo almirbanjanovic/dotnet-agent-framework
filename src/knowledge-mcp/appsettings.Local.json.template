@@ -1,18 +1,12 @@
 {
   "Foundry": {
     "Endpoint": "{{FOUNDRY_ENDPOINT}}",
-    "ApiKey": "{{FOUNDRY_API_KEY}}",
     "EmbeddingDeploymentName": "{{EMBEDDING_DEPLOYMENT_NAME}}"
   },
-  "Search": {
-    "Endpoint": "",
-    "IndexName": "knowledge-documents-index"
+  "AzureAd": {
+    "TenantId": "{{TENANT_ID}}"
   },
-  "Storage": {
-    "ImagesEndpoint": "",
-    "ImagesAccountName": "",
-    "ImagesContainer": "product-images"
-  },
+  "DataMode": "InMemory",
   "Kestrel": {
     "Endpoints": {
       "Http": { "Url": "http://localhost:5003" }

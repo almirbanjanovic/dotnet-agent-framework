@@ -153,11 +153,12 @@ Expected output:
   ✓ crm-api/appsettings.Development.json (3 keys)
   ✓ crm-mcp/appsettings.Development.json (2 keys)
   ✓ knowledge-mcp/appsettings.Development.json (6 keys)
-  ✓ crm-agent/appsettings.Development.json (4 keys)
+  ✓ crm-agent/appsettings.Development.json (5 keys)
   ✓ product-agent/appsettings.Development.json (5 keys)
   ✓ orchestrator-agent/appsettings.Development.json (5 keys)
-  ✓ bff-api/appsettings.Development.json (9 keys)
+  ✓ bff-api/appsettings.Development.json (10 keys)
   ✓ blazor-ui/appsettings.Development.json (3 keys)
+  ✓ simple-agent/appsettings.Development.json (3 keys)
 
 ═══════════════════════════════════════════════════════════
   Done! Each component has its own appsettings.Development.json.

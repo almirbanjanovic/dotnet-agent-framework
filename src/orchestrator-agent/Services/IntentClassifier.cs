@@ -40,19 +40,16 @@ internal sealed class IntentClassifier
     public async Task<string> ClassifyAsync(string message, CancellationToken cancellationToken)
     {
         var prompt = string.Format(ClassificationTemplate, message);
-        var intent = (await _client.RunAsync(prompt, cancellationToken)).Trim();
+        var raw = (await _client.RunAsync(prompt, cancellationToken)).Trim();
 
-        if (intent.Contains("PRODUCT", StringComparison.OrdinalIgnoreCase))
-        {
-            return "PRODUCT";
-        }
+        // Match the FIRST whole-word occurrence so noise around the answer
+        // (markdown wrappers, trailing periods, etc.) doesn't flip the route.
+        var token = System.Text.RegularExpressions.Regex.Match(
+            raw,
+            @"\b(PRODUCT|CRM)\b",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase).Value;
 
-        if (intent.Contains("CRM", StringComparison.OrdinalIgnoreCase))
-        {
-            return "CRM";
-        }
-
-        return "CRM";
+        return string.Equals(token, "PRODUCT", StringComparison.OrdinalIgnoreCase) ? "PRODUCT" : "CRM";
     }
 
     private static AIAgent BuildAgent(
@@ -65,19 +62,10 @@ internal sealed class IntentClassifier
             ?? throw new InvalidOperationException("Foundry:DeploymentName is not set.");
         var endpoint = configuration["Foundry:Endpoint"]
             ?? throw new InvalidOperationException("Foundry:Endpoint is not set.");
-        var apiKey = configuration["Foundry:ApiKey"];
 
-        if (!string.IsNullOrEmpty(apiKey))
-        {
-            var client = new AzureOpenAIClient(new Uri(endpoint), new AzureKeyCredential(apiKey));
-            return client.GetChatClient(deploymentName).AsAIAgent(
-                instructions: prompt,
-                name: "Orchestrator Agent",
-                description: "Classifies customer intent for routing to CRM or Product agents.",
-                loggerFactory: loggerFactory,
-                services: services);
-        }
-
+        // Always authenticate via DefaultAzureCredential — no API keys.
+        // In local dev the deployer's `az login` token is used; in AKS the
+        // pod's agent identity is used via workload-identity federation.
         var tenantId = configuration["AzureAd:TenantId"];
         var credential = string.IsNullOrEmpty(tenantId)
             ? new DefaultAzureCredential()

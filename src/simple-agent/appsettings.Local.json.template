@@ -1,7 +1,9 @@
 {
   "Foundry": {
     "Endpoint": "{{FOUNDRY_ENDPOINT}}",
-    "ApiKey": "{{FOUNDRY_API_KEY}}",
     "DeploymentName": "{{CHAT_DEPLOYMENT_NAME}}"
+  },
+  "AzureAd": {
+    "TenantId": "{{TENANT_ID}}"
   }
 }

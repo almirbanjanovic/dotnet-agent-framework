@@ -117,12 +117,7 @@ jobs:
         run: dotnet restore src/crm-api/Contoso.CrmApi.csproj
 
       - name: Test
-        run: |
-          if [ -f "src/crm-api.tests/Contoso.CrmApi.Tests.csproj" ]; then
-            dotnet test src/crm-api.tests/Contoso.CrmApi.Tests.csproj --no-restore --verbosity normal
-          else
-            echo "No test project found — skipping."
-          fi
+        run: dotnet test src-tests/Contoso.CrmApi.Tests/Contoso.CrmApi.Tests.csproj --no-restore --verbosity normal
 
   docker-build-push:
     runs-on: ubuntu-latest

@@ -1,24 +1,22 @@
 # Local Development Quick-Start Guide
 
-Run the entire .NET Agent Framework system locally with a single command.
+Run the entire .NET Agent Framework system locally with a single command. The
+local mode runs all 8 services in-process via .NET Aspire, with **in-memory
+data** (no Cosmos DB Emulator, no Azurite, no databases to install).
 
 ---
 
 ## Prerequisites
 
-Before you start, ensure you have the following installed:
-
 ### Tools
 
 - **[.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)** — for running all components
-- **[Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli)** — for Azure authentication (`az login`)
-- **[Terraform >= 1.14.7](https://developer.hashicorp.com/terraform/install)** — for deploying Foundry
-- **[Cosmos DB Emulator](https://aka.ms/cosmosdb-emulator)** — for local CRM data persistence
-- **Node.js + npm** — for Azurite (Azure Storage emulator)
+- **[Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli)** — for `az login`
+- **[Terraform >= 1.14.7](https://developer.hashicorp.com/terraform/install)** — to provision Azure AI Foundry
 
 ### Accounts
 
-- An **Azure subscription** with Owner or Contributor permissions
+- An **Azure subscription** with permission to create an Azure AI Services account
 
 ---
 
@@ -30,46 +28,38 @@ Before you start, ensure you have the following installed:
 az login
 ```
 
-### Step 2: Start local emulators
+`DefaultAzureCredential` picks up your CLI token, so the local services
+authenticate to Foundry as you — no API keys are required.
 
-**Cosmos DB Emulator:**
-- On Windows, open the Cosmos DB Emulator application from Start menu, or run:
-  ```powershell
-  # If installed via winget/MSI, it may start as a service automatically.
-  # Verify it's running: https://localhost:8081/_explorer/index.html
-  ```
+### Step 2: Deploy Foundry and generate local config
 
-**Azurite (Storage Emulator):**
-```bash
-npm install -g azurite  # (one-time)
-azurite --silent --location .azurite
-# Runs on: http://127.0.0.1:10000 (blob), http://127.0.0.1:10001 (queue), http://127.0.0.1:10002 (table)
-```
-
-> **Tip:** Keep both emulator terminals open while developing.
-
-### Step 3: Deploy Foundry and generate local config
-
-From the project root:
+From the repository root:
 
 ```powershell
 ./infra/setup-local.ps1
 ```
 
+```bash
+./infra/setup-local.sh
+```
+
 **What this does:**
-1. Deploys **Azure AI Foundry** (1 resource group + 1 AI Services account + 2 model deployments) to your Azure subscription
-2. Retrieves the Foundry API key
-3. Generates `appsettings.Local.json` for each of the 8 components with:
-   - Foundry endpoint and API key
-   - Cosmos DB emulator connection strings
-   - Azurite blob storage connection strings
-   - Seeded customer IDs for dev auth
-4. Seeds CRM data (customers, orders, products, promotions, support tickets) into the local Cosmos emulator
-5. Uploads product images and knowledge documents to Azurite
 
-**Cost:** ~$1–5/day (pay-per-token only, no infrastructure charges beyond Foundry account creation).
+1. Runs `terraform apply` in `infra/terraform/local-dev/` — provisions:
+   - 1 resource group (`rg-dotnetagent-localdev`)
+   - 1 Azure AI Services account (Foundry)
+   - 2 model deployments: chat (`gpt-4.1`) and embeddings (`text-embedding-3-small`)
+2. Reads the Foundry endpoint from Terraform output.
+3. Generates `appsettings.Local.json` for each component with:
+   - `Foundry:Endpoint` (auth uses `DefaultAzureCredential` — your `az login` token)
+   - `DataMode = InMemory` so services load CSV/TXT/PNG data from `data/`
 
-**Cleanup (optional):** To remove Foundry and free up costs:
+**No API keys are written.** Everything authenticates via your Azure CLI token.
+
+**Cost:** ~$1–5/day (pay-per-token only, no infrastructure beyond the Foundry account).
+
+**Cleanup:**
+
 ```powershell
 ./infra/setup-local.ps1 -Cleanup
 ```
@@ -78,34 +68,33 @@ From the project root:
 
 ## Running the System
 
-### Quick Start: Use Aspire Dashboard
-
-From the project root, run all 8 components together with monitoring:
+### Use the Aspire dashboard (recommended)
 
 ```bash
 dotnet run --project src/AppHost
 ```
 
-This starts the **Aspire orchestration dashboard** at **https://localhost:15000** with:
-- All 8 components visible and live logs
-- Health checks for each component
+This starts the Aspire orchestration dashboard (default at **https://localhost:15888**) with:
+
+- All 8 components registered with live logs and metrics
+- Health-check status per service
 - Port mappings (5001–5008)
-- One-click stop/restart
+- One-click stop / restart per service
 
-### Manual Start (Optional)
+### Manual start (optional)
 
-If you prefer to run components individually, open 8 terminals and run:
+If you prefer to run components individually, open 8 terminals:
 
-| Terminal | Component | Port |
-|----------|-----------|------|
-| 1 | `cd src/crm-api && dotnet run --environment Local` | 5001 |
-| 2 | `cd src/crm-mcp && dotnet run --environment Local` | 5002 |
-| 3 | `cd src/knowledge-mcp && dotnet run --environment Local` | 5003 |
-| 4 | `cd src/crm-agent && dotnet run --environment Local` | 5004 |
-| 5 | `cd src/product-agent && dotnet run --environment Local` | 5005 |
-| 6 | `cd src/orchestrator-agent && dotnet run --environment Local` | 5006 |
-| 7 | `cd src/bff-api && dotnet run --environment Local` | 5007 |
-| 8 | `cd src/blazor-ui && dotnet run --environment Local` | 5008 |
+| Terminal | Component | Command | Port |
+|----------|-----------|---------|------|
+| 1 | CRM API | `dotnet run --project src/crm-api` | 5001 |
+| 2 | CRM MCP | `dotnet run --project src/crm-mcp` | 5002 |
+| 3 | Knowledge MCP | `dotnet run --project src/knowledge-mcp` | 5003 |
+| 4 | CRM Agent | `dotnet run --project src/crm-agent` | 5004 |
+| 5 | Product Agent | `dotnet run --project src/product-agent` | 5005 |
+| 6 | Orchestrator Agent | `dotnet run --project src/orchestrator-agent` | 5006 |
+| 7 | BFF API | `dotnet run --project src/bff-api` | 5007 |
+| 8 | Blazor UI | `dotnet run --project src/blazor-ui` | 5008 |
 
 ---
 
@@ -113,305 +102,204 @@ If you prefer to run components individually, open 8 terminals and run:
 
 | Component | Port | URL | Purpose |
 |-----------|------|-----|---------|
-| **CRM API** | 5001 | `http://localhost:5001` | Core CRM data endpoints (11 APIs) |
-| **CRM MCP** | 5002 | `http://localhost:5002` | MCP server wrapping CRM API as tools |
-| **Knowledge MCP** | 5003 | `http://localhost:5003` | MCP server for knowledge base search |
-| **CRM Agent** | 5004 | `http://localhost:5004` | Agent specializing in CRM queries |
-| **Product Agent** | 5005 | `http://localhost:5005` | Agent specializing in product queries |
-| **Orchestrator Agent** | 5006 | `http://localhost:5006` | Intent classifier & router agent |
-| **BFF API** | 5007 | `http://localhost:5007` | Backend-for-Frontend (conversation, image proxy) |
-| **Blazor UI** | 5008 | `https://localhost:5008` | User interface (WASM SPA, MudBlazor) |
-| **Aspire Dashboard** | 15000 | `https://localhost:15000` | Monitoring & orchestration |
+| CRM API | 5001 | `http://localhost:5001` | Core CRM data endpoints (11 routes) |
+| CRM MCP | 5002 | `http://localhost:5002` | MCP server wrapping the CRM API as 11 tools |
+| Knowledge MCP | 5003 | `http://localhost:5003` | MCP server with `search_knowledge_base` |
+| CRM Agent | 5004 | `http://localhost:5004` | CRM specialist agent |
+| Product Agent | 5005 | `http://localhost:5005` | Product/recommendation agent |
+| Orchestrator Agent | 5006 | `http://localhost:5006` | Intent classifier + router |
+| BFF API | 5007 | `http://localhost:5007` | Backend-for-Frontend |
+| Blazor UI | 5008 | `https://localhost:5008` | User interface (WASM SPA) |
+| Aspire Dashboard | 15888 | `https://localhost:15888` | Monitoring + orchestration |
 
 ---
 
 ## User Authentication (Dev Mode)
 
-The Blazor UI includes a customer **dropdown menu** for dev testing. Select from these built-in customers:
+In local mode the Blazor UI shows a **customer dropdown** for dev testing. The
+options match the seed data in [`data/contoso-crm/customers.csv`](../data/contoso-crm/customers.csv):
 
-| ID | Name | Email |
-|----|------|-------|
-| 101 | Alice Johnson | alice.johnson@contoso.com |
-| 102 | Bob Smith | bob.smith@contoso.com |
-| 103 | Charlie Brown | charlie.brown@contoso.com |
-| 104 | Diana Prince | diana.prince@contoso.com |
-| 105 | Eve Martinez | eve.martinez@contoso.com |
-| 106 | Frank Chen | frank.chen@contoso.com |
-| 107 | Grace Lee | grace.lee@contoso.com |
-| 108 | Henry Davis | henry.davis@contoso.com |
+| ID | Name | Loyalty Tier |
+|----|------|--------------|
+| 101 | Emma Wilson | Silver |
+| 102 | James Chen | Bronze |
+| 103 | Sarah Miller | Gold |
+| 104 | David Park | Silver |
+| 105 | Lisa Torres | Bronze |
+| 106 | Mike Johnson | Gold |
+| 107 | Anna Roberts | Bronze |
+| 108 | Tom Garcia | Silver |
 
-This is a shortcut for local dev. In Azure, the UI uses MSAL for Microsoft Entra ID authentication.
+In Azure mode the dropdown is replaced by MSAL-based Microsoft Entra ID sign-in.
 
 ---
 
 ## Architecture Overview
 
-### What's Running Where
+### What's running where
 
-**Local Machine:**
-- ✅ **All 8 components** (via `dotnet run`)
-- ✅ **Cosmos DB Emulator** (CRM data persistence)
-- ✅ **Azurite** (Blob storage, product images, knowledge docs)
-- ✅ **Aspire orchestration** (health monitoring, logs)
+**Local machine (in-process):**
 
-**Azure:**
-- ☁️ **Foundry account** (Azure AI Services, gpt-4.1 + text-embedding-3-small models)
+- All 8 services via `dotnet run --project src/AppHost`
+- In-memory CRM data (CSVs from `data/contoso-crm/`)
+- In-memory knowledge base (TXT files from `data/contoso-sharepoint/`, embedded with Foundry)
+- Local file system for product images (`data/contoso-images/`)
+- Aspire dashboard for observability
 
-### Data Patterns
+**Azure (single resource):**
 
-**CRM Data (In-Memory → Cosmos):**
-- CSV files in `data/contoso-crm/` are parsed and seeded into Cosmos containers
-- Each component reads from Cosmos via the **CRM API** (repository pattern)
-- BFF proxies CRM API calls; agents access via **CRM MCP tools**
+- Azure AI Foundry account with `gpt-4.1` and `text-embedding-3-small` deployments
 
-**Knowledge Base (In-Memory → Azurite):**
-- PDF/TXT files in `data/contoso-sharepoint/` are seeded into Azurite blob storage
-- Agents search via **Knowledge MCP** → embeddings via Foundry → cosine similarity
-- Results augment agent context (RAG pattern)
+### Data patterns
 
-**Product Images (Blob Storage):**
-- PNG files in `data/contoso-images/` are uploaded to Azurite
-- BFF proxies image bytes to the browser (`/api/images/{filename}`)
+**CRM data (CSV → in-memory):**
 
-### Component Interaction
+- CRM API loads `data/contoso-crm/*.csv` into `InMemoryCrmDataService` at startup.
+- BFF proxies CRM API calls. Agents access CRM data through the CRM MCP tools.
+
+**Knowledge base (TXT → embeddings → in-memory vector index):**
+
+- Knowledge MCP loads `data/contoso-sharepoint/**/*.txt` at startup.
+- Each file is embedded via Foundry, then queries hit `InMemorySearchService` for cosine-similarity ranking.
+- Foundry calls authenticate via `DefaultAzureCredential` — no API key.
+
+**Product images (file system):**
+
+- BFF reads PNGs from `data/contoso-images/` and streams them through `/api/v1/images/{filename}`.
+
+### Component interaction
 
 ```text
 Browser
-  ↓
-Blazor UI (5008)
-  ├→ BFF API (5007)
-  │   ├→ CRM API (5001) → Cosmos DB Emulator
-  │   ├→ Orchestrator Agent (5006)
-  │   └→ Blob Storage (Azurite)
   │
-  └→ Orchestrator Agent (5006, via HTTP)
-      ├→ CRM Agent (5004)
-      │   ├→ CRM MCP (5002) → CRM API (5001)
-      │   └→ Knowledge MCP (5003) → Azurite
-      │
-      └→ Product Agent (5005)
-          ├→ CRM MCP (5002) → CRM API (5001)
-          └→ Knowledge MCP (5003) → Azurite
+  ▼
+Blazor UI (5008)
+  │
+  └─► BFF API (5007)
+        │
+        ├─► CRM API (5001) — in-memory CRM service
+        │
+        └─► Orchestrator Agent (5006)
+              │
+              ├─► CRM Agent (5004)
+              │     ├─► CRM MCP (5002) ─► CRM API (5001)
+              │     └─► Knowledge MCP (5003) ─► local TXT files + Foundry embeddings
+              │
+              └─► Product Agent (5005)
+                    ├─► CRM MCP (5002) ─► CRM API (5001)
+                    └─► Knowledge MCP (5003) ─► local TXT files + Foundry embeddings
 
-All agents use Foundry (Azure) for:
-  - Chat model: gpt-4.1
-  - Embeddings: text-embedding-3-small
+All agents call Azure AI Foundry for:
+  • Chat completions: gpt-4.1
+  • Embeddings:        text-embedding-3-small
+Authentication everywhere: DefaultAzureCredential (your `az login` token).
 ```
 
 ---
 
 ## Common Tasks
 
-### Check Health of All Components
+### Check health
 
-Open the Aspire Dashboard: **https://localhost:15000**
+Open the Aspire dashboard at **https://localhost:15888**. Each service shows:
 
-Each component shows:
-- ✅ Running (green) or ❌ Failed (red)
-- Real-time logs
-- Environment variables
-- Resource usage
+- Status (running / failed)
+- Live logs
+- Environment variables and resource usage
 
-### View CRM Data
+Or hit the endpoints directly:
 
-**Via API:**
+```bash
+curl http://localhost:5001/health        # liveness
+curl http://localhost:5001/ready         # readiness (deps reachable)
+```
+
+### View CRM data
+
 ```bash
 curl http://localhost:5001/api/v1/customers
 curl http://localhost:5001/api/v1/customers/101
-curl http://localhost:5001/api/v1/orders?customerId=101
+curl http://localhost:5001/api/v1/customers/101/orders
 ```
 
-**Via Cosmos Emulator UI:**
-Open https://localhost:8081/_explorer/index.html in your browser and browse the `contoso-crm` database.
+### Run tests
 
-### Run Tests
+Test projects live under `src-tests/`:
 
 ```bash
-# Unit tests for CRM API
-dotnet test src/crm-api.tests
-
-# Integration tests for BFF
-dotnet test src/bff-api.tests
+dotnet test src-tests/Contoso.CrmApi.Tests/Contoso.CrmApi.Tests.csproj
+dotnet test src-tests/Contoso.BffApi.Tests/Contoso.BffApi.Tests.csproj
+# Or run everything:
+dotnet test dotnet-agent-framework.sln
 ```
 
-### Debug a Component
+### Debug a component
 
-Add a breakpoint in your IDE and run:
+In your IDE, set a breakpoint and run the project directly (not via AppHost):
+
 ```bash
-cd src/crm-api
-dotnet run --environment Local --no-restore
+dotnet run --project src/crm-api --no-restore
 ```
-
-The component will wait for the debugger to attach.
 
 ---
 
 ## Troubleshooting
 
-### Issue: `az login` fails or requires re-authentication
+### `az login` fails or token expired
 
-**Solution:**
 ```bash
 az account clear
 az login
 ```
 
-### Issue: Cosmos DB Emulator won't start
+### Port 5001–5008 already in use
 
-**Symptoms:** Port 8081 already in use or "emulator not found"
-
-**Solution (Windows):**
 ```powershell
-# Check if running
-Get-Process | grep -i cosmos
-
-# Kill existing process if stuck
-Stop-Process -Name "CosmosDB.Emulator" -Force
-
-# Restart from Start menu or re-install:
-winget install Microsoft.Azure.CosmosEmulator
+# Windows / PowerShell
+Get-NetTCPConnection -LocalPort 5001 | Select-Object -ExpandProperty OwningProcess | ForEach-Object { Stop-Process -Id $_ -Force }
 ```
-
-### Issue: Azurite connection refused
-
-**Symptoms:** `Connection refused: 127.0.0.1:10000`
-
-**Solution:**
-```bash
-# Ensure Azurite is running
-azurite --silent --location .azurite
-
-# Or kill if stuck
-pkill -f azurite   # macOS/Linux
-Stop-Process -Name "node" -Filter {$_.Path -like "*azurite*"}  # Windows
-```
-
-### Issue: "Connection string is required" at startup
-
-**Symptoms:** Component fails with missing `CosmosDb:ConnectionString`
-
-**Solution:**
-```bash
-# Regenerate config
-./infra/setup-local.ps1
-
-# Verify `appsettings.Local.json` exists in src/crm-api/ (and other components)
-ls src/crm-api/appsettings.Local.json
-```
-
-### Issue: Terraform state corruption
-
-**Symptoms:** `terraform apply` fails with "resource already exists" or "state mismatch"
-
-**Solution:**
-```bash
-cd infra/terraform/local-dev
-
-# Check current state
-terraform state list
-
-# (Rarely needed) Reset state if corrupted
-rm -rf .terraform.lock.hcl terraform.tfstate*
-terraform init
-terraform apply
-```
-
-### Issue: Component port 5001–5008 already in use
-
-**Symptoms:** `Address already in use` when starting components
-
-**Solution:**
-```bash
-# Find what's using the port (example: 5001)
-netstat -ano | grep 5001  # Windows
-lsof -i :5001             # macOS/Linux
-
-# Kill the process by PID
-Stop-Process -Id <PID> -Force  # Windows
-kill -9 <PID>                  # macOS/Linux
-
-# Or just pick a different port:
-dotnet run --environment Local -- --urls "http://localhost:5011"
-```
-
----
-
-## Development Workflow
-
-### 1. Clone and Initialize
 
 ```bash
-git clone <repo>
-cd dotnet-agent-framework
+# macOS / Linux
+lsof -i :5001
+kill -9 <PID>
 ```
 
-### 2. Run Setup
+### `appsettings.Local.json` missing
+
+Re-run setup; the script regenerates the files:
 
 ```bash
 ./infra/setup-local.ps1
-# This also starts emulators if needed
 ```
 
-### 3. Start All Components
+### Foundry quota or model deployment failure
 
-```bash
-dotnet run --project src/AppHost
-# Dashboard at https://localhost:15000
-```
+Check the Foundry account in the Azure portal under
+`rg-dotnetagent-localdev`. Confirm the chat and embedding deployments exist
+and have available quota in the chosen region.
 
-### 4. Open UI in Browser
+### Knowledge base returns no matches
 
-```bash
-https://localhost:5008
-```
-
-Select a customer from the dropdown and start chatting!
-
-### 5. Make Code Changes
-
-Edit any component (e.g., `src/crm-api/Program.cs`). Aspire detects file changes and restarts the component automatically.
-
-### 6. Run Tests
-
-```bash
-dotnet test src/crm-api.tests
-```
-
-### 7. Stop All Components
-
-In the Aspire Dashboard, click **Stop** or Ctrl+C in the terminal where AppHost is running.
+The first request after startup populates the in-memory vector index by
+calling Foundry for embeddings. Watch the Knowledge MCP logs in the Aspire
+dashboard for progress. Reload after a few seconds.
 
 ---
 
 ## What's Different from Azure Deployment
 
-| Aspect | Local Dev | Azure |
-|--------|-----------|-------|
-| **CRM Database** | Cosmos DB Emulator (local) | Azure Cosmos DB (managed service) |
-| **Storage** | Azurite (local) | Azure Blob Storage |
-| **AI Models** | Foundry (Azure) | Foundry (Azure) |
-| **Auth** | Dropdown menu (dev bypass) | MSAL + Microsoft Entra ID |
-| **Network** | `localhost` only | Public internet (Ingress + NSGs) |
-| **Cost** | ~$1–5/day | ~$50–100/day |
-| **Setup time** | ~15 min | ~45–60 min |
-| **Deployment** | `dotnet run` | Helm + AKS |
+| Aspect | Local Dev | Azure Deployment |
+|--------|-----------|------------------|
+| CRM data | In-memory (`data/contoso-crm/*.csv`) | Cosmos DB (CRM account, 6 containers) |
+| Knowledge base | In-memory vector index over local TXT files | Azure AI Search (Standard, integrated vectorization over PDFs) |
+| Product images | File system (`data/contoso-images/`) | Azure Blob Storage (image proxy through BFF) |
+| AI models | Foundry (Azure) — `DefaultAzureCredential` | Foundry (Azure) — workload identity / agent identity |
+| Auth | Customer dropdown (dev bypass) | Microsoft Entra ID via MSAL (PKCE) |
+| Network | `localhost` | App Gateway for Containers + private endpoints |
+| Hosting | `dotnet run` via Aspire | AKS (Helm + workload identity) |
+| Cost | ~$1–5/day | ~$50–100/day |
+| Setup time | ~10 min | ~45–60 min |
 
-In Azure, replace emulators and dropdown auth with real cloud services and MSAL authentication. **No code changes needed** — all components support both modes via configuration.
-
----
-
-## Next Steps
-
-- **Learn the architecture:** See [docs/architecture.png](architecture.png) and [README.md](../README.md)
-- **Implement a component:** Follow [docs/implementation-plan.md](implementation-plan.md)
-- **Deploy to Azure:** See [infra/README.md](../infra/README.md) and [Lab 1](lab-1.md)
-- **Write tests:** See [docs/security.md](security.md) for RBAC patterns and test strategies
-- **Contribute:** Create a feature branch, make changes, run tests, submit a PR
-
----
-
-## Support
-
-- **Got stuck?** Check [Troubleshooting](#troubleshooting) above
-- **Found a bug?** Open an issue on GitHub
-- **Want to contribute?** See [CONTRIBUTING.md](../CONTRIBUTING.md) (if it exists) or start with the implementation plan
+No code changes are required to switch — components read `DataMode` from
+configuration to pick `InMemory*` vs Azure-backed services.

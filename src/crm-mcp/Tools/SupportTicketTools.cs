@@ -32,7 +32,7 @@ public sealed class SupportTicketTools
         }
     }
 
-    [McpServerTool(Name = "create_support_ticket"), Description("Create a new support ticket.")]
+    [McpServerTool(Name = "create_support_ticket", ReadOnly = false), Description("Create a new support ticket.")]
     public async Task<string> CreateSupportTicketAsync(
         [Description("Support ticket request payload.")] CreateTicketRequest request)
     {

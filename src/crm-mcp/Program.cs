@@ -22,10 +22,15 @@ builder.WebHost.ConfigureKestrel(options =>
 var crmApiBaseUrl = builder.Configuration["CrmApi:BaseUrl"]
     ?? throw new InvalidOperationException("CrmApi:BaseUrl configuration is required.");
 
+// Forward customer identity from inbound MCP request to outbound CRM API call.
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddTransient<CustomerHeaderForwarder>();
+
 builder.Services.AddHttpClient<CrmApiClient>(client =>
 {
     client.BaseAddress = new Uri(crmApiBaseUrl);
 })
+.AddHttpMessageHandler<CustomerHeaderForwarder>()
 .AddStandardResilienceHandler();
 
 builder.Services.AddMcpServer()

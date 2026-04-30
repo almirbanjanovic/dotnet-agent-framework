@@ -17,7 +17,7 @@ Before running any scenario:
    - [ ] All 8 services are healthy and ready
 
 2. **Service endpoints are responding:**
-   - [ ] Aspire Dashboard: http://localhost:15000 → shows all 8 services in "Running" state
+   - [ ] Aspire Dashboard: https://localhost:15888 → shows all 8 services in "Running" state
    - [ ] Blazor UI: http://localhost:5008 → loads without auth errors
    - [ ] BFF API health: `curl http://localhost:5007/health` → 200 OK
    - [ ] CRM API health: `curl http://localhost:5001/api/v1/health` → 200 OK
@@ -47,7 +47,7 @@ Run these checks before executing scenarios. Record results below.
 Date: _______________
 Tester: _______________
 
-[ ] All services healthy in Aspire Dashboard (15000)
+[ ] All services healthy in Aspire Dashboard (15888)
 [ ] Blazor UI loads without 401/403 errors
 [ ] BFF /health returns 200
 [ ] CRM API /health returns 200
@@ -96,7 +96,7 @@ Tester: _______________
    - [ ] Response is in natural language (not raw JSON)
 
 6. **Verify no hallucination:**
-   - [ ] Order 1001 exists in seed data (check CSV: `data/seed/orders.csv`)
+   - [ ] Order 1001 exists in seed data (check CSV: `data/contoso-crm/orders.csv`)
    - [ ] Tracking number `TRK-29481` matches seed data exactly
    - [ ] Delivery date is reasonable (not 2025 or 2099)
 
@@ -161,7 +161,7 @@ Tester: _______________
 
 ## Scenario 3: "Any deals on tents?"
 
-**Customer:** Sarah Johnson (ID: 103)  
+**Customer:** Sarah Miller (ID: 103)  
 **User Query:** "I'm a Gold member — are there any tent deals right now?"  
 **Expected Agent Route:** Orchestrator → Product Agent  
 **Expected MCP Tools:** `get_eligible_promotions`, `get_products` (tent category)
@@ -169,7 +169,7 @@ Tester: _______________
 ### Test Steps
 
 1. **Select customer in Blazor UI:**
-   - [ ] Dev auth dropdown → select ID 103 (Sarah Johnson)
+   - [ ] Dev auth dropdown → select ID 103 (Sarah Miller)
    - [ ] Verify customer switched
 
 2. **Send query to chat:**
@@ -195,7 +195,7 @@ Tester: _______________
    - [ ] Response confirms Sarah qualifies for promotion
 
 6. **Verify product data:**
-   - [ ] Tent products shown are from seed data (`data/seed/products.csv`)
+   - [ ] Tent products shown are from seed data (`data/contoso-crm/products.csv`)
    - [ ] Prices are realistic (not 0 or 999999)
    - [ ] Image filenames match product catalog structure
 
@@ -211,7 +211,7 @@ Tester: _______________
 
 ## Scenario 4: "My jacket arrived damaged"
 
-**Customer:** Michael Brown (ID: 104)  
+**Customer:** David Park (ID: 104)  
 **User Query:** "The jacket I ordered arrived with a tear in the sleeve. What can I do?"  
 **Expected Agent Route:** Orchestrator → CRM Agent  
 **Expected MCP Tools:** `get_customer_orders`, `search_knowledge_base` (warranty policy), `create_support_ticket`
@@ -219,7 +219,7 @@ Tester: _______________
 ### Test Steps
 
 1. **Select customer in Blazor UI:**
-   - [ ] Dev auth dropdown → select ID 104 (Michael Brown)
+   - [ ] Dev auth dropdown → select ID 104 (David Park)
    - [ ] Verify customer switched
 
 2. **Send query to chat:**
@@ -263,7 +263,7 @@ Tester: _______________
 
 ## Scenario 5: "Help me pick a backpack"
 
-**Customer:** Lisa Anderson (ID: 105)  
+**Customer:** Lisa Torres (ID: 105)  
 **User Query:** "I'm planning a 5-day backpacking trip. What backpack should I get?"  
 **Expected Agent Route:** Orchestrator → Product Agent  
 **Expected MCP Tools:** `search_knowledge_base` (backpack fitting guide), `get_products` (backpack category)
@@ -271,7 +271,7 @@ Tester: _______________
 ### Test Steps
 
 1. **Select customer in Blazor UI:**
-   - [ ] Dev auth dropdown → select ID 105 (Lisa Anderson)
+   - [ ] Dev auth dropdown → select ID 105 (Lisa Torres)
    - [ ] Verify customer switched
 
 2. **Send query to chat:**
@@ -313,7 +313,7 @@ Tester: _______________
 
 ## Scenario 6: "How do I waterproof my tent?"
 
-**Customer:** Tom Garcia (ID: 106)  
+**Customer:** Mike Johnson (ID: 106)  
 **User Query:** "I just got my tent delivered. How should I take care of it?"  
 **Expected Agent Route:** Orchestrator → CRM Agent  
 **Expected MCP Tools:** `get_customer_orders`, `search_knowledge_base` (gear care guide)
@@ -321,7 +321,7 @@ Tester: _______________
 ### Test Steps
 
 1. **Select customer in Blazor UI:**
-   - [ ] Dev auth dropdown → select ID 106 (Tom Garcia)
+   - [ ] Dev auth dropdown → select ID 106 (Mike Johnson)
    - [ ] Verify customer switched
 
 2. **Send query to chat:**
@@ -362,7 +362,7 @@ Tester: _______________
 
 ## Scenario 7: "I want to cancel my order"
 
-**Customer:** Rachel Kim (ID: 107)  
+**Customer:** Anna Roberts (ID: 107)  
 **User Query:** "I changed my mind about my order. Can I cancel it?"  
 **Expected Agent Route:** Orchestrator → CRM Agent  
 **Expected MCP Tools:** `get_customer_orders`, `create_support_ticket`
@@ -370,7 +370,7 @@ Tester: _______________
 ### Test Steps
 
 1. **Select customer in Blazor UI:**
-   - [ ] Dev auth dropdown → select ID 107 (Rachel Kim)
+   - [ ] Dev auth dropdown → select ID 107 (Anna Roberts)
    - [ ] Verify customer switched
 
 2. **Send query to chat:**
@@ -412,7 +412,7 @@ Tester: _______________
 
 ## Scenario 8: "What happened to my refund?"
 
-**Customer:** David Lee (ID: 108)  
+**Customer:** Tom Garcia (ID: 108)  
 **User Query:** "I returned some items a while ago but haven't gotten my refund yet."  
 **Expected Agent Route:** Orchestrator → CRM Agent  
 **Expected MCP Tools:** `get_customer_orders`, `get_support_tickets`, `search_knowledge_base` (return policy)
@@ -420,7 +420,7 @@ Tester: _______________
 ### Test Steps
 
 1. **Select customer in Blazor UI:**
-   - [ ] Dev auth dropdown → select ID 108 (David Lee)
+   - [ ] Dev auth dropdown → select ID 108 (Tom Garcia)
    - [ ] Verify customer switched
 
 2. **Send query to chat:**
@@ -527,7 +527,7 @@ Tester: _______________
 ### Service Won't Start
 
 - [ ] Check `dotnet run --project src/AppHost` output for errors
-- [ ] Verify all ports (5001–5008, 15000) are available
+- [ ] Verify all ports (5001–5008, 15888) are available
 - [ ] Check `.squad/secrets/*` files exist and are populated
 - [ ] Run `setup-local.sh` to re-initialize environment
 
@@ -623,7 +623,7 @@ Total Runtime: _______________
 | Orchestrator Agent | 5006 | (none) | Router to specialist agents |
 | BFF API | 5007 | `/health` | Frontend backend, auth, chat orchestration |
 | Blazor UI | 5008 | (none) | WASM front-end with customer auth dropdown |
-| Aspire Dashboard | 15000 | (web UI) | Service health and logs |
+| Aspire Dashboard | 15888 | (web UI) | Service health and logs |
 
 ---
 

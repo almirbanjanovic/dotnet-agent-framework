@@ -1,5 +1,6 @@
-using Azure;
 using Azure.AI.OpenAI;
+using Azure.Core;
+using Azure.Identity;
 using OpenAI.Embeddings;
 
 namespace Contoso.KnowledgeMcp.Services;
@@ -22,10 +23,17 @@ public sealed class InMemorySearchService : ISearchService
             ?? throw new InvalidOperationException("Foundry:Endpoint configuration is required.");
         var deploymentName = configuration["Foundry:EmbeddingDeploymentName"]
             ?? throw new InvalidOperationException("Foundry:EmbeddingDeploymentName configuration is required.");
-        var apiKey = configuration["Foundry:ApiKey"]
-            ?? throw new InvalidOperationException("Foundry:ApiKey configuration is required for InMemory mode.");
 
-        var client = new AzureOpenAIClient(new Uri(endpoint), new AzureKeyCredential(apiKey));
+        // Always authenticate via DefaultAzureCredential — no API keys.
+        // The deployer is granted "Cognitive Services OpenAI User" on the
+        // Foundry account by Terraform (see infra/terraform/local-dev/main.tf),
+        // and AKS workload identity provides the same role in production.
+        var tenantId = configuration["AzureAd:TenantId"];
+        TokenCredential credential = string.IsNullOrWhiteSpace(tenantId)
+            ? new DefaultAzureCredential()
+            : new DefaultAzureCredential(new DefaultAzureCredentialOptions { TenantId = tenantId });
+
+        var client = new AzureOpenAIClient(new Uri(endpoint), credential);
         _embeddingClient = client.GetEmbeddingClient(deploymentName);
         _dataPath = ResolveDataPath();
     }

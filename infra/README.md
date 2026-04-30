@@ -21,7 +21,7 @@ infra/
 │   └── manifests/             # All K8s YAML — namespace, service accounts, network policies
 │       ├── namespace.yaml
 │       ├── service-account.yaml
-│       └── network-policies/  # NetworkPolicy YAMLs (applied manually via kubectl)
+│       └── network-policies/  # NetworkPolicy YAMLs (default-deny + per-service ingress/egress)
 └── terraform/
     ├── main.tf                # Root module — wires all child modules + common_tags locals
     ├── variables.tf           # Root input variables (with validations on environment, location)

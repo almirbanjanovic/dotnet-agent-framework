@@ -164,12 +164,13 @@ if ($LASTEXITCODE -ne 0) {
 }
 $outputs = $outputsJson | ConvertFrom-Json
 $foundryEndpoint       = $outputs.foundry_endpoint.value
-$foundryApiKey         = $outputs.foundry_api_key.value
 $chatDeploymentName    = $outputs.chat_deployment_name.value
 $embeddingDeploymentName = $outputs.embedding_deployment_name.value
+$tenantId              = $outputs.tenant_id.value
 Write-Ok "Foundry endpoint: $foundryEndpoint"
 Write-Ok "Chat deployment: $chatDeploymentName"
 Write-Ok "Embedding deployment: $embeddingDeploymentName"
+Write-Ok "Tenant ID: $tenantId"
 
 # ── Generate appsettings.Local.json from Templates ──────────────────────────
 
@@ -186,9 +187,9 @@ foreach ($component in $TemplateComponents) {
 
     $content = Get-Content $templatePath -Raw
     $content = $content -replace '\{\{FOUNDRY_ENDPOINT\}\}',          $foundryEndpoint
-    $content = $content -replace '\{\{FOUNDRY_API_KEY\}\}',           $foundryApiKey
     $content = $content -replace '\{\{CHAT_DEPLOYMENT_NAME\}\}',      $chatDeploymentName
     $content = $content -replace '\{\{EMBEDDING_DEPLOYMENT_NAME\}\}', $embeddingDeploymentName
+    $content = $content -replace '\{\{TENANT_ID\}\}',                 $tenantId
 
     Set-Content -Path $outputPath -Value $content -NoNewline
     Write-Ok "Generated src/$component/appsettings.Local.json"

@@ -104,8 +104,12 @@ jobs:
     name: Manual Approval
     needs: [terraform-plan, cleanup-after-plan]
     runs-on: ubuntu-latest
+    # NOTE: For stronger guarantees, configure required reviewers on the
+    # GitHub Environment (Settings -> Environments -> ${{ inputs.environment }})
+    # so the `terraform-apply` job below pauses for native approval. The
+    # third-party action is pinned to an exact tag for reproducibility.
     steps:
-      - uses: trstringer/manual-approval@v1
+      - uses: trstringer/manual-approval@v1.9.1
         with:
           secret: ${{ github.TOKEN }}
           approvers: ${{ github.repository_owner }}

@@ -375,10 +375,11 @@ module "rbac_cosmosdb_crm" {
   cosmosdb_account_id   = module.cosmosdb_crm.account_id
   cosmosdb_account_name = module.cosmosdb_crm.account_name
 
+  # Note: id-crm-mcp does NOT need Cosmos DB access. CRM MCP is an HTTP
+  # client to the CRM API; only id-crm-api needs Cosmos DB CRM access.
   principal_ids = {
     bff      = module.identity.identities["bff"].principal_id
     crm_api  = module.identity.identities["crm_api"].principal_id
-    crm_mcp  = module.identity.identities["crm_mcp"].principal_id
     deployer = data.azurerm_client_config.current.object_id
   }
 }

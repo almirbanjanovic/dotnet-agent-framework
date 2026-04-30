@@ -169,6 +169,7 @@ All CRM tools in a single MCP server — wraps CRM API endpoints for customer pr
 | `get_customer_detail(customer_id)` | Full customer profile |
 | `get_customer_orders(customer_id)` | All orders for a customer |
 | `get_order_detail(order_id)` | Order with line items, shipping status, tracking number |
+| `get_order_items(order_id)` | Line items for a single order |
 | `get_products(query?, category?, in_stock_only?)` | Search or browse products |
 | `get_product_detail(product_id)` | Full product info including description, price, rating |
 | `get_promotions()` | All active promotions |

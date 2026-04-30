@@ -123,12 +123,13 @@ ok "Terraform apply complete"
 step "Retrieving Terraform outputs"
 outputs_json=$(terraform -chdir="$TERRAFORM_DIR" output -json)
 foundry_endpoint=$(echo "$outputs_json"        | python3 -c "import sys,json; print(json.load(sys.stdin)['foundry_endpoint']['value'])")
-foundry_api_key=$(echo "$outputs_json"         | python3 -c "import sys,json; print(json.load(sys.stdin)['foundry_api_key']['value'])")
 chat_deployment_name=$(echo "$outputs_json"    | python3 -c "import sys,json; print(json.load(sys.stdin)['chat_deployment_name']['value'])")
 embedding_deployment_name=$(echo "$outputs_json" | python3 -c "import sys,json; print(json.load(sys.stdin)['embedding_deployment_name']['value'])")
+tenant_id=$(echo "$outputs_json"               | python3 -c "import sys,json; print(json.load(sys.stdin)['tenant_id']['value'])")
 ok "Foundry endpoint: $foundry_endpoint"
 ok "Chat deployment: $chat_deployment_name"
 ok "Embedding deployment: $embedding_deployment_name"
+ok "Tenant ID: $tenant_id"
 
 # ── Generate appsettings.Local.json from Templates ──────────────────────────
 
@@ -145,9 +146,9 @@ for component in "${TEMPLATE_COMPONENTS[@]}"; do
 
     sed \
         -e "s|{{FOUNDRY_ENDPOINT}}|$foundry_endpoint|g" \
-        -e "s|{{FOUNDRY_API_KEY}}|$foundry_api_key|g" \
         -e "s|{{CHAT_DEPLOYMENT_NAME}}|$chat_deployment_name|g" \
         -e "s|{{EMBEDDING_DEPLOYMENT_NAME}}|$embedding_deployment_name|g" \
+        -e "s|{{TENANT_ID}}|$tenant_id|g" \
         "$template_path" > "$output_path"
 
     ok "Generated src/$component/appsettings.Local.json"

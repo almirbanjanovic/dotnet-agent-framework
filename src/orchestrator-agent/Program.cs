@@ -22,11 +22,16 @@ builder.Services.AddSingleton<SystemPromptProvider>();
 builder.Services.AddSingleton<IntentClassifier>();
 builder.Services.AddSingleton<AgentRouter>();
 
+// Forward customer identity to specialist agents.
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddTransient<CustomerHeaderForwarder>();
+
 builder.Services.AddHttpClient<CrmAgentClient>(client =>
     {
         var baseUrl = builder.Configuration["CrmAgent:BaseUrl"] ?? "http://localhost:5004";
         client.BaseAddress = new Uri(baseUrl);
     })
+    .AddHttpMessageHandler<CustomerHeaderForwarder>()
     .AddStandardResilienceHandler();
 
 builder.Services.AddHttpClient<ProductAgentClient>(client =>
@@ -34,6 +39,7 @@ builder.Services.AddHttpClient<ProductAgentClient>(client =>
         var baseUrl = builder.Configuration["ProductAgent:BaseUrl"] ?? "http://localhost:5005";
         client.BaseAddress = new Uri(baseUrl);
     })
+    .AddHttpMessageHandler<CustomerHeaderForwarder>()
     .AddStandardResilienceHandler();
 
 builder.Services.AddHealthChecks()

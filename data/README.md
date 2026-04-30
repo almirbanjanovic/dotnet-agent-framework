@@ -65,7 +65,7 @@ User: "What is your return policy?"
 ┌─────────────┼───────────────────────────────┼──────────────────────┐
 │             │                               │                      │
 │  ┌──────────▼───────────┐    ┌──────────────▼────────────────┐     │
-│  │  Cosmos DB - CRM         │    │  Azure AI Search (Basic)      │     │
+  │  │  Cosmos DB - CRM         │    │  Azure AI Search (Standard)   │     │
 │  │  (Session)               │    │  Index: knowledge-documents   │     │
 │  │  Customers, Orders,      │    │  Skillset: split + embed      │     │
 │  │  Products, etc.           │    │  Indexer: blob → index        │     │

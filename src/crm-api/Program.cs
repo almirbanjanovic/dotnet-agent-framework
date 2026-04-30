@@ -11,6 +11,10 @@ var builder = WebApplication.CreateBuilder(args);
 // ── Aspire Service Defaults (OpenTelemetry, Resilience, Service Discovery) ─
 builder.AddServiceDefaults();
 
+// ── Customer identity (X-Customer-Entra-Id header) ─────────────────────────
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<CustomerContext>();
+
 // ── Logging ────────────────────────────────────────────────────────────────
 builder.Logging.ClearProviders();
 builder.Logging.AddJsonConsole(options =>

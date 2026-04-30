@@ -34,11 +34,15 @@ builder.Services.AddSingleton(sp => new CustomerContext(
     sp.GetRequiredService<IHttpContextAccessor>(),
     useInMemory));
 
+// Transient handler (per-request, scoped CustomerContext is a singleton wrapping IHttpContextAccessor).
+builder.Services.AddTransient<CustomerHeaderHandler>();
+
 builder.Services.AddHttpClient<CrmApiClient>(client =>
     {
         var baseUrl = GetConfigOrDefault(builder.Configuration, "CrmApi:BaseUrl", "http://localhost:5001");
         client.BaseAddress = new Uri(baseUrl);
     })
+    .AddHttpMessageHandler<CustomerHeaderHandler>()
     .AddStandardResilienceHandler();
 
 builder.Services.AddHttpClient<OrchestratorClient>(client =>
@@ -46,6 +50,7 @@ builder.Services.AddHttpClient<OrchestratorClient>(client =>
         var baseUrl = GetConfigOrDefault(builder.Configuration, "Orchestrator:BaseUrl", "http://localhost:5006");
         client.BaseAddress = new Uri(baseUrl);
     })
+    .AddHttpMessageHandler<CustomerHeaderHandler>()
     .AddStandardResilienceHandler();
 
 var healthChecks = builder.Services.AddHealthChecks();
