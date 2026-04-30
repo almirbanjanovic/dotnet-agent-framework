@@ -14,10 +14,8 @@ builder.Configuration.AddJsonFile(
 
 builder.AddServiceDefaults();
 
-builder.WebHost.ConfigureKestrel(options =>
-{
-    options.ListenAnyIP(5003);
-});
+// Port binding is driven by ASPNETCORE_URLS (Aspire), appsettings, or the
+// container platform — not hardcoded.
 
 if (string.Equals(builder.Configuration["DataMode"], "InMemory", StringComparison.OrdinalIgnoreCase))
 {

@@ -21,10 +21,8 @@ builder.Configuration.AddJsonFile(
 
 builder.AddServiceDefaults();
 
-builder.WebHost.ConfigureKestrel(options =>
-{
-    options.ListenAnyIP(5005);
-});
+// Port binding is driven by ASPNETCORE_URLS (Aspire), appsettings, or the
+// container platform — not hardcoded.
 
 builder.Services.AddSingleton<CrmMcpClientProvider>();
 builder.Services.AddSingleton<KnowledgeMcpClientProvider>();

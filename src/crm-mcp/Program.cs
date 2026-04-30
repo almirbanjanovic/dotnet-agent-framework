@@ -14,10 +14,8 @@ builder.Configuration.AddJsonFile(
 
 builder.AddServiceDefaults();
 
-builder.WebHost.ConfigureKestrel(options =>
-{
-    options.ListenAnyIP(5002);
-});
+// Port binding is driven by ASPNETCORE_URLS (Aspire), appsettings, or the
+// container platform — not hardcoded.
 
 var crmApiBaseUrl = builder.Configuration["CrmApi:BaseUrl"]
     ?? throw new InvalidOperationException("CrmApi:BaseUrl configuration is required.");

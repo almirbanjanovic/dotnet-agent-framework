@@ -149,7 +149,7 @@ public static class CrmSeeder
         Console.WriteLine("\n  ✓ All containers verified successfully");
     }
 
-    private static List<Dictionary<string, string?>> ParseCsv(string filePath)
+    internal static List<Dictionary<string, string?>> ParseCsv(string filePath)
     {
         var results = new List<Dictionary<string, string?>>();
         var lines = File.ReadAllLines(filePath);
@@ -177,7 +177,7 @@ public static class CrmSeeder
         return results;
     }
 
-    private static string[] ParseCsvLine(string line)
+    internal static string[] ParseCsvLine(string line)
     {
         var fields = new List<string>();
         bool inQuotes = false;
@@ -206,7 +206,7 @@ public static class CrmSeeder
         return fields.ToArray();
     }
 
-    private static object? ConvertValue(string fieldName, string? value)
+    internal static object? ConvertValue(string fieldName, string? value)
     {
         if (string.IsNullOrEmpty(value)) return null;
 
@@ -255,6 +255,36 @@ public static class CrmSeeder
         }
     }
 
+    internal static IReadOnlyDictionary<string, string> ParseEntraMapping(string mapping)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(mapping))
+        {
+            return result;
+        }
+
+        foreach (var pair in mapping.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = pair.Split('=', 2);
+            if (parts.Length != 2)
+            {
+                continue;
+            }
+
+            var customerId = parts[0].Trim();
+            var entraOid = parts[1].Trim();
+
+            if (string.IsNullOrEmpty(customerId) || string.IsNullOrEmpty(entraOid))
+            {
+                continue;
+            }
+
+            result[customerId] = entraOid;
+        }
+
+        return result;
+    }
+
     /// <summary>
     /// Links Entra user object IDs to customer documents in the Customers container.
     /// </summary>
@@ -264,15 +294,10 @@ public static class CrmSeeder
     public static async Task LinkEntraIdsAsync(CosmosClient cosmosClient, string databaseName, string mapping)
     {
         var container = cosmosClient.GetContainer(databaseName, "Customers");
+        var pairs = ParseEntraMapping(mapping);
 
-        foreach (var pair in mapping.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var (customerId, entraOid) in pairs)
         {
-            var parts = pair.Split('=', 2);
-            if (parts.Length != 2) continue;
-
-            var customerId = parts[0].Trim();
-            var entraOid = parts[1].Trim();
-
             try
             {
                 var response = await container.ReadItemAsync<Dictionary<string, object?>>(

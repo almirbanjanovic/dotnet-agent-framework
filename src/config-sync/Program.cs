@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Azure.Identity;
 using Azure.Security.KeyVault.Secrets;
+using ConfigSync;
 
 // ---------------------------------------------------------------------------
 // Config Sync — pulls secrets from Azure Key Vault into per-component appsettings.{Environment}.json
@@ -226,7 +227,7 @@ foreach (var (component, entries) in componentManifest)
     foreach (var (kvSecret, configKey) in entries)
     {
         var value = secretValues.GetValueOrDefault(kvSecret, "");
-        SetNestedValue(root, configKey, value);
+        ConfigJsonBuilder.SetNestedValue(root, configKey, value);
     }
 
     var outputPath = Path.Combine(componentDir, $"appsettings.{environment}.json");
@@ -239,23 +240,3 @@ Console.WriteLine();
 Console.WriteLine("═══════════════════════════════════════════════════════════");
 Console.WriteLine($"  Done! Each component has its own appsettings.{environment}.json.");
 Console.WriteLine("═══════════════════════════════════════════════════════════");
-
-// ── Helper: set a nested value in a JsonObject using : notation ───────────
-static void SetNestedValue(JsonObject root, string configKey, string value)
-{
-    var segments = configKey.Split(':');
-    var current = root;
-
-    for (var i = 0; i < segments.Length - 1; i++)
-    {
-        if (current[segments[i]] is not JsonObject child)
-        {
-            child = new JsonObject();
-            current[segments[i]] = child;
-        }
-
-        current = child;
-    }
-
-    current[segments[^1]] = value;
-}
