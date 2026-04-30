@@ -7,6 +7,11 @@
       "Http": { "Url": "http://localhost:5008" }
     }
   },
+  "AzureAd": {
+    "Enabled": true,
+    "TenantId": "{{TENANT_ID}}",
+    "BffClientId": "{{BFF_CLIENT_ID}}"
+  },
   "Logging": {
     "LogLevel": { "Default": "Information" }
   }

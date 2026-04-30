@@ -15,7 +15,7 @@ variable "redirect_uris" {
 }
 
 variable "test_users" {
-  description = "Map of customer test users to create in Entra ID. Each maps to a pre-seeded customer in Cosmos DB."
+  description = "Map of customer test users to create in Entra ID. Each maps to a pre-seeded customer in Cosmos DB / the in-memory CSV."
   type = map(object({
     display_name  = string
     mail_nickname = string
@@ -51,6 +51,24 @@ variable "test_users" {
       display_name  = "Lisa Torres"
       mail_nickname = "lisa.torres"
       customer_id   = "105"
+      roles         = ["Customer"]
+    }
+    mike = {
+      display_name  = "Mike Johnson"
+      mail_nickname = "mike.johnson"
+      customer_id   = "106"
+      roles         = ["Customer"]
+    }
+    anna = {
+      display_name  = "Anna Roberts"
+      mail_nickname = "anna.roberts"
+      customer_id   = "107"
+      roles         = ["Customer"]
+    }
+    tom = {
+      display_name  = "Tom Garcia"
+      mail_nickname = "tom.garcia"
+      customer_id   = "108"
       roles         = ["Customer"]
     }
   }

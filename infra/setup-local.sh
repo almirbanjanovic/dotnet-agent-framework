@@ -32,14 +32,14 @@ TEMPLATE_COMPONENTS=(
     "crm-agent"
     "product-agent"
     "orchestrator-agent"
+    "bff-api"
+    "blazor-ui"
 )
 
 # Templates that are static (no placeholder replacement needed)
 STATIC_COMPONENTS=(
     "crm-api"
     "crm-mcp"
-    "bff-api"
-    "blazor-ui"
 )
 
 # ── Helper Functions ────────────────────────────────────────────────────────
@@ -126,14 +126,50 @@ foundry_endpoint=$(echo "$outputs_json"        | python3 -c "import sys,json; pr
 chat_deployment_name=$(echo "$outputs_json"    | python3 -c "import sys,json; print(json.load(sys.stdin)['chat_deployment_name']['value'])")
 embedding_deployment_name=$(echo "$outputs_json" | python3 -c "import sys,json; print(json.load(sys.stdin)['embedding_deployment_name']['value'])")
 tenant_id=$(echo "$outputs_json"               | python3 -c "import sys,json; print(json.load(sys.stdin)['tenant_id']['value'])")
+bff_client_id=$(echo "$outputs_json"           | python3 -c "import sys,json; print(json.load(sys.stdin)['bff_client_id']['value'])")
+customer_map_json=$(echo "$outputs_json"       | python3 -c "import sys,json; print(json.load(sys.stdin)['customer_map_json']['value'])")
 ok "Foundry endpoint: $foundry_endpoint"
 ok "Chat deployment: $chat_deployment_name"
 ok "Embedding deployment: $embedding_deployment_name"
 ok "Tenant ID: $tenant_id"
+ok "BFF SPA client ID: $bff_client_id"
 
 # ── Generate appsettings.Local.json from Templates ──────────────────────────
 
 step "Generating appsettings.Local.json files"
+
+# Substitute placeholders without invoking sed (which would mis-handle
+# the ampersands, slashes, and `$` characters inside generated passwords
+# and URIs). Use Python for literal string replacement.
+substitute_template() {
+    local template_path="$1"
+    local output_path="$2"
+    python3 - "$template_path" "$output_path" <<'PY'
+import os, sys
+src, dst = sys.argv[1], sys.argv[2]
+with open(src, 'r', encoding='utf-8') as f:
+    content = f.read()
+mapping = {
+    '{{FOUNDRY_ENDPOINT}}':          os.environ['FOUNDRY_ENDPOINT'],
+    '{{CHAT_DEPLOYMENT_NAME}}':      os.environ['CHAT_DEPLOYMENT_NAME'],
+    '{{EMBEDDING_DEPLOYMENT_NAME}}': os.environ['EMBEDDING_DEPLOYMENT_NAME'],
+    '{{TENANT_ID}}':                 os.environ['TENANT_ID'],
+    '{{BFF_CLIENT_ID}}':             os.environ['BFF_CLIENT_ID'],
+    '{{CUSTOMER_MAP_JSON}}':         os.environ['CUSTOMER_MAP_JSON'],
+}
+for k, v in mapping.items():
+    content = content.replace(k, v)
+with open(dst, 'w', encoding='utf-8') as f:
+    f.write(content)
+PY
+}
+
+export FOUNDRY_ENDPOINT="$foundry_endpoint"
+export CHAT_DEPLOYMENT_NAME="$chat_deployment_name"
+export EMBEDDING_DEPLOYMENT_NAME="$embedding_deployment_name"
+export TENANT_ID="$tenant_id"
+export BFF_CLIENT_ID="$bff_client_id"
+export CUSTOMER_MAP_JSON="$customer_map_json"
 
 for component in "${TEMPLATE_COMPONENTS[@]}"; do
     template_path="$REPO_ROOT/src/$component/appsettings.Local.json.template"
@@ -144,13 +180,7 @@ for component in "${TEMPLATE_COMPONENTS[@]}"; do
         continue
     fi
 
-    sed \
-        -e "s|{{FOUNDRY_ENDPOINT}}|$foundry_endpoint|g" \
-        -e "s|{{CHAT_DEPLOYMENT_NAME}}|$chat_deployment_name|g" \
-        -e "s|{{EMBEDDING_DEPLOYMENT_NAME}}|$embedding_deployment_name|g" \
-        -e "s|{{TENANT_ID}}|$tenant_id|g" \
-        "$template_path" > "$output_path"
-
+    substitute_template "$template_path" "$output_path"
     ok "Generated src/$component/appsettings.Local.json"
 done
 
@@ -173,6 +203,16 @@ echo ""
 echo -e "\033[32m============================================================\033[0m"
 echo -e "\033[32m  Local Dev Setup Complete\033[0m"
 echo -e "\033[32m============================================================\033[0m"
+echo ""
+echo "  Sign in to the Blazor UI as one of these test users"
+echo "  (saved in your Entra tenant; passwords printed once):"
+python3 - <<PY
+import json, os
+upns      = json.loads(os.popen("terraform -chdir='$TERRAFORM_DIR' output -json test_user_upns").read())
+passwords = json.loads(os.popen("terraform -chdir='$TERRAFORM_DIR' output -json test_user_passwords").read())
+for key in sorted(upns.keys()):
+    print(f"    {key:<7} {upns[key]:<50} {passwords[key]}")
+PY
 echo ""
 echo "  Port Map:"
 for port in $(echo "${!PORT_MAP[@]}" | tr ' ' '\n' | sort -n); do

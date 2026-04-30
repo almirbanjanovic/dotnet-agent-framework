@@ -1,7 +1,7 @@
 {
   "Foundry": {
-    "Endpoint": "https://aif-dotnetagent-dev-centralus.cognitiveservices.azure.com/",
-    "DeploymentName": "gpt-4.1"
+    "Endpoint": "{{FOUNDRY_ENDPOINT}}",
+    "DeploymentName": "{{CHAT_DEPLOYMENT_NAME}}"
   },
   "CrmAgent": {
     "BaseUrl": "http://localhost:5004"
@@ -10,7 +10,7 @@
     "BaseUrl": "http://localhost:5005"
   },
   "AzureAd": {
-    "TenantId": "7960be14-fc91-4f30-8ca1-237851909103"
+    "TenantId": "{{TENANT_ID}}"
   },
   "Kestrel": {
     "Endpoints": {

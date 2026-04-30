@@ -40,4 +40,40 @@ public class ConfigurationTests
 
         result.Should().BeTrue();
     }
+
+    [Fact]
+    public void IsDevAuthEnabled_AzureAdEnabled_ForcesMsal_EvenWhenDataModeIsSet()
+    {
+        // Local Track + opt-in real Microsoft Entra ID. AzureAd:Enabled = true
+        // must force dev auth off so MSAL takes over.
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["DataMode"] = "InMemory",
+                ["AzureAd:Enabled"] = "true"
+            })
+            .Build();
+        var environment = new TestWebAssemblyHostEnvironment { EnvironmentName = "Development" };
+
+        var result = BlazorUiConfiguration.IsDevAuthEnabled(configuration, environment);
+
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsDevAuthEnabled_AzureAdEnabledFalse_StillRespectsDataMode()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["DataMode"] = "InMemory",
+                ["AzureAd:Enabled"] = "false"
+            })
+            .Build();
+        var environment = new TestWebAssemblyHostEnvironment { EnvironmentName = "Production" };
+
+        var result = BlazorUiConfiguration.IsDevAuthEnabled(configuration, environment);
+
+        result.Should().BeTrue();
+    }
 }

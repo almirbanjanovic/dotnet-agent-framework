@@ -73,6 +73,76 @@ public class CustomerContextTests
         result.Should().Be("cust-4");
     }
 
+    [Fact]
+    public void GetCustomerId_JwtMode_WithCustomerMap_MapsByPreferredUsername()
+    {
+        // Local Track + real Entra: Emma signs in as emma.wilson@tenant.com,
+        // map resolves her to seeded customer 101 without any claim engineering.
+        var accessor = BuildAccessor(claims: new[]
+        {
+            new Claim("preferred_username", "emma.wilson@contoso.com"),
+            new Claim("oid", "00000000-0000-0000-0000-000000000001")
+        });
+        var map = new Dictionary<string, string>
+        {
+            ["emma.wilson@contoso.com"] = "101"
+        };
+        var context = new CustomerContext(accessor, useHeader: false, customerMap: map);
+
+        var result = context.GetCustomerId();
+
+        result.Should().Be("101");
+    }
+
+    [Fact]
+    public void GetCustomerId_JwtMode_CustomerMap_IsCaseInsensitive()
+    {
+        var accessor = BuildAccessor(claims: new[]
+        {
+            new Claim("preferred_username", "Emma.Wilson@CONTOSO.COM")
+        });
+        var map = new Dictionary<string, string> { ["emma.wilson@contoso.com"] = "101" };
+        var context = new CustomerContext(accessor, useHeader: false, customerMap: map);
+
+        var result = context.GetCustomerId();
+
+        result.Should().Be("101");
+    }
+
+    [Fact]
+    public void GetCustomerId_JwtMode_NoMapMatch_FallsBackToOid()
+    {
+        var accessor = BuildAccessor(claims: new[]
+        {
+            new Claim("preferred_username", "unknown@contoso.com"),
+            new Claim("oid", "oid-fallback")
+        });
+        var map = new Dictionary<string, string> { ["emma.wilson@contoso.com"] = "101" };
+        var context = new CustomerContext(accessor, useHeader: false, customerMap: map);
+
+        var result = context.GetCustomerId();
+
+        result.Should().Be("oid-fallback");
+    }
+
+    [Fact]
+    public void GetCustomerId_JwtMode_CustomerIdClaim_WinsOverMap()
+    {
+        // Explicit customer_id claim (issued by a custom IdP) should win
+        // over UPN-based map lookup so production policies can override.
+        var accessor = BuildAccessor(claims: new[]
+        {
+            new Claim("customer_id", "explicit-cust"),
+            new Claim("preferred_username", "emma.wilson@contoso.com")
+        });
+        var map = new Dictionary<string, string> { ["emma.wilson@contoso.com"] = "101" };
+        var context = new CustomerContext(accessor, useHeader: false, customerMap: map);
+
+        var result = context.GetCustomerId();
+
+        result.Should().Be("explicit-cust");
+    }
+
     private static IHttpContextAccessor BuildAccessor(
         IDictionary<string, string>? headers = null,
         IEnumerable<Claim>? claims = null)

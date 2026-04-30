@@ -1,13 +1,161 @@
 # Lab 1 — Infrastructure, Validation & Data Seeding
 
-This lab stands up the full Azure environment, validates connectivity, and seeds all databases with the Contoso Outdoors data.
+> ## 📍 Lab 1 has two tracks
+>
+> Pick the track you started in Lab 0. Both tracks finish with a working agent stack you can hit from a browser.
+>
+> | | **Local Track** *(Foundry only)* | **Full Azure Track** *(production-shaped)* |
+> |---|---|---|
+> | Time | ~10 min | ~45–60 min |
+> | Azure resources | 1 (Foundry account + 2 model deployments) | 14+ (Foundry, Cosmos×2, AI Search, AKS, ACR, Storage, Key Vault, identities, networking) |
+> | Cost | ~$1–5/day | ~$50–100/day |
+> | Where the 8 services run | `dotnet run` (Aspire) on your laptop | AKS pods (Helm + workload identity) |
+> | Data | In-memory from `data/` | Cosmos DB + AI Search + Blob Storage |
+> | User auth | Microsoft Entra ID via MSAL (8 test users in your tenant) | Microsoft Entra ID via MSAL (8 test users in your tenant) |
+>
+> Jump to: [Local Track](#local-track--foundry-only-deployment) · [Full Azure Track](#full-azure-track--full-infrastructure--seeding)
 
-## Prerequisites
+---
 
-- [Lab 0 — Bootstrap](lab-0.md) completed (accounts, tools, remote state backend)
+## Local Track — Foundry-only deployment
+
+The Local Track provisions **only Azure AI Foundry** (one resource group, one AI Services account, two model deployments) and runs everything else on your laptop via .NET Aspire with in-memory data services.
+
+### Prerequisites
+
+- [Lab 0 — Local Track](lab-0.md#local-track) completed (`az login` and tools installed).
+- Your `az` session is in the subscription where you want the Foundry account.
+
+### Step 1 — Provision Foundry and generate appsettings
+
+From the repository root:
+
+```powershell
+# PowerShell
+./infra/setup-local.ps1
+```
+
+```bash
+# Bash / WSL / macOS
+chmod +x infra/setup-local.sh
+./infra/setup-local.sh
+```
+
+The script:
+
+1. Runs `terraform apply` in `infra/terraform/local-dev/` to create:
+   - Resource group `rg-dotnetagent-localdev-<your-username>` (suffixed so multiple developers can share one subscription)
+   - 1 Azure AI Foundry account
+   - 2 model deployments: chat (`gpt-4.1`) + embeddings (`text-embedding-3-small`)
+   - Grants you `Cognitive Services OpenAI User` on the account
+   - **Microsoft Entra:** a SPA app registration (`app-dotnetagent-local-localdev-bff`) with `http://localhost:5008/authentication/login-callback` redirect URIs, the `Customer` app role, plus 8 test users (Emma Wilson, James Chen, Sarah Miller, David Park, Lisa Torres, Mike Johnson, Anna Roberts, Tom Garcia) with the role assigned
+2. Reads the Foundry endpoint, deployment names, tenant ID, BFF client ID, and customer-map JSON from Terraform output.
+3. Renders each `src/<component>/appsettings.Local.json.template` into a per-component `appsettings.Local.json`. Auth everywhere is `DefaultAzureCredential` to Azure resources; user sign-in to the Blazor UI is real MSAL/Entra.
+4. Prints each test user's UPN and generated password to your terminal **once** — copy them somewhere safe.
+
+The Entra side requires Application Developer + User Administrator (or higher) in the tenant where you ran `az login`. See the [Local Track prerequisites in Lab 0](lab-0.md#prerequisites) if you're missing those roles.
+
+Override the region (default is `centralus`) when needed:
+
+```powershell
+$env:TF_VAR_location = "eastus2"
+./infra/setup-local.ps1
+```
+
+### Step 2 — Validate Foundry connectivity
+
+```bash
+dotnet run --project src/simple-agent --environment Local
+```
+
+Expected output (the joke varies — it's AI-generated):
+
+```text
+Using AI Foundry project endpoint: https://<your-foundry-endpoint>/
+Model deployment:                  gpt-4.1
+Auth mode:                         DefaultAzureCredential (Tenant: <your-tenant-id>)
+
+Agent response:
+ Why did the developer break up with the cloud?
+ Because the relationship had too many issues... and none of them were resolved!
+```
+
+If you see an error, see the [Foundry troubleshooting section](local-development.md#foundry-quota-or-model-deployment-failure).
+
+### How `simple-agent` works (your first Microsoft Agent Framework call)
+
+If you're new to the Microsoft Agent Framework, [src/simple-agent/Program.cs](../src/simple-agent/Program.cs) is the smallest possible "hello world". The whole file is ~25 lines of code; here are the three calls that matter:
+
+```csharp
+// 1. DefaultAzureCredential — the only auth path in this repo. Walks
+//    az CLI → Visual Studio → Managed Identity → Workload Identity in
+//    order. Locally it picks up your `az login` token (which setup-local
+//    granted "Cognitive Services OpenAI User" on the Foundry account).
+var credential = new DefaultAzureCredential(
+    new DefaultAzureCredentialOptions { TenantId = tenantId });
+
+// 2. AIProjectClient is the Agent Framework's typed client over your
+//    Foundry project. `AsAIAgent(...)` adapts it into a runnable agent —
+//    pick a model deployment, set the system prompt, give it a name.
+//    No tools, no memory, no orchestration: this agent does one thing.
+AIAgent agent = new AIProjectClient(new Uri(endpoint), credential)
+    .AsAIAgent(
+        model: deploymentName,
+        instructions: "You are a helpful and funny assistant who tells short jokes.",
+        name: "Joker");
+
+// 3. RunAsync sends the prompt + system instructions to the model and
+//    returns when the model is done. For richer agents you'd pass a
+//    `ChatMessage` history; for one-shot use, a string is enough.
+var result = await agent.RunAsync("Tell me a joke about the cloud.");
+```
+
+The same three primitives — `DefaultAzureCredential` → `AIProjectClient.AsAIAgent(...)` → `agent.RunAsync(...)` — are how *every* agent in this repo is built. The richer agents in [Lab 2](lab-2.md) just add **tools** (MCP clients) and **multi-turn history** to the same `AsAIAgent` call.
+
+### Step 3 — Run the full system
+
+```bash
+dotnet run --project src/AppHost
+```
+
+The Aspire AppHost starts all 8 components and a dashboard at **`https://localhost:15888`**. Open the Blazor UI at **`http://localhost:5008`** and you'll be redirected to `login.microsoftonline.com`. Sign in as one of the test users `setup-local` printed (e.g., `emma.wilson@<your-tenant-domain>`).
+
+The BFF validates the JWT, looks up the signed-in UPN in `AzureAd:CustomerMap`, and scopes every downstream call to that customer's data — same wire contract as the Full Azure Track.
+
+For port maps, troubleshooting, and component-level details, see the [Local Development Guide](local-development.md).
+
+### Verification checklist (Local Track)
+
+- [ ] `terraform output` in `infra/terraform/local-dev/` returns a Foundry endpoint **and** a `bff_client_id`
+- [ ] `simple-agent` returns a joke from AI Foundry
+- [ ] All 8 services are green in the Aspire dashboard
+- [ ] Blazor UI redirects to `login.microsoftonline.com` on first load
+- [ ] After signing in as `emma.wilson@<your-tenant-domain>`, asking "what is my last order?" returns Emma's order data sourced from the in-memory CRM data
+
+### Cleanup (Local Track)
+
+```powershell
+./infra/setup-local.ps1 -Cleanup
+```
+
+```bash
+./infra/setup-local.sh --cleanup
+```
+
+This destroys the Foundry resources, **the Entra SPA app registration, and the 8 test users**, and removes the generated `appsettings.Local.json` files.
+
+---
+
+## Full Azure Track — Full infrastructure & seeding
+
+This track stands up the full Azure environment, validates connectivity, and seeds all databases with the Contoso Outdoors data.
+
+### Prerequisites
+
+- [Lab 0 — Full Azure Track](lab-0.md#full-azure-track) completed (accounts, tools, remote state backend)
 - `az login` authenticated to the correct subscription
 
-## What gets deployed
+### What gets deployed
 
 | Resource | Purpose |
 | ---------- | --------- |
@@ -20,7 +168,7 @@ This lab stands up the full Azure environment, validates connectivity, and seeds
 | **Key Vault** | Secrets management (endpoints, deployment names, identity client IDs — no API keys, RBAC only) |
 | **Managed Identities** | 5 non-agent identities (bff, crm-api, crm-mcp, know-mcp, kubelet) + 3 agent identities (CRM Agent, Product Agent, Orchestrator Agent via Entra Agent ID) — all with least-privilege RBAC |
 
-## Step 1 — Deploy infrastructure and seed data
+### Step 1 — Deploy infrastructure and seed data
 
 The deploy script provisions all infrastructure and seeds data in a single run:
 
@@ -33,7 +181,7 @@ The deploy script provisions all infrastructure and seeds data in a single run:
 | CRM data (CSV) → Cosmos DB containers | Deploy script phase 6 (runs `dotnet run` for seed-data) |
 | Entra user IDs → Cosmos DB Customers container | Deploy script phase 7 (reads object IDs from Key Vault, updates Cosmos DB) |
 
-### Option A — Terminal
+#### Option A — Terminal
 
 From the `infra/` directory:
 
@@ -63,7 +211,7 @@ The script performs 8 phases (0-7) with a confirmation gate between each:
 
 If `terraform apply` fails, the script runs a **post-failure diagnostic** that lists all deny-effect Azure Policy assignments (including parameterized policies in initiatives) across the subscription and resource group. This helps identify `RequestDisallowedByPolicy` errors quickly.
 
-### Option B — GitHub Actions
+#### Option B — GitHub Actions
 
 1. Go to **Actions → Terraform Plan, Approve, Apply** in your GitHub repository
 2. Click **Run workflow**, select the `dev` environment, and confirm
@@ -76,7 +224,7 @@ If `terraform apply` fails, the script runs a **post-failure diagnostic** that l
 
 All Terraform variables are read from the GitHub environment variables that `init` configured in Lab 0.
 
-## Step 2 — Configure app settings
+### Step 2 — Configure app settings
 
 The **config-sync** tool pulls secrets from Key Vault into per-component `appsettings.{Environment}.json` files so each project can use them locally. Since the deploy script closes resource firewalls when it finishes, you need to temporarily open the Key Vault firewall first.
 
@@ -165,7 +313,7 @@ Expected output:
 ═══════════════════════════════════════════════════════════
 ```
 
-## Step 3 — Validate infrastructure
+### Step 3 — Validate infrastructure
 
 The **simple-agent** project creates a minimal AI agent that calls AI Foundry. This confirms your endpoint, deployment, and credentials are all working. Since AI Foundry (Cognitive Services) has a firewall, you need to temporarily open it.
 
@@ -212,8 +360,9 @@ az cognitiveservices account network-rule remove --resource-group "$RG" --name "
 Expected output (the joke will differ on each run — it's AI-generated):
 
 ```text
-Using AI Foundry endpoint: https://<your-foundry-endpoint>/
-Deployment name: gpt-4.1
+Using AI Foundry project endpoint: https://<your-foundry-endpoint>/
+Model deployment: gpt-4.1
+Auth mode: DefaultAzureCredential (Tenant: <your-tenant-id>)
 
 Agent response:
  Why did the developer break up with the cloud?
@@ -227,7 +376,7 @@ If you see an error, check:
 - `Foundry:Endpoint` and `Foundry:DeploymentName` are set in `src/simple-agent/appsettings.Development.json` or via environment variables (`Foundry__Endpoint`, `Foundry__DeploymentName`)
 - The AI Foundry deployment exists in the Azure portal
 
-## Verification checklist
+### Verification checklist (Full Azure Track)
 
 After completing all steps, verify:
 
@@ -239,6 +388,9 @@ After completing all steps, verify:
 - [ ] Azure Blob Storage `product-images` container has 15 `.png` files
 - [ ] Azure Blob Storage `sharepoint-docs` container has 12 `.pdf` files
 
-## What's next
+### What's next
 
-Lab 1 is complete. Your Azure environment is fully provisioned, validated, and seeded. Future labs will build on this foundation to create .NET Minimal APIs, MCP servers, and agent orchestrations.
+Lab 1 is complete. Your Azure environment is fully provisioned, validated, and seeded. Continue with:
+
+- **[Lab 2 — Single & Multi-Agent Workflows](lab-2.md)** — drive the existing CRM / Product / Orchestrator agents directly, then add a third specialist (Returns Agent) without touching the others.
+- **[Lab 3 — Human-in-the-Loop Workflows](lab-3.md)** — build an ambient, durable refund-risk workflow with three parallel agents, an aggregator, and a Blazor operations dashboard for review.

@@ -1,4 +1,21 @@
-# Local Development Quick-Start Guide
+# Local Track — Foundry-Only Lab
+
+> ## 📍 You are on the **Local Track** — “Foundry only, everything else local”
+>
+> | | Local Track *(this page)* | [Full Azure Track](lab-0.md) → [Lab 1](lab-1.md) |
+> |---|---|---|
+> | Azure resources | 1 (Foundry only) | 14+ (Foundry, Cosmos×2, AI Search, AKS, ACR, Storage, Key Vault, identities, networking) |
+> | Setup time | ~10 min | ~45–60 min |
+> | Cost | ~$1–5/day | ~$50–100/day |
+> | Where the 8 services run | `dotnet run` (Aspire) on your laptop | AKS pods |
+> | CRM data | In-memory from `data/contoso-crm/*.csv` | Cosmos DB |
+> | Knowledge base | In-memory vectors over `data/contoso-sharepoint/**/*.txt` | Azure AI Search (PDFs) |
+> | User auth | Microsoft Entra ID via MSAL (8 test users in your tenant) | Microsoft Entra ID via MSAL (8 test users in your tenant) |
+> | When to pick this | Inner loop, demos, agent prompt iteration | Production-shaped end-to-end testing, security/identity work |
+>
+> Switch tracks anytime; they share no state.
+
+---
 
 Run the entire .NET Agent Framework system locally with a single command. The
 local mode runs all 8 services in-process via .NET Aspire, with **in-memory
@@ -50,10 +67,12 @@ From the repository root:
    - 1 Azure AI Services account (Foundry)
    - 2 model deployments: chat (`gpt-4.1`) and embeddings (`text-embedding-3-small`)
    - Grants you the `Cognitive Services OpenAI User` role on the Foundry account
-2. Reads the Foundry endpoint from Terraform output.
-3. Generates `appsettings.Local.json` for each component with:
-   - `Foundry:Endpoint` (auth uses `DefaultAzureCredential` — your `az login` token)
-   - `DataMode = InMemory` so services load CSV/TXT/PNG data from `data/`
+2. Reads the Foundry endpoint, deployment names, and tenant ID from Terraform output.
+3. Generates `appsettings.Local.json` for each component from `appsettings.Local.json.template`:
+   - Agents (`crm-agent`, `product-agent`, `orchestrator-agent`, `simple-agent`) and `knowledge-mcp` get `Foundry:Endpoint`, `Foundry:DeploymentName` (or `Foundry:EmbeddingDeploymentName`), and `AzureAd:TenantId` substituted in.
+   - `crm-api` and `knowledge-mcp` get `DataMode = InMemory` so they load CSV/TXT data from `data/`.
+   - `crm-mcp`, `bff-api`, and `blazor-ui` get static port + URL configuration only (no Foundry credentials needed — they call other services over HTTP).
+   - Auth everywhere is `DefaultAzureCredential` — your `az login` token. No API keys are written.
 
 **No API keys are written.** Everything authenticates via your Azure CLI token.
 
@@ -121,28 +140,41 @@ sets this automatically — you only need the flag for manual runs.)
 | Product Agent | 5005 | `http://localhost:5005` | Product/recommendation agent |
 | Orchestrator Agent | 5006 | `http://localhost:5006` | Intent classifier + router |
 | BFF API | 5007 | `http://localhost:5007` | Backend-for-Frontend |
-| Blazor UI | 5008 | `https://localhost:5008` | User interface (WASM SPA) |
+| Blazor UI | 5008 | `http://localhost:5008` | User interface (WASM SPA) |
 | Aspire Dashboard | 15888 | `https://localhost:15888` | Monitoring + orchestration |
 
 ---
 
-## User Authentication (Dev Mode)
+## User Authentication
 
-In local mode the Blazor UI shows a **customer dropdown** for dev testing. The
-options match the seed data in [`data/contoso-crm/customers.csv`](../data/contoso-crm/customers.csv):
+Both tracks use **real Microsoft Entra ID via MSAL** for user sign-in.
+`infra/setup-local.{ps1,sh}` provisions a per-developer SPA app registration
+in your tenant plus 8 test users matching the seeded customers in
+[`data/contoso-crm/customers.csv`](../data/contoso-crm/customers.csv):
 
-| ID | Name | Loyalty Tier |
-|----|------|--------------|
-| 101 | Emma Wilson | Silver |
-| 102 | James Chen | Bronze |
-| 103 | Sarah Miller | Gold |
-| 104 | David Park | Silver |
-| 105 | Lisa Torres | Bronze |
-| 106 | Mike Johnson | Gold |
-| 107 | Anna Roberts | Bronze |
-| 108 | Tom Garcia | Silver |
+| Test user | UPN | Customer ID | Loyalty Tier |
+|-----------|-----|-------------|--------------|
+| Emma Wilson   | `emma.wilson@<your-tenant>`   | 101 | Silver |
+| James Chen    | `james.chen@<your-tenant>`    | 102 | Bronze |
+| Sarah Miller  | `sarah.miller@<your-tenant>`  | 103 | Gold |
+| David Park    | `david.park@<your-tenant>`    | 104 | Silver |
+| Lisa Torres   | `lisa.torres@<your-tenant>`   | 105 | Bronze |
+| Mike Johnson  | `mike.johnson@<your-tenant>`  | 106 | Gold |
+| Anna Roberts  | `anna.roberts@<your-tenant>`  | 107 | Bronze |
+| Tom Garcia    | `tom.garcia@<your-tenant>`    | 108 | Silver |
 
-In Azure mode the dropdown is replaced by MSAL-based Microsoft Entra ID sign-in.
+`setup-local` prints each generated password to your terminal once — copy them somewhere
+safe (the local Terraform state retains them, but they are never written to disk by
+the script). The BFF maps each UPN → customer ID via `AzureAd:CustomerMap` in
+`src/bff-api/appsettings.Local.json`, so `emma.wilson` always resolves to
+customer `101` (Silver tier, Portland OR).
+
+If you need to bypass MSAL for an automated test, set `AzureAd:Enabled = false`
+in both [src/bff-api/appsettings.Local.json](../src/bff-api/appsettings.Local.json)
+and [src/blazor-ui/appsettings.Local.json](../src/blazor-ui/appsettings.Local.json),
+then restart AppHost. The Blazor UI will fall back to the customer dropdown
+and the BFF will accept `X-Customer-Id` headers — useful only for non-interactive
+testing.
 
 ---
 
@@ -322,7 +354,7 @@ dashboard for progress. Reload after a few seconds.
 | Knowledge base | In-memory vector index over local TXT files | Azure AI Search (Standard, integrated vectorization over PDFs) |
 | Product images | File system (`data/contoso-images/`) | Azure Blob Storage (image proxy through BFF) |
 | AI models | Foundry (Azure) — `DefaultAzureCredential` | Foundry (Azure) — workload identity / agent identity |
-| Auth | Customer dropdown (dev bypass) | Microsoft Entra ID via MSAL (PKCE) |
+| Auth | Microsoft Entra ID via MSAL (PKCE) — 8 test users in your tenant | Microsoft Entra ID via MSAL (PKCE) — 8 test users in your tenant |
 | Network | `localhost` | App Gateway for Containers + private endpoints |
 | Hosting | `dotnet run` via Aspire | AKS (Helm + workload identity) |
 | Cost | ~$1–5/day | ~$50–100/day |

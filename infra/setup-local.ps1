@@ -37,15 +37,15 @@ $TemplateComponents = @(
     "knowledge-mcp",
     "crm-agent",
     "product-agent",
-    "orchestrator-agent"
+    "orchestrator-agent",
+    "bff-api",
+    "blazor-ui"
 )
 
 # Templates that are static (no placeholder replacement needed)
 $StaticComponents = @(
     "crm-api",
-    "crm-mcp",
-    "bff-api",
-    "blazor-ui"
+    "crm-mcp"
 )
 
 # ── Helper Functions ────────────────────────────────────────────────────────
@@ -167,10 +167,19 @@ $foundryEndpoint       = $outputs.foundry_endpoint.value
 $chatDeploymentName    = $outputs.chat_deployment_name.value
 $embeddingDeploymentName = $outputs.embedding_deployment_name.value
 $tenantId              = $outputs.tenant_id.value
+$bffClientId           = $outputs.bff_client_id.value
+$customerMapJson       = $outputs.customer_map_json.value
+$testUserUpns          = $outputs.test_user_upns.value
 Write-Ok "Foundry endpoint: $foundryEndpoint"
 Write-Ok "Chat deployment: $chatDeploymentName"
 Write-Ok "Embedding deployment: $embeddingDeploymentName"
 Write-Ok "Tenant ID: $tenantId"
+Write-Ok "BFF SPA client ID: $bffClientId"
+
+# Pull sensitive password output via terraform's targeted -raw mode so we
+# never write it to disk. We only print to the operator at the end.
+$testUserPasswordsJson = terraform -chdir="$TerraformDir" output -json test_user_passwords
+$testUserPasswords = $testUserPasswordsJson | ConvertFrom-Json
 
 # ── Generate appsettings.Local.json from Templates ──────────────────────────
 
@@ -185,11 +194,15 @@ foreach ($component in $TemplateComponents) {
         continue
     }
 
-    $content = Get-Content $templatePath -Raw
-    $content = $content -replace '\{\{FOUNDRY_ENDPOINT\}\}',          $foundryEndpoint
-    $content = $content -replace '\{\{CHAT_DEPLOYMENT_NAME\}\}',      $chatDeploymentName
-    $content = $content -replace '\{\{EMBEDDING_DEPLOYMENT_NAME\}\}', $embeddingDeploymentName
-    $content = $content -replace '\{\{TENANT_ID\}\}',                 $tenantId
+    # Use String.Replace (literal) so that JSON values containing regex
+    # metacharacters (`$`, `\`) substitute cleanly into the template.
+    $content = (Get-Content $templatePath -Raw).
+        Replace('{{FOUNDRY_ENDPOINT}}',          $foundryEndpoint).
+        Replace('{{CHAT_DEPLOYMENT_NAME}}',      $chatDeploymentName).
+        Replace('{{EMBEDDING_DEPLOYMENT_NAME}}', $embeddingDeploymentName).
+        Replace('{{TENANT_ID}}',                 $tenantId).
+        Replace('{{BFF_CLIENT_ID}}',             $bffClientId).
+        Replace('{{CUSTOMER_MAP_JSON}}',         $customerMapJson)
 
     Set-Content -Path $outputPath -Value $content -NoNewline
     Write-Ok "Generated src/$component/appsettings.Local.json"
@@ -214,6 +227,14 @@ Write-Host ""
 Write-Host "============================================================" -ForegroundColor Green
 Write-Host "  Local Dev Setup Complete" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green
+Write-Host ""
+Write-Host "  Sign in to the Blazor UI as one of these test users" -ForegroundColor White
+Write-Host "  (saved in your Entra tenant; passwords printed once):" -ForegroundColor White
+foreach ($key in ($testUserUpns.PSObject.Properties.Name | Sort-Object)) {
+    $upn = $testUserUpns.$key
+    $password = $testUserPasswords.$key
+    Write-Host ("    {0,-7} {1,-50} {2}" -f $key, $upn, $password)
+}
 Write-Host ""
 Write-Host "  Port Map:" -ForegroundColor White
 foreach ($entry in $PortMap) {

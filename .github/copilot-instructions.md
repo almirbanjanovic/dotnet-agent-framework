@@ -38,6 +38,12 @@ disabling the test.
 - For manual `dotnet run` of any component, pass `--environment Local`,
   otherwise the project loads `appsettings.Development.json` (which
   contains Azure endpoints written by CI/CD).
+- **`appsettings.Local.json.template` files MUST use placeholders** —
+  `{{FOUNDRY_ENDPOINT}}`, `{{CHAT_DEPLOYMENT_NAME}}`,
+  `{{EMBEDDING_DEPLOYMENT_NAME}}`, `{{TENANT_ID}}` — never literal values.
+  Hardcoding pins every developer to one Foundry account and leaks tenant
+  IDs into source control. Enforced by
+  [`LocalDevTemplateTests`](../src-tests/Contoso.AppHost.Tests/LocalDevTemplateTests.cs).
 
 See [`docs/local-development.md`](../docs/local-development.md) for the
 full local-dev guide.

@@ -164,8 +164,11 @@ docs/
   architecture.png                → Exported architecture diagram (PNG)
   config-naming-standard.md       → Key Vault naming convention (PascalCase--Hierarchy)
   implementation-plan.md          → Component-by-component build plan
-  lab-0.md                        → Lab 0: Bootstrap (Terraform backend, Entra, CI/CD)
-  lab-1.md                        → Lab 1: Infrastructure, Validation & Data Seeding
+  local-development.md            → Local Track: Foundry-only, services run via dotnet run
+  lab-0.md                        → Both tracks, Lab 0: Prerequisites + Bootstrap (choose your track)
+  lab-1.md                        → Both tracks, Lab 1: Infrastructure, Validation & Data Seeding
+  lab-2.md                        → Both tracks, Lab 2: Single & Multi-Agent Workflows (Microsoft Agent Framework)
+  lab-3.md                        → Both tracks, Lab 3: Human-in-the-Loop Workflows (durable, ambient agents)
   security.md                     → Security architecture (auth, RBAC, network)
 
 infra/
@@ -218,34 +221,45 @@ src/
 - [GitHub CLI](https://cli.github.com/) (GitHub Actions path)
 - [Terraform >= 1.14.7](https://developer.hashicorp.com/terraform/install)
 
-## Local Development
+## Getting started — choose your track
 
-Run the entire system locally with just `dotnet run`:
+This repo supports two deployment tracks. Pick one based on what you're trying to do; you can switch later — they share no state.
+
+| | **Local Track** — Foundry only | **Full Azure Track** — production-shaped |
+|---|---|---|
+| **Best for** | Inner loop, demos, agent prompt iteration | End-to-end testing, security/identity work, production patterns |
+| **Setup time** | ~10 min | ~45–60 min |
+| **Cost** | ~$1–5/day (Foundry tokens only) | ~$50–100/day |
+| **Azure resources** | 1 (Foundry) | 14+ (Foundry, Cosmos×2, AI Search, AKS, ACR, Storage, Key Vault, identities, networking) |
+| **Where the 8 services run** | `dotnet run` (Aspire) on your laptop | AKS pods (Helm + workload identity) |
+| **CRM data** | In-memory from `data/contoso-crm/*.csv` | Cosmos DB (seeded from the same CSVs) |
+| **Knowledge base** | In-memory vector search over `data/contoso-sharepoint/**/*.txt` | Azure AI Search (PDFs, semantic ranker) |
+| **User auth** | Microsoft Entra ID via MSAL (8 test users in your tenant) | Microsoft Entra ID via MSAL (8 test users in your tenant) |
+| **Start command** | `./infra/setup-local.ps1` then `dotnet run --project src/AppHost` | `./infra/init.ps1` then `./infra/deploy.ps1` |
+| **Guide** | [Local Track →](docs/local-development.md) | [Lab 0 →](docs/lab-0.md) then [Lab 1 →](docs/lab-1.md) |
+
+After Lab 1 (either track), continue with [Lab 2 — Single & Multi-Agent Workflows](docs/lab-2.md) and [Lab 3 — Human-in-the-Loop Workflows](docs/lab-3.md). Both labs preserve the same two-track structure.
+
+Both tracks use Azure AI Foundry for chat completions and embeddings, authenticated via `DefaultAzureCredential` — no API keys are stored in either path.
+
+### Track A — Local (Foundry only)
 
 ```bash
-./infra/setup-local.ps1                    # one-time: deploy Foundry to Azure
-dotnet run --project src/AppHost           # start all components + dashboard
+az login                               # one-time
+./infra/setup-local.ps1                # deploy Foundry to your subscription
+dotnet run --project src/AppHost       # all 8 components + Aspire dashboard
 ```
 
-See [Local Development Guide](docs/local-development.md) for details — prerequisites, troubleshooting, and architecture overview.
+Aspire dashboard: `https://localhost:15888`. Blazor UI: `http://localhost:5008`. Full guide: [docs/local-development.md](docs/local-development.md).
 
-The system will:
-- Deploy minimal Foundry resources to Azure (~$1–5/day)
-- Load CRM data from CSVs into memory (no emulators)
-- Search knowledge base via in-memory vectors + Foundry embeddings
-- Start all 8 components + Aspire dashboard at `https://localhost:15888`
-- Provide a dev customer selector in the UI (no MSAL needed)
+### Track B — Full Azure
 
----
+```bash
+./infra/init.ps1                       # Lab 0: Terraform backend, GitHub OIDC, RBAC
+./infra/deploy.ps1                     # Lab 1: provision + seed everything
+```
 
-## Getting started
-
-See the lab guides in [`docs/`](docs/):
-
-| # | Lab | Description |
-| --- | ----- | ------------- |
-| 0 | [Lab 0 — Bootstrap](docs/lab-0.md) | One-time setup: Terraform config files, remote state backend, CI/CD configuration |
-| 1 | [Lab 1 — Infrastructure, Validation & Data Seeding](docs/lab-1.md) | Deploy Azure infrastructure, validate with simple-agent, seed Cosmos DB with CRM data |
+Full guide: [docs/lab-0.md](docs/lab-0.md) → [docs/lab-1.md](docs/lab-1.md) → [docs/lab-2.md](docs/lab-2.md) → [docs/lab-3.md](docs/lab-3.md).
 
 ## Notes
 

@@ -29,9 +29,23 @@ builder.Services.AddHttpContextAccessor();
 var dataMode = builder.Configuration["DataMode"];
 var useInMemory = string.Equals(dataMode, "InMemory", StringComparison.OrdinalIgnoreCase);
 
+// Auth and storage are independent: a developer can opt into real
+// Microsoft Entra ID sign-in on the Local Track (InMemory data + JWT)
+// by setting AzureAd:Enabled = true. By default, InMemory data implies
+// header-based dev auth and Cosmos data implies JWT.
+var useEntraAuth = string.Equals(
+    builder.Configuration["AzureAd:Enabled"],
+    "true",
+    StringComparison.OrdinalIgnoreCase) || !useInMemory;
+
+var customerMap = builder.Configuration
+    .GetSection("AzureAd:CustomerMap")
+    .Get<Dictionary<string, string>>() ?? new Dictionary<string, string>();
+
 builder.Services.AddSingleton(sp => new CustomerContext(
     sp.GetRequiredService<IHttpContextAccessor>(),
-    useInMemory));
+    useHeader: !useEntraAuth,
+    customerMap: customerMap));
 
 // Transient handler (per-request, scoped CustomerContext is a singleton wrapping IHttpContextAccessor).
 builder.Services.AddTransient<CustomerHeaderHandler>();
@@ -94,7 +108,10 @@ else
     builder.Services.AddSingleton<IImageService, BlobImageService>();
 
     healthChecks.AddCheck<CosmosHealthCheck>("cosmos-db", tags: ["ready"]);
+}
 
+if (useEntraAuth)
+{
     var bffClientId = builder.Configuration["AzureAd:BffClientId"];
     if (!string.IsNullOrWhiteSpace(bffClientId))
     {
@@ -124,7 +141,7 @@ var app = builder.Build();
 
 app.UseCors("BlazorUI");
 
-if (!useInMemory)
+if (useEntraAuth)
 {
     app.UseAuthentication();
     app.UseAuthorization();
@@ -292,7 +309,7 @@ var ordersEndpoint = api.MapGet("/customers/{id}/orders", async (
     return await ProxyResponseAsync(response, cancellationToken);
 });
 
-if (!useInMemory)
+if (useEntraAuth)
 {
     chatEndpoint.RequireAuthorization();
     conversationsEndpoint.RequireAuthorization();

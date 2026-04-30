@@ -1,21 +1,29 @@
 name: Architecture Fitness
 
-# Enforces the component-independence edict (zero ProjectReferences in src/
-# except AppHost). This workflow MUST stay green on main.
+# Enforces two architectural fitness functions:
+#   1. Component independence — zero ProjectReferences in src/ except AppHost.
+#      → src-tests/Contoso.AppHost.Tests/ComponentIndependenceTests.cs
+#      → src/README.md → "Architectural edict — component independence"
+#   2. Local-dev template hygiene — no hardcoded Foundry endpoints / tenant IDs
+#      in *.Local.json.template files (forces every developer onto one account).
+#      → src-tests/Contoso.AppHost.Tests/LocalDevTemplateTests.cs
 #
-# See: src-tests/Contoso.AppHost.Tests/ComponentIndependenceTests.cs
-# See: src/README.md → "Architectural edict — component independence"
+# This workflow MUST stay green on main.
 
 on:
   pull_request:
     paths:
       - 'src/**/*.csproj'
+      - 'src/AppHost/Program.cs'
+      - 'src/**/appsettings.Local.json.template'
       - 'src-tests/Contoso.AppHost.Tests/**'
       - '.github/workflows/architecture-fitness.yml'
   push:
     branches: [main]
     paths:
       - 'src/**/*.csproj'
+      - 'src/AppHost/Program.cs'
+      - 'src/**/appsettings.Local.json.template'
       - 'src-tests/Contoso.AppHost.Tests/**'
       - '.github/workflows/architecture-fitness.yml'
   workflow_dispatch:
@@ -25,7 +33,7 @@ permissions:
 
 jobs:
   enforce-component-independence:
-    name: Enforce component independence
+    name: Enforce component independence + template hygiene
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

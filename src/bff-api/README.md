@@ -30,9 +30,10 @@ cd src/bff-api
 dotnet run
 ```
 
-### Local dev auth
-- Set `DataMode=InMemory`.
-- Include `X-Customer-Id` header on chat/conversation requests.
+### Local dev sign-in
+- `setup-local.{ps1,sh}` provisions a SPA app registration in your tenant and writes `AzureAd:Enabled=true`, `AzureAd:BffClientId`, and `AzureAd:CustomerMap` into `appsettings.Local.json`.
+- The Blazor UI redirects to `login.microsoftonline.com`; the BFF validates the JWT and resolves the signed-in UPN to a customer ID via `AzureAd:CustomerMap`.
+- Header-based dev auth (`X-Customer-Id`) is only honoured when `AzureAd:Enabled=false` AND `DataMode=InMemory` — keep it as an automated-test escape hatch only.
 
 ## Architecture role
 

@@ -17,3 +17,30 @@ output "tenant_id" {
   description = "Azure tenant ID (used by DefaultAzureCredential to disambiguate accounts)."
   value       = data.azurerm_client_config.current.tenant_id
 }
+
+output "bff_client_id" {
+  description = "Client ID of the BFF SPA app registration created in the deployer's Entra tenant."
+  value       = module.entra.bff_client_id
+}
+
+output "test_user_upns" {
+  description = "Map of test user key (emma, james, ...) → user principal name. Use these to sign in to the Blazor UI."
+  value       = module.entra.test_user_upns
+}
+
+output "test_user_passwords" {
+  description = "Map of test user key → generated password. Marked sensitive; setup-local prints them once."
+  value       = module.entra.test_user_passwords
+  sensitive   = true
+}
+
+# Pre-built JSON fragment for AzureAd:CustomerMap so setup-local can substitute
+# it verbatim into appsettings.Local.json.template. Maps each test user's UPN
+# (lower-cased) to the seeded customer ID in data/contoso-crm/customers.csv.
+output "customer_map_json" {
+  description = "JSON object mapping test-user UPNs → seeded customer IDs. Substituted into bff-api appsettings.Local.json."
+  value = jsonencode({
+    for key, upn in module.entra.test_user_upns :
+    lower(upn) => module.entra.test_user_customer_ids[key]
+  })
+}

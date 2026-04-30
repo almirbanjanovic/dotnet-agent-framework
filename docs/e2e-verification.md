@@ -33,8 +33,9 @@ Before running any scenario:
 
 5. **UI is authenticated and ready:**
    - [ ] Navigate to http://localhost:5008
-   - [ ] Dev auth dropdown shows customer IDs 101–108
-   - [ ] Default customer selected: 101 (Emma Wilson)
+   - [ ] First load redirects to `login.microsoftonline.com`
+   - [ ] Sign in as `emma.wilson@<your-tenant>` (test user printed by `setup-local`)
+   - [ ] User badge shows "Emma Wilson" — BFF mapped UPN → customer 101
    - [ ] Chat input box is active and focused
 
 ---
@@ -52,7 +53,8 @@ Tester: _______________
 [ ] BFF /health returns 200
 [ ] CRM API /health returns 200
 [ ] CRM API /api/v1/customers returns 200 with ≥8 customers
-[ ] Dev auth dropdown populated with IDs 101–108
+[ ] Blazor UI redirects to login.microsoftonline.com on first visit
+[ ] Sign-in as `emma.wilson@<your-tenant>` succeeds and resolves to customer 101
 [ ] Chat input box is focusable and ready
 [ ] Orchestrator logs show both MCPs connected
 [ ] Knowledge base index is online (Product Agent startup logs confirm)
@@ -70,10 +72,10 @@ Tester: _______________
 
 ### Test Steps
 
-1. **Select customer in Blazor UI:**
-   - [ ] Navigate to http://localhost:5008
-   - [ ] Dev auth dropdown shows "101 — Emma Wilson"
-   - [ ] Select customer ID 101
+1. **Sign in as the customer:**
+   - [ ] Navigate to http://localhost:5008 (use an incognito window for clean state)
+   - [ ] Sign in as `emma.wilson@<your-tenant>`
+   - [ ] User badge shows "Emma Wilson" — BFF resolved UPN → customer 101
 
 2. **Send query to chat:**
    - [ ] Type: "I placed an order a few days ago — can you tell me where it is?"
@@ -119,9 +121,9 @@ Tester: _______________
 
 ### Test Steps
 
-1. **Select customer in Blazor UI:**
-   - [ ] Dev auth dropdown → select ID 102 (James Chen)
-   - [ ] Verify customer switched
+1. **Sign in as the customer (incognito or new browser profile):**
+   - [ ] Sign in as `james.chen@<your-tenant>` (customer 102)
+   - [ ] User badge confirms James Chen
 
 2. **Send query to chat:**
    - [ ] Type: "I got my hiking boots but they're too small. Can I return them?"
@@ -168,9 +170,9 @@ Tester: _______________
 
 ### Test Steps
 
-1. **Select customer in Blazor UI:**
-   - [ ] Dev auth dropdown → select ID 103 (Sarah Miller)
-   - [ ] Verify customer switched
+1. **Sign in as the customer (incognito or new browser profile):**
+   - [ ] Sign in as `sarah.miller@<your-tenant>` (customer 103, Gold tier)
+   - [ ] User badge confirms Sarah Miller
 
 2. **Send query to chat:**
    - [ ] Type: "I'm a Gold member — are there any tent deals right now?"
@@ -218,9 +220,9 @@ Tester: _______________
 
 ### Test Steps
 
-1. **Select customer in Blazor UI:**
-   - [ ] Dev auth dropdown → select ID 104 (David Park)
-   - [ ] Verify customer switched
+1. **Sign in as the customer (incognito or new browser profile):**
+   - [ ] Sign in as `david.park@<your-tenant>` (customer 104)
+   - [ ] User badge confirms David Park
 
 2. **Send query to chat:**
    - [ ] Type: "The jacket I ordered arrived with a tear in the sleeve. What can I do?"
@@ -270,9 +272,9 @@ Tester: _______________
 
 ### Test Steps
 
-1. **Select customer in Blazor UI:**
-   - [ ] Dev auth dropdown → select ID 105 (Lisa Torres)
-   - [ ] Verify customer switched
+1. **Sign in as the customer (incognito or new browser profile):**
+   - [ ] Sign in as `lisa.torres@<your-tenant>` (customer 105)
+   - [ ] User badge confirms Lisa Torres
 
 2. **Send query to chat:**
    - [ ] Type: "I'm planning a 5-day backpacking trip. What backpack should I get?"

@@ -41,3 +41,34 @@ resource "azurerm_role_assignment" "deployer_openai_user" {
   role_definition_name = "Cognitive Services OpenAI User"
   principal_id         = data.azurerm_client_config.current.object_id
 }
+
+# -----------------------------------------------------------------------------
+# Microsoft Entra ID — SPA app registration + test users for MSAL sign-in
+#
+# Both tracks (Local + Full Azure) use real Microsoft Entra ID. The Local Track
+# creates a per-developer SPA app registration with localhost callbacks plus a
+# small set of test users matching the seeded customers. The same flow is used
+# in the Full Azure Track via infra/terraform/main.tf.
+#
+# Requires the deployer to have:
+#   - Application Developer (or higher) — to create the app registration
+#   - User Administrator (or higher)    — to create test users
+# Most M365 dev tenants grant both by default; an enterprise tenant typically
+# does not. See docs/lab-0.md for tenant choices.
+# -----------------------------------------------------------------------------
+
+module "entra" {
+  source = "../modules/entra/v1"
+
+  base_name   = "${var.base_name}-local"
+  environment = var.environment
+
+  redirect_uris = [
+    "http://localhost:5008/authentication/login-callback",
+    "http://localhost:5008/authentication/logout-callback",
+  ]
+
+  # Default test_users (8 customers: Emma, James, Sarah, David, Lisa,
+  # Mike, Anna, Tom) seeded by the entra module — same set used by the
+  # Full Azure Track. Override here only if you need a different mix.
+}
