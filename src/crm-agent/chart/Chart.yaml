@@ -1,0 +1,22 @@
+apiVersion: v2
+name: crm-agent
+description: Contoso Outdoors CRM Agent - orders, returns, support tickets via Microsoft Agents Framework
+type: application
+
+version: 0.1.0
+
+appVersion: "0.0.1"
+
+maintainers:
+  - name: Contoso Platform Team
+    email: platform@contoso.com
+
+keywords:
+  - dotnet
+  - agent
+  - foundry
+  - aks
+  - workload-identity
+
+annotations:
+  category: agent

@@ -12,7 +12,7 @@
 ## What I Own
 
 - CRM API (all 11 endpoints)
-- CRM MCP Server (10 tools)
+- CRM MCP Server (11 tools)
 - Knowledge MCP Server
 - CRM Agent, Product Agent, Orchestrator Agent
 - BFF API (JWT validation, chat, proxying, conversation persistence)

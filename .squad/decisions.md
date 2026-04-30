@@ -36,7 +36,7 @@
 
 ### Frontend & UI
 
-**Decision (Lois):** Blazor WASM UI is fully specified but has zero implementation. Start with scaffolding (dotnet new blazorwasm + MudBlazor + MSAL + SignalR.Client + Markdig packages, Dockerfile). Priority order: Auth → Shell → Chat Core → SignalR → State → Error Handling → Accessibility → Testing → Polish.
+**Decision (Lois):** Blazor WASM UI is fully specified but has zero implementation. Start with scaffolding (dotnet new blazorwasm + MudBlazor + MSAL + Markdig packages, Dockerfile). Priority order: Auth → Shell → Chat Core → State → Error Handling → Accessibility → Testing → Polish.
 
 **Decision (Lois):** Image URL rewriting pattern is well-defined. Markdown images (`![alt](filename.png)`) must be rewritten by ChatMessage.razor to BFF proxy URLs (`/api/images/{filename}`). Implement with Markdig post-processing or custom extension.
 

@@ -1,0 +1,23 @@
+apiVersion: v2
+name: bff-api
+description: Contoso Outdoors BFF API - chat orchestration entrypoint, MSAL session management
+type: application
+
+version: 0.1.0
+
+appVersion: "0.0.1"
+
+maintainers:
+  - name: Contoso Platform Team
+    email: platform@contoso.com
+
+keywords:
+  - dotnet
+  - microservice
+  - aks
+  - workload-identity
+  - bff
+  - msal
+
+annotations:
+  category: backend

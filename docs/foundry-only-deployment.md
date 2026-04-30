@@ -33,7 +33,7 @@ The existing full deployment path (`init.ps1` → `deploy.ps1` → Terraform →
 | **Identity** | Managed identities, workload identity, Entra Agent ID | None (dev mode) |
 | **Run method** | AKS (Helm charts, Docker images) | `dotnet run --project src/AppHost` |
 | **Config source** | Key Vault → config-sync → appsettings.Development.json | Direct `appsettings.Local.json` |
-| **Dashboard** | None (production-grade) | Aspire orchestration dashboard at localhost:15000 |
+| **Dashboard** | None (production-grade) | Aspire orchestration dashboard at localhost:15888 |
 
 ### Developer Workflow (Git Clone to Running System)
 
@@ -50,7 +50,7 @@ See **[Local Development Guide](local-development.md)** for the quick-start walk
 5. Run: dotnet run --project src/AppHost
    → Starts Aspire orchestration
    → All 8 components run locally with in-memory data
-   → Dashboard at https://localhost:15000
+   → Dashboard at https://localhost:15888
 6. Open browser: https://localhost:5008
 ```
 
@@ -582,7 +582,7 @@ The setup script does 7 things:
 | orchestrator-agent | 5006 | HTTP | Agent endpoint |
 | bff-api | 5007 | HTTPS | Backend-for-Frontend |
 | blazor-ui | 5008 | HTTPS | SPA |
-| **Aspire Dashboard** | **15000** | **HTTPS** | **Monitoring all components** |
+| **Aspire Dashboard** | **15888** | **HTTPS** | **Monitoring all components** |
 
 ---
 
@@ -595,7 +595,7 @@ The setup script does 7 things:
 - ✅ No emulators needed (repository pattern handles everything)
 - ✅ Foundry deployed to Azure (real API calls)
 - ✅ Dev auth bypass (no MSAL, just customer ID header)
-- ✅ Dashboard at `localhost:15000` shows all components
+- ✅ Dashboard at `localhost:15888` shows all components
 
 ### When Deploying to Azure
 
@@ -622,7 +622,7 @@ This ensures local dev is always testing the actual production code paths.
 1. **Read the quick-start guide:** [Local Development Guide](local-development.md)
 2. **Run setup:** `./infra/setup-local.ps1`
 3. **Start the system:** `dotnet run --project src/AppHost`
-4. **Open dashboard:** `https://localhost:15000`
+4. **Open dashboard:** `https://localhost:15888`
 5. **Open UI:** `https://localhost:5008`
 
 See [README.md](../README.md) for more information on architecture and deployment paths.

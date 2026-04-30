@@ -1,0 +1,104 @@
+# =============================================================================
+# Values for Contoso Blazor UI (WASM SPA served by nginx)
+# =============================================================================
+# Static SPA — no Azure identity is required at runtime. The browser-side
+# WASM bundle authenticates against Entra directly via MSAL.js.
+# =============================================================================
+
+image:
+  repository: contosoacr.azurecr.io/blazor-ui
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+replicaCount: 1
+
+serviceAccount:
+  create: false
+  name: ""
+  annotations: {}
+
+workloadIdentity:
+  enabled: false
+
+podAnnotations: {}
+podLabels: {}
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: blazor-ui.contoso.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 192Mi
+
+probes:
+  liveness:
+    path: /health
+    port: 8080
+    initialDelaySeconds: 5
+    periodSeconds: 15
+    timeoutSeconds: 3
+    failureThreshold: 3
+  readiness:
+    path: /health
+    port: 8080
+    initialDelaySeconds: 2
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# nginx:alpine ships with the unprivileged "nginx" user (UID 101 / GID 101).
+# Aligning the pod identity with that UID lets us keep readOnlyRootFilesystem.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 101
+  runAsGroup: 101
+  fsGroup: 101
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 101
+  capabilities:
+    drop:
+      - ALL
+
+config: {}
+
+secretRefs: []
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+namespaceOverride: ""

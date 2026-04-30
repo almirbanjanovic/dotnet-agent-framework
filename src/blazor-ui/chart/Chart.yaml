@@ -1,0 +1,22 @@
+apiVersion: v2
+name: blazor-ui
+description: Contoso Outdoors Blazor WASM UI - static SPA served by nginx
+type: application
+
+version: 0.1.0
+
+appVersion: "0.0.1"
+
+maintainers:
+  - name: Contoso Platform Team
+    email: platform@contoso.com
+
+keywords:
+  - blazor
+  - wasm
+  - spa
+  - nginx
+  - aks
+
+annotations:
+  category: frontend

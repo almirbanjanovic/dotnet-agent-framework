@@ -11,10 +11,10 @@ Required config keys (populated by config-sync from Key Vault):
 |-----|-------------|
 | `Search:Endpoint` | Azure AI Search endpoint |
 | `Search:IndexName` | Search index name |
-| `Storage:ImagesEndpoint` | Blob storage endpoint for product images |
-| `Storage:ImagesAccountName` | Storage account name |
-| `Storage:ImagesContainer` | Blob container for images |
+| `Foundry:Endpoint` | AI Foundry endpoint (used for embeddings in `DataMode=InMemory`) |
+| `Foundry:EmbeddingDeploymentName` | Embedding model deployment name (`DataMode=InMemory` only) |
 | `AzureAd:TenantId` | Entra tenant ID for DefaultAzureCredential |
+| `DataMode` | `AzureSearch` (default) or `InMemory` for local dev |
 
 Run config-sync to populate: `cd src/config-sync && dotnet run -- <key-vault-uri> [environment]`
 
@@ -29,4 +29,4 @@ dotnet run
 
 ## Architecture role
 
-Knowledge MCP Server provides semantic search over the product knowledge base via Azure AI Search. Agents (primarily product-agent) call the `search_knowledge_base` tool to retrieve catalog details, sizing guides, and promotional content. It also proxies product image URLs from Blob Storage.
+Knowledge MCP Server provides semantic search over the product knowledge base via Azure AI Search. Agents (primarily product-agent) call the `search_knowledge_base` tool to retrieve catalog details, sizing guides, and promotional content.

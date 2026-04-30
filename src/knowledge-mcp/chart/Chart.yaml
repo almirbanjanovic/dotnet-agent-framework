@@ -1,0 +1,22 @@
+apiVersion: v2
+name: knowledge-mcp
+description: Contoso Outdoors Knowledge MCP server - products + AI Search retrieval over MCP
+type: application
+
+version: 0.1.0
+
+appVersion: "0.0.1"
+
+maintainers:
+  - name: Contoso Platform Team
+    email: platform@contoso.com
+
+keywords:
+  - dotnet
+  - mcp
+  - aks
+  - workload-identity
+  - search
+
+annotations:
+  category: backend

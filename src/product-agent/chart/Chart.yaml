@@ -1,0 +1,22 @@
+apiVersion: v2
+name: product-agent
+description: Contoso Outdoors Product Agent - recommendations, sizing, gear advice via Microsoft Agents Framework
+type: application
+
+version: 0.1.0
+
+appVersion: "0.0.1"
+
+maintainers:
+  - name: Contoso Platform Team
+    email: platform@contoso.com
+
+keywords:
+  - dotnet
+  - agent
+  - foundry
+  - aks
+  - workload-identity
+
+annotations:
+  category: agent

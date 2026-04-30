@@ -12,7 +12,7 @@
 
 | Component | Type | What it does | Calls | Identity |
 | --- | --- | --- | --- | --- |
-| **Blazor WASM UI** | SPA (.NET, MudBlazor) | User interface, MSAL auth, chat panel, SignalR streaming | BFF API (HTTP + SignalR) | *(none)* |
+| **Blazor WASM UI** | SPA (.NET, MudBlazor) | User interface, MSAL auth, chat panel, conversation history | BFF API (HTTP) | *(none — browser-side)* |
 | **BFF API** | .NET Minimal API | JWT validation, CRM API proxy, image proxy (blob bytes), chat, conversation persistence | CRM API, Orchestrator, Blob Storage, Cosmos DB | `id-bff` |
 | **CRM API** | .NET Minimal API | All CRM data: customers, orders, products, promotions, support tickets (11 endpoints) | Cosmos DB (CRM) | `id-crm-api` |
 | **CRM MCP** | MCP Server | 11 tools wrapping all CRM API endpoints | CRM API (HTTP) | `id-crm-mcp` |
@@ -22,8 +22,6 @@
 | **Orchestrator Agent** | Agent | Intent classification, routes to CRM or Product agent | CRM/Product Agent (HTTP), Azure OpenAI | Contoso Orchestrator Agent (agent identity) |
 
 Each component is fully independent — own models, own Dockerfile, own Helm chart, own test project. No shared project references. Communication between services is HTTP/JSON only.
-
-> **Implementation status:** CRM API is fully implemented. All other components are architecturally defined and scaffolded — implementation follows the [build plan](docs/implementation-plan.md).
 
 ### Key architectural decisions
 
@@ -50,7 +48,7 @@ The BFF is the sole writer/reader for conversation history in Cosmos DB. The Orc
 
 #### 5. Blazor WASM UI + separate BFF API
 
-The UI is a Blazor WebAssembly SPA with MudBlazor components, deployed as static files in its own container. The BFF is a .NET Minimal API in a separate container. Blazor WASM authenticates via Microsoft.Authentication.Msal (PKCE) and sends Bearer tokens to the BFF. Both UI and backend use C# — the entire stack is .NET.
+The UI is a Blazor WebAssembly SPA with MudBlazor components, deployed as static files in its own container. The BFF is a .NET Minimal API in a separate container. Blazor WASM authenticates via Microsoft.Authentication.Msal (PKCE) and sends Bearer tokens to the BFF. Conversation responses are returned as a single HTTP/JSON payload — there is no streaming protocol between the UI and the BFF. Both UI and backend are .NET.
 
 #### 6. BFF proxies product images (most secure)
 
@@ -82,8 +80,8 @@ Path 3 — Product image:
 
 | Container | Service Type | Identity | Key Connections |
 | --- | --- | --- | --- |
-| blazor-ui | Ingress (public, path: /) | *(none)* | BFF API (HTTP + SignalR) |
-| bff-api | Ingress (path: /api/*, /hubs/*) | `id-bff` | CRM API, Orchestrator, Blob Storage, Cosmos DB |
+| blazor-ui | Ingress (public, path: /) | *(none)* | BFF API (HTTP) |
+| bff-api | Ingress (path: /api/*) | `id-bff` | CRM API, Orchestrator, Blob Storage, Cosmos DB |
 | crm-api | ClusterIP | `id-crm-api` | Cosmos DB (CRM) |
 | crm-mcp | ClusterIP | `id-crm-mcp` | CRM API |
 | knowledge-mcp | ClusterIP | `id-know-mcp` | AI Search |
@@ -130,7 +128,7 @@ See [docs/security.md](docs/security.md) for the full security architecture: aut
 | Domain API | ASP.NET Core Minimal API, Microsoft.Azure.Cosmos |
 | MCP Servers | [ModelContextProtocol C# SDK](https://github.com/modelcontextprotocol/csharp-sdk) (Streamable HTTP) |
 | Agents | [Microsoft.Agents.AI](https://learn.microsoft.com/en-us/agent-framework/agents/), Azure.AI.OpenAI |
-| BFF + UI | Blazor WebAssembly ([MudBlazor](https://mudblazor.com/), Microsoft.Authentication.Msal, SignalR.Client) + .NET Minimal API (separate containers) |
+| BFF + UI | Blazor WebAssembly ([MudBlazor](https://mudblazor.com/), Microsoft.Authentication.Msal) + .NET Minimal API (separate containers) |
 | Markdown | [Markdig](https://github.com/xoofx/markdig) (renders agent markdown responses with image rewriting) |
 | Auth (Users) | Microsoft.Authentication.Msal in Blazor WASM, JwtBearer validation in BFF |
 | Auth (Agents) | [Entra Agent ID](https://learn.microsoft.com/en-us/entra/agent-id/identity-platform/agent-identities) (agent identity blueprints + FIC for AKS) |
@@ -196,13 +194,13 @@ src/
   seed-data/                      → Tool: CSV → Cosmos DB (runs during deploy phase 6)
   simple-agent/                   → Lab 1 validation (Azure OpenAI connectivity test)
 
-  crm-api/                        → Domain API: all CRM data (11 endpoints) ✅ BUILT
+  crm-api/                        → Domain API: all CRM data (11 endpoints)
   crm-mcp/                        → MCP Server: 11 CRM tools → CRM API
   knowledge-mcp/                  → MCP Server: knowledge search → AI Search SDK
   crm-agent/                      → CRM specialist agent (customers, orders, tickets)
   product-agent/                  → Product specialist agent (catalog, promotions)
   orchestrator-agent/             → Intent classifier + specialist routing
-  blazor-ui/                      → Blazor WebAssembly SPA (MudBlazor + MSAL + SignalR)
+  blazor-ui/                      → Blazor WebAssembly SPA (MudBlazor + MSAL)
   bff-api/                        → BFF API (.NET): JWT validation, proxy, chat, image proxy
 ```
 
@@ -235,7 +233,7 @@ The system will:
 - Deploy minimal Foundry resources to Azure (~$1–5/day)
 - Load CRM data from CSVs into memory (no emulators)
 - Search knowledge base via in-memory vectors + Foundry embeddings
-- Start all 8 components + Aspire dashboard at `https://localhost:15000`
+- Start all 8 components + Aspire dashboard at `https://localhost:15888`
 - Provide a dev customer selector in the UI (no MSAL needed)
 
 ---

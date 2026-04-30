@@ -22,7 +22,7 @@ cd src/crm-api
 dotnet run
 ```
 
-The API starts on `http://localhost:5000` by default. Health endpoints: `/health` (liveness), `/ready` (Cosmos DB connectivity).
+The API starts on `http://localhost:5001` by default (set by Aspire AppHost in local dev). Health endpoints: `/health` (liveness), `/ready` (Cosmos DB connectivity).
 
 ## Endpoints
 

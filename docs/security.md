@@ -541,7 +541,7 @@ MCP tools are classified by sensitivity:
    }
 ⑤ BFF intercepts → checks Cosmos DB for existing consent
    - If pre-approved (user chose "always allow"): auto-approve, execute tool
-   - If no consent: emit ConsentRequested event via SignalR
+   - If no consent: return a `consent_required` payload to the Blazor UI
 ⑥ Blazor UI shows inline consent card in chat:
    ┌───────────────────────────────────────────────┐
    │  🛡️  Contoso CRM Agent wants to:              │
