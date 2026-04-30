@@ -3,40 +3,126 @@
 @inject BffApiClient BffApiClient
 @inject AuthStateProvider AuthStateProvider
 
-<PageTitle>Profile</PageTitle>
+<PageTitle>Profile · Contoso Outdoors</PageTitle>
 
-<MudStack Spacing="3">
-    <MudText Typo="Typo.h5">Customer Profile</MudText>
+<MudStack Spacing="4">
+    <div>
+        <MudText Typo="Typo.h4">Customer profile</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Account details for the selected customer.
+        </MudText>
+    </div>
 
     @if (_isLoading)
     {
-        <MudProgressCircular Indeterminate="true" Size="Size.Large" />
+        <MudPaper Class="pa-6">
+            <MudSkeleton SkeletonType="SkeletonType.Circle" Width="80px" Height="80px" />
+            <MudSkeleton SkeletonType="SkeletonType.Text" Width="40%" Style="margin-top: 1rem;" />
+            <MudSkeleton SkeletonType="SkeletonType.Text" Width="60%" />
+        </MudPaper>
     }
     else if (!string.IsNullOrWhiteSpace(_errorMessage))
     {
-        <MudAlert Severity="Severity.Error">@_errorMessage</MudAlert>
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_errorMessage</MudAlert>
     }
     else if (_customer is null)
     {
-        <MudText Typo="Typo.body1" Color="Color.Secondary">Select a customer to view their profile.</MudText>
+        <MudPaper Class="pa-8" Style="text-align: center;" Elevation="0">
+            <MudIcon Icon="@Icons.Material.Outlined.PersonOutline" Size="Size.Large" Color="Color.Secondary" />
+            <MudText Typo="Typo.h6" Style="margin-top: 0.75rem;">No customer selected</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Pick a customer in the top bar to view their profile.
+            </MudText>
+        </MudPaper>
     }
     else
     {
-        <MudPaper Class="pa-4">
-            <MudText Typo="Typo.h6">@_customer.FirstName @_customer.LastName</MudText>
-            <MudText Typo="Typo.body2">@_customer.Email</MudText>
-
-            <MudStack Row="true" Spacing="2" Style="margin-top: 1rem;">
-                <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined">
-                    Loyalty: @_customer.LoyaltyTier
-                </MudChip>
-                <MudChip T="string" Color="Color.Secondary" Variant="Variant.Outlined">
-                    Status: @_customer.AccountStatus
-                </MudChip>
-            </MudStack>
+        <MudPaper Class="profile-hero">
+            <div class="profile-avatar">@GetInitials(_customer.FirstName, _customer.LastName)</div>
+            <div class="profile-meta">
+                <MudText Typo="Typo.h4" Style="font-weight: 700; color: #fff;">
+                    @_customer.FirstName @_customer.LastName
+                </MudText>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Style="margin-top: 0.4rem; opacity: 0.92;">
+                    <MudIcon Icon="@Icons.Material.Outlined.Email" Size="Size.Small" Style="color: #fff;" />
+                    <MudText Typo="Typo.body1" Style="color: #fff;">@_customer.Email</MudText>
+                </MudStack>
+            </div>
         </MudPaper>
+
+        <MudGrid>
+            <MudItem xs="12" sm="6">
+                <MudPaper Class="pa-5 stat-card">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Style="text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;">
+                        Loyalty tier
+                    </MudText>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Style="margin-top: 0.5rem;">
+                        <MudIcon Icon="@Icons.Material.Filled.WorkspacePremium" Color="Color.Secondary" />
+                        <MudText Typo="Typo.h5" Style="font-weight: 700;">@_customer.LoyaltyTier</MudText>
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudPaper Class="pa-5 stat-card">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Style="text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;">
+                        Account status
+                    </MudText>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Style="margin-top: 0.5rem;">
+                        <MudIcon Icon="@Icons.Material.Filled.Verified" Color="Color.Primary" />
+                        <MudText Typo="Typo.h5" Style="font-weight: 700;">@_customer.AccountStatus</MudText>
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
     }
 </MudStack>
+
+<style>
+    .profile-hero {
+        position: relative;
+        overflow: hidden;
+        padding: 2rem;
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+        background: linear-gradient(135deg, #1F5F3F 0%, #14B8A6 100%);
+        color: #fff;
+        border: none !important;
+    }
+    .profile-hero::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background:
+            radial-gradient(circle at 80% 0%, rgba(255, 255, 255, 0.18), transparent 50%),
+            radial-gradient(circle at 0% 100%, rgba(217, 119, 6, 0.25), transparent 50%);
+        pointer-events: none;
+    }
+    .profile-avatar {
+        position: relative;
+        width: 84px; height: 84px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.18);
+        backdrop-filter: blur(8px);
+        border: 2px solid rgba(255, 255, 255, 0.35);
+        color: #fff;
+        font-size: 1.75rem;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    .profile-meta { position: relative; }
+    .stat-card {
+        height: 100%;
+        transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(15, 31, 23, 0.06), 0 12px 24px -8px rgba(15, 31, 23, 0.1);
+    }
+</style>
 
 @code {
     private Customer? _customer;
@@ -73,6 +159,14 @@
         {
             _isLoading = false;
         }
+    }
+
+    private static string GetInitials(string? first, string? last)
+    {
+        var f = string.IsNullOrWhiteSpace(first) ? "" : first[..1];
+        var l = string.IsNullOrWhiteSpace(last)  ? "" : last[..1];
+        var combined = (f + l).ToUpperInvariant();
+        return string.IsNullOrEmpty(combined) ? "??" : combined;
     }
 
     private async void HandleCustomerChanged()

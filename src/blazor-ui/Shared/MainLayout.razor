@@ -2,39 +2,55 @@
 @inject AuthStateProvider AuthStateProvider
 
 <MudLayout>
-    <MudAppBar Color="Color.Primary" Elevation="1">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="ToggleDrawer" />
-        <MudText Typo="Typo.h6">Contoso Outdoors</MudText>
+    <MudAppBar Color="Color.Inherit" Elevation="0" Dense="true">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Default" Edge="Edge.Start" OnClick="ToggleDrawer" />
+        <div class="brand-mark">
+            <div class="brand-logo">
+                <MudIcon Icon="@Icons.Material.Filled.Terrain" Size="Size.Small" Style="color: #fff;" />
+            </div>
+            <div class="brand-text">
+                <span class="brand-title">Contoso Outdoors</span>
+                <span class="brand-tagline">Customer Care</span>
+            </div>
+        </div>
         <MudSpacer />
         @if (AuthStateProvider.UseDevAuth)
         {
-            <MudSelect T="CustomerOption"
-                       Value="AuthStateProvider.SelectedCustomer"
-                       ValueChanged="OnCustomerChanged"
-                       Dense="true"
-                       Variant="Variant.Outlined"
-                       Class="customer-select"
-                       Label="Customer">
-                @foreach (var customer in AuthStateProvider.Customers)
-                {
-                    <MudSelectItem Value="@customer">@customer.Name (@customer.Id)</MudSelectItem>
-                }
-            </MudSelect>
+            <MudTooltip Text="Switch impersonated customer (Local Track only)">
+                <MudSelect T="CustomerOption"
+                           Value="AuthStateProvider.SelectedCustomer"
+                           ValueChanged="OnCustomerChanged"
+                           Dense="true"
+                           Variant="Variant.Outlined"
+                           Class="customer-select"
+                           AdornmentIcon="@Icons.Material.Filled.PersonOutline"
+                           Adornment="Adornment.Start"
+                           Margin="Margin.Dense"
+                           Placeholder="Select customer">
+                    @foreach (var customer in AuthStateProvider.Customers)
+                    {
+                        <MudSelectItem Value="@customer">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span class="customer-avatar">@GetInitials(customer.Name)</span>
+                                <span>@customer.Name</span>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">#@customer.Id</MudText>
+                            </div>
+                        </MudSelectItem>
+                    }
+                </MudSelect>
+            </MudTooltip>
         }
     </MudAppBar>
 
     <MudDrawer @bind-Open="_drawerOpen"
                Variant="DrawerVariant.Responsive"
-               Elevation="1"
+               Elevation="0"
                Class="mud-width-260">
-        <MudDrawerHeader>
-            <MudText Typo="Typo.subtitle1" Style="margin-left: 1rem;">Navigation</MudText>
-        </MudDrawerHeader>
         <NavMenu />
     </MudDrawer>
 
     <MudMainContent>
-        <MudContainer MaxWidth="MaxWidth.False" Class="pa-4">
+        <MudContainer MaxWidth="MaxWidth.Large" Class="px-4 py-6">
             @Body
         </MudContainer>
     </MudMainContent>
@@ -52,5 +68,13 @@
     {
         AuthStateProvider.SetCustomer(customer);
         return Task.CompletedTask;
+    }
+
+    private static string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "??";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1) return parts[0][..Math.Min(2, parts[0].Length)].ToUpperInvariant();
+        return string.Concat(parts[0][0], parts[^1][0]).ToUpperInvariant();
     }
 }

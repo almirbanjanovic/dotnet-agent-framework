@@ -5,75 +5,173 @@
 @inject AuthStateProvider AuthStateProvider
 @inject IJSRuntime JsRuntime
 
-<PageTitle>Chat</PageTitle>
+<PageTitle>Chat · Contoso Outdoors</PageTitle>
 
-<MudStack Spacing="3">
-    <MudPaper Class="pa-4">
-        <MudText Typo="Typo.h6">Customer Context</MudText>
+<MudStack Spacing="4">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Spacing="2">
+        <div>
+            <MudText Typo="Typo.h4">Customer chat</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Conversational support powered by the Contoso AI agents.
+            </MudText>
+        </div>
         @if (AuthStateProvider.SelectedCustomer is not null)
         {
-            <MudText Typo="Typo.subtitle2">
-                @AuthStateProvider.SelectedCustomer.Name (@AuthStateProvider.SelectedCustomer.Id)
-            </MudText>
+            <MudPaper Class="px-4 py-2" Elevation="0" Style="display: inline-flex; align-items: center; gap: 0.6rem;">
+                <span class="customer-context-avatar">@GetInitials(AuthStateProvider.SelectedCustomer.Name)</span>
+                <div style="line-height: 1.2;">
+                    <MudText Typo="Typo.subtitle2" Style="font-weight: 600;">@AuthStateProvider.SelectedCustomer.Name</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Customer #@AuthStateProvider.SelectedCustomer.Id</MudText>
+                </div>
+            </MudPaper>
         }
-        else
-        {
-            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Select a customer to begin.</MudText>
-        }
-    </MudPaper>
+    </MudStack>
 
-    <MudPaper Class="pa-4 chat-panel">
+    <MudPaper Class="chat-panel" Elevation="0">
         <div id="@ScrollContainerId" class="chat-messages">
             @if (_messages.Count == 0)
             {
-                <MudText Typo="Typo.body2" Color="Color.Secondary">Start the conversation when you're ready.</MudText>
+                <div class="chat-empty">
+                    <span class="chat-empty-emoji">👋</span>
+                    <MudText Typo="Typo.h5" Style="margin-bottom: 0.5rem;">How can we help today?</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Style="margin-bottom: 1.25rem;">
+                        Ask about an order, request a return, or get gear recommendations.
+                    </MudText>
+                    @if (AuthStateProvider.SelectedCustomer is null)
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true" Variant="Variant.Outlined">
+                            Pick a customer in the top bar to begin.
+                        </MudAlert>
+                    }
+                    else
+                    {
+                        <MudStack Spacing="2" AlignItems="AlignItems.Stretch">
+                            @foreach (var prompt in _suggestedPrompts)
+                            {
+                                <MudButton Variant="Variant.Outlined"
+                                           Color="Color.Default"
+                                           OnClick="@(() => UseSuggestion(prompt))"
+                                           Class="suggested-prompt">
+                                    @prompt
+                                </MudButton>
+                            }
+                        </MudStack>
+                    }
+                </div>
             }
             else
             {
                 @foreach (var message in _messages)
                 {
-                    <MudPaper Class="@GetMessageClass(message)" Elevation="0">
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">
-                            @GetRoleLabel(message.Role) · @message.Timestamp.ToLocalTime().ToString("g")
-                        </MudText>
-                        <div class="markdown-body">@ChatMarkdownRenderer.RenderMarkdown(message.Content)</div>
-                    </MudPaper>
+                    var isUser = string.Equals(message.Role, "user", StringComparison.OrdinalIgnoreCase);
+                    <div class="chat-row @(isUser ? "user" : "assistant")">
+                        @if (!isUser)
+                        {
+                            <span class="chat-avatar assistant">AI</span>
+                        }
+                        <div class="chat-bubble">
+                            <div class="chat-meta">
+                                @GetRoleLabel(message.Role) · @message.Timestamp.ToLocalTime().ToString("t")
+                            </div>
+                            <div class="markdown-body">@ChatMarkdownRenderer.RenderMarkdown(message.Content)</div>
+                        </div>
+                        @if (isUser)
+                        {
+                            <span class="chat-avatar user">@GetInitials(AuthStateProvider.SelectedCustomer?.Name)</span>
+                        }
+                    </div>
+                }
+                @if (_isSending)
+                {
+                    <div class="chat-row assistant">
+                        <span class="chat-avatar assistant">AI</span>
+                        <div class="chat-bubble">
+                            <div class="typing-indicator"><span></span><span></span><span></span></div>
+                        </div>
+                    </div>
                 }
             }
         </div>
-    </MudPaper>
-
-    <MudPaper Class="pa-4">
-        <MudTextField @bind-Value="_currentMessage"
-                      Label="Message"
-                      Lines="3"
-                      Disabled="@_isSending"
-                      Placeholder="Ask about your orders, returns, or gear recommendations..." />
-        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Spacing="2" Style="margin-top: 1rem;">
-            @if (_isSending)
+        <div class="chat-composer">
+            <MudTextField @bind-Value="_currentMessage"
+                          Variant="Variant.Outlined"
+                          Lines="2"
+                          Disabled="@_isSending"
+                          Placeholder="Ask about your orders, returns, or gear recommendations..."
+                          Margin="Margin.Dense"
+                          OnKeyDown="HandleKeyDown" />
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Spacing="2" Style="margin-top: 0.75rem;">
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    Press <kbd>Enter</kbd> to send · <kbd>Shift</kbd> + <kbd>Enter</kbd> for newline
+                </MudText>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           EndIcon="@Icons.Material.Filled.Send"
+                           OnClick="SendAsync"
+                           Disabled="@IsSendDisabled">
+                    @(_isSending ? "Sending…" : "Send")
+                </MudButton>
+            </MudStack>
+            @if (!string.IsNullOrWhiteSpace(_errorMessage))
             {
-                <MudProgressLinear Indeterminate="true" Color="Color.Info" Style="flex: 1;" />
+                <MudAlert Severity="Severity.Error" Dense="true" Style="margin-top: 0.75rem;">@_errorMessage</MudAlert>
             }
-            else
-            {
-                <MudSpacer />
-            }
-            <MudButton Variant="Variant.Filled"
-                       Color="Color.Primary"
-                       OnClick="SendAsync"
-                       Disabled="@IsSendDisabled">
-                Send
-            </MudButton>
-        </MudStack>
-        @if (!string.IsNullOrWhiteSpace(_errorMessage))
-        {
-            <MudAlert Severity="Severity.Error" Style="margin-top: 1rem;">@_errorMessage</MudAlert>
-        }
+        </div>
     </MudPaper>
 </MudStack>
 
+<style>
+    .customer-context-avatar {
+        width: 32px; height: 32px; border-radius: 50%;
+        background: linear-gradient(135deg, #D97706, #F59E0B);
+        color: #fff; font-weight: 700; font-size: 0.8rem;
+        display: inline-flex; align-items: center; justify-content: center;
+    }
+    .suggested-prompt {
+        justify-content: flex-start !important;
+        text-transform: none !important;
+        font-weight: 500 !important;
+        border-color: rgba(15, 31, 23, 0.1) !important;
+        color: #475569 !important;
+    }
+    .suggested-prompt:hover {
+        background-color: rgba(31, 95, 63, 0.05) !important;
+        border-color: #1F5F3F !important;
+        color: #1F5F3F !important;
+    }
+    kbd {
+        font-family: inherit;
+        font-size: 0.7rem;
+        padding: 0.1rem 0.35rem;
+        background-color: #F1F5F4;
+        border: 1px solid #E5E7EB;
+        border-radius: 4px;
+        font-weight: 600;
+    }
+    .typing-indicator { display: inline-flex; gap: 4px; padding: 0.3rem 0.1rem; }
+    .typing-indicator span {
+        width: 7px; height: 7px; border-radius: 50%;
+        background-color: #94A3B8;
+        animation: typing 1.2s infinite ease-in-out;
+    }
+    .typing-indicator span:nth-child(2) { animation-delay: 0.15s; }
+    .typing-indicator span:nth-child(3) { animation-delay: 0.3s; }
+    @@keyframes typing {
+        0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+        40%           { transform: scale(1);   opacity: 1; }
+    }
+</style>
+
 @code {
     private const string ScrollContainerId = "chat-scroll-container";
+
+    private static readonly string[] _suggestedPrompts =
+    [
+        "Where is my latest order?",
+        "What's your return policy on hiking boots?",
+        "Recommend a tent for a 3-person summer trip."
+    ];
+
     private readonly List<ChatMessage> _messages = new();
     private string? _conversationId;
     private string _currentMessage = string.Empty;
@@ -89,6 +187,20 @@
     protected override void OnInitialized()
     {
         AuthStateProvider.CustomerChanged += HandleCustomerChanged;
+    }
+
+    private void UseSuggestion(string prompt)
+    {
+        _currentMessage = prompt;
+        _ = SendAsync();
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendAsync();
+        }
     }
 
     private async Task SendAsync()
@@ -135,10 +247,13 @@
     private static string GetRoleLabel(string role) =>
         string.Equals(role, "user", StringComparison.OrdinalIgnoreCase) ? "You" : "Assistant";
 
-    private static string GetMessageClass(ChatMessage message) =>
-        string.Equals(message.Role, "user", StringComparison.OrdinalIgnoreCase)
-            ? "chat-message user"
-            : "chat-message assistant";
+    private static string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "U";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1) return parts[0][..Math.Min(2, parts[0].Length)].ToUpperInvariant();
+        return string.Concat(parts[0][0], parts[^1][0]).ToUpperInvariant();
+    }
 
     private void HandleCustomerChanged()
     {
@@ -153,5 +268,4 @@
     {
         AuthStateProvider.CustomerChanged -= HandleCustomerChanged;
     }
-
 }

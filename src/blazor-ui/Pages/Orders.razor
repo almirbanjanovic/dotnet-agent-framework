@@ -3,22 +3,46 @@
 @inject BffApiClient BffApiClient
 @inject AuthStateProvider AuthStateProvider
 
-<PageTitle>Orders</PageTitle>
+<PageTitle>Orders · Contoso Outdoors</PageTitle>
 
-<MudStack Spacing="3">
-    <MudText Typo="Typo.h5">Order History</MudText>
+<MudStack Spacing="4">
+    <div>
+        <MudText Typo="Typo.h4">Order history</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Recent orders for the selected customer.
+        </MudText>
+    </div>
 
     @if (_isLoading)
     {
-        <MudProgressCircular Indeterminate="true" Size="Size.Large" />
+        <MudGrid>
+            @for (var i = 0; i < 3; i++)
+            {
+                <MudItem xs="12" md="6" lg="4">
+                    <MudPaper Class="pa-4" Style="height: 220px;">
+                        <MudSkeleton SkeletonType="SkeletonType.Text" Width="60%" />
+                        <MudSkeleton SkeletonType="SkeletonType.Text" Width="40%" />
+                        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="100px" Style="margin-top: 1rem;" />
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
     }
     else if (!string.IsNullOrWhiteSpace(_errorMessage))
     {
-        <MudAlert Severity="Severity.Error">@_errorMessage</MudAlert>
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_errorMessage</MudAlert>
     }
     else if (_orders.Count == 0)
     {
-        <MudText Typo="Typo.body1" Color="Color.Secondary">No orders available for this customer.</MudText>
+        <MudPaper Class="pa-8" Style="text-align: center;" Elevation="0">
+            <MudIcon Icon="@Icons.Material.Outlined.Inventory2" Size="Size.Large" Color="Color.Secondary" />
+            <MudText Typo="Typo.h6" Style="margin-top: 0.75rem;">No orders yet</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                @(AuthStateProvider.SelectedCustomer is null
+                    ? "Select a customer to view their order history."
+                    : "This customer has no recorded orders.")
+            </MudText>
+        </MudPaper>
     }
     else
     {
@@ -26,54 +50,66 @@
             @foreach (var order in _orders)
             {
                 <MudItem xs="12" md="6" lg="4">
-                    <MudCard>
-                        <MudCardHeader>
-                            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Style="width: 100%;">
-                                <MudText Typo="Typo.subtitle1">Order @order.Id</MudText>
-                                <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined">
+                    <MudCard Class="card-hover" Style="height: 100%;">
+                        <MudCardContent>
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Style="margin-bottom: 0.75rem;">
+                                <div>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Style="text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">
+                                        Order
+                                    </MudText>
+                                    <MudText Typo="Typo.h6" Style="line-height: 1.1;">#@order.Id</MudText>
+                                </div>
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Class="@GetStatusChipClass(order.Status)">
                                     @order.Status
                                 </MudChip>
                             </MudStack>
-                        </MudCardHeader>
-                        <MudCardContent>
-                            <MudText Typo="Typo.body2">
-                                Order Date: @FormatDate(order.OrderDate)
+
+                            <MudText Typo="Typo.h5" Style="font-weight: 700; color: #1F5F3F; margin-bottom: 0.5rem;">
+                                @order.TotalAmount.ToString("C")
                             </MudText>
-                            <MudText Typo="Typo.body2">
-                                Total: @order.TotalAmount.ToString("C")
-                            </MudText>
-                            @if (!string.IsNullOrWhiteSpace(order.TrackingNumber))
-                            {
-                                <MudText Typo="Typo.body2">
-                                    Tracking: @order.TrackingNumber
-                                </MudText>
-                            }
-                            @if (!string.IsNullOrWhiteSpace(order.EstimatedDelivery))
-                            {
-                                <MudText Typo="Typo.body2">
-                                    Estimated delivery: @order.EstimatedDelivery
-                                </MudText>
-                            }
+
+                            <MudStack Spacing="1">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                    <MudIcon Icon="@Icons.Material.Outlined.CalendarToday" Size="Size.Small" Color="Color.Secondary" />
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary">@FormatDate(order.OrderDate)</MudText>
+                                </MudStack>
+                                @if (!string.IsNullOrWhiteSpace(order.TrackingNumber))
+                                {
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                        <MudIcon Icon="@Icons.Material.Outlined.LocalShipping" Size="Size.Small" Color="Color.Secondary" />
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">@order.TrackingNumber</MudText>
+                                    </MudStack>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(order.EstimatedDelivery))
+                                {
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                        <MudIcon Icon="@Icons.Material.Outlined.Schedule" Size="Size.Small" Color="Color.Secondary" />
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">ETA @order.EstimatedDelivery</MudText>
+                                    </MudStack>
+                                }
+                            </MudStack>
 
                             <MudDivider Style="margin: 1rem 0;" />
-                            <MudText Typo="Typo.subtitle2">Items</MudText>
+
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Style="text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">
+                                Items
+                            </MudText>
                             @if (order.Items?.Count > 0)
                             {
-                                <MudList T="string" Dense="true">
+                                <MudStack Spacing="0" Style="margin-top: 0.5rem;">
                                     @foreach (var item in order.Items)
                                     {
-                                        <MudListItem T="string" Value="@item.ProductName">
-                                            <MudText Typo="Typo.body2">
-                                                @item.ProductName (x@item.Quantity)
-                                            </MudText>
-                                        </MudListItem>
+                                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Style="padding: 0.3rem 0; border-bottom: 1px dashed rgba(15, 31, 23, 0.06);">
+                                            <MudText Typo="Typo.body2">@item.ProductName</MudText>
+                                            <MudText Typo="Typo.body2" Color="Color.Secondary" Style="font-variant-numeric: tabular-nums;">×@item.Quantity</MudText>
+                                        </MudStack>
                                     }
-                                </MudList>
+                                </MudStack>
                             }
                             else
                             {
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                    Items are not available in this view.
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Style="margin-top: 0.5rem;">
+                                    Item details unavailable.
                                 </MudText>
                             }
                         </MudCardContent>
@@ -126,11 +162,24 @@
     {
         if (DateTime.TryParse(value, out var parsed))
         {
-            return parsed.ToString("d");
+            return parsed.ToString("d MMM yyyy");
         }
 
         return value ?? "N/A";
     }
+
+    private static string GetStatusChipClass(string? status) => status?.ToLowerInvariant() switch
+    {
+        "delivered"   => "status-chip-success",
+        "completed"   => "status-chip-success",
+        "shipped"     => "status-chip-info",
+        "in transit"  => "status-chip-info",
+        "processing"  => "status-chip-warn",
+        "pending"     => "status-chip-warn",
+        "cancelled"   => "status-chip-muted",
+        "returned"    => "status-chip-muted",
+        _             => "status-chip-info"
+    };
 
     private async void HandleCustomerChanged()
     {
