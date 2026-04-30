@@ -2,6 +2,26 @@
 
 This folder contains all .NET projects for the Contoso Outdoors agent framework. Each project is fully independent — own models, own Dockerfile, own Helm chart, own test project. No shared project references.
 
+## Architectural edict — component independence
+
+> **Every project under `src/` must be completely self-contained.**
+> **Zero project-to-project references are permitted.**
+>
+> The single exception is **`AppHost/`**, which exists only as an Aspire
+> orchestrator so the entire system can be launched with one
+> `dotnet run --project src/AppHost`. AppHost references each runnable
+> service so Aspire's source generator can produce typed `Projects.X`
+> handles. AppHost is **not** a deployable component and **not** a place
+> for shared application code.
+>
+> If you find yourself wanting to share code between two services, **inline
+> it into both** rather than creating a shared library. Cross-service
+> communication is HTTP/JSON only.
+>
+> This rule is enforced by
+> [`ComponentIndependenceTests`](../src-tests/Contoso.AppHost.Tests/ComponentIndependenceTests.cs).
+> The build will fail if a non-AppHost project gains a `ProjectReference`.
+
 > **Prerequisite:** Infrastructure must be deployed before running any project. See [Lab 0](../docs/lab-0.md) and [Lab 1](../docs/lab-1.md).
 
 ## Configure app settings

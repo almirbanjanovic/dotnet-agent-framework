@@ -202,3 +202,26 @@ The `title` field already provides context. Exception is logged server-side.
 - ⏳ CRM MCP Server (Component 2) — can now call the 11 endpoints
 - ⏳ BFF API (Component 7) — can proxy CRM data to frontend
 - ⏳ Integration tests for all 8 business scenarios
+
+---
+
+### 2026-04-30 — Component independence is now machine-enforced (Almir)
+
+**What:** The 2026-03-23T20:07 directive ("self-contained, independently deployable components") is now enforced by an automated test plus a CI workflow. Any non-AppHost project under `src/` that adds a `<ProjectReference>` will fail the build.
+
+**Why:** The original directive was advisory and drifted. A shared `Contoso.ServiceDefaults` project was created and accumulated 7 consumers. This made it impossible for a service to be lifted out of the repo without untangling the shared library. Inlining the ~95 lines back into each consumer restored true independence.
+
+**Enforcement (three layers):**
+1. **Unit test:** [`ComponentIndependenceTests.NoComponentInSrc_HasProjectReferences_ExceptAppHost`](../../src-tests/Contoso.AppHost.Tests/ComponentIndependenceTests.cs) walks every `*.csproj` under `src/` and asserts zero `ProjectReference` elements. `AppHost` is the only allowed exception.
+2. **CI workflow:** [`.github/workflows/architecture-fitness.yml`](../../.github/workflows/architecture-fitness.yml) runs that test on every PR and push that touches `src/**/*.csproj` or the AppHost test project.
+3. **Agent instructions:** [`.github/copilot-instructions.md`](../../.github/copilot-instructions.md) and [`src/README.md`](../../src/README.md) state the rule prominently.
+
+**The AppHost exception:** `src/AppHost/` references each runnable service so Aspire's source generator produces typed `Projects.X` handles. This is the only way to launch the whole system with one `dotnet run`. AppHost is **not** deployable and **not** a place for shared application code — only for orchestration wiring.
+
+**When tempted to share code between two services:** inline the duplicate into both. Cross-service communication is HTTP/JSON only.
+
+**Impact:**
+- Deleted `src/ServiceDefaults/` (the shared project).
+- Per-service `ServiceDefaults.cs` (internal static class in the service's own namespace) inlined into each of the 7 consumers.
+- Each consumer now declares its own `OpenTelemetry.*` + `Microsoft.Extensions.ServiceDiscovery` + `Microsoft.Extensions.Http.Resilience` package references directly.
+- Tests: 220+ tests across 13 projects all green.

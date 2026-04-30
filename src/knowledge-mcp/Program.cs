@@ -1,6 +1,6 @@
+using Contoso.KnowledgeMcp;
 using Contoso.KnowledgeMcp.Services;
 using Contoso.KnowledgeMcp.Tools;
-using Contoso.ServiceDefaults;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using ModelContextProtocol.Server;

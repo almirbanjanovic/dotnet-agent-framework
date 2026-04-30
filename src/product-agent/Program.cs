@@ -2,7 +2,7 @@ using Azure;
 using Azure.AI.OpenAI;
 using Azure.AI.Projects;
 using Azure.Identity;
-using Contoso.ServiceDefaults;
+using Contoso.ProductAgent;
 using Microsoft.Agents.AI;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.AI;

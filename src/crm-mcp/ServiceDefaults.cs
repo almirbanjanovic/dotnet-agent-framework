@@ -1,5 +1,3 @@
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
@@ -8,15 +6,20 @@ using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 
-namespace Contoso.ServiceDefaults;
+namespace Contoso.CrmMcp;
 
-public static class Extensions
+// Per-service hosting defaults (OpenTelemetry, service discovery, HTTP resilience,
+// default health checks). Inlined per service so each component remains fully
+// self-contained — no shared project references.
+internal static class ServiceDefaults
 {
     public static TBuilder AddServiceDefaults<TBuilder>(this TBuilder builder)
         where TBuilder : IHostApplicationBuilder
     {
         builder.ConfigureOpenTelemetry();
-        builder.AddDefaultHealthChecks();
+
+        builder.Services.AddHealthChecks()
+            .AddCheck("self", () => HealthCheckResult.Healthy(), tags: ["live"]);
 
         builder.Services.AddServiceDiscovery();
         builder.Services.ConfigureHttpClientDefaults(http =>
@@ -26,22 +29,6 @@ public static class Extensions
         });
 
         return builder;
-    }
-
-    public static WebApplication MapDefaultEndpoints(this WebApplication app)
-    {
-        // Health check endpoints are already mapped in crm-api,
-        // so this is a no-op for now. Future services can use these defaults.
-        if (app.Environment.IsDevelopment())
-        {
-            // In development, expose simple endpoints for Aspire dashboard
-            app.MapHealthChecks("/alive", new HealthCheckOptions
-            {
-                Predicate = _ => false // Liveness probe — always 200
-            });
-        }
-
-        return app;
     }
 
     private static TBuilder ConfigureOpenTelemetry<TBuilder>(this TBuilder builder)
@@ -67,30 +54,10 @@ public static class Extensions
                     .AddHttpClientInstrumentation();
             });
 
-        AddOpenTelemetryExporters(builder);
-
-        return builder;
-    }
-
-    private static TBuilder AddOpenTelemetryExporters<TBuilder>(this TBuilder builder)
-        where TBuilder : IHostApplicationBuilder
-    {
-        var useOtlpExporter = !string.IsNullOrWhiteSpace(
-            builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
-
-        if (useOtlpExporter)
+        if (!string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))
         {
             builder.Services.AddOpenTelemetry().UseOtlpExporter();
         }
-
-        return builder;
-    }
-
-    private static TBuilder AddDefaultHealthChecks<TBuilder>(this TBuilder builder)
-        where TBuilder : IHostApplicationBuilder
-    {
-        builder.Services.AddHealthChecks()
-            .AddCheck("self", () => HealthCheckResult.Healthy(), tags: ["live"]);
 
         return builder;
     }

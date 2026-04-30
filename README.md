@@ -21,7 +21,7 @@
 | **Product Agent** | Agent | Product specialist: catalog, promotions, recommendations, guides | CRM MCP + Knowledge MCP, Azure OpenAI | Contoso Product Agent (agent identity) |
 | **Orchestrator Agent** | Agent | Intent classification, routes to CRM or Product agent | CRM/Product Agent (HTTP), Azure OpenAI | Contoso Orchestrator Agent (agent identity) |
 
-Each component is fully independent — own models, own Dockerfile, own Helm chart, own test project. No shared project references. Communication between services is HTTP/JSON only.
+Each component is fully independent — own models, own Dockerfile, own Helm chart, own test project. No shared project references. Communication between services is HTTP/JSON only. This is enforced by an [automated fitness test](src-tests/Contoso.AppHost.Tests/ComponentIndependenceTests.cs) and a [CI workflow](.github/workflows/architecture-fitness.yml) — see the [edict in `src/README.md`](src/README.md#architectural-edict--component-independence).
 
 ### Key architectural decisions
 

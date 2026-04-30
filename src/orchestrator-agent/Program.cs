@@ -1,6 +1,6 @@
+using Contoso.OrchestratorAgent;
 using Contoso.OrchestratorAgent.Models;
 using Contoso.OrchestratorAgent.Services;
-using Contoso.ServiceDefaults;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 

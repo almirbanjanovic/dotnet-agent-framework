@@ -1,9 +1,9 @@
 using System.Text.Json;
 using Azure.Identity;
 using Azure.Storage.Blobs;
+using Contoso.BffApi;
 using Contoso.BffApi.Models;
 using Contoso.BffApi.Services;
-using Contoso.ServiceDefaults;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Azure.Cosmos;

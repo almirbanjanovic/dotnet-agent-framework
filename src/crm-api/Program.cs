@@ -1,8 +1,8 @@
 using Azure.Identity;
+using Contoso.CrmApi;
 using Contoso.CrmApi.Endpoints;
 using Contoso.CrmApi.Middleware;
 using Contoso.CrmApi.Services;
-using Contoso.ServiceDefaults;
 using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 

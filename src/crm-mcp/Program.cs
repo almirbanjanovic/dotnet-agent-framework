@@ -1,6 +1,6 @@
+using Contoso.CrmMcp;
 using Contoso.CrmMcp.Clients;
 using Contoso.CrmMcp.Tools;
-using Contoso.ServiceDefaults;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using ModelContextProtocol.Server;
