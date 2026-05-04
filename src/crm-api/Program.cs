@@ -1,21 +1,33 @@
 using Azure.Identity;
 using Contoso.CrmApi;
 using Contoso.CrmApi.Endpoints;
+using Contoso.CrmApi.HealthChecks;
 using Contoso.CrmApi.Middleware;
 using Contoso.CrmApi.Services;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
+// ─────────────────────────────────────────────────────────────────────────
+// CRM API — REST surface over Cosmos DB. Backend for the CRM MCP server.
+//
+// Composition root only. Concrete logic lives in:
+//   Models/         → Customer, Order, Product, Promotion, SupportTicket
+//   Services/       → ICosmosService + Cosmos and InMemory implementations,
+//                     CustomerContext (per-request identity)
+//   Endpoints/      → One Map*Endpoints class per resource
+//   Middleware/     → GlobalExceptionHandler
+//   HealthChecks/   → CosmosHealthCheck for /ready
+// ─────────────────────────────────────────────────────────────────────────
+
 var builder = WebApplication.CreateBuilder(args);
 
-// ── Aspire Service Defaults (OpenTelemetry, Resilience, Service Discovery) ─
 builder.AddServiceDefaults();
 
-// ── Customer identity (X-Customer-Entra-Id header) ─────────────────────────
+// Per-request customer identity from the X-Customer-Entra-Id header.
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<CustomerContext>();
 
-// ── Logging ────────────────────────────────────────────────────────────────
 builder.Logging.ClearProviders();
 builder.Logging.AddJsonConsole(options =>
 {
@@ -23,84 +35,54 @@ builder.Logging.AddJsonConsole(options =>
     options.TimestampFormat = "yyyy-MM-ddTHH:mm:ss.fffZ";
 });
 
-// ── Azure Identity ─────────────────────────────────────────────────────────
+// All Azure clients use a single DefaultAzureCredential (no API keys).
 var tenantId = builder.Configuration["AzureAd:TenantId"];
-var credential = new DefaultAzureCredential(new DefaultAzureCredentialOptions
-{
-    TenantId = tenantId
-});
+var credential = new DefaultAzureCredential(new DefaultAzureCredentialOptions { TenantId = tenantId });
 
-// ── Data Mode (InMemory vs Cosmos) ─────────────────────────────────────────
+// DataMode=InMemory swaps in a stub so devs can run without provisioning Cosmos.
 var dataMode = builder.Configuration["DataMode"];
-if (string.Equals(dataMode, "InMemory", StringComparison.OrdinalIgnoreCase))
+var useInMemory = string.Equals(dataMode, "InMemory", StringComparison.OrdinalIgnoreCase);
+
+if (useInMemory)
 {
     builder.Services.AddSingleton<ICosmosService, InMemoryCrmDataService>();
 }
 else
 {
-    // ── Cosmos DB ──────────────────────────────────────────────────────────
     var cosmosEndpoint = builder.Configuration["CosmosDb:Endpoint"]
         ?? throw new InvalidOperationException("CosmosDb:Endpoint configuration is required.");
 
-    builder.Services.AddSingleton(sp =>
+    builder.Services.AddSingleton(_ => new CosmosClient(cosmosEndpoint, credential, new CosmosClientOptions
     {
-        var clientOptions = new CosmosClientOptions
-        {
-            SerializerOptions = new CosmosSerializationOptions
-            {
-                PropertyNamingPolicy = CosmosPropertyNamingPolicy.CamelCase
-            },
-            ConnectionMode = ConnectionMode.Direct,
-            ApplicationName = "Contoso.CrmApi"
-        };
-
-        return new CosmosClient(cosmosEndpoint, credential, clientOptions);
-    });
-
+        SerializerOptions = new CosmosSerializationOptions { PropertyNamingPolicy = CosmosPropertyNamingPolicy.CamelCase },
+        ConnectionMode = ConnectionMode.Direct,
+        ApplicationName = "Contoso.CrmApi"
+    }));
     builder.Services.AddScoped<ICosmosService, CosmosService>();
 }
 
-// ── Error Handling ─────────────────────────────────────────────────────────
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
-// ── Health Checks ──────────────────────────────────────────────────────────
-if (string.Equals(dataMode, "InMemory", StringComparison.OrdinalIgnoreCase))
+if (useInMemory)
 {
+    // No external dependency — readiness is just process-up.
     builder.Services.AddHealthChecks()
         .AddCheck("in-memory-crm", () => HealthCheckResult.Healthy("In-memory CRM data service."), tags: ["ready"]);
 }
 else
 {
     builder.Services.AddHealthChecks()
-        .Add(new HealthCheckRegistration(
-            "cosmos-db",
-            sp =>
-            {
-                var cosmos = sp.GetRequiredService<ICosmosService>();
-                return new CosmosHealthCheck(cosmos);
-            },
-            failureStatus: HealthStatus.Unhealthy,
-            tags: ["ready"]));
+        .AddCheck<CosmosHealthCheck>("cosmos-db", tags: ["ready"]);
 }
 
 var app = builder.Build();
 
-// ── Middleware Pipeline ────────────────────────────────────────────────────
 app.UseExceptionHandler();
 
-// ── Health Endpoints ───────────────────────────────────────────────────────
-app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
-{
-    Predicate = _ => false // Liveness — always 200
-});
+app.MapHealthChecks("/health", new HealthCheckOptions { Predicate = _ => false });
+app.MapHealthChecks("/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
 
-app.MapHealthChecks("/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
-{
-    Predicate = check => check.Tags.Contains("ready")
-});
-
-// ── API Endpoints ──────────────────────────────────────────────────────────
 app.MapCustomerEndpoints();
 app.MapOrderEndpoints();
 app.MapProductEndpoints();
@@ -109,19 +91,5 @@ app.MapSupportTicketEndpoints();
 
 app.Run();
 
-// ── Health Check Implementation ────────────────────────────────────────────
-internal sealed class CosmosHealthCheck(ICosmosService cosmosService) : IHealthCheck
-{
-    public async Task<HealthCheckResult> CheckHealthAsync(
-        HealthCheckContext context,
-        CancellationToken cancellationToken = default)
-    {
-        var isHealthy = await cosmosService.CheckConnectivityAsync(cancellationToken);
-        return isHealthy
-            ? HealthCheckResult.Healthy("Cosmos DB is reachable.")
-            : HealthCheckResult.Unhealthy("Cosmos DB is not reachable.");
-    }
-}
-
-// Make Program accessible for integration tests
+// Make Program accessible for integration tests.
 public partial class Program { }

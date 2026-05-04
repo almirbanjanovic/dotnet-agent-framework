@@ -1,0 +1,16 @@
+{
+  "Bff": {
+    "BaseUrl": "${BFF_BASE_URL}"
+  },
+  "AzureAd": {
+    "Enabled": true,
+    "TenantId": "${TENANT_ID}",
+    "BffClientId": "${BFF_CLIENT_ID}"
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  }
+}

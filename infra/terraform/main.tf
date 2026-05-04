@@ -590,9 +590,12 @@ module "keyvault_secrets" {
 
   secrets = {
     # App-consumed secrets (PascalCase--Hierarchy → .NET Section:Key)
-    "Foundry--Endpoint"            = module.foundry.endpoint
-    "Foundry--DeploymentName"      = module.foundry.deployment_name
-    "Foundry--EmbeddingDeployment" = module.foundry.embedding_deployment_name
+    "Foundry--Endpoint"       = module.foundry.endpoint
+    "Foundry--DeploymentName" = module.foundry.deployment_name
+    # Suffix "Name" matters: knowledge-mcp chart maps this KV key to env var
+    # Foundry__EmbeddingDeploymentName which the .NET code reads as
+    # Foundry:EmbeddingDeploymentName.
+    "Foundry--EmbeddingDeploymentName" = module.foundry.embedding_deployment_name
     "CosmosDb--AgentsEndpoint"         = module.cosmosdb_agents.endpoint
     "CosmosDb--AgentsDatabase"         = module.cosmosdb_agents.database_name
     "CosmosDb--CrmEndpoint"            = module.cosmosdb_crm.endpoint
@@ -665,7 +668,8 @@ module "entra" {
   environment = var.environment
 
   redirect_uris = [
-    "https://localhost:5002/authentication/login-callback",
+    # Local dev fallback (Blazor on AppHost port 5008, HTTP — MSAL allows http for localhost)
+    "http://localhost:5008/authentication/login-callback",
     "https://${module.agc.frontend_fqdn}/authentication/login-callback",
   ]
 }

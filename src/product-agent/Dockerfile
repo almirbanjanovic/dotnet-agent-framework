@@ -18,12 +18,10 @@ COPY Directory.Build.props ./
 COPY Directory.Packages.props ./
 COPY global.json ./
 
-COPY src/ServiceDefaults/Contoso.ServiceDefaults.csproj ./src/ServiceDefaults/
 COPY src/product-agent/Contoso.ProductAgent.csproj ./src/product-agent/
 
 RUN dotnet restore "./src/product-agent/Contoso.ProductAgent.csproj"
 
-COPY src/ServiceDefaults/ ./src/ServiceDefaults/
 COPY src/product-agent/ ./src/product-agent/
 
 # ---------------------------------------------------------------------------

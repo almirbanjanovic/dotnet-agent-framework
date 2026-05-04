@@ -134,6 +134,11 @@ output "agc_frontend_fqdn" {
   value       = module.agc.frontend_fqdn
 }
 
+output "agc_frontend_id" {
+  description = "App Gateway for Containers frontend resource ID — referenced by infra/k8s/manifests/gateway/application-loadbalancer.yaml.template"
+  value       = module.agc.frontend_id
+}
+
 # ---------------------------------------------------------------
 # Identities
 # ---------------------------------------------------------------

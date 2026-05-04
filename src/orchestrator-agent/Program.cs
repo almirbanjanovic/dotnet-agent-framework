@@ -1,8 +1,21 @@
 using Contoso.OrchestratorAgent;
-using Contoso.OrchestratorAgent.Models;
+using Contoso.OrchestratorAgent.Endpoints;
+using Contoso.OrchestratorAgent.HealthChecks;
 using Contoso.OrchestratorAgent.Services;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
+
+// ─────────────────────────────────────────────────────────────────────────
+// Orchestrator Agent — front door for the BFF. Picks the specialist
+// agent (CRM vs Product) and proxies the chat turn to it.
+//
+// Composition root only. Concrete logic lives in:
+//   Models/         → ChatRequest / ChatResponse wire records
+//   Services/       → IntentClassifier, AgentRouter, the typed
+//                     CrmAgentClient / ProductAgentClient HTTP wrappers,
+//                     CustomerHeaderForwarder, SystemPromptProvider
+//   HealthChecks/   → /ready probes for both specialist agents and Foundry
+//   Endpoints/      → POST /api/v1/chat
+// ─────────────────────────────────────────────────────────────────────────
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,14 +26,12 @@ builder.Configuration.AddJsonFile(
 
 builder.AddServiceDefaults();
 
-// Port binding is driven by ASPNETCORE_URLS (Aspire), appsettings, or the
-// container platform — not hardcoded.
-
 builder.Services.AddSingleton<SystemPromptProvider>();
 builder.Services.AddSingleton<IntentClassifier>();
 builder.Services.AddSingleton<AgentRouter>();
 
-// Forward customer identity to specialist agents.
+// Forward the X-Customer-Id header onto outbound calls so the specialist
+// agents know which customer the request belongs to.
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddTransient<CustomerHeaderForwarder>();
 
@@ -47,97 +58,12 @@ builder.Services.AddHealthChecks()
 
 var app = builder.Build();
 
-app.MapHealthChecks("/health", new HealthCheckOptions
-{
-    Predicate = _ => false
-});
+app.MapHealthChecks("/health", new HealthCheckOptions { Predicate = _ => false });
+app.MapHealthChecks("/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
 
-app.MapHealthChecks("/ready", new HealthCheckOptions
-{
-    Predicate = check => check.Tags.Contains("ready")
-});
-
-app.MapPost("/api/v1/chat", async (
-    ChatRequest request,
-    IntentClassifier classifier,
-    AgentRouter router,
-    CancellationToken cancellationToken) =>
-{
-    if (string.IsNullOrWhiteSpace(request.CustomerId) || string.IsNullOrWhiteSpace(request.Message))
-    {
-        return Results.BadRequest(new { error = "customerId and message are required." });
-    }
-
-    var intent = await classifier.ClassifyAsync(request.Message, cancellationToken);
-    var result = await router.RouteAsync(intent, request, cancellationToken);
-
-    if (string.IsNullOrWhiteSpace(result.Payload))
-    {
-        return Results.StatusCode(result.StatusCode);
-    }
-
-    return Results.Content(result.Payload, "application/json", statusCode: result.StatusCode);
-});
+app.MapChatEndpoint();
 
 app.Run();
 
-internal sealed class CrmAgentHealthCheck(CrmAgentClient client) : IHealthCheck
-{
-    public async Task<HealthCheckResult> CheckHealthAsync(
-        HealthCheckContext context,
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var response = await client.HttpClient.GetAsync("/health", cancellationToken);
-            return response.IsSuccessStatusCode
-                ? HealthCheckResult.Healthy("CRM Agent is reachable.")
-                : HealthCheckResult.Unhealthy("CRM Agent returned an error status.");
-        }
-        catch (Exception ex)
-        {
-            return HealthCheckResult.Unhealthy("CRM Agent is not reachable.", ex);
-        }
-    }
-}
-
-internal sealed class ProductAgentHealthCheck(ProductAgentClient client) : IHealthCheck
-{
-    public async Task<HealthCheckResult> CheckHealthAsync(
-        HealthCheckContext context,
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var response = await client.HttpClient.GetAsync("/health", cancellationToken);
-            return response.IsSuccessStatusCode
-                ? HealthCheckResult.Healthy("Product Agent is reachable.")
-                : HealthCheckResult.Unhealthy("Product Agent returned an error status.");
-        }
-        catch (Exception ex)
-        {
-            return HealthCheckResult.Unhealthy("Product Agent is not reachable.", ex);
-        }
-    }
-}
-
-internal sealed class FoundryHealthCheck(IntentClassifier classifier) : IHealthCheck
-{
-    public async Task<HealthCheckResult> CheckHealthAsync(
-        HealthCheckContext context,
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            _ = await classifier.ClassifyAsync("Ping", cancellationToken);
-            return HealthCheckResult.Healthy("Foundry chat model is reachable.");
-        }
-        catch (Exception ex)
-        {
-            return HealthCheckResult.Unhealthy("Foundry chat model is not reachable.", ex);
-        }
-    }
-}
-
-// Make Program accessible for integration tests
+// Make Program accessible for integration tests.
 public partial class Program { }

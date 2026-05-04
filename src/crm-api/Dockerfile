@@ -18,14 +18,12 @@ COPY Directory.Build.props ./
 COPY Directory.Packages.props ./
 COPY global.json ./
 
-# ProjectReference targets must be present at restore time so NuGet can
-# resolve the dependency graph under Central Package Management.
-COPY src/ServiceDefaults/Contoso.ServiceDefaults.csproj ./src/ServiceDefaults/
+# Per the architectural edict, each service is self-contained — no shared
+# ProjectReferences. The csproj is copied alone for cache-friendly restore.
 COPY src/crm-api/Contoso.CrmApi.csproj ./src/crm-api/
 
 RUN dotnet restore "./src/crm-api/Contoso.CrmApi.csproj"
 
-COPY src/ServiceDefaults/ ./src/ServiceDefaults/
 COPY src/crm-api/ ./src/crm-api/
 
 # ---------------------------------------------------------------------------

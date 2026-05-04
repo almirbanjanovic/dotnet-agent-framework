@@ -1,0 +1,225 @@
+name: Deploy Blazor UI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/blazor-ui/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Select environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+      region:
+        description: 'Azure region'
+        required: true
+        default: 'eastus2'
+        type: choice
+        options:
+          # United States
+          - eastus
+          - eastus2
+          - centralus
+          - northcentralus
+          - southcentralus
+          - westus
+          - westus2
+          - westus3
+          # Canada
+          - canadacentral
+          - canadaeast
+          # Brazil
+          - brazilsouth
+          # Europe
+          - westeurope
+          - northeurope
+          # France
+          - francecentral
+          # Germany
+          - germanywestcentral
+          # Norway
+          - norwayeast
+          # Sweden
+          - swedencentral
+          # Switzerland
+          - switzerlandnorth
+          # United Kingdom
+          - uksouth
+          # Italy
+          - italynorth
+          # Spain
+          - spaincentral
+          # Asia Pacific
+          - eastasia
+          - southeastasia
+          # Australia
+          - australiaeast
+          # Japan
+          - japaneast
+          # Korea
+          - koreacentral
+          # India
+          - centralindia
+          # UAE
+          - uaenorth
+          # Qatar
+          - qatarcentral
+          # South Africa
+          - southafricanorth
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  DOTNET_VERSION: '9.0.x'
+  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  SERVICE_NAME: blazor-ui
+  NAMESPACE: contoso
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore src/blazor-ui/Contoso.BlazorUi.csproj
+
+      - name: Build
+        run: dotnet build src/blazor-ui/Contoso.BlazorUi.csproj --no-restore -c Release
+
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore src/blazor-ui/Contoso.BlazorUi.csproj
+
+      - name: Test
+        run: dotnet test src-tests/Contoso.BlazorUi.Tests/Contoso.BlazorUi.Tests.csproj --no-restore --verbosity normal
+
+  docker-build-push:
+    runs-on: ubuntu-latest
+    needs: test
+    environment: ${{ inputs.environment || 'dev' }}
+    outputs:
+      image-tag: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set image metadata
+        id: meta
+        run: echo "version=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+        env:
+          AZURE_IDENTITY_DISABLE_CP1: "true"
+
+      - name: ACR Login
+        run: az acr login --name ${{ vars.ACR_NAME }}
+
+      # Blazor WebAssembly is a static SPA — its configuration must be baked
+      # into wwwroot/appsettings.json at build time so the browser can read
+      # MSAL ClientId, TenantId, and the BFF base URL on first load.
+      # The values come from Key Vault, where Terraform writes them after
+      # provisioning the AGC frontend and the Entra app registration.
+      - name: Render production wwwroot/appsettings.json from template
+        run: |
+          KV_NAME=$(az keyvault list \
+            --resource-group "${{ vars.RESOURCE_GROUP }}" \
+            --query "[0].name" -o tsv)
+          if [ -z "$KV_NAME" ]; then
+            echo "::error::No Key Vault found in resource group ${{ vars.RESOURCE_GROUP }}"
+            exit 1
+          fi
+          echo "Reading Blazor production config from Key Vault: $KV_NAME"
+
+          BFF_HOSTNAME=$(az keyvault secret show --vault-name "$KV_NAME" \
+            --name "Bff--Hostname" --query value -o tsv)
+          BFF_CLIENT_ID=$(az keyvault secret show --vault-name "$KV_NAME" \
+            --name "AzureAd--BffClientId" --query value -o tsv)
+          TENANT_ID=$(az keyvault secret show --vault-name "$KV_NAME" \
+            --name "AzureAd--TenantId" --query value -o tsv)
+
+          if [ -z "$BFF_HOSTNAME" ] || [ -z "$BFF_CLIENT_ID" ] || [ -z "$TENANT_ID" ]; then
+            echo "::error::Required Key Vault secrets missing (Bff--Hostname / AzureAd--BffClientId / AzureAd--TenantId)"
+            exit 1
+          fi
+
+          export BFF_BASE_URL="https://${BFF_HOSTNAME}"
+          export BFF_CLIENT_ID TENANT_ID
+          envsubst < src/blazor-ui/wwwroot/appsettings.json.template \
+            > src/blazor-ui/wwwroot/appsettings.json
+          echo "Rendered src/blazor-ui/wwwroot/appsettings.json:"
+          cat src/blazor-ui/wwwroot/appsettings.json
+
+      - name: Build and push Docker image
+        run: |
+          IMAGE="${{ vars.ACR_NAME }}.azurecr.io/${{ env.SERVICE_NAME }}:${{ steps.meta.outputs.version }}"
+          docker build \
+            -t "$IMAGE" \
+            -f src/blazor-ui/Dockerfile \
+            --build-arg BUILD_VERSION="${{ steps.meta.outputs.version }}" \
+            --build-arg BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --build-arg VCS_REF="${{ github.sha }}" \
+            .
+          docker push "$IMAGE"
+
+  helm-deploy:
+    runs-on: ubuntu-latest
+    needs: docker-build-push
+    environment: ${{ inputs.environment || 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+        env:
+          AZURE_IDENTITY_DISABLE_CP1: "true"
+
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ vars.RESOURCE_GROUP }} \
+            --name aks-${{ vars.BASE_NAME }}-${{ vars.ENVIRONMENT }}-${{ vars.LOCATION }} \
+            --overwrite-existing
+
+      - name: Helm upgrade
+        run: |
+          helm upgrade --install ${{ env.SERVICE_NAME }} src/blazor-ui/chart/ \
+            --namespace ${{ env.NAMESPACE }} \
+            --create-namespace \
+            --set image.repository=${{ vars.ACR_NAME }}.azurecr.io/${{ env.SERVICE_NAME }} \
+            --set image.tag=${{ needs.docker-build-push.outputs.image-tag }} \
+            --wait \
+            --timeout 5m

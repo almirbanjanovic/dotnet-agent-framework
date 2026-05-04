@@ -376,6 +376,53 @@ If you see an error, check:
 - `Foundry:Endpoint` and `Foundry:DeploymentName` are set in `src/simple-agent/appsettings.Development.json` or via environment variables (`Foundry__Endpoint`, `Foundry__DeploymentName`)
 - The AI Foundry deployment exists in the Azure portal
 
+### Step 4 — Deploy the 8 services to AKS
+
+Lab 1 has provisioned AKS, ACR, and the workload identities, but the Pods themselves aren't running yet. The simplest way to deploy all 8 services in one go is the **Deploy All Services** workflow. It runs build + test for every service, pushes one image per service to ACR, then `helm upgrade --install`s each chart in dependency-aware tiers (CRM API + Knowledge MCP → CRM MCP → CRM/Product agents → Orchestrator → BFF + Blazor UI).
+
+> **One-time prerequisite — install the Application Gateway for Containers (AGC) ALB Controller.** Terraform provisions the AGC resource (load balancer, frontend FQDN, TLS cert) but does **not** install the in-cluster controller that programs it. Without the controller, the Blazor UI is reachable inside the cluster but **not** from the internet. Follow the upstream Helm install guide once per cluster:
+> [Deploy Application Gateway for Containers ALB Controller (Helm BYO)](https://learn.microsoft.com/en-us/azure/application-gateway/for-containers/quickstart-deploy-application-gateway-for-containers-alb-controller-helm)
+>
+> Then apply the Gateway + HTTPRoute manifests this repo ships:
+>
+> ```bash
+> az aks get-credentials --resource-group "$RG" --name "aks-${BASE_NAME}-${ENVIRONMENT}-${LOCATION}" --overwrite-existing
+> AGC_FRONTEND_ID=$(terraform -chdir=infra/terraform output -raw agc_frontend_id)
+> envsubst < infra/k8s/manifests/gateway/application-loadbalancer.yaml.template | kubectl apply -f -
+> kubectl apply -f infra/k8s/manifests/gateway/gateway.yaml
+> kubectl apply -f infra/k8s/manifests/gateway/httproute-blazor-ui.yaml
+> kubectl apply -f infra/k8s/manifests/gateway/httproute-bff-api.yaml
+> ```
+>
+> See [`infra/k8s/manifests/gateway/README.md`](../infra/k8s/manifests/gateway/README.md) for the full sequence (UAMI creation, role assignments, federated identity).
+
+> **Optional — pod-level network segmentation.** The policies in `infra/k8s/manifests/network-policies/` enforce least-privilege traffic. Without them every pod can reach every other pod (which still works, just less secure). Apply with:
+>
+> ```bash
+> kubectl apply -f infra/k8s/manifests/network-policies/
+> ```
+>
+> The namespace, service accounts, and the `keyvault-secrets` Kubernetes Secret are already provisioned by Terraform during Step 1.
+
+1. Go to **Actions → Deploy All Services** in your GitHub repository
+2. Click **Run workflow**, select the `dev` environment + your region, and confirm
+3. The matrix-strategy jobs run for each service:
+   - `build-test` — restore, build, and `dotnet test` per service (parallel)
+   - `docker-build-push` — build the per-service Dockerfile and push to ACR (parallel)
+   - `deploy-tier-1` … `deploy-tier-5` — `helm upgrade --install` in dependency order
+
+After the workflow completes, validate with:
+
+```bash
+kubectl get pods -n contoso          # 8 pods, all Running
+kubectl get gateway -n contoso       # PROGRAMMED=True (only after AGC routing prereq above is done)
+kubectl get httproute -n contoso     # ACCEPTED=True for blazor-ui + bff-api
+```
+
+You should see 8 pods, all `Running`. The Blazor UI is reachable at `https://<AGC_FRONTEND_FQDN>/` — run `terraform -chdir=infra/terraform output -raw agc_frontend_fqdn`.
+
+> Subsequent code changes deploy through the **per-service** workflows (`deploy-crm-api.yml`, `deploy-crm-mcp.yml`, `deploy-knowledge-mcp.yml`, `deploy-crm-agent.yml`, `deploy-product-agent.yml`, `deploy-orchestrator-agent.yml`, `deploy-bff-api.yml`, `deploy-blazor-ui.yml`) — each one is triggered automatically when its `src/<service>/**` subtree changes on `main`, or you can run any of them manually from **Actions → Deploy <Service>**.
+
 ### Verification checklist (Full Azure Track)
 
 After completing all steps, verify:
@@ -387,6 +434,7 @@ After completing all steps, verify:
 - [ ] Azure AI Search index has vectorized document chunks (check indexer status in Azure portal)
 - [ ] Azure Blob Storage `product-images` container has 15 `.png` files
 - [ ] Azure Blob Storage `sharepoint-docs` container has 12 `.pdf` files
+- [ ] `kubectl get pods -n contoso` shows 8 pods all `Running` (Step 4)
 
 ### What's next
 

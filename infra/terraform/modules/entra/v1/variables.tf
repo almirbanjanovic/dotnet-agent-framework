@@ -11,7 +11,9 @@ variable "environment" {
 variable "redirect_uris" {
   description = "Redirect URIs for the SPA app registration (MSAL PKCE callback)"
   type        = list(string)
-  default     = ["https://localhost:5002/authentication/login-callback"]
+  # Default matches the Blazor UI port the AppHost assigns in src/AppHost/Program.cs
+  # (HTTP, port 5008). MSAL Browser allows http:// only for localhost.
+  default = ["http://localhost:5008/authentication/login-callback"]
 }
 
 variable "test_users" {

@@ -1,0 +1,25 @@
+# =============================================================================
+# HTTPRoute — Blazor UI (root + auth callbacks + static assets)
+# =============================================================================
+# Catches everything that isn't /api/* and forwards it to the Blazor UI Service
+# (port 80 → pod port 8080, see src/blazor-ui/chart/values.yaml). MSAL
+# redirect_uris registered in Entra all start with /authentication/, which this
+# route also captures via the implicit catch-all.
+# =============================================================================
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: blazor-ui
+  namespace: contoso
+spec:
+  parentRefs:
+    - name: contoso-gateway
+      namespace: contoso
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: blazor-ui
+          port: 80

@@ -1,9 +1,20 @@
 using Contoso.KnowledgeMcp;
+using Contoso.KnowledgeMcp.HealthChecks;
 using Contoso.KnowledgeMcp.Services;
 using Contoso.KnowledgeMcp.Tools;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
-using ModelContextProtocol.Server;
+
+// ─────────────────────────────────────────────────────────────────────────
+// Knowledge MCP server — exposes Contoso SharePoint/Azure Search docs as
+// MCP tools.
+//
+// Composition root only. Concrete logic lives in:
+//   Models/         → search-result DTOs
+//   Services/       → ISearchService (in-memory + Azure AI Search impls),
+//                     embedding helpers
+//   Tools/          → KnowledgeTools (the MCP tool methods)
+//   HealthChecks/   → /ready probe for the configured ISearchService
+// ─────────────────────────────────────────────────────────────────────────
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,9 +25,8 @@ builder.Configuration.AddJsonFile(
 
 builder.AddServiceDefaults();
 
-// Port binding is driven by ASPNETCORE_URLS (Aspire), appsettings, or the
-// container platform — not hardcoded.
-
+// DataMode=InMemory swaps in a local fake so devs can run the agents
+// against canned docs without provisioning Azure AI Search.
 if (string.Equals(builder.Configuration["DataMode"], "InMemory", StringComparison.OrdinalIgnoreCase))
 {
     builder.Services.AddSingleton<ISearchService, InMemorySearchService>();
@@ -35,34 +45,12 @@ builder.Services.AddHealthChecks()
 
 var app = builder.Build();
 
-app.MapHealthChecks("/health", new HealthCheckOptions
-{
-    Predicate = _ => false
-});
-
-app.MapHealthChecks("/ready", new HealthCheckOptions
-{
-    Predicate = check => check.Tags.Contains("ready")
-});
+app.MapHealthChecks("/health", new HealthCheckOptions { Predicate = _ => false });
+app.MapHealthChecks("/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
 
 app.MapMcp();
 
 app.Run();
 
-internal sealed class SearchServiceHealthCheck(ISearchService searchService) : IHealthCheck
-{
-    public async Task<HealthCheckResult> CheckHealthAsync(
-        HealthCheckContext context,
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            _ = await searchService.SearchAsync("return policy", 1, cancellationToken);
-            return HealthCheckResult.Healthy("Knowledge search is reachable.");
-        }
-        catch (Exception ex)
-        {
-            return HealthCheckResult.Unhealthy("Knowledge search is not reachable.", ex);
-        }
-    }
-}
+// Make Program accessible for integration tests.
+public partial class Program { }

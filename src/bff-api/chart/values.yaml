@@ -89,10 +89,23 @@ securityContext:
 config:
   ASPNETCORE_ENVIRONMENT: "Production"
   ASPNETCORE_URLS: "http://+:8080"
-  BlazorUi__Origin: "https://blazor-ui.contoso.local"
+  # Browser CORS allowlist for the Blazor SPA. In production both UI and BFF
+  # are served from the same AGC frontend FQDN, so requests are technically
+  # same-origin and CORS isn't consulted — but this value MUST still be the
+  # actual production hostname so any future cross-origin scenario (split
+  # domains, custom UI host, debugging from a workstation) does not silently
+  # leak the wrong allowlist. Both the per-service deploy workflow
+  # (.github/workflows/deploy-bff-api.yml) and the tier-5 step in
+  # .github/workflows/deploy-all-services.yml read the AGC FQDN from the
+  # `Bff--Hostname` Key Vault secret and override this via
+  # `--set config.BlazorUi__Origin=https://<agc-fqdn>`. The sentinel below
+  # is intentionally invalid so a forgotten override is loud, not silent.
+  BlazorUi__Origin: "https://override-via-helm-set"
   CrmApi__BaseUrl: "http://crm-api"
   Orchestrator__BaseUrl: "http://orchestrator-agent"
-  CosmosDb__AgentsDatabase: "contoso-agents"
+  # Database name MUST match Terraform's `cosmos_agents_database_name` (see
+  # infra/terraform/dev.tfvars). Currently "agents".
+  CosmosDb__AgentsDatabase: "agents"
   CosmosDb__AgentsContainer: "conversations"
   Logging__LogLevel__Default: "Information"
   Logging__LogLevel__Microsoft.AspNetCore: "Warning"
@@ -108,6 +121,8 @@ secretRefs:
         envVar: CosmosDb__AgentsEndpoint
       - key: Storage--ImagesEndpoint
         envVar: Storage__ImagesEndpoint
+      - key: Storage--ImagesContainer
+        envVar: Storage__ImagesContainer
 
 nodeSelector: {}
 

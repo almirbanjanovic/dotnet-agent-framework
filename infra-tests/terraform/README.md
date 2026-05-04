@@ -18,7 +18,7 @@ All 4 tests validate core configuration without requiring Azure credentials or a
 |---|------|------------------|
 | 1 | `terraform validate` passes | HCL syntax is valid |
 | 2 | Module variables have sensible defaults | No required vars without defaults |
-| 3 | Outputs are defined | `foundry_endpoint`, `foundry_api_key`, `chat_deployment_name`, `embedding_deployment_name` exist |
+| 3 | Outputs are defined | `foundry_endpoint`, `chat_deployment_name`, `embedding_deployment_name`, `tenant_id`, `bff_client_id` exist |
 | 4 | Variables validation | All expected variables are properly defined |
 
 ## Running Tests
@@ -81,6 +81,12 @@ All variables have sensible defaults and can be used without customization for l
 | Output | Type | Sensitive | Usage |
 |--------|------|-----------|-------|
 | `foundry_endpoint` | string | ❌ | Azure OpenAI endpoint URL |
-| `foundry_api_key` | string | ✅ | API key (marked sensitive) |
 | `chat_deployment_name` | string | ❌ | Chat model deployment name |
 | `embedding_deployment_name` | string | ❌ | Embedding model deployment name |
+| `tenant_id` | string | ❌ | Azure tenant ID for `DefaultAzureCredential` |
+| `bff_client_id` | string | ❌ | SPA app registration client ID |
+| `test_user_upns` | map | ❌ | Map of key (`emma`, ...) → UPN |
+| `test_user_passwords` | map | ✅ | Map of key → generated password |
+| `customer_map_json` | string | ❌ | JSON: UPN → customer ID for `AzureAd:CustomerMap` |
+
+Auth uses `DefaultAzureCredential` (no API key output) — enforced by [`NoApiKeyTests`](../../src-tests/Contoso.SimpleAgent.Tests/NoApiKeyTests.cs).

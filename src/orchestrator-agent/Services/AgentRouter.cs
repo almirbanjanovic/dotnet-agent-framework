@@ -3,6 +3,10 @@ using Contoso.OrchestratorAgent.Models;
 
 namespace Contoso.OrchestratorAgent.Services;
 
+// Forwards the chat turn to the specialist agent picked by IntentClassifier.
+// We pass through the raw HTTP status + payload so any error the agent
+// emits (validation, rate-limit, 5xx) reaches the BFF unchanged.
+
 internal sealed class AgentRouter
 {
     private readonly CrmAgentClient _crmClient;
@@ -31,23 +35,3 @@ internal sealed class AgentRouter
 }
 
 internal sealed record AgentRouterResult(int StatusCode, string Payload);
-
-internal sealed class CrmAgentClient
-{
-    public CrmAgentClient(HttpClient httpClient)
-    {
-        HttpClient = httpClient;
-    }
-
-    public HttpClient HttpClient { get; }
-}
-
-internal sealed class ProductAgentClient
-{
-    public ProductAgentClient(HttpClient httpClient)
-    {
-        HttpClient = httpClient;
-    }
-
-    public HttpClient HttpClient { get; }
-}

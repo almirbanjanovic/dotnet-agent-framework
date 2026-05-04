@@ -18,12 +18,10 @@ COPY Directory.Build.props ./
 COPY Directory.Packages.props ./
 COPY global.json ./
 
-COPY src/ServiceDefaults/Contoso.ServiceDefaults.csproj ./src/ServiceDefaults/
 COPY src/crm-agent/Contoso.CrmAgent.csproj ./src/crm-agent/
 
 RUN dotnet restore "./src/crm-agent/Contoso.CrmAgent.csproj"
 
-COPY src/ServiceDefaults/ ./src/ServiceDefaults/
 COPY src/crm-agent/ ./src/crm-agent/
 
 # ---------------------------------------------------------------------------

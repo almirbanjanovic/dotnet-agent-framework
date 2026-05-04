@@ -18,12 +18,10 @@ COPY Directory.Build.props ./
 COPY Directory.Packages.props ./
 COPY global.json ./
 
-COPY src/ServiceDefaults/Contoso.ServiceDefaults.csproj ./src/ServiceDefaults/
 COPY src/knowledge-mcp/Contoso.KnowledgeMcp.csproj ./src/knowledge-mcp/
 
 RUN dotnet restore "./src/knowledge-mcp/Contoso.KnowledgeMcp.csproj"
 
-COPY src/ServiceDefaults/ ./src/ServiceDefaults/
 COPY src/knowledge-mcp/ ./src/knowledge-mcp/
 
 # ---------------------------------------------------------------------------

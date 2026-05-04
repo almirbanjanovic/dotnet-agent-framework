@@ -90,7 +90,12 @@ config:
   ASPNETCORE_ENVIRONMENT: "Production"
   ASPNETCORE_URLS: "http://+:8080"
   DataMode: "AzureSearch"
-  Search__IndexName: "products"
+  # Index name MUST match what Terraform creates. The knowledge-source module
+  # produces "<var.search_index_name>-index" (see
+  # infra/terraform/modules/knowledge-source/v1/outputs.tf). With
+  # search_index_name="knowledge-documents" in dev.tfvars the resulting AI
+  # Search index is "knowledge-documents-index".
+  Search__IndexName: "knowledge-documents-index"
   Logging__LogLevel__Default: "Information"
   Logging__LogLevel__Microsoft.AspNetCore: "Warning"
 

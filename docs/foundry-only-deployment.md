@@ -1,5 +1,32 @@
 # Foundry-Only Deployment — Local Dev Mode (Technical Overview)
 
+> **⚠️ ARCHIVED — DO NOT FOLLOW THIS DOCUMENT**
+>
+> This is an early design specification (July 2025) that pre-dates the
+> actual implementation. It contains examples that **contradict the
+> current architectural rules**, including:
+>
+> - API-key auth (`AzureKeyCredential`, `Foundry:ApiKey`) — the codebase
+>   is now RBAC-only via `DefaultAzureCredential`. Enforced by
+>   [`NoApiKeyTests`](../src-tests/Contoso.SimpleAgent.Tests/NoApiKeyTests.cs).
+> - A `foundry_api_key` Terraform output — removed; the only outputs are
+>   `foundry_endpoint`, `chat_deployment_name`, `embedding_deployment_name`,
+>   `tenant_id`, `bff_client_id`, plus the Entra test-user outputs.
+> - Optional Microsoft Entra ID — Entra is now mandatory on **both**
+>   tracks (Local + Full Azure). See [docs/lab-0.md](lab-0.md).
+>
+> **For the current local-dev workflow, see:**
+> - [`docs/local-development.md`](local-development.md) — how it actually works today
+> - [`docs/lab-0.md`](lab-0.md) — bootstrap steps
+> - [`docs/lab-1.md`](lab-1.md) — first deployment
+>
+> The text below is preserved only as a record of the original design
+> intent. Anything in it that conflicts with the docs above is wrong.
+
+---
+
+# Foundry-Only Deployment — Local Dev Mode (Technical Overview)
+
 > **Author:** Stewie (Lead/Architect)
 > **Requested by:** Almir Banjanovic
 > **Date:** 2025-07-26

@@ -71,9 +71,12 @@ grep -q "output \"foundry_endpoint\"" outputs.tf
 - **Why:** Downstream code expects these outputs
 - **Outputs:**
   - `foundry_endpoint` — Used by .NET app to connect to Azure OpenAI
-  - `foundry_api_key` — Auth credential
   - `chat_deployment_name` — Model selection
   - `embedding_deployment_name` — Search capability
+  - `tenant_id` — Substituted into appsettings.Local.json `AzureAd:TenantId`
+  - `bff_client_id` — Substituted into appsettings.Local.json `AzureAd:BffClientId`
+
+  Auth uses `DefaultAzureCredential` (no API key output) — see `NoApiKeyTests`.
 
 ### Test 4: Variables Check
 ```bash

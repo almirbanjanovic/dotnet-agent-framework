@@ -1,0 +1,452 @@
+name: Deploy All Services
+
+# First-time / full-fleet deployment for Lab 1 / Lab 2 Full Azure Track.
+# Deploys all 8 services to AKS in dependency-aware order. Use this after
+# the infrastructure (terraform-plan-approve-apply-seed-data) succeeds and
+# before opening the Blazor UI for the first time.
+#
+# Subsequent code changes deploy via the per-service workflows
+# (deploy-<service>.yml), each triggered on push to its src/ subtree.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Select environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+      region:
+        description: 'Azure region'
+        required: true
+        default: 'eastus2'
+        type: choice
+        options:
+          # United States
+          - eastus
+          - eastus2
+          - centralus
+          - northcentralus
+          - southcentralus
+          - westus
+          - westus2
+          - westus3
+          # Canada
+          - canadacentral
+          - canadaeast
+          # Brazil
+          - brazilsouth
+          # Europe
+          - westeurope
+          - northeurope
+          # France
+          - francecentral
+          # Germany
+          - germanywestcentral
+          # Norway
+          - norwayeast
+          # Sweden
+          - swedencentral
+          # Switzerland
+          - switzerlandnorth
+          # United Kingdom
+          - uksouth
+          # Italy
+          - italynorth
+          # Spain
+          - spaincentral
+          # Asia Pacific
+          - eastasia
+          - southeastasia
+          # Australia
+          - australiaeast
+          # Japan
+          - japaneast
+          # Korea
+          - koreacentral
+          # India
+          - centralindia
+          # UAE
+          - uaenorth
+          # Qatar
+          - qatarcentral
+          # South Africa
+          - southafricanorth
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  DOTNET_VERSION: '9.0.x'
+  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  NAMESPACE: contoso
+
+jobs:
+  # ── Build & test all 8 services in parallel ────────────────────────────
+  build-test:
+    name: Build & test ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: crm-api
+            csproj: Contoso.CrmApi
+            tests: Contoso.CrmApi.Tests
+          - service: crm-mcp
+            csproj: Contoso.CrmMcp
+            tests: Contoso.CrmMcp.Tests
+          - service: knowledge-mcp
+            csproj: Contoso.KnowledgeMcp
+            tests: Contoso.KnowledgeMcp.Tests
+          - service: crm-agent
+            csproj: Contoso.CrmAgent
+            tests: Contoso.CrmAgent.Tests
+          - service: product-agent
+            csproj: Contoso.ProductAgent
+            tests: Contoso.ProductAgent.Tests
+          - service: orchestrator-agent
+            csproj: Contoso.OrchestratorAgent
+            tests: Contoso.OrchestratorAgent.Tests
+          - service: bff-api
+            csproj: Contoso.BffApi
+            tests: Contoso.BffApi.Tests
+          - service: blazor-ui
+            csproj: Contoso.BlazorUi
+            tests: Contoso.BlazorUi.Tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore src/${{ matrix.service }}/${{ matrix.csproj }}.csproj
+
+      - name: Build
+        run: dotnet build src/${{ matrix.service }}/${{ matrix.csproj }}.csproj --no-restore -c Release
+
+      - name: Test
+        run: dotnet test src-tests/${{ matrix.tests }}/${{ matrix.tests }}.csproj --no-restore --verbosity normal
+
+  # ── Build & push container images for all 8 services in parallel ───────
+  docker-build-push:
+    name: Build & push ${{ matrix.service }} image
+    runs-on: ubuntu-latest
+    needs: build-test
+    environment: ${{ inputs.environment }}
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - crm-api
+          - crm-mcp
+          - knowledge-mcp
+          - crm-agent
+          - product-agent
+          - orchestrator-agent
+          - bff-api
+          - blazor-ui
+    outputs:
+      image-tag: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set image metadata
+        id: meta
+        run: echo "version=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+        env:
+          AZURE_IDENTITY_DISABLE_CP1: "true"
+
+      - name: ACR Login
+        run: az acr login --name ${{ vars.ACR_NAME }}
+
+      # Blazor WebAssembly is a static SPA — its production configuration
+      # (MSAL TenantId/ClientId, BFF base URL) must be baked into
+      # wwwroot/appsettings.json at build time so the browser can read it
+      # on first load. The values come from Key Vault, where Terraform
+      # writes them after provisioning the AGC frontend and Entra app.
+      - name: Render Blazor production wwwroot/appsettings.json
+        if: matrix.service == 'blazor-ui'
+        run: |
+          KV_NAME=$(az keyvault list \
+            --resource-group "${{ vars.RESOURCE_GROUP }}" \
+            --query "[0].name" -o tsv)
+          if [ -z "$KV_NAME" ]; then
+            echo "::error::No Key Vault found in resource group ${{ vars.RESOURCE_GROUP }}"
+            exit 1
+          fi
+          BFF_HOSTNAME=$(az keyvault secret show --vault-name "$KV_NAME" \
+            --name "Bff--Hostname" --query value -o tsv)
+          BFF_CLIENT_ID=$(az keyvault secret show --vault-name "$KV_NAME" \
+            --name "AzureAd--BffClientId" --query value -o tsv)
+          TENANT_ID=$(az keyvault secret show --vault-name "$KV_NAME" \
+            --name "AzureAd--TenantId" --query value -o tsv)
+          if [ -z "$BFF_HOSTNAME" ] || [ -z "$BFF_CLIENT_ID" ] || [ -z "$TENANT_ID" ]; then
+            echo "::error::Required Key Vault secrets missing"
+            exit 1
+          fi
+          export BFF_BASE_URL="https://${BFF_HOSTNAME}"
+          export BFF_CLIENT_ID TENANT_ID
+          envsubst < src/blazor-ui/wwwroot/appsettings.json.template \
+            > src/blazor-ui/wwwroot/appsettings.json
+
+      - name: Build and push Docker image
+        run: |
+          IMAGE="${{ vars.ACR_NAME }}.azurecr.io/${{ matrix.service }}:${{ steps.meta.outputs.version }}"
+          docker build \
+            -t "$IMAGE" \
+            -f src/${{ matrix.service }}/Dockerfile \
+            --build-arg BUILD_VERSION="${{ steps.meta.outputs.version }}" \
+            --build-arg BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --build-arg VCS_REF="${{ github.sha }}" \
+            .
+          docker push "$IMAGE"
+
+  # ── Helm-deploy in dependency-aware order ──────────────────────────────
+  # Tier 1: backend services with no inter-service deps
+  deploy-tier-1:
+    name: Deploy ${{ matrix.service }} (tier 1 — backends)
+    runs-on: ubuntu-latest
+    needs: docker-build-push
+    environment: ${{ inputs.environment }}
+    strategy:
+      fail-fast: true
+      matrix:
+        service:
+          - crm-api
+          - knowledge-mcp
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+        env:
+          AZURE_IDENTITY_DISABLE_CP1: "true"
+
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ vars.RESOURCE_GROUP }} \
+            --name aks-${{ vars.BASE_NAME }}-${{ vars.ENVIRONMENT }}-${{ vars.LOCATION }} \
+            --overwrite-existing
+
+      - name: Helm upgrade
+        run: |
+          helm upgrade --install ${{ matrix.service }} src/${{ matrix.service }}/chart/ \
+            --namespace ${{ env.NAMESPACE }} \
+            --create-namespace \
+            --set image.repository=${{ vars.ACR_NAME }}.azurecr.io/${{ matrix.service }} \
+            --set image.tag=${{ needs.docker-build-push.outputs.image-tag }} \
+            --wait \
+            --timeout 5m
+
+  # Tier 2: services that depend on tier 1
+  deploy-tier-2:
+    name: Deploy ${{ matrix.service }} (tier 2 — MCP wrappers)
+    runs-on: ubuntu-latest
+    needs: deploy-tier-1
+    environment: ${{ inputs.environment }}
+    strategy:
+      fail-fast: true
+      matrix:
+        service:
+          - crm-mcp
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+        env:
+          AZURE_IDENTITY_DISABLE_CP1: "true"
+
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ vars.RESOURCE_GROUP }} \
+            --name aks-${{ vars.BASE_NAME }}-${{ vars.ENVIRONMENT }}-${{ vars.LOCATION }} \
+            --overwrite-existing
+
+      - name: Helm upgrade
+        run: |
+          helm upgrade --install ${{ matrix.service }} src/${{ matrix.service }}/chart/ \
+            --namespace ${{ env.NAMESPACE }} \
+            --create-namespace \
+            --set image.repository=${{ vars.ACR_NAME }}.azurecr.io/${{ matrix.service }} \
+            --set image.tag=${{ needs.docker-build-push.outputs.image-tag }} \
+            --wait \
+            --timeout 5m
+
+  # Tier 3: specialist agents that depend on MCP servers
+  deploy-tier-3:
+    name: Deploy ${{ matrix.service }} (tier 3 — specialist agents)
+    runs-on: ubuntu-latest
+    needs: deploy-tier-2
+    environment: ${{ inputs.environment }}
+    strategy:
+      fail-fast: true
+      matrix:
+        service:
+          - crm-agent
+          - product-agent
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+        env:
+          AZURE_IDENTITY_DISABLE_CP1: "true"
+
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ vars.RESOURCE_GROUP }} \
+            --name aks-${{ vars.BASE_NAME }}-${{ vars.ENVIRONMENT }}-${{ vars.LOCATION }} \
+            --overwrite-existing
+
+      - name: Helm upgrade
+        run: |
+          helm upgrade --install ${{ matrix.service }} src/${{ matrix.service }}/chart/ \
+            --namespace ${{ env.NAMESPACE }} \
+            --create-namespace \
+            --set image.repository=${{ vars.ACR_NAME }}.azurecr.io/${{ matrix.service }} \
+            --set image.tag=${{ needs.docker-build-push.outputs.image-tag }} \
+            --wait \
+            --timeout 5m
+
+  # Tier 4: orchestrator depends on specialist agents
+  deploy-tier-4:
+    name: Deploy ${{ matrix.service }} (tier 4 — orchestrator)
+    runs-on: ubuntu-latest
+    needs: deploy-tier-3
+    environment: ${{ inputs.environment }}
+    strategy:
+      fail-fast: true
+      matrix:
+        service:
+          - orchestrator-agent
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+        env:
+          AZURE_IDENTITY_DISABLE_CP1: "true"
+
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ vars.RESOURCE_GROUP }} \
+            --name aks-${{ vars.BASE_NAME }}-${{ vars.ENVIRONMENT }}-${{ vars.LOCATION }} \
+            --overwrite-existing
+
+      - name: Helm upgrade
+        run: |
+          helm upgrade --install ${{ matrix.service }} src/${{ matrix.service }}/chart/ \
+            --namespace ${{ env.NAMESPACE }} \
+            --create-namespace \
+            --set image.repository=${{ vars.ACR_NAME }}.azurecr.io/${{ matrix.service }} \
+            --set image.tag=${{ needs.docker-build-push.outputs.image-tag }} \
+            --wait \
+            --timeout 5m
+
+  # Tier 5: BFF and UI sit on top of everything else
+  deploy-tier-5:
+    name: Deploy ${{ matrix.service }} (tier 5 — edge)
+    runs-on: ubuntu-latest
+    needs: deploy-tier-4
+    environment: ${{ inputs.environment }}
+    strategy:
+      fail-fast: true
+      matrix:
+        service:
+          - bff-api
+          - blazor-ui
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+        env:
+          AZURE_IDENTITY_DISABLE_CP1: "true"
+
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ vars.RESOURCE_GROUP }} \
+            --name aks-${{ vars.BASE_NAME }}-${{ vars.ENVIRONMENT }}-${{ vars.LOCATION }} \
+            --overwrite-existing
+
+      # bff-api needs the AGC FQDN injected into its CORS allowlist. The chart
+      # default is an intentionally invalid sentinel so a missed override is
+      # loud, not silent. blazor-ui doesn't need this (its production config
+      # was baked into wwwroot at docker-build time, see render step above).
+      - name: Read BFF hostname from Key Vault
+        id: kv
+        if: matrix.service == 'bff-api'
+        run: |
+          KV_NAME=$(az keyvault list \
+            --resource-group "${{ vars.RESOURCE_GROUP }}" \
+            --query "[0].name" -o tsv)
+          if [ -z "$KV_NAME" ]; then
+            echo "::error::No Key Vault found in resource group ${{ vars.RESOURCE_GROUP }}"
+            exit 1
+          fi
+          BFF_HOSTNAME=$(az keyvault secret show --vault-name "$KV_NAME" \
+            --name "Bff--Hostname" --query value -o tsv)
+          if [ -z "$BFF_HOSTNAME" ]; then
+            echo "::error::Key Vault secret Bff--Hostname is empty or missing"
+            exit 1
+          fi
+          echo "bff_hostname=$BFF_HOSTNAME" >> $GITHUB_OUTPUT
+
+      - name: Helm upgrade
+        run: |
+          EXTRA_SET=""
+          if [ "${{ matrix.service }}" = "bff-api" ]; then
+            EXTRA_SET="--set config.BlazorUi__Origin=https://${{ steps.kv.outputs.bff_hostname }}"
+          fi
+          helm upgrade --install ${{ matrix.service }} src/${{ matrix.service }}/chart/ \
+            --namespace ${{ env.NAMESPACE }} \
+            --create-namespace \
+            --set image.repository=${{ vars.ACR_NAME }}.azurecr.io/${{ matrix.service }} \
+            --set image.tag=${{ needs.docker-build-push.outputs.image-tag }} \
+            $EXTRA_SET \
+            --wait \
+            --timeout 5m

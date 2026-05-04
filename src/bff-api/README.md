@@ -11,7 +11,7 @@ Required config keys (populated by config-sync from Key Vault):
 |-----|-------------|
 | `Orchestrator:BaseUrl` | Orchestrator Agent base URL |
 | `CosmosDb:AgentsEndpoint` | Cosmos DB agents account endpoint |
-| `CosmosDb:AgentsDatabase` | Agents database name (default: contoso-agents) |
+| `CosmosDb:AgentsDatabase` | Agents database name (default: agents) |
 | `Storage:ImagesEndpoint` | Blob storage endpoint for product images |
 | `Storage:ImagesAccountName` | Storage account name |
 | `Storage:ImagesContainer` | Blob container for images |

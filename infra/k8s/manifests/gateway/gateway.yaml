@@ -1,0 +1,41 @@
+# =============================================================================
+# Gateway — entry point for AGC traffic into the contoso namespace
+# =============================================================================
+# References the well-known `azure-alb-external` GatewayClass that the ALB
+# Controller registers when it starts. Listens on HTTP/80 and HTTPS/443 (TLS
+# terminated by AGC; the cert is loaded from Key Vault by Terraform via
+# module.tls_cert and bound to the AGC frontend out-of-band — see security.md).
+#
+# `allowedRoutes.namespaces.from: Same` restricts HTTPRoutes to the contoso
+# namespace; this prevents other workloads on the cluster from quietly
+# attaching themselves to the public frontend.
+# =============================================================================
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: contoso-gateway
+  namespace: contoso
+  annotations:
+    alb.networking.azure.io/alb-namespace: azure-alb-system
+    alb.networking.azure.io/alb-name: contoso-alb
+spec:
+  gatewayClassName: azure-alb-external
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Same
+    - name: https
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        # Cert is bound to the AGC frontend by the TLS cert resource Terraform
+        # provisioned in module.tls_cert; AGC handles termination so the
+        # in-cluster Gateway just exposes the listener port.
+        certificateRefs: []
+      allowedRoutes:
+        namespaces:
+          from: Same

@@ -29,7 +29,10 @@ try {
     
     # Test 3: All expected outputs defined
     Write-Host "Test 3: All expected outputs defined"
-    $expectedOutputs = @("foundry_endpoint", "foundry_api_key", "chat_deployment_name", "embedding_deployment_name")
+    # Note: foundry_api_key was intentionally removed when the local-dev module
+    # switched to RBAC-only auth (DefaultAzureCredential). See setup-local + the
+    # NoApiKeyTests fitness function.
+    $expectedOutputs = @("foundry_endpoint", "chat_deployment_name", "embedding_deployment_name", "tenant_id", "bff_client_id")
     $outputsFile = Get-Content outputs.tf -Raw
     
     foreach ($output in $expectedOutputs) {

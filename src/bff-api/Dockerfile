@@ -18,12 +18,10 @@ COPY Directory.Build.props ./
 COPY Directory.Packages.props ./
 COPY global.json ./
 
-COPY src/ServiceDefaults/Contoso.ServiceDefaults.csproj ./src/ServiceDefaults/
 COPY src/bff-api/Contoso.BffApi.csproj ./src/bff-api/
 
 RUN dotnet restore "./src/bff-api/Contoso.BffApi.csproj"
 
-COPY src/ServiceDefaults/ ./src/ServiceDefaults/
 COPY src/bff-api/ ./src/bff-api/
 
 # ---------------------------------------------------------------------------

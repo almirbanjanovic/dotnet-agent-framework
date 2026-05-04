@@ -1,0 +1,19 @@
+# =============================================================================
+# ApplicationLoadBalancer (BYO deployment)
+# =============================================================================
+# Binds the in-cluster ALB Controller to the Azure-side AGC resource that
+# Terraform provisioned (module.agc.frontend_id). The controller uses this to
+# publish Gateway/HTTPRoute config back to the AGC.
+#
+# `${AGC_FRONTEND_ID}` is replaced at deploy time by the value of
+#   terraform -chdir=infra/terraform output -raw agc_frontend_id
+# (envsubst on Linux/macOS or PowerShell on Windows — see ./README.md).
+# =============================================================================
+apiVersion: alb.networking.azure.io/v1
+kind: ApplicationLoadBalancer
+metadata:
+  name: contoso-alb
+  namespace: azure-alb-system
+spec:
+  associations:
+    - ${AGC_FRONTEND_ID}

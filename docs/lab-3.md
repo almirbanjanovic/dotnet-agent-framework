@@ -112,7 +112,7 @@ Three rules that will save you debugging time:
                 └────────────────────┘
 ```
 
-The `fraud-workflow` service is a **new component** you'll add — it does not exist in `src/` yet. It follows the same component-independence rule as every other service: no `<ProjectReference>` to anything except its own dependencies (Microsoft Agent Framework, MCP client, Aspire ServiceDefaults).
+The `fraud-workflow` service is a **new component** you'll add — it does not exist in `src/` yet. It follows the same component-independence rule as every other service: no `<ProjectReference>` to any other project under `src/` — only NuGet package references (Microsoft Agent Framework, MCP client, Aspire workload). The same fitness function ([`ComponentIndependenceTests`](../src-tests/Contoso.AppHost.Tests/ComponentIndependenceTests.cs)) that guards every other service will guard this one too.
 
 ---
 
@@ -312,7 +312,7 @@ app.MapHub<OperationsHub>("/hubs/operations");
 
 ### Step 6 — Add the Blazor operations page
 
-In src/blazor-ui/Components/Pages/ create Operations.razor:
+In src/blazor-ui/Pages/ create Operations.razor:
 
 ```razor
 @page "/operations"

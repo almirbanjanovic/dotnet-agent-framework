@@ -12,7 +12,7 @@ public sealed class CosmosConversationStore : IConversationStore
 
     public CosmosConversationStore(CosmosClient client, IConfiguration configuration)
     {
-        var databaseName = configuration["CosmosDb:AgentsDatabase"] ?? "contoso-agents";
+        var databaseName = configuration["CosmosDb:AgentsDatabase"] ?? "agents";
         var containerName = configuration["CosmosDb:AgentsContainer"] ?? "conversations";
         _container = client.GetContainer(databaseName, containerName);
     }

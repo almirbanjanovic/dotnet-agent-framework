@@ -17,7 +17,10 @@ terraform validate > /dev/null 2>&1
 echo "  PASS"
 
 echo "Test 3: All expected outputs defined"
-for output in foundry_endpoint foundry_api_key chat_deployment_name embedding_deployment_name; do
+# Note: foundry_api_key was intentionally removed when the local-dev module
+# switched to RBAC-only auth (DefaultAzureCredential). See setup-local + the
+# NoApiKeyTests fitness function.
+for output in foundry_endpoint chat_deployment_name embedding_deployment_name tenant_id bff_client_id; do
   if ! grep -q "output \"$output\"" outputs.tf; then
     echo "  FAIL: missing output $output"
     exit 1

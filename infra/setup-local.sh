@@ -173,7 +173,14 @@ export CUSTOMER_MAP_JSON="$customer_map_json"
 
 for component in "${TEMPLATE_COMPONENTS[@]}"; do
     template_path="$REPO_ROOT/src/$component/appsettings.Local.json.template"
-    output_path="$REPO_ROOT/src/$component/appsettings.Local.json"
+    # blazor-ui is a WASM SPA — the browser fetches configuration from
+    # wwwroot/appsettings.Local.json over HTTP. Every other component reads
+    # from the project root at process startup.
+    if [[ "$component" == "blazor-ui" ]]; then
+        output_path="$REPO_ROOT/src/$component/wwwroot/appsettings.Local.json"
+    else
+        output_path="$REPO_ROOT/src/$component/appsettings.Local.json"
+    fi
 
     if [[ ! -f "$template_path" ]]; then
         warn "Template not found: $template_path — skipping"
@@ -181,12 +188,16 @@ for component in "${TEMPLATE_COMPONENTS[@]}"; do
     fi
 
     substitute_template "$template_path" "$output_path"
-    ok "Generated src/$component/appsettings.Local.json"
+    ok "Generated ${output_path#$REPO_ROOT/}"
 done
 
 for component in "${STATIC_COMPONENTS[@]}"; do
     template_path="$REPO_ROOT/src/$component/appsettings.Local.json.template"
-    output_path="$REPO_ROOT/src/$component/appsettings.Local.json"
+    if [[ "$component" == "blazor-ui" ]]; then
+        output_path="$REPO_ROOT/src/$component/wwwroot/appsettings.Local.json"
+    else
+        output_path="$REPO_ROOT/src/$component/appsettings.Local.json"
+    fi
 
     if [[ ! -f "$template_path" ]]; then
         warn "Template not found: $template_path — skipping"
@@ -194,7 +205,7 @@ for component in "${STATIC_COMPONENTS[@]}"; do
     fi
 
     cp "$template_path" "$output_path"
-    ok "Generated src/$component/appsettings.Local.json"
+    ok "Generated ${output_path#$REPO_ROOT/}"
 done
 
 # ── Summary ─────────────────────────────────────────────────────────────────

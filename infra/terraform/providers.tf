@@ -124,3 +124,13 @@ provider "kubectl" {
   cluster_ca_certificate = try(base64decode(module.aks.kube_config_cluster_ca), "")
   load_config_file       = false
 }
+
+# kubernetes provider — same connection as kubectl. Used to write the
+# `keyvault-secrets` K8s Secret that every per-service Helm chart (except
+# blazor-ui) consumes via secretRefs.
+provider "kubernetes" {
+  host                   = try(module.aks.kube_config_host, "")
+  client_certificate     = try(base64decode(module.aks.kube_config_client_certificate), "")
+  client_key             = try(base64decode(module.aks.kube_config_client_key), "")
+  cluster_ca_certificate = try(base64decode(module.aks.kube_config_cluster_ca), "")
+}

@@ -18,12 +18,10 @@ COPY Directory.Build.props ./
 COPY Directory.Packages.props ./
 COPY global.json ./
 
-COPY src/ServiceDefaults/Contoso.ServiceDefaults.csproj ./src/ServiceDefaults/
 COPY src/orchestrator-agent/Contoso.OrchestratorAgent.csproj ./src/orchestrator-agent/
 
 RUN dotnet restore "./src/orchestrator-agent/Contoso.OrchestratorAgent.csproj"
 
-COPY src/ServiceDefaults/ ./src/ServiceDefaults/
 COPY src/orchestrator-agent/ ./src/orchestrator-agent/
 
 # ---------------------------------------------------------------------------

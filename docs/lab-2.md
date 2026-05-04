@@ -417,7 +417,7 @@ The local steps in [Step 5](#step-5--add-a-third-specialist-returns-agent-withou
 2. **Container image** — clone src/crm-agent/Dockerfile into the new component (no changes needed; the multi-stage build picks up the new csproj).
 3. **Helm chart** — clone src/crm-agent/chart/ into src/returns-agent/chart/, update Chart.yaml, values.yaml (image repository, service account name `sa-returns-agent`), and the ConfigMap keys. Helm template files are reusable.
 4. **NetworkPolicy** — add a new manifest under infra/k8s/manifests/network-policies/ allowing ingress from `orchestrator-agent` and egress to `crm-mcp` + `knowledge-mcp` (mirror crm-agent.yaml).
-5. **CI/CD** — add the new component to the GitHub Actions deploy workflow (add it to the matrix or copy the existing crm-agent stage).
+5. **CI/CD** — copy `.github/workflows/deploy-crm-agent.yml` to `deploy-returns-agent.yml`, replace `crm-agent` with `returns-agent` in the path filter, `SERVICE_NAME`, csproj path, test project, Dockerfile path, and chart path. Optionally add `returns-agent` to the matrix in `.github/workflows/deploy-all-services.yml` (under `tier-3`, alongside `crm-agent` and `product-agent`) so future full-fleet deploys pick it up too.
 6. **Orchestrator config** — bump the `orchestrator-agent` ConfigMap to add `ReturnsAgent:BaseUrl: http://returns-agent:8080`.
 
 The component-independence fitness test (`ComponentIndependenceTests`) and the template-hygiene fitness test (`LocalDevTemplateTests`) both run on every PR — they will catch most omissions.

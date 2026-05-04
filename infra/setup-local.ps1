@@ -185,9 +185,20 @@ $testUserPasswords = $testUserPasswordsJson | ConvertFrom-Json
 
 Write-Step "Generating appsettings.Local.json files"
 
+# Helper: blazor-ui is a WASM SPA; configuration is loaded from
+# wwwroot/appsettings.Local.json (served over HTTP), not the project root.
+# Every other component reads from the project root at process startup.
+function Get-AppsettingsOutputPath {
+    param([string]$Component)
+    if ($Component -eq 'blazor-ui') {
+        return Join-Path $RepoRoot "src/$Component/wwwroot/appsettings.Local.json"
+    }
+    return Join-Path $RepoRoot "src/$Component/appsettings.Local.json"
+}
+
 foreach ($component in $TemplateComponents) {
     $templatePath = Join-Path $RepoRoot "src/$component/appsettings.Local.json.template"
-    $outputPath   = Join-Path $RepoRoot "src/$component/appsettings.Local.json"
+    $outputPath   = Get-AppsettingsOutputPath -Component $component
 
     if (-not (Test-Path $templatePath)) {
         Write-Warn "Template not found: $templatePath — skipping"
@@ -205,12 +216,13 @@ foreach ($component in $TemplateComponents) {
         Replace('{{CUSTOMER_MAP_JSON}}',         $customerMapJson)
 
     Set-Content -Path $outputPath -Value $content -NoNewline
-    Write-Ok "Generated src/$component/appsettings.Local.json"
+    $relativePath = (Resolve-Path -Relative $outputPath).TrimStart('.','/','\\')
+    Write-Ok "Generated $relativePath"
 }
 
 foreach ($component in $StaticComponents) {
     $templatePath = Join-Path $RepoRoot "src/$component/appsettings.Local.json.template"
-    $outputPath   = Join-Path $RepoRoot "src/$component/appsettings.Local.json"
+    $outputPath   = Get-AppsettingsOutputPath -Component $component
 
     if (-not (Test-Path $templatePath)) {
         Write-Warn "Template not found: $templatePath — skipping"
@@ -218,7 +230,8 @@ foreach ($component in $StaticComponents) {
     }
 
     Copy-Item $templatePath $outputPath -Force
-    Write-Ok "Generated src/$component/appsettings.Local.json"
+    $relativePath = (Resolve-Path -Relative $outputPath).TrimStart('.','/','\\')
+    Write-Ok "Generated $relativePath"
 }
 
 # ── Summary ─────────────────────────────────────────────────────────────────
