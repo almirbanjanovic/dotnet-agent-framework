@@ -80,7 +80,9 @@ From the repository root:
 
 **Region:** Defaults to `centralus`. Override with `TF_VAR_location=<region>` (the region must support `gpt-4.1` and `text-embedding-3-small` with at least 120K TPM embedding capacity).
 
-**Cleanup:**
+### Cleanup
+
+When you're finished with the labs, tear down the local Foundry environment:
 
 ```powershell
 # Windows / PowerShell
@@ -91,6 +93,8 @@ From the repository root:
 # macOS / Linux
 ./infra/setup-local.sh --cleanup
 ```
+
+This destroys the Foundry resources, **the Entra SPA app registration, and the 8 test users**, and removes the generated `appsettings.Local.json` files.
 
 ---
 

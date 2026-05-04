@@ -51,7 +51,9 @@ You will:
 
 - [Lab 1](lab-1.md) completed on either the Local Track or the Full Azure Track.
 - All 8 services healthy (Aspire dashboard or AKS readiness probes green).
-- A REST client — `curl`, `Invoke-RestMethod`, [Bruno](https://www.usebruno.com/), Postman, or the Aspire dashboard's HTTP tab.
+- A modern browser (Edge, Chrome, Firefox) — you'll drive every scenario through the **Blazor UI** the same way a real customer would, and inspect what's happening underneath via the **Aspire dashboard** (`https://localhost:15888`) and the browser's **Network** dev tool.
+
+> **Why the UI, not curl?** This repo is the customer experience for Contoso Outdoors. Every prompt below should be **typed into the chat panel** by a signed-in test user — that's what exercises the full token → BFF → orchestrator → specialist → MCP path. If you really want to script the wire calls (rare), see the [Full Azure Track](#step-2--drive-the-orchestrator-from-a-script-optional) which shows how to acquire a bearer token and POST directly.
 
 ## The architecture you'll exercise
 
@@ -92,41 +94,32 @@ dotnet run --project src/AppHost
 
 Open the Aspire dashboard at `https://localhost:15888`. Confirm 8 services are green: `crm-api`, `crm-mcp`, `knowledge-mcp`, `crm-agent`, `product-agent`, `orchestrator-agent`, `bff-api`, `blazor-ui`.
 
-### Step 2 — Single-agent pattern: drive `crm-agent` directly
+### Step 2 — Single-agent pattern: drive `crm-agent` through the chat UI
 
-The `crm-agent` exposes one endpoint: `POST /api/v1/chat`. The body shape is:
+Open `http://localhost:5008`, sign in as **emma.wilson@<your-tenant-domain>** (or any test user `setup-local` printed), and pick **Emma Wilson** in the customer picker. Type into the chat:
+
+> Where is my last order?
+
+While the response renders, open the **Aspire dashboard** (`https://localhost:15888`) and click **Traces**. Find the trace started by `bff-api` for `POST /api/v1/chat`. Expand it — the span tree is the entire flow:
+
+```text
+bff-api  POST /api/v1/chat
+ └─ orchestrator-agent  POST /api/v1/chat            (intent classifier picks CRM)
+     └─ crm-agent  POST /api/v1/chat                 (the specialist this lab focuses on)
+          ├─ crm-mcp  list_tools                      (runtime tool discovery)
+          ├─ knowledge-mcp  list_tools                (runtime tool discovery)
+          ├─ azure_openai  chat.completions           (turn 1 — model decides to call get_customer_orders)
+          ├─ crm-mcp  call_tool: get_customer_orders
+          ├─ azure_openai  chat.completions           (turn 2 — model decides to call get_order_detail)
+          ├─ crm-mcp  call_tool: get_order_detail
+          └─ azure_openai  chat.completions           (turn 3 — final natural-language reply)
+```
+
+The wire shape `bff-api` returns to the browser is:
 
 ```json
 {
-  "customerId": "101",
-  "message": "Where is my last order?",
-  "history": []
-}
-```
-
-Hit it with `curl`:
-
-```bash
-curl -sS http://localhost:5004/api/v1/chat ^
-  -H "Content-Type: application/json" ^
-  -d "{ \"customerId\": \"101\", \"message\": \"Where is my last order?\", \"history\": [] }"
-```
-
-PowerShell:
-
-```powershell
-$body = @{
-    customerId = "101"
-    message    = "Where is my last order?"
-    history    = @()
-} | ConvertTo-Json
-Invoke-RestMethod -Uri http://localhost:5004/api/v1/chat -Method Post -ContentType "application/json" -Body $body
-```
-
-The response shape:
-
-```json
-{
+  "conversationId": "...",
   "response": "Your most recent order is #1003 ...",
   "toolCalls": [
     { "name": "get_customer_orders", "arguments": { "customerId": "101" } },
@@ -134,6 +127,8 @@ The response shape:
   ]
 }
 ```
+
+Open the browser's **DevTools → Network** tab, click the `chat` request, and look at **Response** — you'll see the same `toolCalls` array the dashboard trace already showed you, just from the BFF's vantage point.
 
 #### What just happened
 
@@ -186,47 +181,27 @@ Note what is **not** there: no hardcoded tool list, no shared C# DTOs with the M
 
 ### Step 3 — Single-agent pattern: try it with conversation history
 
-Send a follow-up. Pass the previous turn back as `history`:
+In the **same** chat session (do **not** start a new one), send a follow-up:
 
-```powershell
-$body = @{
-    customerId = "101"
-    message    = "What's the return window for that?"
-    history    = @(
-        @{ role = "user";      content = "Where is my last order?" }
-        @{ role = "assistant"; content = "Your most recent order is #1003 ..." }
-    )
-} | ConvertTo-Json -Depth 5
-Invoke-RestMethod -Uri http://localhost:5004/api/v1/chat -Method Post -ContentType "application/json" -Body $body
-```
+> What's the return window for that?
 
-Watch the `toolCalls` field — this turn should call `search_knowledge_base` (the only tool from `knowledge-mcp`) instead of any CRM tool. Same agent, different tool, picked by the model based on intent.
+The Blazor UI is keeping a `history` array on the client and sending the prior turns back with each request — that's what lets the model resolve "that" to order #1003 without re-asking. Open the browser **Network** tab and look at the request body for the new `chat` POST: you'll see your previous user/assistant turns inside the `history` array.
 
-### Step 4 — Multi-agent pattern: drive the orchestrator
+Now open the Aspire dashboard's **Traces** tab and find the new trace. The model's tool choice should be different this turn — instead of `get_customer_orders`, you should see a span for `knowledge-mcp` `call_tool: search_knowledge_base` (the one tool that MCP server exposes). Same agent, same code, different tool — picked by the model based on intent. That's the whole point of runtime tool discovery: the agent doesn't pre-select tools, the model does.
 
-Now hit `orchestrator-agent` (port 5006) with the same shape. The orchestrator does **not** call any tool — it asks the model to emit one of two labels, then forwards the original request to the right specialist.
+### Step 4 — Multi-agent pattern: watch the orchestrator route
 
-```powershell
-$body = @{
-    customerId = "101"
-    message    = "Are there any sales on hiking boots?"
-    history    = @()
-} | ConvertTo-Json
-Invoke-RestMethod -Uri http://localhost:5006/api/v1/chat -Method Post -ContentType "application/json" -Body $body
-```
+Every prompt you've sent so far has actually gone through `orchestrator-agent` first — the BFF doesn't talk to specialists directly. To **see the routing happen**, start a fresh chat (refresh the browser) and send these two prompts back-to-back, watching the Aspire **Traces** tab between each:
 
-This should land on `product-agent`. Now try:
+> Are there any sales on hiking boots?
 
-```powershell
-$body = @{
-    customerId = "101"
-    message    = "Where is order 1003?"
-    history    = @()
-} | ConvertTo-Json
-Invoke-RestMethod -Uri http://localhost:5006/api/v1/chat -Method Post -ContentType "application/json" -Body $body
-```
+Expand the new trace. You should see the orchestrator span branch into a `product-agent` `POST /api/v1/chat` span (no `crm-agent` span at all).
 
-This should land on `crm-agent`.
+> Where is order 1003?
+
+Expand this trace. The orchestrator should branch into a `crm-agent` span instead.
+
+That's intent-based handoff: the orchestrator made one tiny LLM call to classify (`PRODUCT` vs `CRM`), then forwarded the original message to the right specialist. The orchestrator does **not** call any tool itself — it doesn't even import another agent's code.
 
 #### Read the orchestrator's source
 
@@ -395,18 +370,11 @@ reorganization shows its value — each concern lives where you'd expect):
 
 #### 5d — Verify
 
-Restart AppHost and confirm `returns-agent` is green in the dashboard. Then:
+Restart AppHost and confirm `returns-agent` is green in the dashboard. Then go back to the Blazor UI, sign in as Emma, and send:
 
-```powershell
-$body = @{
-    customerId = "101"
-    message    = "When will my refund be processed?"
-    history    = @()
-} | ConvertTo-Json
-Invoke-RestMethod -Uri http://localhost:5006/api/v1/chat -Method Post -ContentType "application/json" -Body $body
-```
+> When will my refund be processed?
 
-The `crm-agent` and `product-agent` are unchanged — only `returns-agent` (new) and `orchestrator-agent` (one classifier line + one route line) were touched. The fitness test still passes:
+Open the Aspire **Traces** tab — the orchestrator span should now branch into a `returns-agent` `POST /api/v1/chat` span (not `crm-agent`, not `product-agent`). The `crm-agent` and `product-agent` are unchanged — only `returns-agent` (new) and `orchestrator-agent` (one classifier line + one route line) were touched. The fitness test still passes:
 
 ```powershell
 dotnet test src-tests/Contoso.AppHost.Tests/Contoso.AppHost.Tests.csproj
@@ -414,10 +382,12 @@ dotnet test src-tests/Contoso.AppHost.Tests/Contoso.AppHost.Tests.csproj
 
 ### Verification checklist (Local Track)
 
-- [ ] Direct call to `crm-agent` returns `toolCalls` showing two CRM MCP tools were invoked
-- [ ] Follow-up call with `history` populated invokes `search_knowledge_base` instead of CRM tools
-- [ ] `orchestrator-agent` routes a "promotions" prompt to `product-agent` and an "order status" prompt to `crm-agent`
-- [ ] After Step 5, a "refund status" prompt routes to `returns-agent`
+- [ ] Signed in as Emma in the Blazor UI, asking "Where is my last order?" returns Emma's order data
+- [ ] The Aspire **Traces** tab shows the trace branching `bff-api → orchestrator-agent → crm-agent` with two `crm-mcp` tool spans (`get_customer_orders`, `get_order_detail`)
+- [ ] The browser **Network** tab response for `/api/v1/chat` shows the same tool calls in the `toolCalls` array
+- [ ] A follow-up turn ("What's the return window for that?") shows a `search_knowledge_base` span instead of CRM tool spans
+- [ ] "Are there any sales on hiking boots?" routes to `product-agent` (visible in the trace tree); "Where is order 1003?" routes to `crm-agent`
+- [ ] After Step 5, "When will my refund be processed?" routes to `returns-agent`
 - [ ] `crm-agent` source has not changed (`git diff src/crm-agent` is empty)
 - [ ] `ComponentIndependenceTests` is still green
 

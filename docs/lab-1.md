@@ -144,17 +144,7 @@ For port maps, troubleshooting, and component-level details, see the [Local Deve
 - [ ] Blazor UI redirects to `login.microsoftonline.com` on first load
 - [ ] After signing in as `emma.wilson@<your-tenant-domain>`, asking "what is my last order?" returns Emma's order data sourced from the in-memory CRM data
 
-### Cleanup (Local Track)
-
-```powershell
-./infra/setup-local.ps1 -Cleanup
-```
-
-```bash
-./infra/setup-local.sh --cleanup
-```
-
-This destroys the Foundry resources, **the Entra SPA app registration, and the 8 test users**, and removes the generated `appsettings.Local.json` files.
+> **Cleanup** — leave the local environment running for the rest of the labs. Tear-down instructions live in the [Local Development Guide](local-development.md#cleanup).
 
 ---
 

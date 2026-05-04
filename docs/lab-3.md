@@ -390,12 +390,16 @@ Restart `dotnet run --project src/AppHost`. Confirm `fraud-workflow` is green in
 
 Open two browser windows:
 
-- **Window A** (incognito) — sign in as a customer (e.g., `emma.wilson@<your-tenant-domain>` from the test users `setup-local` printed). Submit a refund request:
+- **Window A** (incognito) — sign in to the Blazor UI at `http://localhost:5008` as a customer (e.g., `emma.wilson@<your-tenant-domain>` from the test users `setup-local` printed). Pick **Emma Wilson** in the customer picker, open the chat, and ask:
 
-  ```powershell
-  curl -sS http://localhost:5010/api/v1/refunds `
-    -H "Content-Type: application/json" `
-    -d "{ \"customerId\": \"101\", \"orderId\": \"1003\", \"amount\": 285.00, \"reason\": \"Boots damaged on arrival\" }"
+  > I'd like a refund for order 1003 — the boots arrived damaged. The total was $285.
+
+  In production a real customer-experience surface would have a **Refund this order** button on the order detail page that POSTs `{ customerId, orderId, amount, reason }` to `bff-api/api/v1/refunds`, and the BFF would forward to `fraud-workflow`. We haven't built that button in this lab — for now, the chat prompt above is the customer trigger and the `returns-agent` (built in Lab 2) is responsible for collecting the structured fields and calling `fraud-workflow` over HTTP.
+
+  > **Lab gap (acknowledged):** wiring the BFF refund endpoint and the order-page button is left as an exercise. Until that's done you can simulate the customer-side POST from the **Aspire dashboard**: open `fraud-workflow` → **Endpoints** → use the built-in HTTP tab to send `POST /api/v1/refunds` with the body below. **Do not** make a habit of running production-shaped traffic through a CLI \u2014 it bypasses the very BFF/auth path the rest of the labs prove out.
+
+  ```json
+  { "customerId": "101", "orderId": "1003", "amount": 285.00, "reason": "Boots damaged on arrival" }
   ```
 
 - **Window B** (separate browser profile) — sign in as a different test user (e.g., `lisa.torres@<your-tenant-domain>`) and navigate to `/operations`. In production this would be an account with the `Operations` app role; for the Local Track lab, any signed-in user can see the queue.
