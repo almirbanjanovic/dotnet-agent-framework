@@ -137,7 +137,10 @@ The response shape:
 
 #### What just happened
 
-Open Program.cs and trace the path. On every request:
+The per-request flow lives in `src/crm-agent/Endpoints/ChatEndpoint.cs`
+(the agent itself is built in `src/crm-agent/Services/CrmAgentFactory.cs`,
+the MCP clients in `src/crm-agent/Services/Mcp/`). Open `ChatEndpoint.cs` and
+trace the path. On every request:
 
 1. The agent fetches tool catalogs from both MCP servers via `client.ListToolsAsync()` — this is the **runtime tool discovery** that makes the agent decoupled from the MCP server's implementation. The agent doesn't know what tools exist until it asks.
 2. The combined tool list is handed to the `AIAgent`.
@@ -164,6 +167,22 @@ var toolCalls = ToolCallExtractor.Extract(response);
 ```
 
 Note what is **not** there: no hardcoded tool list, no shared C# DTOs with the MCP servers, no compile-time dependency on any tool's implementation. The agent and the tool servers can be deployed independently and in different repos.
+
+> **File map for the rest of the lab.** After the recent reorganization, every
+> agent component follows the same layout:
+>
+> | Folder | Holds |
+> |--------|-------|
+> | `Program.cs` | composition root only — DI registrations, health-check wiring, endpoint mapping |
+> | `Models/` | wire DTOs (`ChatRequest`, `ChatResponse`, etc.) |
+> | `Services/` | the agent factory, MCP client cache, prompt loader, helpers |
+> | `Services/Mcp/` | one file per MCP backend (`CrmMcpClientProvider.cs`, `KnowledgeMcpClientProvider.cs`) |
+> | `HealthChecks/` | one `IHealthCheck` per file |
+> | `Endpoints/` | the `Map*Endpoint` extension methods called from `Program.cs` |
+>
+> When the lab says "open `IntentClassifier.cs`" or "`AgentRouter.cs`", look in `src/orchestrator-agent/Services/`.
+> The typed HTTP clients (`CrmAgentClient`, `ProductAgentClient`) live in `src/orchestrator-agent/Services/AgentClients.cs`.
+
 
 ### Step 3 — Single-agent pattern: try it with conversation history
 
@@ -338,7 +357,41 @@ return token.ToUpperInvariant() switch
 };
 ```
 
-Edit AgentRouter.cs and Program.cs to add a `ReturnsAgentClient` (mirror `ProductAgentClient`) plus a third branch in `RouteAsync`. Add the corresponding `AddHttpClient<ReturnsAgentClient>` call in `Program.cs` with `BaseUrl = http://localhost:5009`.
+Three small edits, in three files (this is where the per-component
+reorganization shows its value — each concern lives where you'd expect):
+
+1. **`Services/AgentClients.cs`** — add a `ReturnsAgentClient` next to `ProductAgentClient`:
+
+   ```csharp
+   internal sealed class ReturnsAgentClient
+   {
+       public ReturnsAgentClient(HttpClient httpClient) => HttpClient = httpClient;
+       public HttpClient HttpClient { get; }
+   }
+   ```
+
+2. **`Services/AgentRouter.cs`** — accept the new client in the constructor and add a third branch in `RouteAsync`:
+
+   ```csharp
+   var client = intent.ToUpperInvariant() switch
+   {
+       "PRODUCT" => _productClient.HttpClient,
+       "RETURNS" => _returnsClient.HttpClient,
+       _         => _crmClient.HttpClient,
+   };
+   ```
+
+3. **`Program.cs`** — register the typed `HttpClient` next to the other two:
+
+   ```csharp
+   builder.Services.AddHttpClient<ReturnsAgentClient>(client =>
+       {
+           var baseUrl = builder.Configuration["ReturnsAgent:BaseUrl"] ?? "http://localhost:5009";
+           client.BaseAddress = new Uri(baseUrl);
+       })
+       .AddHttpMessageHandler<CustomerHeaderForwarder>()
+       .AddStandardResilienceHandler();
+   ```
 
 #### 5d — Verify
 

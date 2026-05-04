@@ -64,8 +64,20 @@ $env:TF_VAR_location = "eastus2"
 
 ### Step 2 — Validate Foundry connectivity
 
+Set `ASPNETCORE_ENVIRONMENT=Local` in your shell so `simple-agent` loads the
+`appsettings.Local.json` that `setup-local` just generated. (The .NET 9 SDK's
+`dotnet run --environment` flag takes `NAME=VALUE` pairs — it does **not** set
+`ASPNETCORE_ENVIRONMENT` on its own.)
+
+```powershell
+# PowerShell
+$env:ASPNETCORE_ENVIRONMENT = 'Local'
+dotnet run --project src/simple-agent
+```
+
 ```bash
-dotnet run --project src/simple-agent --environment Local
+# Bash / macOS / Linux
+ASPNETCORE_ENVIRONMENT=Local dotnet run --project src/simple-agent
 ```
 
 Expected output (the joke varies — it's AI-generated):

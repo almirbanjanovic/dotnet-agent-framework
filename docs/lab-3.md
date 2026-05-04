@@ -204,7 +204,11 @@ The other two follow the same shape with different prompts and tool subsets:
 - **ReturnConditionAgent** — uses `knowledge-mcp.search_knowledge_base` to fetch the relevant policy section and `crm-mcp.get_order_detail` to fetch the items; reports whether the customer's reason matches a covered scenario.
 - **LoyaltyContextAgent** — uses `crm-mcp.get_customer_detail` for tier and account age; reports whether the customer's profile carries weight (long-tenure Platinum vs. brand-new account).
 
-Wire each agent in Program.cs the same way `crm-agent` does — see Program.cs for the exact `AIProjectClient.AsAIAgent` + MCP-tool-loading pattern.
+Wire each agent in `Program.cs` the same way `crm-agent` does — the
+`AIProjectClient.AsAIAgent(...)` call lives in
+[`src/crm-agent/Services/CrmAgentFactory.cs`](../src/crm-agent/Services/CrmAgentFactory.cs)
+and the per-request MCP-tool-loading pattern lives in
+[`src/crm-agent/Endpoints/ChatEndpoint.cs`](../src/crm-agent/Endpoints/ChatEndpoint.cs).
 
 ### Step 3 — Build the workflow with Microsoft Agent Framework `WorkflowBuilder`
 

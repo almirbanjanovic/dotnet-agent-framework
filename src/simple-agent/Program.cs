@@ -12,8 +12,15 @@ using Microsoft.Extensions.Configuration;
 // single agent ("Joker") for a one-off response.
 // ─────────────────────────────────────────────────────────────────────────
 
+// Fall back through both env vars so the same `ASPNETCORE_ENVIRONMENT=Local`
+// prefix works for the Web projects AND for this console app.
+var environmentName =
+    Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ??
+    Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ??
+    "Development";
+
 var configuration = new ConfigurationBuilder()
-    .AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? "Development"}.json", optional: true)
+    .AddJsonFile($"appsettings.{environmentName}.json", optional: true)
     .AddEnvironmentVariables()
     .Build();
 
