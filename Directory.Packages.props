@@ -60,8 +60,12 @@
     <!-- Misc -->
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
 
-    <!-- OpenTelemetry -->
-    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.12.0" />
+    <!-- OpenTelemetry. The exporter is pinned higher than the instrumentation
+         packages because 1.15.3 is the patched version for
+         GHSA-4625-4j76-fww9 (CVE-2026-42191) — the OTLP disk-retry
+         path-traversal advisory. The instrumentation packages aren't on the
+         same release cadence and aren't affected by that CVE. -->
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.3" />
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.12.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.12.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.12.0" />
