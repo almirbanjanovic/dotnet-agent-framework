@@ -11,11 +11,6 @@
     "ImagesAccountName": "",
     "ImagesContainer": "product-images"
   },
-  "Kestrel": {
-    "Endpoints": {
-      "Http": { "Url": "http://localhost:5007" }
-    }
-  },
   "AzureAd": {
     "Enabled": true,
     "TenantId": "{{TENANT_ID}}",

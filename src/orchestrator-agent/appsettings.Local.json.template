@@ -12,11 +12,6 @@
   "AzureAd": {
     "TenantId": "{{TENANT_ID}}"
   },
-  "Kestrel": {
-    "Endpoints": {
-      "Http": { "Url": "http://localhost:5006" }
-    }
-  },
   "Logging": {
     "LogLevel": { "Default": "Information" }
   }

@@ -17,7 +17,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $RepoRoot = Split-Path -Parent $PSScriptRoot
-$TerraformDir = "infra/terraform/local-dev"
+$TerraformDir = Join-Path $RepoRoot "infra/terraform/local-dev"
 
 # ── Port Map ────────────────────────────────────────────────────────────────
 $PortMap = @(
@@ -130,8 +130,7 @@ Write-Ok "Logged in as $($accountInfo.user.name) (subscription: $($accountInfo.n
 # ── Compute Resource Group Name ─────────────────────────────────────────────
 
 Write-Step "Computing resource group name"
-$username = [Environment]::UserName.ToLower() -replace '[^a-z0-9]', ''
-$env:TF_VAR_resource_group_name = "rg-dotnetagent-localdev-$username"
+$env:TF_VAR_resource_group_name = "rg-dotnetagent-localdev"
 Write-Ok "Resource group: $($env:TF_VAR_resource_group_name)"
 
 # ── Terraform Init ──────────────────────────────────────────────────────────
@@ -180,6 +179,11 @@ Write-Ok "BFF SPA client ID: $bffClientId"
 # never write it to disk. We only print to the operator at the end.
 $testUserPasswordsJson = terraform -chdir="$TerraformDir" output -json test_user_passwords
 $testUserPasswords = $testUserPasswordsJson | ConvertFrom-Json
+
+# Pre-existing users that terraform imported instead of creating. Their
+# passwords are unknown to this run — either the operator still has them
+# from the original setup-local invocation, or they need a portal reset.
+$importedUserKeys = @($outputs.imported_user_keys.value)
 
 # ── Generate appsettings.Local.json from Templates ──────────────────────────
 
@@ -245,8 +249,19 @@ Write-Host "  Sign in to the Blazor UI as one of these test users" -ForegroundCo
 Write-Host "  (saved in your Entra tenant; passwords printed once):" -ForegroundColor White
 foreach ($key in ($testUserUpns.PSObject.Properties.Name | Sort-Object)) {
     $upn = $testUserUpns.$key
-    $password = $testUserPasswords.$key
-    Write-Host ("    {0,-7} {1,-50} {2}" -f $key, $upn, $password)
+    if ($importedUserKeys -contains $key) {
+        Write-Host ("    {0,-7} {1,-50} <imported — use password from prior setup-local run>" -f $key, $upn) -ForegroundColor Yellow
+    } else {
+        $password = $testUserPasswords.$key
+        Write-Host ("    {0,-7} {1,-50} {2}" -f $key, $upn, $password)
+    }
+}
+if ($importedUserKeys.Count -gt 0) {
+    Write-Host ""
+    Write-Host "  Note: $($importedUserKeys.Count) user(s) already existed in this tenant" -ForegroundColor Yellow
+    Write-Host "  and were imported into terraform state. Their passwords were NOT reset." -ForegroundColor Yellow
+    Write-Host "  If you don't have the password from the original setup-local run, reset" -ForegroundColor Yellow
+    Write-Host "  it in the Azure portal under: Microsoft Entra ID > Users > <user> > Reset password." -ForegroundColor Yellow
 }
 Write-Host ""
 Write-Host "  Port Map:" -ForegroundColor White

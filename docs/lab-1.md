@@ -44,7 +44,7 @@ chmod +x infra/setup-local.sh
 The script:
 
 1. Runs `terraform apply` in `infra/terraform/local-dev/` to create:
-   - Resource group `rg-dotnetagent-localdev-<your-username>` (suffixed so multiple developers can share one subscription)
+   - Resource group `rg-dotnetagent-localdev`
    - 1 Azure AI Foundry account
    - 2 model deployments: chat (`gpt-4.1`) + embeddings (`text-embedding-3-small`)
    - Grants you `Cognitive Services OpenAI User` on the account

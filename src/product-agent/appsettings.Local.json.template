@@ -12,11 +12,6 @@
   "CrmMcp": {
     "BaseUrl": "http://localhost:5002"
   },
-  "Kestrel": {
-    "Endpoints": {
-      "Http": { "Url": "http://localhost:5005" }
-    }
-  },
   "Logging": {
     "LogLevel": { "Default": "Information" }
   }

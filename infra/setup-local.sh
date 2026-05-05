@@ -11,7 +11,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-TERRAFORM_DIR="infra/terraform/local-dev"
+TERRAFORM_DIR="$REPO_ROOT/infra/terraform/local-dev"
 
 # ── Port Map ────────────────────────────────────────────────────────────────
 declare -A PORT_MAP=(
@@ -102,8 +102,7 @@ ok "Logged in as $az_user (subscription: $az_sub)"
 # ── Compute Resource Group Name ─────────────────────────────────────────────
 
 step "Computing resource group name"
-username=$(whoami | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9')
-export TF_VAR_resource_group_name="rg-dotnetagent-localdev-$username"
+export TF_VAR_resource_group_name="rg-dotnetagent-localdev"
 ok "Resource group: $TF_VAR_resource_group_name"
 
 # ── Terraform Init ──────────────────────────────────────────────────────────
@@ -221,8 +220,18 @@ python3 - <<PY
 import json, os
 upns      = json.loads(os.popen("terraform -chdir='$TERRAFORM_DIR' output -json test_user_upns").read())
 passwords = json.loads(os.popen("terraform -chdir='$TERRAFORM_DIR' output -json test_user_passwords").read())
+imported  = json.loads(os.popen("terraform -chdir='$TERRAFORM_DIR' output -json imported_user_keys").read()) or []
 for key in sorted(upns.keys()):
-    print(f"    {key:<7} {upns[key]:<50} {passwords[key]}")
+    if key in imported:
+        print(f"    {key:<7} {upns[key]:<50} <imported \u2014 use password from prior setup-local run>")
+    else:
+        print(f"    {key:<7} {upns[key]:<50} {passwords[key]}")
+if imported:
+    print()
+    print(f"  Note: {len(imported)} user(s) already existed in this tenant and were imported")
+    print( "  into terraform state. Their passwords were NOT reset. If you don't have the")
+    print( "  password from the original setup-local run, reset it in the Azure portal under:")
+    print( "    Microsoft Entra ID > Users > <user> > Reset password.")
 PY
 echo ""
 echo "  Port Map:"

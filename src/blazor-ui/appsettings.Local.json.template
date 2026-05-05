@@ -2,11 +2,6 @@
   "Bff": {
     "BaseUrl": "http://localhost:5007"
   },
-  "Kestrel": {
-    "Endpoints": {
-      "Http": { "Url": "http://localhost:5008" }
-    }
-  },
   "AzureAd": {
     "Enabled": true,
     "TenantId": "{{TENANT_ID}}",
