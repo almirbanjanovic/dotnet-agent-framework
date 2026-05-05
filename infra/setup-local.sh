@@ -215,13 +215,17 @@ missing=()
 command_exists dotnet    || missing+=("dotnet")
 command_exists az        || missing+=("az (Azure CLI)")
 command_exists terraform || missing+=("terraform")
+# python3 is used to parse `az account show` output, terraform JSON outputs,
+# and to substitute placeholders in appsettings templates without invoking
+# sed (which mis-handles the `&`, `/`, and `$` characters in passwords/URIs).
+command_exists python3   || missing+=("python3")
 
 if [[ ${#missing[@]} -gt 0 ]]; then
     fail "Missing required tools: ${missing[*]}"
     echo "  Install them and re-run this script."
     exit 1
 fi
-ok "dotnet, az, terraform found"
+ok "dotnet, az, terraform, python3 found"
 
 # ── Azure Login Check ──────────────────────────────────────────────────────
 
@@ -348,11 +352,16 @@ embedding_deployment_name=$(echo "$outputs_json" | python3 -c "import sys,json; 
 tenant_id=$(echo "$outputs_json"               | python3 -c "import sys,json; print(json.load(sys.stdin)['tenant_id']['value'])")
 bff_client_id=$(echo "$outputs_json"           | python3 -c "import sys,json; print(json.load(sys.stdin)['bff_client_id']['value'])")
 customer_map_json=$(echo "$outputs_json"       | python3 -c "import sys,json; print(json.load(sys.stdin)['customer_map_json']['value'])")
+test_user_upns_json=$(echo "$outputs_json"     | python3 -c "import sys,json; print(json.dumps(json.load(sys.stdin)['test_user_upns']['value']))")
 ok "Foundry project endpoint: $foundry_project_endpoint"
 ok "Chat deployment: $chat_deployment_name"
 ok "Embedding deployment: $embedding_deployment_name"
 ok "Tenant ID: $tenant_id"
 ok "BFF SPA client ID: $bff_client_id"
+
+# Pull sensitive password output via terraform's targeted -json mode so we
+# never write it to disk except inside the gitignored credentials file below.
+test_user_passwords_json=$(terraform -chdir="$TERRAFORM_DIR" output -json test_user_passwords)
 
 # ── Write test-user credentials to a gitignored file ───────────────
 #
@@ -368,11 +377,16 @@ step "Writing test-user credentials"
 credentials_path="$REPO_ROOT/local-dev-credentials.txt"
 credentials_relative="${credentials_path#$REPO_ROOT/}"
 
-python3 - "$credentials_path" "$tenant_id" <<PY
-import datetime, json, os, sys
-dst, tenant = sys.argv[1], sys.argv[2]
-upns      = json.loads(os.popen("terraform -chdir='$TERRAFORM_DIR' output -json test_user_upns").read())
-passwords = json.loads(os.popen("terraform -chdir='$TERRAFORM_DIR' output -json test_user_passwords").read())
+TEST_USER_UPNS_JSON="$test_user_upns_json" \
+TEST_USER_PASSWORDS_JSON="$test_user_passwords_json" \
+CREDENTIALS_PATH="$credentials_path" \
+TENANT_ID_OUT="$tenant_id" \
+python3 - <<'PY'
+import datetime, json, os
+upns      = json.loads(os.environ['TEST_USER_UPNS_JSON'])
+passwords = json.loads(os.environ['TEST_USER_PASSWORDS_JSON'])
+dst       = os.environ['CREDENTIALS_PATH']
+tenant    = os.environ['TENANT_ID_OUT']
 lines = [
     "# Local-dev test-user credentials",
     f"# Generated: {datetime.datetime.now().astimezone().strftime('%Y-%m-%d %H:%M:%S %z')}",

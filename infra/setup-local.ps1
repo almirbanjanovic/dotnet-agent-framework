@@ -422,7 +422,6 @@ $testUserPasswords = $testUserPasswordsJson | ConvertFrom-Json
 Write-Step "Writing test-user credentials"
 
 $credentialsPath = Join-Path $RepoRoot "local-dev-credentials.txt"
-$credentialsRelative = (Resolve-Path -Relative $credentialsPath).TrimStart('.','/','\')
 
 $credLines = @(
     "# Local-dev test-user credentials"
@@ -439,6 +438,7 @@ foreach ($key in ($testUserUpns.PSObject.Properties.Name | Sort-Object)) {
     $credLines += ("{0,-7}  {1,-50}  {2}" -f $key, $upn, $password)
 }
 Set-Content -Path $credentialsPath -Value $credLines -Encoding UTF8
+$credentialsRelative = (Resolve-Path -Relative $credentialsPath).TrimStart('.','/','\')
 Write-Ok "Wrote $credentialsRelative"
 
 # ── Generate appsettings.Local.json from Templates ──────────────────────────
