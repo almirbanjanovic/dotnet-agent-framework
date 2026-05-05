@@ -14,14 +14,9 @@ output "domain" {
 }
 
 output "test_user_passwords" {
-  description = "Map of test user key → generated password. NOTE: For users in `imported_user_keys`, this is the password terraform GENERATED for this run, but `lifecycle.ignore_changes = [password]` on `azuread_user.test` means the user's ACTUAL password is whatever was set on the original create — these printed values do not match the live account."
+  description = "Map of test user key → generated password. Always reflects the live password — setup-local deletes orphan users before each apply, so every user is freshly created with the password printed below."
   value       = local.user_passwords
   sensitive   = true
-}
-
-output "imported_user_keys" {
-  description = "List of test user keys (e.g. [\"emma\", \"sarah\"]) that already existed in the tenant and were imported into state instead of created. Their passwords from `test_user_passwords` are NOT real — use the password printed by the original setup-local run, or reset via the Azure portal."
-  value       = sort(keys(local.import_targets))
 }
 
 output "test_user_upns" {

@@ -96,7 +96,7 @@ Open the Aspire dashboard at `https://localhost:15888`. Confirm 8 services are g
 
 ### Step 2 — Single-agent pattern: drive `crm-agent` through the chat UI
 
-Open `http://localhost:5008`, sign in as **emma.wilson@<your-tenant-domain>** (or any test user `setup-local` printed), and pick **Emma Wilson** in the customer picker. Type into the chat:
+Open `http://localhost:5008`, sign in as **emma.wilson-local@<your-tenant-domain>** (UPN + password from `local-dev-credentials.txt` at the repo root), and pick **Emma Wilson** in the customer picker. Type into the chat:
 
 > Where is my last order?
 

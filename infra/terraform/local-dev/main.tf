@@ -83,6 +83,12 @@ module "entra" {
     "http://localhost:5008/authentication/logout-callback",
   ]
 
+  # Suffix every test-user UPN with `-local` (→ `emma.wilson-local@<tenant>`,
+  # etc.) so a developer running BOTH this Local Track and the Full Azure
+  # Track in the same tenant doesn't hit `userPrincipalName already exists`
+  # — tenants enforce UPN uniqueness.
+  mail_nickname_suffix = "-local"
+
   # Default test_users (8 customers: Emma, James, Sarah, David, Lisa,
   # Mike, Anna, Tom) seeded by the entra module — same set used by the
   # Full Azure Track. Override here only if you need a different mix.

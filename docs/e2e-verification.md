@@ -34,7 +34,7 @@ Before running any scenario:
 5. **UI is authenticated and ready:**
    - [ ] Navigate to http://localhost:5008
    - [ ] First load redirects to `login.microsoftonline.com`
-   - [ ] Sign in as `emma.wilson@<your-tenant>` (test user printed by `setup-local`)
+   - [ ] Sign in as `emma.wilson-local@<your-tenant>` (UPN + password in `local-dev-credentials.txt` at the repo root)
    - [ ] User badge shows "Emma Wilson" — BFF mapped UPN → customer 101
    - [ ] Chat input box is active and focused
 

@@ -75,16 +75,154 @@ function Test-Command {
     $null -ne (Get-Command $Name -ErrorAction SilentlyContinue)
 }
 
+# ── Backend Bootstrap (shared by Cleanup and main path) ────────────────────
+#
+# The local-dev stack stores Terraform state REMOTELY in Azure Blob Storage,
+# co-located with the rest of the stack inside the working resource group
+# `rg-dotnetagent-localdev`. Storage account, container, and the working RG
+# itself are bootstrapped via the Azure CLI (out-of-band of Terraform), so
+# `terraform destroy` never touches them — state survives:
+#   - `setup-local -Cleanup` (which only runs `terraform destroy`)
+#   - re-running `setup-local` end-to-end (idempotent create-if-absent)
+# To wipe everything for real, run `az group delete --name rg-dotnetagent-localdev`.
+#
+# This function is idempotent and runs in BOTH cleanup and main flows.
+function Initialize-Backend {
+    param(
+        [string]$WorkingResourceGroup,
+        [string]$Location
+    )
+
+    # ── Working RG (out-of-band; Terraform reads it via a data source) ─────
+    az group create `
+        --name $WorkingResourceGroup `
+        --location $Location `
+        --tags "managed-by=setup-local" "purpose=local-development" `
+        --output none
+    if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to create working RG $WorkingResourceGroup"; exit 1 }
+
+    # ── State backend names (deterministic, subscription-scoped) ───────────
+    $subId = az account show --query id -o tsv 2>$null
+    if ([string]::IsNullOrWhiteSpace($subId)) {
+        Write-Fail "Could not determine subscription ID"
+        exit 1
+    }
+    # Subscription ID hashed → 8 hex chars for storage-account uniqueness.
+    # Using a hash (not the raw subId prefix) avoids leaking subscription
+    # identifiers into a globally-visible storage-account name.
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $hashBytes = $sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($subId))
+    $sha.Dispose()
+    $suffix = (-join ($hashBytes | ForEach-Object { $_.ToString("x2") })).Substring(0, 8)
+    $storageAccount = "stdotnetagentldtf$suffix"  # 17 + 8 = 25 chars… trim to 24
+    if ($storageAccount.Length -gt 24) { $storageAccount = $storageAccount.Substring(0, 24) }
+    $containerName = "tfstate"
+    $stateKey      = "local-dev.tfstate"
+
+    Write-Step "Bootstrapping Terraform state backend"
+    Write-Ok "Resource group:   $WorkingResourceGroup"
+    Write-Ok "Storage account:  $storageAccount"
+    Write-Ok "Container / key:  $containerName / $stateKey"
+
+    # ── Storage account (idempotent) ───────────────────────────────────────
+    $null = az storage account show --resource-group $WorkingResourceGroup --name $storageAccount 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        az storage account create `
+            --resource-group $WorkingResourceGroup `
+            --name $storageAccount `
+            --location $Location `
+            --sku Standard_LRS `
+            --kind StorageV2 `
+            --min-tls-version TLS1_2 `
+            --allow-blob-public-access false `
+            --output none
+        if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to create storage account $storageAccount"; exit 1 }
+        Write-Ok "Created storage account"
+    } else {
+        Write-Ok "Storage account already exists"
+    }
+
+    # ── RBAC: Storage Blob Data Contributor for the deployer ──────────────
+    # Required for `use_azuread_auth = true` (no storage keys involved).
+    $deployerOid = az ad signed-in-user show --query id -o tsv 2>$null
+    if ([string]::IsNullOrWhiteSpace($deployerOid)) {
+        Write-Fail "Could not determine deployer object ID"
+        exit 1
+    }
+    $stScope = az storage account show --name $storageAccount --resource-group $WorkingResourceGroup --query id -o tsv
+    $existingRole = az role assignment list `
+        --assignee $deployerOid `
+        --scope $stScope `
+        --role "Storage Blob Data Contributor" `
+        --query "[0].id" -o tsv 2>$null
+    if (-not $existingRole) {
+        az role assignment create `
+            --assignee-object-id $deployerOid `
+            --assignee-principal-type User `
+            --role "Storage Blob Data Contributor" `
+            --scope $stScope --output none 2>$null
+        Write-Ok "Granted Storage Blob Data Contributor — waiting 30s for RBAC propagation"
+        Start-Sleep -Seconds 30
+    } else {
+        Write-Ok "Storage Blob Data Contributor already assigned"
+    }
+
+    # ── Container (with retry — RBAC propagation can lag) ─────────────────
+    $containerReady = $false
+    for ($attempt = 1; $attempt -le 6; $attempt++) {
+        $null = az storage container show --name $containerName --account-name $storageAccount --auth-mode login 2>&1
+        if ($LASTEXITCODE -eq 0) { $containerReady = $true; break }
+        $null = az storage container create --name $containerName --account-name $storageAccount --auth-mode login 2>&1
+        if ($LASTEXITCODE -eq 0) { $containerReady = $true; break }
+        if ($attempt -lt 6) {
+            Write-Host "    Waiting for RBAC (attempt $attempt/6) — retrying in 15s" -ForegroundColor DarkGray
+            Start-Sleep -Seconds 15
+        }
+    }
+    if (-not $containerReady) { Write-Fail "Failed to create $containerName container"; exit 1 }
+    Write-Ok "Container ready: $containerName"
+
+    # ── Generate backend.hcl (gitignored — see infra/.gitignore) ──────────
+    $backendFile = Join-Path $TerraformDir "backend.hcl"
+    Set-Content -Path $backendFile -Encoding UTF8 -Value @"
+resource_group_name  = "$WorkingResourceGroup"
+storage_account_name = "$storageAccount"
+container_name       = "$containerName"
+key                  = "$stateKey"
+use_azuread_auth     = true
+"@
+    Write-Ok "Generated backend.hcl"
+
+    # ── terraform init with the remote backend ────────────────────────────
+    # `-reconfigure` discards any prior backend config (e.g. legacy local
+    # state from before this script was migrated to remote state) WITHOUT
+    # auto-migrating. If you have a populated local state file you want to
+    # migrate, run once manually:
+    #   terraform -chdir=infra/terraform/local-dev init -migrate-state -backend-config=backend.hcl
+    Write-Step "Initializing Terraform with remote backend"
+    terraform -chdir="$TerraformDir" init -reconfigure -backend-config="$backendFile" -input=false
+    if ($LASTEXITCODE -ne 0) { Write-Fail "terraform init failed"; exit 1 }
+    Write-Ok "Terraform initialized (remote state in $storageAccount/$containerName/$stateKey)"
+}
+
+# ── Compute working RG name (used by both cleanup and main) ────────────────
+$WorkingRg       = "rg-dotnetagent-localdev"
+$WorkingLocation = if ([string]::IsNullOrWhiteSpace($env:TF_VAR_location)) { "centralus" } else { $env:TF_VAR_location }
+
 # ── Cleanup Mode ────────────────────────────────────────────────────────────
 
 if ($Cleanup) {
+    # Initialize backend first so `terraform destroy` talks to the remote
+    # state. The working RG, storage account, and container are NOT destroyed.
+    Initialize-Backend -WorkingResourceGroup $WorkingRg -Location $WorkingLocation
+
     Write-Step "Destroying Terraform resources"
     terraform -chdir="$TerraformDir" destroy -auto-approve -input=false
     if ($LASTEXITCODE -ne 0) {
         Write-Fail "Terraform destroy failed (exit code $LASTEXITCODE)"
         exit 1
     }
-    Write-Ok "Terraform resources destroyed"
+    Write-Ok "Terraform resources destroyed (state backend in $WorkingRg preserved)"
 
     Write-Step "Removing generated appsettings.Local.json files"
     $allComponents = $TemplateComponents + $StaticComponents
@@ -94,6 +232,12 @@ if ($Cleanup) {
             Remove-Item $settingsFile -Force
             Write-Ok "Removed src/$component/appsettings.Local.json"
         }
+    }
+
+    $credentialsFile = Join-Path $RepoRoot "local-dev-credentials.txt"
+    if (Test-Path $credentialsFile) {
+        Remove-Item $credentialsFile -Force
+        Write-Ok "Removed local-dev-credentials.txt"
     }
 
     Write-Host "`nCleanup complete." -ForegroundColor Green
@@ -130,35 +274,14 @@ Write-Ok "Logged in as $($accountInfo.user.name) (subscription: $($accountInfo.n
 # ── Compute Resource Group Name ─────────────────────────────────────────────
 
 Write-Step "Computing resource group name"
-$env:TF_VAR_resource_group_name = "rg-dotnetagent-localdev"
+$env:TF_VAR_resource_group_name = $WorkingRg
 Write-Ok "Resource group: $($env:TF_VAR_resource_group_name)"
 
-# ── Ensure Resource Group Exists ────────────────────────────────────────────
-# The Terraform stack reads the RG via a `data` source so `terraform destroy`
-# (cleanup) tears down the Foundry account but leaves the RG intact for next
-# time. We create it here, out-of-band, idempotently.
-Write-Step "Ensuring resource group exists"
-$rgLocation = if ([string]::IsNullOrWhiteSpace($env:TF_VAR_location)) { "centralus" } else { $env:TF_VAR_location }
-az group create `
-    --name $env:TF_VAR_resource_group_name `
-    --location $rgLocation `
-    --tags "managed-by=setup-local" "purpose=local-development" `
-    --output none
-if ($LASTEXITCODE -ne 0) {
-    Write-Fail "Failed to create or verify resource group $($env:TF_VAR_resource_group_name)"
-    exit 1
-}
-Write-Ok "Resource group ready: $($env:TF_VAR_resource_group_name) ($rgLocation)"
-
-# ── Terraform Init ──────────────────────────────────────────────────────────
-
-Write-Step "Initializing Terraform"
-terraform -chdir="$TerraformDir" init -input=false
-if ($LASTEXITCODE -ne 0) {
-    Write-Fail "Terraform init failed (exit code $LASTEXITCODE)"
-    exit 1
-}
-Write-Ok "Terraform initialized"
+# ── Bootstrap Terraform state backend + init ────────────────────────────────
+# Initialize-Backend also creates the working RG (idempotent) since the state
+# storage account lives there — the Terraform stack reads the RG via a `data`
+# source, so it's never in TF state and `terraform destroy` won't touch it.
+Initialize-Backend -WorkingResourceGroup $WorkingRg -Location $WorkingLocation
 
 # ── Purge soft-deleted resources ────────────────────────────────────────────
 # Cognitive Services accounts and Key Vaults use soft-delete by default. If a
@@ -192,6 +315,62 @@ foreach ($kv in ($softKv -split "`n" | Where-Object { $_ })) {
 
 if (-not $softCog -and -not $softKv) {
     Write-Ok "No soft-deleted resources to purge"
+}
+
+# ── Delete orphan Entra test users ──────────────────────────────────────────
+#
+# Terraform owns these users completely. If a UPN already exists in the
+# tenant, it is leftover state from a prior run that errored or was
+# destroyed without removing the Entra objects (Entra deletes are not
+# transactional with Terraform state). Nothing outside Terraform is
+# supposed to create these UPNs, so we delete any orphans here — the
+# subsequent `terraform apply` then creates them fresh from a clean slate.
+#
+# This is what makes setup-local idempotent: rerun it any number of times
+# and you get the same final state with the passwords printed at the end.
+Write-Step "Deleting orphan Entra test users (if any)"
+
+$tenantDomain = az rest --method GET --url 'https://graph.microsoft.com/v1.0/domains' `
+    --query "value[?isDefault].id | [0]" -o tsv 2>$null
+if ([string]::IsNullOrWhiteSpace($tenantDomain)) {
+    Write-Fail "Could not determine default tenant domain via Graph"
+    exit 1
+}
+Write-Ok "Tenant default domain: $tenantDomain"
+
+# Mirror of `var.test_users` defaults in
+# infra/terraform/modules/entra/v1/variables.tf — keep in sync.
+# The `-local` suffix matches `mail_nickname_suffix` passed from
+# infra/terraform/local-dev/main.tf so we look up the SAME UPNs Terraform
+# will create. The Full Azure Track uses no suffix, so its `emma.wilson@`
+# users are not deleted by this script.
+$TestUserNicknames = [ordered]@{
+    emma  = "emma.wilson-local"
+    james = "james.chen-local"
+    sarah = "sarah.miller-local"
+    david = "david.park-local"
+    lisa  = "lisa.torres-local"
+    mike  = "mike.johnson-local"
+    anna  = "anna.roberts-local"
+    tom   = "tom.garcia-local"
+}
+
+$deletedCount = 0
+foreach ($key in $TestUserNicknames.Keys) {
+    $upn = "$($TestUserNicknames[$key])@$tenantDomain"
+    $oid = az ad user show --id $upn --query id -o tsv 2>$null
+    if ([string]::IsNullOrWhiteSpace($oid)) { continue }
+
+    az ad user delete --id $upn 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Fail "Failed to delete orphan user $upn (object id $($oid.Trim()))"
+        exit 1
+    }
+    Write-Ok "Deleted orphan: $upn"
+    $deletedCount++
+}
+if ($deletedCount -eq 0) {
+    Write-Ok "No orphan test users found"
 }
 
 # ── Terraform Apply ─────────────────────────────────────────────────────────
@@ -231,10 +410,36 @@ Write-Ok "BFF SPA client ID: $bffClientId"
 $testUserPasswordsJson = terraform -chdir="$TerraformDir" output -json test_user_passwords
 $testUserPasswords = $testUserPasswordsJson | ConvertFrom-Json
 
-# Pre-existing users that terraform imported instead of creating. Their
-# passwords are unknown to this run — either the operator still has them
-# from the original setup-local invocation, or they need a portal reset.
-$importedUserKeys = @($outputs.imported_user_keys.value)
+# ── Write test-user credentials to a gitignored file ───────────────────────
+#
+# Each `terraform apply` rotates the 8 test-user passwords (we delete
+# orphans before applying so creates are always fresh). Printing them to the
+# terminal isn't practical for lab students — they need to copy individual
+# passwords back into the Blazor sign-in dialog as they exercise different
+# customer scenarios. Write them to a per-clone, gitignored file at the repo
+# root instead. The file is rewritten in full on every apply so it always
+# reflects the live passwords.
+Write-Step "Writing test-user credentials"
+
+$credentialsPath = Join-Path $RepoRoot "local-dev-credentials.txt"
+$credentialsRelative = (Resolve-Path -Relative $credentialsPath).TrimStart('.','/','\')
+
+$credLines = @(
+    "# Local-dev test-user credentials"
+    "# Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz')"
+    "# Tenant:    $tenantId"
+    "# WARNING:   gitignored — do not commit. Each `setup-local` run rotates these passwords."
+    ""
+    ("{0,-7}  {1,-50}  {2}" -f "key", "upn", "password")
+    ("{0,-7}  {1,-50}  {2}" -f "---", "---", "---")
+)
+foreach ($key in ($testUserUpns.PSObject.Properties.Name | Sort-Object)) {
+    $upn = $testUserUpns.$key
+    $password = $testUserPasswords.$key
+    $credLines += ("{0,-7}  {1,-50}  {2}" -f $key, $upn, $password)
+}
+Set-Content -Path $credentialsPath -Value $credLines -Encoding UTF8
+Write-Ok "Wrote $credentialsRelative"
 
 # ── Generate appsettings.Local.json from Templates ──────────────────────────
 
@@ -296,24 +501,9 @@ Write-Host "============================================================" -Foreg
 Write-Host "  Local Dev Setup Complete" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "  Sign in to the Blazor UI as one of these test users" -ForegroundColor White
-Write-Host "  (saved in your Entra tenant; passwords printed once):" -ForegroundColor White
-foreach ($key in ($testUserUpns.PSObject.Properties.Name | Sort-Object)) {
-    $upn = $testUserUpns.$key
-    if ($importedUserKeys -contains $key) {
-        Write-Host ("    {0,-7} {1,-50} <imported — use password from prior setup-local run>" -f $key, $upn) -ForegroundColor Yellow
-    } else {
-        $password = $testUserPasswords.$key
-        Write-Host ("    {0,-7} {1,-50} {2}" -f $key, $upn, $password)
-    }
-}
-if ($importedUserKeys.Count -gt 0) {
-    Write-Host ""
-    Write-Host "  Note: $($importedUserKeys.Count) user(s) already existed in this tenant" -ForegroundColor Yellow
-    Write-Host "  and were imported into terraform state. Their passwords were NOT reset." -ForegroundColor Yellow
-    Write-Host "  If you don't have the password from the original setup-local run, reset" -ForegroundColor Yellow
-    Write-Host "  it in the Azure portal under: Microsoft Entra ID > Users > <user> > Reset password." -ForegroundColor Yellow
-}
+Write-Host "  Sign-in credentials for the 8 test users have been written to:" -ForegroundColor White
+Write-Host "    $credentialsRelative" -ForegroundColor Yellow
+Write-Host "  (gitignored — each apply rotates the passwords)" -ForegroundColor DarkGray
 Write-Host ""
 Write-Host "  Port Map:" -ForegroundColor White
 foreach ($entry in $PortMap) {

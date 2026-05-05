@@ -45,3 +45,4 @@ variable "embedding_model_version" {
   type        = string
   default     = "1"
 }
+

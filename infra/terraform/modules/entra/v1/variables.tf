@@ -16,6 +16,12 @@ variable "redirect_uris" {
   default = ["http://localhost:5008/authentication/login-callback"]
 }
 
+variable "mail_nickname_suffix" {
+  description = "Suffix appended to every test user's mail_nickname (and therefore UPN) to keep test users from colliding with another deployment of this module in the same tenant. Tenants enforce UPN uniqueness, so the Local Track and Full Azure Track CANNOT both create `emma.wilson@<tenant>` — give one of them a suffix like `-local`. Empty by default."
+  type        = string
+  default     = ""
+}
+
 variable "test_users" {
   description = "Map of customer test users to create in Entra ID. Each maps to a pre-seeded customer in Cosmos DB / the in-memory CSV."
   type = map(object({

@@ -2,54 +2,36 @@
 # Entra Module v1 — Test Users
 # Creates: Test users with random passwords and app role assignments
 #
-# Idempotent against pre-existing users: if a previous setup-local run was
-# interrupted (or another developer in this tenant already provisioned the
-# same UPNs), the data source below detects them and the `import` block
-# brings them into terraform state instead of failing with
-# `Request_BadRequest: Another object with the same value for property
-# userPrincipalName already exists`.
+# Idempotency: terraform owns these users completely. The setup-local script
+# deletes any orphan UPNs in Entra (left from a prior failed/destroyed run)
+# BEFORE running `terraform apply`, so the create path here always starts
+# from a clean slate. We deliberately do NOT use a Terraform `import` block:
+# that path failed in practice because `data.azuread_users` returned empty
+# results in some tenants AND because `import` blocks driven by an `auto.tfvars`
+# variable still produced "will be created" plans without honoring the
+# import. Delete-then-create is simpler, deterministic, and Terraform-only.
 # =============================================================================
 
-# -----------------------------------------------------------------------------
-# Detect pre-existing test users
-# `ignore_missing = true` means a UPN that doesn't exist is silently dropped
-# from the result set instead of failing the plan.
-# -----------------------------------------------------------------------------
-
 locals {
-  desired_upns = {
+  # Effective mail_nickname (= UPN local-part) per user. The suffix lets the
+  # Local Track and Full Azure Track coexist in the same tenant without UPN
+  # collisions — caller passes `mail_nickname_suffix = "-local"` for one of
+  # them. Empty suffix = vanilla nicknames.
+  effective_nicknames = {
     for key, user in var.test_users :
-    key => "${user.mail_nickname}@${local.domain}"
-  }
-}
-
-data "azuread_users" "existing" {
-  user_principal_names = values(local.desired_upns)
-  ignore_missing       = true
-}
-
-locals {
-  # Lower-case UPN → object_id (Entra UPN comparisons are case-insensitive).
-  existing_upn_to_oid = {
-    for u in data.azuread_users.existing.users :
-    lower(u.user_principal_name) => u.object_id
+    key => "${user.mail_nickname}${var.mail_nickname_suffix}"
   }
 
-  # user_key → object_id, only for keys whose UPN was found in the tenant.
-  import_targets = {
-    for key, upn in local.desired_upns :
-    key => local.existing_upn_to_oid[lower(upn)]
-    if contains(keys(local.existing_upn_to_oid), lower(upn))
+  desired_upns = {
+    for key, nick in local.effective_nicknames :
+    key => "${nick}@${local.domain}"
   }
 }
 
 # -----------------------------------------------------------------------------
 # Random Passwords (human-readable format: Contoso-<Pet>-<Number>!#)
-# Generated for ALL users (terraform doesn't allow conditional resources),
-# but only NEW users actually receive this password — for imported users,
-# `lifecycle.ignore_changes = [password]` on `azuread_user.test` preserves
-# whatever password the prior run set. The setup-local script consults
-# `imported_user_keys` to decide which passwords to print.
+# Always freshly generated — setup-local deletes orphan users before apply
+# so every `azuread_user.test` is a brand-new create that uses this password.
 # -----------------------------------------------------------------------------
 
 resource "random_pet" "user_password_pet" {
@@ -72,40 +54,17 @@ locals {
 
 # -----------------------------------------------------------------------------
 # Test Users
-# `import` block (Terraform 1.7+) brings any pre-existing UPNs into state
-# before terraform plans changes. After import, terraform diffs the imported
-# state against the desired config — `password` is excluded from drift
-# detection so existing users keep their original password.
 # -----------------------------------------------------------------------------
-
-import {
-  for_each = local.import_targets
-  to       = azuread_user.test[each.key]
-  id       = each.value
-}
 
 resource "azuread_user" "test" {
   for_each = var.test_users
 
-  user_principal_name   = "${each.value.mail_nickname}@${local.domain}"
+  user_principal_name   = local.desired_upns[each.key]
   display_name          = each.value.display_name
-  mail_nickname         = each.value.mail_nickname
+  mail_nickname         = local.effective_nicknames[each.key]
   password              = local.user_passwords[each.key]
   force_password_change = false
   account_enabled       = true
-
-  # `password` is set on create only. Once imported, terraform will not
-  # rotate it on subsequent plans — preserves the password from whichever
-  # run originally provisioned the user.
-  # `display_name` and `mail_nickname` are only set on create as well so
-  # an imported user with manually-edited display name isn't overwritten.
-  lifecycle {
-    ignore_changes = [
-      password,
-      display_name,
-      mail_nickname,
-    ]
-  }
 }
 
 # -----------------------------------------------------------------------------

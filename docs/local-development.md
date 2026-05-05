@@ -62,13 +62,15 @@ From the repository root:
 
 **What this does:**
 
-1. Creates the resource group `rg-dotnetagent-localdev` out-of-band via `az group create` (idempotent; the RG is **not** Terraform-managed so `-Cleanup` later leaves it intact).
-2. Runs `terraform apply` in `infra/terraform/local-dev/` — provisions inside that RG:
+1. Creates the working resource group `rg-dotnetagent-localdev` out-of-band via `az group create` (idempotent; the RG is **not** Terraform-managed so `-Cleanup` later leaves it intact).
+2. Bootstraps a Standard_LRS Storage Account + `tfstate` container **inside the working RG**, then grants you `Storage Blob Data Contributor` on it. Terraform state for the local-dev stack lives there as remote state — it survives `setup-local -Cleanup` because the storage account is bootstrapped out-of-band (Azure CLI), never enters Terraform state, and `terraform destroy` can't touch it. To wipe state for real, delete the working RG: `az group delete --name rg-dotnetagent-localdev`.
+3. Generates `infra/terraform/local-dev/backend.hcl` (gitignored) and runs `terraform init -reconfigure -backend-config=backend.hcl`.
+4. Runs `terraform apply` in `infra/terraform/local-dev/` — provisions inside the working RG:
    - 1 Azure AI Services account (Foundry) with a default project (`default-project`)
    - 2 model deployments: chat (`gpt-4.1`) and embeddings (`text-embedding-3-small`)
    - Grants you `Cognitive Services OpenAI User` on the Foundry account and `Azure AI User` on the project
-3. Reads the Foundry **project** endpoint, deployment names, and tenant ID from Terraform output.
-4. Generates `appsettings.Local.json` for each component from `appsettings.Local.json.template`:
+5. Reads the Foundry **project** endpoint, deployment names, and tenant ID from Terraform output.
+6. Generates `appsettings.Local.json` for each component from `appsettings.Local.json.template`:
    - Agents (`crm-agent`, `product-agent`, `orchestrator-agent`, `simple-agent`) and `knowledge-mcp` get `Foundry:ProjectEndpoint`, `Foundry:DeploymentName` (or `Foundry:EmbeddingDeploymentName`), and `AzureAd:TenantId` substituted in.
    - `crm-api` and `knowledge-mcp` get `DataMode = InMemory` so they load CSV/TXT data from `data/`.
    - `crm-mcp`, `bff-api`, and `blazor-ui` get static port + URL configuration only (no Foundry credentials needed — they call other services over HTTP).
@@ -97,7 +99,11 @@ When you're finished with the labs, tear down the local Foundry environment:
 
 This destroys the Foundry resources, **the Entra SPA app registration, and the 8 test users**, and removes the generated `appsettings.Local.json` files.
 
-**The resource group `rg-dotnetagent-localdev` is intentionally preserved.** It's bootstrapped out-of-band by `setup-local`, looked up via a Terraform `data` source, and never enters Terraform state — so `terraform destroy` (which `-Cleanup` runs) cannot touch it. Any diagnostic resources you've placed alongside the Foundry account survive a tear-down/re-apply cycle. To delete the RG itself, run `az group delete --name rg-dotnetagent-localdev` manually.
+**The working RG is intentionally preserved:**
+
+- `rg-dotnetagent-localdev` is bootstrapped out-of-band by `setup-local`, looked up via a Terraform `data` source, and never enters Terraform state — so `terraform destroy` cannot touch it. It also holds the Standard_LRS storage account backing Terraform's remote state (also bootstrapped out-of-band). Any diagnostic resources you've placed alongside the Foundry account survive a tear-down/re-apply cycle, and so does TF state.
+
+To wipe everything for real, run `az group delete --name rg-dotnetagent-localdev`.
 
 ---
 
@@ -182,19 +188,22 @@ in your tenant plus 8 test users matching the seeded customers in
 
 | Test user | UPN | Customer ID | Loyalty Tier |
 |-----------|-----|-------------|--------------|
-| Emma Wilson   | `emma.wilson@<your-tenant>`   | 101 | Silver |
-| James Chen    | `james.chen@<your-tenant>`    | 102 | Bronze |
-| Sarah Miller  | `sarah.miller@<your-tenant>`  | 103 | Gold |
-| David Park    | `david.park@<your-tenant>`    | 104 | Silver |
-| Lisa Torres   | `lisa.torres@<your-tenant>`   | 105 | Bronze |
-| Mike Johnson  | `mike.johnson@<your-tenant>`  | 106 | Gold |
-| Anna Roberts  | `anna.roberts@<your-tenant>`  | 107 | Bronze |
-| Tom Garcia    | `tom.garcia@<your-tenant>`    | 108 | Silver |
+| Emma Wilson   | `emma.wilson-local@<your-tenant>`   | 101 | Silver |
+| James Chen    | `james.chen-local@<your-tenant>`    | 102 | Bronze |
+| Sarah Miller  | `sarah.miller-local@<your-tenant>`  | 103 | Gold |
+| David Park    | `david.park-local@<your-tenant>`    | 104 | Silver |
+| Lisa Torres   | `lisa.torres-local@<your-tenant>`   | 105 | Bronze |
+| Mike Johnson  | `mike.johnson-local@<your-tenant>`  | 106 | Gold |
+| Anna Roberts  | `anna.roberts-local@<your-tenant>`  | 107 | Bronze |
+| Tom Garcia    | `tom.garcia-local@<your-tenant>`    | 108 | Silver |
 
-`setup-local` prints each generated password to your terminal once — copy them somewhere
-safe (the local Terraform state retains them, but they are never written to disk by
-the script). The BFF maps each UPN → customer ID via `AzureAd:CustomerMap` in
-`src/bff-api/appsettings.Local.json`, so `emma.wilson` always resolves to
+The `-local` suffix exists so the Local Track and Full Azure Track can both
+run in the same tenant — the Full Azure Track creates the unsuffixed
+`emma.wilson@<tenant>` and tenants enforce UPN uniqueness. `setup-local`
+writes each generated password to `local-dev-credentials.txt` at the repo root
+(gitignored — each `setup-local` run rotates the passwords, so the file is rewritten in full).
+The BFF maps each UPN → customer ID via `AzureAd:CustomerMap` in
+`src/bff-api/appsettings.Local.json`, so `emma.wilson-local` always resolves to
 customer `101` (Silver tier, Portland OR).
 
 If you need to bypass MSAL for an automated test, set `AzureAd:Enabled = false`

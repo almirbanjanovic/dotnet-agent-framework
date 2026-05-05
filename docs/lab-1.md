@@ -43,15 +43,16 @@ chmod +x infra/setup-local.sh
 
 The script:
 
-1. Creates the resource group `rg-dotnetagent-localdev` out-of-band via `az group create` (idempotent; not Terraform-managed, so it survives `setup-local -Cleanup`).
-2. Runs `terraform apply` in `infra/terraform/local-dev/` to create inside that RG:
+1. Creates the working resource group `rg-dotnetagent-localdev` out-of-band via `az group create` (idempotent; not Terraform-managed, so it survives `setup-local -Cleanup`).
+2. Bootstraps a Standard_LRS storage account + `tfstate` container in the working RG, grants you `Storage Blob Data Contributor`, generates `infra/terraform/local-dev/backend.hcl` (gitignored), and runs `terraform init -reconfigure -backend-config=backend.hcl`. Terraform state is stored **remotely** in that storage account so it survives `setup-local -Cleanup` (the storage account isn't in TF state and `terraform destroy` won't touch it). To wipe state for real, run `az group delete --name rg-dotnetagent-localdev`.
+3. Runs `terraform apply` in `infra/terraform/local-dev/` to create inside the working RG:
    - 1 Azure AI Foundry account with a default project (`default-project`)
    - 2 model deployments: chat (`gpt-4.1`) + embeddings (`text-embedding-3-small`)
    - Grants you `Cognitive Services OpenAI User` on the account and `Azure AI User` on the project
    - **Microsoft Entra:** a SPA app registration (`app-dotnetagent-local-localdev-bff`) with `http://localhost:5008/authentication/login-callback` redirect URIs, the `Customer` app role, plus 8 test users (Emma Wilson, James Chen, Sarah Miller, David Park, Lisa Torres, Mike Johnson, Anna Roberts, Tom Garcia) with the role assigned
-3. Reads the Foundry project endpoint, deployment names, tenant ID, BFF client ID, and customer-map JSON from Terraform output.
-4. Renders each `src/<component>/appsettings.Local.json.template` into a per-component `appsettings.Local.json`. Auth everywhere is `DefaultAzureCredential` to Azure resources; user sign-in to the Blazor UI is real MSAL/Entra.
-5. Prints each test user's UPN and generated password to your terminal **once** — copy them somewhere safe.
+4. Reads the Foundry project endpoint, deployment names, tenant ID, BFF client ID, and customer-map JSON from Terraform output.
+5. Renders each `src/<component>/appsettings.Local.json.template` into a per-component `appsettings.Local.json`. Auth everywhere is `DefaultAzureCredential` to Azure resources; user sign-in to the Blazor UI is real MSAL/Entra.
+6. Writes each test user's UPN and generated password to `local-dev-credentials.txt` at the repo root — gitignored, rewritten on every apply (passwords rotate each run).
 
 The Entra side requires Application Developer + User Administrator (or higher) in the tenant where you ran `az login`. See the [Local Track prerequisites in Lab 0](lab-0.md#prerequisites) if you're missing those roles.
 
@@ -130,7 +131,7 @@ The same three primitives — `DefaultAzureCredential` → `AIProjectClient.AsAI
 dotnet run --project src/AppHost
 ```
 
-The Aspire AppHost starts all 8 components and a dashboard at **`https://localhost:15888`**. Open the Blazor UI at **`http://localhost:5008`** and you'll be redirected to `login.microsoftonline.com`. Sign in as one of the test users `setup-local` printed (e.g., `emma.wilson@<your-tenant-domain>`).
+The Aspire AppHost starts all 8 components and a dashboard at **`https://localhost:15888`**. Open the Blazor UI at **`http://localhost:5008`** and you'll be redirected to `login.microsoftonline.com`. Sign in as one of the test users from `local-dev-credentials.txt` (e.g., `emma.wilson-local@<your-tenant-domain>` — the `-local` suffix keeps Local-Track UPNs from colliding with the Full Azure Track in the same tenant).
 
 The BFF validates the JWT, looks up the signed-in UPN in `AzureAd:CustomerMap`, and scopes every downstream call to that customer's data — same wire contract as the Full Azure Track.
 

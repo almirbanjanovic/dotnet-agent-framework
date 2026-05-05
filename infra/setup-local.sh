@@ -51,12 +51,141 @@ fail()  { echo -e "  \033[31m[FAIL]\033[0m $1"; }
 
 command_exists() { command -v "$1" &>/dev/null; }
 
+# ── Working RG (used by both cleanup and main) ──────────────────────────────
+WORKING_RG="rg-dotnetagent-localdev"
+WORKING_LOCATION="${TF_VAR_location:-centralus}"
+
+# ── Backend Bootstrap (shared by cleanup and main path) ─────────────────────
+#
+# The local-dev stack stores Terraform state REMOTELY in Azure Blob Storage,
+# co-located with the rest of the stack inside the working resource group
+# `rg-dotnetagent-localdev`. Storage account, container, and the working RG
+# itself are bootstrapped via the Azure CLI (out-of-band of Terraform), so
+# `terraform destroy` never touches them — state survives:
+#   - `setup-local.sh --cleanup` (which only runs `terraform destroy`)
+#   - re-running `setup-local.sh` end-to-end (idempotent create-if-absent)
+# To wipe everything for real, run `az group delete --name rg-dotnetagent-localdev`.
+#
+# Idempotent. Runs in BOTH cleanup and main flows.
+initialize_backend() {
+    local working_rg="$1"
+    local location="$2"
+
+    # ── Working RG (out-of-band; Terraform reads it via a data source) ─────
+    az group create \
+        --name "$working_rg" \
+        --location "$location" \
+        --tags "managed-by=setup-local" "purpose=local-development" \
+        --output none
+
+    local sub_id
+    sub_id=$(az account show --query id -o tsv 2>/dev/null)
+    if [[ -z "$sub_id" ]]; then
+        fail "Could not determine subscription ID"
+        exit 1
+    fi
+    # Hash the subscription ID → 8 hex chars (avoids leaking the raw subId
+    # prefix into a globally-visible storage account name).
+    local suffix
+    suffix=$(printf '%s' "$sub_id" | sha256sum | cut -c1-8)
+    local storage_account="stdotnetagentldtf${suffix}"
+    storage_account="${storage_account:0:24}"
+    local container_name="tfstate"
+    local state_key="local-dev.tfstate"
+
+    step "Bootstrapping Terraform state backend"
+    ok "Resource group:   $working_rg"
+    ok "Storage account:  $storage_account"
+    ok "Container / key:  $container_name / $state_key"
+
+    if ! az storage account show --resource-group "$working_rg" --name "$storage_account" >/dev/null 2>&1; then
+        az storage account create \
+            --resource-group "$working_rg" \
+            --name "$storage_account" \
+            --location "$location" \
+            --sku Standard_LRS \
+            --kind StorageV2 \
+            --min-tls-version TLS1_2 \
+            --allow-blob-public-access false \
+            --output none
+        ok "Created storage account"
+    else
+        ok "Storage account already exists"
+    fi
+
+    local deployer_oid
+    deployer_oid=$(az ad signed-in-user show --query id -o tsv 2>/dev/null)
+    if [[ -z "$deployer_oid" ]]; then
+        fail "Could not determine deployer object ID"
+        exit 1
+    fi
+    local st_scope
+    st_scope=$(az storage account show --name "$storage_account" --resource-group "$working_rg" --query id -o tsv)
+    local existing_role
+    existing_role=$(az role assignment list \
+        --assignee "$deployer_oid" \
+        --scope "$st_scope" \
+        --role "Storage Blob Data Contributor" \
+        --query "[0].id" -o tsv 2>/dev/null || true)
+    if [[ -z "$existing_role" ]]; then
+        az role assignment create \
+            --assignee-object-id "$deployer_oid" \
+            --assignee-principal-type User \
+            --role "Storage Blob Data Contributor" \
+            --scope "$st_scope" --output none 2>/dev/null
+        ok "Granted Storage Blob Data Contributor — waiting 30s for RBAC propagation"
+        sleep 30
+    else
+        ok "Storage Blob Data Contributor already assigned"
+    fi
+
+    local container_ready=0
+    for attempt in 1 2 3 4 5 6; do
+        if az storage container show --name "$container_name" --account-name "$storage_account" --auth-mode login >/dev/null 2>&1; then
+            container_ready=1; break
+        fi
+        if az storage container create --name "$container_name" --account-name "$storage_account" --auth-mode login >/dev/null 2>&1; then
+            container_ready=1; break
+        fi
+        if [[ $attempt -lt 6 ]]; then
+            echo "    Waiting for RBAC (attempt $attempt/6) — retrying in 15s"
+            sleep 15
+        fi
+    done
+    if [[ $container_ready -ne 1 ]]; then
+        fail "Failed to create $container_name container"
+        exit 1
+    fi
+    ok "Container ready: $container_name"
+
+    cat > "$TERRAFORM_DIR/backend.hcl" <<EOF
+resource_group_name  = "$working_rg"
+storage_account_name = "$storage_account"
+container_name       = "$container_name"
+key                  = "$state_key"
+use_azuread_auth     = true
+EOF
+    ok "Generated backend.hcl"
+
+    # `-reconfigure` discards any prior backend config (e.g. legacy local
+    # state from before this script was migrated to remote state) WITHOUT
+    # auto-migrating. To migrate a populated local state, run once manually:
+    #   terraform -chdir=infra/terraform/local-dev init -migrate-state -backend-config=backend.hcl
+    step "Initializing Terraform with remote backend"
+    terraform -chdir="$TERRAFORM_DIR" init -reconfigure -backend-config="$TERRAFORM_DIR/backend.hcl" -input=false
+    ok "Terraform initialized (remote state in $storage_account/$container_name/$state_key)"
+}
+
 # ── Cleanup Mode ────────────────────────────────────────────────────────────
 
 if [[ "${1:-}" == "--cleanup" ]]; then
+    # Initialize backend first so `terraform destroy` talks to the remote
+    # state. State RG / storage / container are NOT destroyed.
+    initialize_backend "$WORKING_RG" "$WORKING_LOCATION"
+
     step "Destroying Terraform resources"
     terraform -chdir="$TERRAFORM_DIR" destroy -auto-approve -input=false
-    ok "Terraform resources destroyed"
+    ok "Terraform resources destroyed (state backend in ${WORKING_RG} preserved)"
 
     step "Removing generated appsettings.Local.json files"
     ALL_COMPONENTS=("${TEMPLATE_COMPONENTS[@]}" "${STATIC_COMPONENTS[@]}")
@@ -67,6 +196,12 @@ if [[ "${1:-}" == "--cleanup" ]]; then
             ok "Removed src/$component/appsettings.Local.json"
         fi
     done
+
+    credentials_file="$REPO_ROOT/local-dev-credentials.txt"
+    if [[ -f "$credentials_file" ]]; then
+        rm -f "$credentials_file"
+        ok "Removed local-dev-credentials.txt"
+    fi
 
     echo -e "\n\033[32mCleanup complete.\033[0m"
     exit 0
@@ -102,27 +237,14 @@ ok "Logged in as $az_user (subscription: $az_sub)"
 # ── Compute Resource Group Name ─────────────────────────────────────────────
 
 step "Computing resource group name"
-export TF_VAR_resource_group_name="rg-dotnetagent-localdev"
+export TF_VAR_resource_group_name="$WORKING_RG"
 ok "Resource group: $TF_VAR_resource_group_name"
 
-# ── Ensure Resource Group Exists ────────────────────────────────────────────
-# The Terraform stack reads the RG via a `data` source so `terraform destroy`
-# (cleanup) tears down the Foundry account but leaves the RG intact for next
-# time. We create it here, out-of-band, idempotently.
-step "Ensuring resource group exists"
-rg_location="${TF_VAR_location:-centralus}"
-az group create \
-    --name "$TF_VAR_resource_group_name" \
-    --location "$rg_location" \
-    --tags "managed-by=setup-local" "purpose=local-development" \
-    --output none
-ok "Resource group ready: $TF_VAR_resource_group_name ($rg_location)"
-
-# ── Terraform Init ──────────────────────────────────────────────────────────
-
-step "Initializing Terraform"
-terraform -chdir="$TERRAFORM_DIR" init -input=false
-ok "Terraform initialized"
+# ── Bootstrap Terraform state backend + init ────────────────────────────────
+# initialize_backend also creates the working RG (idempotent) since the state
+# storage account lives there — the Terraform stack reads the RG via a `data`
+# source, so it's never in TF state and `terraform destroy` won't touch it.
+initialize_backend "$WORKING_RG" "$WORKING_LOCATION"
 
 # ── Purge soft-deleted resources ────────────────────────────────────────────
 # Cognitive Services accounts and Key Vaults use soft-delete by default. If a
@@ -162,6 +284,54 @@ if [[ -z "$soft_cog" && -z "$soft_kv" ]]; then
     ok "No soft-deleted resources to purge"
 fi
 
+# ── Delete orphan Entra test users ──────────────────────────────────────────
+#
+# Terraform owns these users completely. If a UPN already exists in the
+# tenant, it is leftover state from a prior run that errored or was
+# destroyed without removing the Entra objects (Entra deletes are not
+# transactional with Terraform state). Nothing outside Terraform is
+# supposed to create these UPNs, so we delete any orphans here — the
+# subsequent `terraform apply` then creates them fresh from a clean slate.
+step "Deleting orphan Entra test users (if any)"
+
+tenant_domain=$(az rest --method GET --url 'https://graph.microsoft.com/v1.0/domains' \
+    --query "value[?isDefault].id | [0]" -o tsv 2>/dev/null || true)
+if [[ -z "$tenant_domain" ]]; then
+    fail "Could not determine default tenant domain via Graph"
+    exit 1
+fi
+ok "Tenant default domain: $tenant_domain"
+
+# Mirror of `var.test_users` defaults in
+# infra/terraform/modules/entra/v1/variables.tf — keep in sync.
+# Use parallel arrays (not associative) to preserve declaration order on
+# bash 4 / 5 — declared assoc-array iteration order is unspecified.
+# The `-local` suffix matches `mail_nickname_suffix` passed from
+# infra/terraform/local-dev/main.tf so we look up the SAME UPNs Terraform
+# will create. The Full Azure Track uses no suffix, so its `emma.wilson@`
+# users are not deleted by this script.
+TEST_USER_KEYS=(emma james sarah david lisa mike anna tom)
+TEST_USER_NICKS=(emma.wilson-local james.chen-local sarah.miller-local david.park-local lisa.torres-local mike.johnson-local anna.roberts-local tom.garcia-local)
+
+# Build JSON map of {key: oid} for users that exist.
+deleted_count=0
+for i in "${!TEST_USER_KEYS[@]}"; do
+    upn="${TEST_USER_NICKS[$i]}@${tenant_domain}"
+    oid=$(az ad user show --id "$upn" --query id -o tsv 2>/dev/null || true)
+    if [[ -z "$oid" ]]; then
+        continue
+    fi
+    if ! az ad user delete --id "$upn" 2>/dev/null; then
+        fail "Failed to delete orphan user $upn (object id $oid)"
+        exit 1
+    fi
+    ok "Deleted orphan: $upn"
+    deleted_count=$((deleted_count + 1))
+done
+if [[ $deleted_count -eq 0 ]]; then
+    ok "No orphan test users found"
+fi
+
 # ── Terraform Apply ─────────────────────────────────────────────────────────
 
 step "Applying Terraform (this may take a few minutes)"
@@ -183,6 +353,41 @@ ok "Chat deployment: $chat_deployment_name"
 ok "Embedding deployment: $embedding_deployment_name"
 ok "Tenant ID: $tenant_id"
 ok "BFF SPA client ID: $bff_client_id"
+
+# ── Write test-user credentials to a gitignored file ───────────────
+#
+# Each `terraform apply` rotates the 8 test-user passwords (we delete
+# orphans before applying so creates are always fresh). Printing them to the
+# terminal isn't practical for lab students — they need to copy individual
+# passwords back into the Blazor sign-in dialog as they exercise different
+# customer scenarios. Write them to a per-clone, gitignored file at the repo
+# root instead. The file is rewritten in full on every apply so it always
+# reflects the live passwords.
+step "Writing test-user credentials"
+
+credentials_path="$REPO_ROOT/local-dev-credentials.txt"
+credentials_relative="${credentials_path#$REPO_ROOT/}"
+
+python3 - "$credentials_path" "$tenant_id" <<PY
+import datetime, json, os, sys
+dst, tenant = sys.argv[1], sys.argv[2]
+upns      = json.loads(os.popen("terraform -chdir='$TERRAFORM_DIR' output -json test_user_upns").read())
+passwords = json.loads(os.popen("terraform -chdir='$TERRAFORM_DIR' output -json test_user_passwords").read())
+lines = [
+    "# Local-dev test-user credentials",
+    f"# Generated: {datetime.datetime.now().astimezone().strftime('%Y-%m-%d %H:%M:%S %z')}",
+    f"# Tenant:    {tenant}",
+    "# WARNING:   gitignored — do not commit. Each setup-local run rotates these passwords.",
+    "",
+    f"{'key':<7}  {'upn':<50}  password",
+    f"{'---':<7}  {'---':<50}  ---",
+]
+for key in sorted(upns.keys()):
+    lines.append(f"{key:<7}  {upns[key]:<50}  {passwords[key]}")
+with open(dst, 'w', encoding='utf-8') as f:
+    f.write('\n'.join(lines) + '\n')
+PY
+ok "Wrote $credentials_relative"
 
 # ── Generate appsettings.Local.json from Templates ──────────────────────────
 
@@ -265,25 +470,9 @@ echo -e "\033[32m============================================================\03
 echo -e "\033[32m  Local Dev Setup Complete\033[0m"
 echo -e "\033[32m============================================================\033[0m"
 echo ""
-echo "  Sign in to the Blazor UI as one of these test users"
-echo "  (saved in your Entra tenant; passwords printed once):"
-python3 - <<PY
-import json, os
-upns      = json.loads(os.popen("terraform -chdir='$TERRAFORM_DIR' output -json test_user_upns").read())
-passwords = json.loads(os.popen("terraform -chdir='$TERRAFORM_DIR' output -json test_user_passwords").read())
-imported  = json.loads(os.popen("terraform -chdir='$TERRAFORM_DIR' output -json imported_user_keys").read()) or []
-for key in sorted(upns.keys()):
-    if key in imported:
-        print(f"    {key:<7} {upns[key]:<50} <imported \u2014 use password from prior setup-local run>")
-    else:
-        print(f"    {key:<7} {upns[key]:<50} {passwords[key]}")
-if imported:
-    print()
-    print(f"  Note: {len(imported)} user(s) already existed in this tenant and were imported")
-    print( "  into terraform state. Their passwords were NOT reset. If you don't have the")
-    print( "  password from the original setup-local run, reset it in the Azure portal under:")
-    print( "    Microsoft Entra ID > Users > <user> > Reset password.")
-PY
+echo "  Sign-in credentials for the 8 test users have been written to:"
+echo -e "    \033[33m${credentials_relative}\033[0m"
+echo -e "    \033[90m(gitignored — each apply rotates the passwords)\033[0m"
 echo ""
 echo "  Port Map:"
 for port in $(echo "${!PORT_MAP[@]}" | tr ' ' '\n' | sort -n); do

@@ -390,7 +390,7 @@ Restart `dotnet run --project src/AppHost`. Confirm `fraud-workflow` is green in
 
 Open two browser windows:
 
-- **Window A** (incognito) — sign in to the Blazor UI at `http://localhost:5008` as a customer (e.g., `emma.wilson@<your-tenant-domain>` from the test users `setup-local` printed). Pick **Emma Wilson** in the customer picker, open the chat, and ask:
+- **Window A** (incognito) — sign in to the Blazor UI at `http://localhost:5008` as a customer (e.g., `emma.wilson-local@<your-tenant-domain>`; UPNs + passwords live in `local-dev-credentials.txt` at the repo root). Pick **Emma Wilson** in the customer picker, open the chat, and ask:
 
   > I'd like a refund for order 1003 — the boots arrived damaged. The total was $285.
 

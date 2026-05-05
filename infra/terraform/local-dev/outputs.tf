@@ -41,14 +41,9 @@ output "test_user_upns" {
 }
 
 output "test_user_passwords" {
-  description = "Map of test user key → generated password. Marked sensitive; setup-local prints them once. For keys present in `imported_user_keys`, this value is NOT the live password (see that output's description)."
+  description = "Map of test user key → generated password. Marked sensitive; setup-local prints them once. Always reflects the live password — setup-local deletes orphan users before each apply, so every user is freshly created with the password printed."
   value       = module.entra.test_user_passwords
   sensitive   = true
-}
-
-output "imported_user_keys" {
-  description = "List of test user keys that pre-existed in the tenant and were imported instead of created. Their printed passwords are not real — use the password from the original setup-local run."
-  value       = module.entra.imported_user_keys
 }
 
 # Pre-built JSON fragment for AzureAd:CustomerMap so setup-local can substitute
