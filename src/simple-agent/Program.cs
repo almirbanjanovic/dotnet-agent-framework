@@ -12,12 +12,15 @@ using Microsoft.Extensions.Configuration;
 // single agent ("Joker") for a one-off response.
 // ─────────────────────────────────────────────────────────────────────────
 
-// Fall back through both env vars so the same `ASPNETCORE_ENVIRONMENT=Local`
-// prefix works for the Web projects AND for this console app.
+// simple-agent is a local-dev-only walkthrough — it isn't containerized,
+// isn't part of the Aspire AppHost, and never runs in CI/CD. Default to
+// `Local` so `dotnet run` (no flags, no env vars) picks up the
+// appsettings.Local.json that `infra/setup-local.{ps1,sh}` just generated.
+// Override with `ASPNETCORE_ENVIRONMENT=...` if you want a different file.
 var environmentName =
     Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ??
     Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ??
-    "Development";
+    "Local";
 
 var configuration = new ConfigurationBuilder()
     .AddJsonFile($"appsettings.{environmentName}.json", optional: true)

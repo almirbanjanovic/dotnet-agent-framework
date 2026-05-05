@@ -209,7 +209,11 @@ module "acr" {
   acr_name            = var.acr_name
   tags                = var.tags
 
-  public_network_access_enabled = true # AKS pulls images; toggled by deploy scripts
+  # AKS pulls images via the AzureServices bypass (managed identity), so the
+  # firewall stays open to it; the deployer IP is whitelisted for `az acr
+  # login` / `docker push` from the laptop running terraform.
+  public_network_access_enabled = true
+  allowed_ips                   = [local.deployer_ip]
 }
 
 #--------------------------------------------------------------------------------------------------------------------------------

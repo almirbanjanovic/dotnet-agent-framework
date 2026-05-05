@@ -1,5 +1,18 @@
 data "azurerm_client_config" "current" {}
 
+# Deployer public IP — used to whitelist the operator's laptop on every public
+# data-plane resource that defaults to a deny-all firewall (Foundry account
+# below; the Full Azure stack additionally restricts Cosmos / Storage / Search
+# / Key Vault / ACR to the same IP). Re-running terraform from a different
+# network refreshes the rule.
+data "http" "deployer_ip" {
+  url = "https://api.ipify.org"
+}
+
+locals {
+  deployer_ip = chomp(data.http.deployer_ip.response_body)
+}
+
 # The resource group is created out-of-band by `infra/setup-local.{ps1,sh}`
 # (`az group create`, idempotent) and looked up here as a data source. This
 # is intentional: `terraform destroy` (run by `setup-local -Cleanup`) wipes
@@ -30,7 +43,7 @@ module "foundry" {
   embedding_capacity            = 120
   local_auth_enabled            = false
   public_network_access_enabled = true
-  allowed_ips                   = []
+  allowed_ips                   = [local.deployer_ip]
 
   tags = {
     environment = var.environment

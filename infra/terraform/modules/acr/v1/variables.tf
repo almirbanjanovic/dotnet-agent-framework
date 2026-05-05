@@ -64,3 +64,9 @@ variable "public_network_access_enabled" {
   default     = false
 }
 
+variable "allowed_ips" {
+  description = "List of public IP addresses (or CIDR ranges) allowed through the ACR firewall. Premium SKU only — ignored on Basic/Standard. AzureServices bypass is always on, so AKS pulls via managed identity continue to work."
+  type        = list(string)
+  default     = []
+}
+

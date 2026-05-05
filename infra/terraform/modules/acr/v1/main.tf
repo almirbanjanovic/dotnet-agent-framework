@@ -21,6 +21,24 @@ resource "azurerm_container_registry" "this" {
   public_network_access_enabled = var.public_network_access_enabled
   network_rule_bypass_option    = "AzureServices"
 
+  # Firewall rules. Only Premium honors network_rule_set; Basic/Standard ignore
+  # it. The dynamic block produces an empty list for non-Premium so the rest of
+  # the configuration stays valid.
+  dynamic "network_rule_set" {
+    for_each = var.sku == "Premium" && length(var.allowed_ips) > 0 ? [1] : []
+    content {
+      default_action = "Deny"
+
+      dynamic "ip_rule" {
+        for_each = var.allowed_ips
+        content {
+          action   = "Allow"
+          ip_range = ip_rule.value
+        }
+      }
+    }
+  }
+
   tags = var.tags
 
   lifecycle {
