@@ -390,7 +390,7 @@ Restart `dotnet run --project src/AppHost`. Confirm `fraud-workflow` is green in
 
 Open two browser windows:
 
-- **Window A** (incognito) — sign in to the Blazor UI at `http://localhost:5008` as a customer (e.g., `emma.wilson-local@<your-tenant-domain>`; UPNs + passwords live in `local-dev-credentials.txt` at the repo root). Pick **Emma Wilson** in the customer picker, open the chat, and ask:
+- **Window A** (incognito) — sign in to the Blazor UI at `http://localhost:5008` as a customer (e.g., `emma.wilson-local@<your-tenant-domain>`). All 8 UPNs + their current passwords live in **`local-dev-credentials.txt` at the repo root** — the file `setup-local` wrote in Lab 1. `cat local-dev-credentials.txt` (or open it in your editor) to grab the password for whichever user you want to sign in as. Pick **Emma Wilson** in the customer picker, open the chat, and ask:
 
   > I'd like a refund for order 1003 — the boots arrived damaged. The total was $285.
 
@@ -402,7 +402,7 @@ Open two browser windows:
   { "customerId": "101", "orderId": "1003", "amount": 285.00, "reason": "Boots damaged on arrival" }
   ```
 
-- **Window B** (separate browser profile) — sign in as a different test user (e.g., `lisa.torres@<your-tenant-domain>`) and navigate to `/operations`. In production this would be an account with the `Operations` app role; for the Local Track lab, any signed-in user can see the queue.
+- **Window B** (separate browser profile) — sign in as a different test user (UPN + password again from **`local-dev-credentials.txt`** at the repo root — e.g., the `lisa` row, which is `lisa.torres-local@<your-tenant-domain>`) and navigate to `/operations`. In production this would be an account with the `Operations` app role; for the Local Track lab, any signed-in user can see the queue.
 
 Within ~5 seconds, a review card should appear in Window B with the three agents' findings. Click **Approve** — the call returns `204` and the workflow runs the action (creates a support ticket via `crm-mcp.create_support_ticket`).
 

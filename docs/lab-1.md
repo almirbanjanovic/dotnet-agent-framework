@@ -49,10 +49,40 @@ The script:
    - 1 Azure AI Foundry account with a default project (`default-project`)
    - 2 model deployments: chat (`gpt-4.1`) + embeddings (`text-embedding-3-small`)
    - Grants you `Cognitive Services OpenAI User` on the account and `Azure AI User` on the project
-   - **Microsoft Entra:** a SPA app registration (`app-dotnetagent-local-localdev-bff`) with `http://localhost:5008/authentication/login-callback` redirect URIs, the `Customer` app role, plus 8 test users (Emma Wilson, James Chen, Sarah Miller, David Park, Lisa Torres, Mike Johnson, Anna Roberts, Tom Garcia) with the role assigned
+   - **Microsoft Entra:** a SPA app registration (`app-dotnetagent-local-bff-localdev`) with `http://localhost:5008/authentication/login-callback` redirect URIs, the `Customer` app role, plus 8 test users (Emma Wilson, James Chen, Sarah Miller, David Park, Lisa Torres, Mike Johnson, Anna Roberts, Tom Garcia) with the role assigned
 4. Reads the Foundry project endpoint, deployment names, tenant ID, BFF client ID, and customer-map JSON from Terraform output.
 5. Renders each `src/<component>/appsettings.Local.json.template` into a per-component `appsettings.Local.json`. Auth everywhere is `DefaultAzureCredential` to Azure resources; user sign-in to the Blazor UI is real MSAL/Entra.
 6. Writes each test user's UPN and generated password to `local-dev-credentials.txt` at the repo root — gitignored, rewritten on every apply (passwords rotate each run).
+
+> ### 🔑 Where the test-user passwords live
+>
+> When `setup-local` finishes it writes all 8 test-user UPNs and their freshly-generated
+> passwords to a single file at the **repo root**:
+>
+> ```text
+> local-dev-credentials.txt
+> ```
+>
+> **Open this file** — it has every UPN you'll need to sign in to the Blazor UI in this
+> lab and in Labs 2 / 3. Example contents:
+>
+> ```text
+> # Local-dev test-user credentials
+> # Generated: 2026-05-05 17:50:21 -07:00
+> # Tenant:    7960be14-fc91-4f30-8ca1-237851909103
+> # WARNING:   gitignored — do not commit. Each setup-local run rotates these passwords.
+>
+> key      upn                                                 password
+> ---      ---                                                 ---
+> anna     anna.roberts-local@<your-tenant>.onmicrosoft.com    Contoso-Otter-4821!#
+> david    david.park-local@<your-tenant>.onmicrosoft.com      Contoso-Wolf-7193!#
+> emma     emma.wilson-local@<your-tenant>.onmicrosoft.com     Contoso-Lynx-2056!#
+> ...
+> ```
+>
+> The file is gitignored (`/local-dev-credentials.txt` in `.gitignore`) and rewritten
+> in full every time you re-run `setup-local`, so if you re-provision you must use the
+> new passwords — the old ones are gone.
 
 The Entra side requires Application Developer + User Administrator (or higher) in the tenant where you ran `az login`. See the [Local Track prerequisites in Lab 0](lab-0.md#prerequisites) if you're missing those roles.
 
@@ -131,7 +161,9 @@ The same three primitives — `DefaultAzureCredential` → `AIProjectClient.AsAI
 dotnet run --project src/AppHost
 ```
 
-The Aspire AppHost starts all 8 components and a dashboard at **`https://localhost:15888`**. Open the Blazor UI at **`http://localhost:5008`** and you'll be redirected to `login.microsoftonline.com`. Sign in as one of the test users from `local-dev-credentials.txt` (e.g., `emma.wilson-local@<your-tenant-domain>` — the `-local` suffix keeps Local-Track UPNs from colliding with the Full Azure Track in the same tenant).
+The Aspire AppHost starts all 8 components and a dashboard at **`https://localhost:15888`**. Open the Blazor UI at **`http://localhost:5008`** and you'll be redirected to `login.microsoftonline.com`.
+
+**Sign in with one of the 8 test users from `local-dev-credentials.txt` at the repo root** (created by `setup-local` in Step 1 — see the callout above). For example, copy the `emma` row's UPN and password into the Microsoft sign-in dialog. The `-local` suffix on every UPN is intentional: it keeps Local-Track UPNs from colliding with the Full Azure Track if both run in the same tenant.
 
 The BFF validates the JWT, looks up the signed-in UPN in `AzureAd:CustomerMap`, and scopes every downstream call to that customer's data — same wire contract as the Full Azure Track.
 

@@ -49,7 +49,7 @@ az account set --subscription "<your-subscription-id>"   # only if you have more
 
 ### What's next
 
-Proceed to [Lab 1 — Local Track](lab-1.md#local-track--foundry-only-deployment). The `setup-local` script there provisions Foundry, creates your local SPA app registration + test users, and writes the credentials to your terminal once.
+Proceed to [Lab 1 — Local Track](lab-1.md#local-track--foundry-only-deployment). The `setup-local` script there provisions Foundry, creates your local SPA app registration + 8 test users, and writes their UPNs and freshly-generated passwords to **`local-dev-credentials.txt`** at the repo root (gitignored, rewritten on every run).
 
 ---
 
