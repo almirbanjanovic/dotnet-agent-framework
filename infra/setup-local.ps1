@@ -254,7 +254,7 @@ foreach ($component in $TemplateComponents) {
         Replace('{{CUSTOMER_MAP_JSON}}',         $customerMapJson)
 
     Set-Content -Path $outputPath -Value $content -NoNewline
-    $relativePath = (Resolve-Path -Relative $outputPath).TrimStart('.','/','\\')
+    $relativePath = (Resolve-Path -Relative $outputPath).TrimStart('.','/','\')
     Write-Ok "Generated $relativePath"
 }
 
@@ -268,7 +268,7 @@ foreach ($component in $StaticComponents) {
     }
 
     Copy-Item $templatePath $outputPath -Force
-    $relativePath = (Resolve-Path -Relative $outputPath).TrimStart('.','/','\\')
+    $relativePath = (Resolve-Path -Relative $outputPath).TrimStart('.','/','\')
     Write-Ok "Generated $relativePath"
 }
 
