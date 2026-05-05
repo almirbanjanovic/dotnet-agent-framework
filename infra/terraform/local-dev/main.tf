@@ -1,8 +1,13 @@
 data "azurerm_client_config" "current" {}
 
-resource "azurerm_resource_group" "this" {
-  name     = var.resource_group_name != null ? var.resource_group_name : "rg-${var.base_name}-${var.environment}"
-  location = var.location
+# The resource group is created out-of-band by `infra/setup-local.{ps1,sh}`
+# (`az group create`, idempotent) and looked up here as a data source. This
+# is intentional: `terraform destroy` (run by `setup-local -Cleanup`) wipes
+# the Foundry account and its dependents but **never** deletes the RG, so
+# any hand-pinned diagnostic resources or state-store containers a developer
+# placed alongside survive a tear-down/re-apply cycle.
+data "azurerm_resource_group" "this" {
+  name = var.resource_group_name != null ? var.resource_group_name : "rg-${var.base_name}-${var.environment}"
 }
 
 module "foundry" {
@@ -10,8 +15,8 @@ module "foundry" {
 
   base_name                     = var.base_name
   environment                   = var.environment
-  location                      = azurerm_resource_group.this.location
-  resource_group_name           = azurerm_resource_group.this.name
+  location                      = data.azurerm_resource_group.this.location
+  resource_group_name           = data.azurerm_resource_group.this.name
   account_kind                  = "AIServices"
   sku_name                      = "S0"
   deployment_sku_name           = "GlobalStandard"
@@ -39,6 +44,16 @@ module "foundry" {
 resource "azurerm_role_assignment" "deployer_openai_user" {
   scope                = module.foundry.account_id
   role_definition_name = "Cognitive Services OpenAI User"
+  principal_id         = data.azurerm_client_config.current.object_id
+}
+
+# Grant the deployer the project-scoped "Azure AI User" role so AIProjectClient
+# calls (agents, threads, memory stores, deployments listing) succeed under the
+# project endpoint. The OpenAI User role above only covers raw OpenAI calls;
+# the Foundry agent service plane requires this project-scoped role.
+resource "azurerm_role_assignment" "deployer_ai_user" {
+  scope                = module.foundry.project_id
+  role_definition_name = "Azure AI User"
   principal_id         = data.azurerm_client_config.current.object_id
 }
 

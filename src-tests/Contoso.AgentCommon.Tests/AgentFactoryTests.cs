@@ -87,7 +87,7 @@ public sealed class AgentFactoryTests
     {
         var values = new Dictionary<string, string?>
         {
-            ["Foundry:Endpoint"] = "https://example.com"
+            ["Foundry:ProjectEndpoint"] = "https://example.com"
         };
 
         var config = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
@@ -117,7 +117,7 @@ public sealed class AgentFactoryTests
             new ServiceCollection().BuildServiceProvider());
 
         act.Should().Throw<InvalidOperationException>()
-           .WithMessage("*Foundry:Endpoint*");
+           .WithMessage("*Foundry:ProjectEndpoint*");
     }
 
     private static IConfiguration CreateConfiguration(string? tenantId = null)
@@ -125,7 +125,7 @@ public sealed class AgentFactoryTests
         var values = new Dictionary<string, string?>
         {
             ["Foundry:DeploymentName"] = "deployment",
-            ["Foundry:Endpoint"] = "https://example.com",
+            ["Foundry:ProjectEndpoint"] = "https://example.com",
             ["AzureAd:TenantId"] = tenantId
         };
 

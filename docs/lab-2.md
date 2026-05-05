@@ -269,7 +269,7 @@ Then in the new directory:
    ```json
    {
      "Foundry": {
-       "Endpoint": "{{FOUNDRY_ENDPOINT}}",
+       "ProjectEndpoint": "{{FOUNDRY_PROJECT_ENDPOINT}}",
        "DeploymentName": "{{CHAT_DEPLOYMENT_NAME}}"
      },
      "AzureAd":      { "TenantId": "{{TENANT_ID}}" },

@@ -60,8 +60,8 @@ internal sealed class IntentClassifier
     {
         var deploymentName = configuration["Foundry:DeploymentName"]
             ?? throw new InvalidOperationException("Foundry:DeploymentName is not set.");
-        var endpoint = configuration["Foundry:Endpoint"]
-            ?? throw new InvalidOperationException("Foundry:Endpoint is not set.");
+        var endpoint = configuration["Foundry:ProjectEndpoint"]
+            ?? throw new InvalidOperationException("Foundry:ProjectEndpoint is not set.");
 
         // Always authenticate via DefaultAzureCredential — no API keys.
         // In local dev the deployer's `az login` token is used; in AKS the

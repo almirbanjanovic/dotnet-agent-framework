@@ -10,7 +10,7 @@
 >   is now RBAC-only via `DefaultAzureCredential`. Enforced by
 >   [`NoApiKeyTests`](../src-tests/Contoso.SimpleAgent.Tests/NoApiKeyTests.cs).
 > - A `foundry_api_key` Terraform output — removed; the only outputs are
->   `foundry_endpoint`, `chat_deployment_name`, `embedding_deployment_name`,
+>   `foundry_project_endpoint`, `chat_deployment_name`, `embedding_deployment_name`,
 >   `tenant_id`, `bff_client_id`, plus the Entra test-user outputs.
 > - Optional Microsoft Entra ID — Entra is now mandatory on **both**
 >   tracks (Local + Full Azure). See [docs/lab-0.md](lab-0.md).

@@ -9,7 +9,7 @@ Required config keys (populated by config-sync from Key Vault):
 
 | Key | Description |
 |-----|-------------|
-| `Foundry:Endpoint` | AI Foundry service endpoint |
+| `Foundry:ProjectEndpoint` | AI Foundry project endpoint |
 | `Foundry:DeploymentName` | Model deployment name |
 | `CrmAgent:BaseUrl` | CRM Agent base URL |
 | `ProductAgent:BaseUrl` | Product Agent base URL |

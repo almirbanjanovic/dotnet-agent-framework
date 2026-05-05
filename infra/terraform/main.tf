@@ -336,6 +336,7 @@ module "rbac_foundry" {
   source = "./modules/rbac/foundry/v1"
 
   ai_services_account_id = module.foundry.account_id
+  foundry_project_id     = module.foundry.project_id
 
   principal_ids = {
     crm_agent  = module.agent_identity.agents["crm_agent"].object_id
@@ -590,8 +591,8 @@ module "keyvault_secrets" {
 
   secrets = {
     # App-consumed secrets (PascalCase--Hierarchy → .NET Section:Key)
-    "Foundry--Endpoint"       = module.foundry.endpoint
-    "Foundry--DeploymentName" = module.foundry.deployment_name
+    "Foundry--ProjectEndpoint" = module.foundry.project_endpoint
+    "Foundry--DeploymentName"  = module.foundry.deployment_name
     # Suffix "Name" matters: knowledge-mcp chart maps this KV key to env var
     # Foundry__EmbeddingDeploymentName which the .NET code reads as
     # Foundry:EmbeddingDeploymentName.

@@ -25,8 +25,8 @@ internal sealed class ProductAgentFactory
         _deploymentName = configuration["Foundry:DeploymentName"]
             ?? throw new InvalidOperationException("Foundry:DeploymentName is not set.");
 
-        var endpoint = configuration["Foundry:Endpoint"]
-            ?? throw new InvalidOperationException("Foundry:Endpoint is not set.");
+        var endpoint = configuration["Foundry:ProjectEndpoint"]
+            ?? throw new InvalidOperationException("Foundry:ProjectEndpoint is not set.");
 
         var tenantId = configuration["AzureAd:TenantId"];
         var credential = string.IsNullOrEmpty(tenantId)

@@ -62,17 +62,18 @@ From the repository root:
 
 **What this does:**
 
-1. Runs `terraform apply` in `infra/terraform/local-dev/` — provisions:
-   - 1 resource group (`rg-dotnetagent-localdev`)
-   - 1 Azure AI Services account (Foundry)
+1. Creates the resource group `rg-dotnetagent-localdev` out-of-band via `az group create` (idempotent; the RG is **not** Terraform-managed so `-Cleanup` later leaves it intact).
+2. Runs `terraform apply` in `infra/terraform/local-dev/` — provisions inside that RG:
+   - 1 Azure AI Services account (Foundry) with a default project (`default-project`)
    - 2 model deployments: chat (`gpt-4.1`) and embeddings (`text-embedding-3-small`)
-   - Grants you the `Cognitive Services OpenAI User` role on the Foundry account
-2. Reads the Foundry endpoint, deployment names, and tenant ID from Terraform output.
-3. Generates `appsettings.Local.json` for each component from `appsettings.Local.json.template`:
-   - Agents (`crm-agent`, `product-agent`, `orchestrator-agent`, `simple-agent`) and `knowledge-mcp` get `Foundry:Endpoint`, `Foundry:DeploymentName` (or `Foundry:EmbeddingDeploymentName`), and `AzureAd:TenantId` substituted in.
+   - Grants you `Cognitive Services OpenAI User` on the Foundry account and `Azure AI User` on the project
+3. Reads the Foundry **project** endpoint, deployment names, and tenant ID from Terraform output.
+4. Generates `appsettings.Local.json` for each component from `appsettings.Local.json.template`:
+   - Agents (`crm-agent`, `product-agent`, `orchestrator-agent`, `simple-agent`) and `knowledge-mcp` get `Foundry:ProjectEndpoint`, `Foundry:DeploymentName` (or `Foundry:EmbeddingDeploymentName`), and `AzureAd:TenantId` substituted in.
    - `crm-api` and `knowledge-mcp` get `DataMode = InMemory` so they load CSV/TXT data from `data/`.
    - `crm-mcp`, `bff-api`, and `blazor-ui` get static port + URL configuration only (no Foundry credentials needed — they call other services over HTTP).
    - Auth everywhere is `DefaultAzureCredential` — your `az login` token. No API keys are written.
+
 
 **No API keys are written.** Everything authenticates via your Azure CLI token.
 
@@ -95,6 +96,8 @@ When you're finished with the labs, tear down the local Foundry environment:
 ```
 
 This destroys the Foundry resources, **the Entra SPA app registration, and the 8 test users**, and removes the generated `appsettings.Local.json` files.
+
+**The resource group `rg-dotnetagent-localdev` is intentionally preserved.** It's bootstrapped out-of-band by `setup-local`, looked up via a Terraform `data` source, and never enters Terraform state — so `terraform destroy` (which `-Cleanup` runs) cannot touch it. Any diagnostic resources you've placed alongside the Foundry account survive a tear-down/re-apply cycle. To delete the RG itself, run `az group delete --name rg-dotnetagent-localdev` manually.
 
 ---
 

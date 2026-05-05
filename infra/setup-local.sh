@@ -105,6 +105,19 @@ step "Computing resource group name"
 export TF_VAR_resource_group_name="rg-dotnetagent-localdev"
 ok "Resource group: $TF_VAR_resource_group_name"
 
+# ── Ensure Resource Group Exists ────────────────────────────────────────────
+# The Terraform stack reads the RG via a `data` source so `terraform destroy`
+# (cleanup) tears down the Foundry account but leaves the RG intact for next
+# time. We create it here, out-of-band, idempotently.
+step "Ensuring resource group exists"
+rg_location="${TF_VAR_location:-centralus}"
+az group create \
+    --name "$TF_VAR_resource_group_name" \
+    --location "$rg_location" \
+    --tags "managed-by=setup-local" "purpose=local-development" \
+    --output none
+ok "Resource group ready: $TF_VAR_resource_group_name ($rg_location)"
+
 # ── Terraform Init ──────────────────────────────────────────────────────────
 
 step "Initializing Terraform"
@@ -159,13 +172,13 @@ ok "Terraform apply complete"
 
 step "Retrieving Terraform outputs"
 outputs_json=$(terraform -chdir="$TERRAFORM_DIR" output -json)
-foundry_endpoint=$(echo "$outputs_json"        | python3 -c "import sys,json; print(json.load(sys.stdin)['foundry_endpoint']['value'])")
+foundry_project_endpoint=$(echo "$outputs_json" | python3 -c "import sys,json; print(json.load(sys.stdin)['foundry_project_endpoint']['value'])")
 chat_deployment_name=$(echo "$outputs_json"    | python3 -c "import sys,json; print(json.load(sys.stdin)['chat_deployment_name']['value'])")
 embedding_deployment_name=$(echo "$outputs_json" | python3 -c "import sys,json; print(json.load(sys.stdin)['embedding_deployment_name']['value'])")
 tenant_id=$(echo "$outputs_json"               | python3 -c "import sys,json; print(json.load(sys.stdin)['tenant_id']['value'])")
 bff_client_id=$(echo "$outputs_json"           | python3 -c "import sys,json; print(json.load(sys.stdin)['bff_client_id']['value'])")
 customer_map_json=$(echo "$outputs_json"       | python3 -c "import sys,json; print(json.load(sys.stdin)['customer_map_json']['value'])")
-ok "Foundry endpoint: $foundry_endpoint"
+ok "Foundry project endpoint: $foundry_project_endpoint"
 ok "Chat deployment: $chat_deployment_name"
 ok "Embedding deployment: $embedding_deployment_name"
 ok "Tenant ID: $tenant_id"
@@ -187,7 +200,7 @@ src, dst = sys.argv[1], sys.argv[2]
 with open(src, 'r', encoding='utf-8') as f:
     content = f.read()
 mapping = {
-    '{{FOUNDRY_ENDPOINT}}':          os.environ['FOUNDRY_ENDPOINT'],
+    '{{FOUNDRY_PROJECT_ENDPOINT}}': os.environ['FOUNDRY_PROJECT_ENDPOINT'],
     '{{CHAT_DEPLOYMENT_NAME}}':      os.environ['CHAT_DEPLOYMENT_NAME'],
     '{{EMBEDDING_DEPLOYMENT_NAME}}': os.environ['EMBEDDING_DEPLOYMENT_NAME'],
     '{{TENANT_ID}}':                 os.environ['TENANT_ID'],
@@ -201,7 +214,7 @@ with open(dst, 'w', encoding='utf-8') as f:
 PY
 }
 
-export FOUNDRY_ENDPOINT="$foundry_endpoint"
+export FOUNDRY_PROJECT_ENDPOINT="$foundry_project_endpoint"
 export CHAT_DEPLOYMENT_NAME="$chat_deployment_name"
 export EMBEDDING_DEPLOYMENT_NAME="$embedding_deployment_name"
 export TENANT_ID="$tenant_id"

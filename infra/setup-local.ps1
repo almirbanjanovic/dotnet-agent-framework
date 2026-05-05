@@ -133,6 +133,23 @@ Write-Step "Computing resource group name"
 $env:TF_VAR_resource_group_name = "rg-dotnetagent-localdev"
 Write-Ok "Resource group: $($env:TF_VAR_resource_group_name)"
 
+# ── Ensure Resource Group Exists ────────────────────────────────────────────
+# The Terraform stack reads the RG via a `data` source so `terraform destroy`
+# (cleanup) tears down the Foundry account but leaves the RG intact for next
+# time. We create it here, out-of-band, idempotently.
+Write-Step "Ensuring resource group exists"
+$rgLocation = if ([string]::IsNullOrWhiteSpace($env:TF_VAR_location)) { "centralus" } else { $env:TF_VAR_location }
+az group create `
+    --name $env:TF_VAR_resource_group_name `
+    --location $rgLocation `
+    --tags "managed-by=setup-local" "purpose=local-development" `
+    --output none
+if ($LASTEXITCODE -ne 0) {
+    Write-Fail "Failed to create or verify resource group $($env:TF_VAR_resource_group_name)"
+    exit 1
+}
+Write-Ok "Resource group ready: $($env:TF_VAR_resource_group_name) ($rgLocation)"
+
 # ── Terraform Init ──────────────────────────────────────────────────────────
 
 Write-Step "Initializing Terraform"
@@ -196,14 +213,14 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 $outputs = $outputsJson | ConvertFrom-Json
-$foundryEndpoint       = $outputs.foundry_endpoint.value
+$foundryProjectEndpoint = $outputs.foundry_project_endpoint.value
 $chatDeploymentName    = $outputs.chat_deployment_name.value
 $embeddingDeploymentName = $outputs.embedding_deployment_name.value
 $tenantId              = $outputs.tenant_id.value
 $bffClientId           = $outputs.bff_client_id.value
 $customerMapJson       = $outputs.customer_map_json.value
 $testUserUpns          = $outputs.test_user_upns.value
-Write-Ok "Foundry endpoint: $foundryEndpoint"
+Write-Ok "Foundry project endpoint: $foundryProjectEndpoint"
 Write-Ok "Chat deployment: $chatDeploymentName"
 Write-Ok "Embedding deployment: $embeddingDeploymentName"
 Write-Ok "Tenant ID: $tenantId"
@@ -246,7 +263,7 @@ foreach ($component in $TemplateComponents) {
     # Use String.Replace (literal) so that JSON values containing regex
     # metacharacters (`$`, `\`) substitute cleanly into the template.
     $content = (Get-Content $templatePath -Raw).
-        Replace('{{FOUNDRY_ENDPOINT}}',          $foundryEndpoint).
+        Replace('{{FOUNDRY_PROJECT_ENDPOINT}}', $foundryProjectEndpoint).
         Replace('{{CHAT_DEPLOYMENT_NAME}}',      $chatDeploymentName).
         Replace('{{EMBEDDING_DEPLOYMENT_NAME}}', $embeddingDeploymentName).
         Replace('{{TENANT_ID}}',                 $tenantId).

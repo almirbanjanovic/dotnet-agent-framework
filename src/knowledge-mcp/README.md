@@ -11,7 +11,7 @@ Required config keys (populated by config-sync from Key Vault):
 |-----|-------------|
 | `Search:Endpoint` | Azure AI Search endpoint |
 | `Search:IndexName` | Search index name |
-| `Foundry:Endpoint` | AI Foundry endpoint (used for embeddings in `DataMode=InMemory`) |
+| `Foundry:ProjectEndpoint` | AI Foundry project endpoint (used to discover the Azure OpenAI connection for embeddings in `DataMode=InMemory`) |
 | `Foundry:EmbeddingDeploymentName` | Embedding model deployment name (`DataMode=InMemory` only) |
 | `AzureAd:TenantId` | Entra tenant ID for DefaultAzureCredential |
 | `DataMode` | `AzureSearch` (default) or `InMemory` for local dev |

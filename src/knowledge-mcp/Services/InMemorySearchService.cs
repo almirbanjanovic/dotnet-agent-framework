@@ -1,4 +1,5 @@
 using Azure.AI.OpenAI;
+using Azure.AI.Projects;
 using Azure.Core;
 using Azure.Identity;
 using OpenAI.Embeddings;
@@ -19,22 +20,44 @@ public sealed class InMemorySearchService : ISearchService
     {
         _logger = logger;
 
-        var endpoint = configuration["Foundry:Endpoint"]
-            ?? throw new InvalidOperationException("Foundry:Endpoint configuration is required.");
+        // Single Foundry endpoint exposed by infra: the project endpoint
+        // (https://<account>.services.ai.azure.com/api/projects/<project>).
+        // We never read a separate "account endpoint" — the project's
+        // connection-discovery API is the canonical way to obtain an
+        // AzureOpenAIClient under the new Foundry experience.
+        var projectEndpoint = configuration["Foundry:ProjectEndpoint"]
+            ?? throw new InvalidOperationException("Foundry:ProjectEndpoint configuration is required.");
         var deploymentName = configuration["Foundry:EmbeddingDeploymentName"]
             ?? throw new InvalidOperationException("Foundry:EmbeddingDeploymentName configuration is required.");
 
         // Always authenticate via DefaultAzureCredential — no API keys.
-        // The deployer is granted "Cognitive Services OpenAI User" on the
-        // Foundry account by Terraform (see infra/terraform/local-dev/main.tf),
-        // and AKS workload identity provides the same role in production.
+        // The deployer is granted "Azure AI User" on the project (which
+        // includes Cognitive Services OpenAI User on the underlying account)
+        // by Terraform; AKS workload identity provides the same role in prod.
         var tenantId = configuration["AzureAd:TenantId"];
         TokenCredential credential = string.IsNullOrWhiteSpace(tenantId)
             ? new DefaultAzureCredential()
             : new DefaultAzureCredential(new DefaultAzureCredentialOptions { TenantId = tenantId });
 
-        var client = new AzureOpenAIClient(new Uri(endpoint), credential);
-        _embeddingClient = client.GetEmbeddingClient(deploymentName);
+        // Microsoft's recommended pattern for the new Foundry experience:
+        //   1. Build an AIProjectClient against the project endpoint.
+        //   2. Ask it for the AzureOpenAIClient connection.
+        //   3. Reduce the connection's locator to its host so we hit the
+        //      account's data plane (https://<account>.openai.azure.com).
+        //   4. Construct an AzureOpenAIClient against that URI and pull
+        //      the EmbeddingClient for our deployment.
+        var projectClient = new AIProjectClient(new Uri(projectEndpoint), credential);
+        var connection = projectClient.GetConnection(typeof(AzureOpenAIClient).FullName!);
+        if (!connection.TryGetLocatorAsUri(out Uri? openAiUri) || openAiUri is null)
+        {
+            throw new InvalidOperationException(
+                "Could not resolve the Azure OpenAI connection URI from the Foundry project. " +
+                "Ensure the project has a default Azure OpenAI connection.");
+        }
+        openAiUri = new Uri($"https://{openAiUri.Host}");
+
+        var azureOpenAIClient = new AzureOpenAIClient(openAiUri, credential);
+        _embeddingClient = azureOpenAIClient.GetEmbeddingClient(deploymentName);
         _dataPath = ResolveDataPath();
     }
 

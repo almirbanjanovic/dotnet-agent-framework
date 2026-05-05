@@ -1,6 +1,18 @@
-output "foundry_endpoint" {
-  description = "Azure OpenAI endpoint URL"
-  value       = module.foundry.endpoint
+# The single endpoint exposed to apps. Best-practice for the new Foundry
+# experience (Azure.AI.Projects 2.x): every consumer constructs an
+# `AIProjectClient` from this URL and derives chat/embedding/agent clients
+# from it via the project's connection-discovery APIs. We do NOT separately
+# expose the account endpoint — there's no scenario in this codebase where a
+# direct `AzureOpenAIClient(<account>)` call is preferable to going through
+# the project.
+output "foundry_project_endpoint" {
+  description = "Foundry project endpoint (https://<account>.services.ai.azure.com/api/projects/<project>). Single canonical endpoint for AIProjectClient — derive ChatClient/EmbeddingClient/AgentAdministrationClient from it."
+  value       = module.foundry.project_endpoint
+}
+
+output "foundry_project_name" {
+  description = "Name of the default Foundry project created under the AI Services account."
+  value       = module.foundry.project_name
 }
 
 output "chat_deployment_name" {

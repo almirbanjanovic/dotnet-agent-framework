@@ -43,15 +43,15 @@ chmod +x infra/setup-local.sh
 
 The script:
 
-1. Runs `terraform apply` in `infra/terraform/local-dev/` to create:
-   - Resource group `rg-dotnetagent-localdev`
-   - 1 Azure AI Foundry account
+1. Creates the resource group `rg-dotnetagent-localdev` out-of-band via `az group create` (idempotent; not Terraform-managed, so it survives `setup-local -Cleanup`).
+2. Runs `terraform apply` in `infra/terraform/local-dev/` to create inside that RG:
+   - 1 Azure AI Foundry account with a default project (`default-project`)
    - 2 model deployments: chat (`gpt-4.1`) + embeddings (`text-embedding-3-small`)
-   - Grants you `Cognitive Services OpenAI User` on the account
+   - Grants you `Cognitive Services OpenAI User` on the account and `Azure AI User` on the project
    - **Microsoft Entra:** a SPA app registration (`app-dotnetagent-local-localdev-bff`) with `http://localhost:5008/authentication/login-callback` redirect URIs, the `Customer` app role, plus 8 test users (Emma Wilson, James Chen, Sarah Miller, David Park, Lisa Torres, Mike Johnson, Anna Roberts, Tom Garcia) with the role assigned
-2. Reads the Foundry endpoint, deployment names, tenant ID, BFF client ID, and customer-map JSON from Terraform output.
-3. Renders each `src/<component>/appsettings.Local.json.template` into a per-component `appsettings.Local.json`. Auth everywhere is `DefaultAzureCredential` to Azure resources; user sign-in to the Blazor UI is real MSAL/Entra.
-4. Prints each test user's UPN and generated password to your terminal **once** — copy them somewhere safe.
+3. Reads the Foundry project endpoint, deployment names, tenant ID, BFF client ID, and customer-map JSON from Terraform output.
+4. Renders each `src/<component>/appsettings.Local.json.template` into a per-component `appsettings.Local.json`. Auth everywhere is `DefaultAzureCredential` to Azure resources; user sign-in to the Blazor UI is real MSAL/Entra.
+5. Prints each test user's UPN and generated password to your terminal **once** — copy them somewhere safe.
 
 The Entra side requires Application Developer + User Administrator (or higher) in the tenant where you ran `az login`. See the [Local Track prerequisites in Lab 0](lab-0.md#prerequisites) if you're missing those roles.
 
@@ -293,7 +293,7 @@ Expected output:
   ✓ AzureAd--BffClientId
   ✓ AzureAd--TenantId
   ✓ Foundry--DeploymentName
-  ✓ Foundry--Endpoint
+  ✓ Foundry--ProjectEndpoint
   ...
 
   Fetched 21/21 secrets
@@ -375,7 +375,7 @@ If you see an error, check:
 
 - `az login` is authenticated
 - `az login` is authenticated with an account that has the **Cognitive Services OpenAI User** role on the AI Foundry account
-- `Foundry:Endpoint` and `Foundry:DeploymentName` are set in `src/simple-agent/appsettings.Development.json` or via environment variables (`Foundry__Endpoint`, `Foundry__DeploymentName`)
+- `Foundry:ProjectEndpoint` and `Foundry:DeploymentName` are set in `src/simple-agent/appsettings.Development.json` or via environment variables (`Foundry__ProjectEndpoint`, `Foundry__DeploymentName`)
 - The AI Foundry deployment exists in the Azure portal
 
 ### Step 4 — Deploy the 8 services to AKS

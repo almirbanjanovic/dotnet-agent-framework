@@ -106,8 +106,8 @@ secretRefs:
         envVar: AzureAd__TenantId
       - key: Search--Endpoint
         envVar: Search__Endpoint
-      - key: Foundry--Endpoint
-        envVar: Foundry__Endpoint
+      - key: Foundry--ProjectEndpoint
+        envVar: Foundry__ProjectEndpoint
       - key: Foundry--EmbeddingDeploymentName
         envVar: Foundry__EmbeddingDeploymentName
 

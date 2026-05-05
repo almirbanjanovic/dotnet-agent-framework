@@ -9,7 +9,7 @@ Required config keys (set via environment variables or a local `appsettings.json
 
 | Key | Description |
 |-----|-------------|
-| `Foundry:Endpoint` | AI Foundry project endpoint (Azure AI Services URL) |
+| `Foundry:ProjectEndpoint` | AI Foundry project endpoint (`https://<account>.services.ai.azure.com/api/projects/<project>`) |
 | `Foundry:DeploymentName` | Model deployment name (passed to `AsAIAgent()`) |
 | `AzureAd:TenantId` | Entra tenant ID for DefaultAzureCredential (optional) |
 

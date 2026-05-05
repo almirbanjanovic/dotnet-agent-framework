@@ -28,7 +28,7 @@ locals {
     "CosmosDb--CrmEndpoint",
     "Storage--ImagesEndpoint",
     "Storage--ImagesContainer",
-    "Foundry--Endpoint",
+    "Foundry--ProjectEndpoint",
     "Foundry--DeploymentName",
     "Foundry--EmbeddingDeploymentName",
     "Search--Endpoint",

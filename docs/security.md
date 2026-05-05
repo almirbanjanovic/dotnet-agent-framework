@@ -760,7 +760,7 @@ Each component's manifest maps specific Key Vault secrets to local config keys. 
 | `crm-api` | 3 | `CosmosDb--CrmEndpoint` → `CosmosDb:Endpoint` |
 | `crm-mcp` | 2 | `CrmApi--BaseUrl` → `CrmApi:BaseUrl` |
 | `knowledge-mcp` | 6 | `Search--Endpoint` → `Search:Endpoint` |
-| `crm-agent` | 4 | `Foundry--Endpoint` → `Foundry:Endpoint` |
+| `crm-agent` | 4 | `Foundry--ProjectEndpoint` → `Foundry:ProjectEndpoint` |
 | `product-agent` | 5 | `Foundry--DeploymentName` → `Foundry:DeploymentName` |
 | `orchestrator-agent` | 5 | `CrmAgent--BaseUrl` → `CrmAgent:BaseUrl` |
 | `bff-api` | 9 | `AzureAd--BffClientId` → `AzureAd:BffClientId` |

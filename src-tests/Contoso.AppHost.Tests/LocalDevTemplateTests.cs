@@ -9,7 +9,7 @@ namespace Contoso.AppHost.Tests;
 ///
 /// Every <c>src/&lt;component&gt;/appsettings.Local.json.template</c> is
 /// processed by <c>infra/setup-local.{ps1,sh}</c>, which substitutes
-/// placeholders (<c>{{FOUNDRY_ENDPOINT}}</c>, <c>{{TENANT_ID}}</c>, etc.)
+/// placeholders (<c>{{FOUNDRY_PROJECT_ENDPOINT}}</c>, <c>{{TENANT_ID}}</c>, etc.)
 /// with values from the per-developer Foundry deployment.
 ///
 /// If a template hardcodes a real Foundry endpoint or tenant ID, every
@@ -27,8 +27,11 @@ public class LocalDevTemplateTests
         @"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b",
         RegexOptions.Compiled);
 
-    private static readonly Regex CognitiveServicesUrlRegex = new(
-        @"https?://[^""]*\.cognitiveservices\.azure\.com",
+    // The new Foundry experience exposes both the account host
+    // (cognitiveservices.azure.com) and the project host
+    // (services.ai.azure.com). Either one in a template is a leak.
+    private static readonly Regex FoundryUrlRegex = new(
+        @"https?://[^""]*\.(cognitiveservices\.azure\.com|services\.ai\.azure\.com)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     [Fact]
@@ -59,14 +62,14 @@ public class LocalDevTemplateTests
             .Select(path => new
             {
                 Path = Path.GetRelativePath(RepoRoot, path),
-                BadUrl = CognitiveServicesUrlRegex.Match(File.ReadAllText(path)).Value
+                BadUrl = FoundryUrlRegex.Match(File.ReadAllText(path)).Value
             })
             .Where(x => !string.IsNullOrEmpty(x.BadUrl))
-            .Select(x => $"{x.Path}: contains hardcoded Foundry URL '{x.BadUrl}' — use '{{{{FOUNDRY_ENDPOINT}}}}' instead.")
+            .Select(x => $"{x.Path}: contains hardcoded Foundry URL '{x.BadUrl}' — use '{{{{FOUNDRY_PROJECT_ENDPOINT}}}}' instead.")
             .ToArray();
 
         violations.Should().BeEmpty(
-            "Foundry endpoints in *.Local.json.template files must be the '{{FOUNDRY_ENDPOINT}}' " +
+            "Foundry endpoints in *.Local.json.template files must be the '{{FOUNDRY_PROJECT_ENDPOINT}}' " +
             "placeholder. setup-local substitutes it with each developer's own deployment. " +
             "Hardcoding a real endpoint forces every developer onto the same Foundry account. " +
             "Violations:" + Environment.NewLine + string.Join(Environment.NewLine, violations));

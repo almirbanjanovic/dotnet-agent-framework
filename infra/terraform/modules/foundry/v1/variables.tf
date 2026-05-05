@@ -107,3 +107,25 @@ variable "local_auth_enabled" {
   default     = false
 }
 
+# -----------------------------------------------------------------------------
+# Foundry project (the new flat experience under the AI Services account)
+# -----------------------------------------------------------------------------
+
+variable "project_name" {
+  description = "Name of the default Foundry project under the AI Services account."
+  type        = string
+  default     = "default-project"
+}
+
+variable "project_display_name" {
+  description = "Display name shown in the Foundry portal for the default project."
+  type        = string
+  default     = "Default Project"
+}
+
+variable "project_description" {
+  description = "Description of the default Foundry project."
+  type        = string
+  default     = "Default project provisioned by Terraform for agent and AI Foundry SDK workloads."
+}
+

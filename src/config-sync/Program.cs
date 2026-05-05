@@ -115,7 +115,7 @@ var componentManifest = new Dictionary<string, (string KvSecret, string ConfigKe
     ],
     ["crm-agent"] =
     [
-        ("Foundry--Endpoint",       "Foundry:Endpoint"),
+        ("Foundry--ProjectEndpoint", "Foundry:ProjectEndpoint"),
         ("Foundry--DeploymentName", "Foundry:DeploymentName"),
         ("CrmMcp--BaseUrl",             "CrmMcp:BaseUrl"),
         ("KnowledgeMcp--BaseUrl",       "KnowledgeMcp:BaseUrl"),
@@ -123,7 +123,7 @@ var componentManifest = new Dictionary<string, (string KvSecret, string ConfigKe
     ],
     ["product-agent"] =
     [
-        ("Foundry--Endpoint",       "Foundry:Endpoint"),
+        ("Foundry--ProjectEndpoint", "Foundry:ProjectEndpoint"),
         ("Foundry--DeploymentName", "Foundry:DeploymentName"),
         ("KnowledgeMcp--BaseUrl",       "KnowledgeMcp:BaseUrl"),
         ("CrmMcp--BaseUrl",             "CrmMcp:BaseUrl"),
@@ -131,7 +131,7 @@ var componentManifest = new Dictionary<string, (string KvSecret, string ConfigKe
     ],
     ["orchestrator-agent"] =
     [
-        ("Foundry--Endpoint",       "Foundry:Endpoint"),
+        ("Foundry--ProjectEndpoint", "Foundry:ProjectEndpoint"),
         ("Foundry--DeploymentName", "Foundry:DeploymentName"),
         ("CrmAgent--BaseUrl",           "CrmAgent:BaseUrl"),
         ("ProductAgent--BaseUrl",       "ProductAgent:BaseUrl"),
@@ -158,7 +158,7 @@ var componentManifest = new Dictionary<string, (string KvSecret, string ConfigKe
     ],
     ["simple-agent"] =
     [
-        ("Foundry--Endpoint",       "Foundry:Endpoint"),
+        ("Foundry--ProjectEndpoint", "Foundry:ProjectEndpoint"),
         ("Foundry--DeploymentName", "Foundry:DeploymentName"),
         ("AzureAd--TenantId",           "AzureAd:TenantId"),
     ],
