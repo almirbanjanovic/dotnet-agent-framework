@@ -111,6 +111,44 @@ step "Initializing Terraform"
 terraform -chdir="$TERRAFORM_DIR" init -input=false
 ok "Terraform initialized"
 
+# ── Purge soft-deleted resources ────────────────────────────────────────────
+# Cognitive Services accounts and Key Vaults use soft-delete by default. If a
+# prior `setup-local.sh --cleanup` ran (or terraform destroy), the soft-deleted
+# resources block re-creation with `FlagMustBeSetForRestore` (HTTP 409). Purge
+# them so the next `terraform apply` can recreate cleanly.
+step "Purging soft-deleted resources (if any)"
+
+soft_cog=$(az cognitiveservices account list-deleted \
+    --query "[?contains(id, '$TF_VAR_resource_group_name')].name" -o tsv 2>/dev/null || true)
+if [[ -n "$soft_cog" ]]; then
+    while IFS= read -r acct; do
+        [[ -z "$acct" ]] && continue
+        # Recover the deleted account's location from its full ID so we don't
+        # have to hardcode a region (the same RG name can host accounts in
+        # different regions across re-deploys).
+        acct_loc=$(az cognitiveservices account list-deleted \
+            --query "[?name=='$acct'].location | [0]" -o tsv 2>/dev/null || true)
+        [[ -z "$acct_loc" ]] && continue
+        az cognitiveservices account purge --location "$acct_loc" \
+            --resource-group "$TF_VAR_resource_group_name" --name "$acct" >/dev/null 2>&1 || true
+        ok "Purged Cognitive Services: $acct ($acct_loc)"
+    done <<< "$soft_cog"
+fi
+
+soft_kv=$(az keyvault list-deleted \
+    --query "[?properties.vaultId && contains(properties.vaultId, '$TF_VAR_resource_group_name')].name" -o tsv 2>/dev/null || true)
+if [[ -n "$soft_kv" ]]; then
+    while IFS= read -r kv; do
+        [[ -z "$kv" ]] && continue
+        az keyvault purge --name "$kv" --no-wait >/dev/null 2>&1 || true
+        ok "Purged Key Vault: $kv"
+    done <<< "$soft_kv"
+fi
+
+if [[ -z "$soft_cog" && -z "$soft_kv" ]]; then
+    ok "No soft-deleted resources to purge"
+fi
+
 # ── Terraform Apply ─────────────────────────────────────────────────────────
 
 step "Applying Terraform (this may take a few minutes)"

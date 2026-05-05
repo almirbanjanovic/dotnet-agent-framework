@@ -143,6 +143,40 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Ok "Terraform initialized"
 
+# ── Purge soft-deleted resources ────────────────────────────────────────────
+# Cognitive Services accounts and Key Vaults use soft-delete by default. If a
+# prior `setup-local.ps1 -Cleanup` ran (or terraform destroy), the soft-deleted
+# resources block re-creation with `FlagMustBeSetForRestore` (HTTP 409). Purge
+# them so the next `terraform apply` can recreate cleanly.
+Write-Step "Purging soft-deleted resources (if any)"
+
+$softCog = az cognitiveservices account list-deleted `
+    --query "[?contains(id, '$($env:TF_VAR_resource_group_name)')].name" -o tsv 2>$null
+foreach ($acct in ($softCog -split "`n" | Where-Object { $_ })) {
+    $acct = $acct.Trim()
+    # Recover the deleted account's location from its full ID so we don't have
+    # to hardcode a region (the same RG name can host accounts in different
+    # regions across re-deploys).
+    $acctLoc = az cognitiveservices account list-deleted `
+        --query "[?name=='$acct'].location | [0]" -o tsv 2>$null
+    if ([string]::IsNullOrWhiteSpace($acctLoc)) { continue }
+    az cognitiveservices account purge --location $acctLoc `
+        --resource-group $env:TF_VAR_resource_group_name --name $acct 2>$null | Out-Null
+    Write-Ok "Purged Cognitive Services: $acct ($acctLoc)"
+}
+
+$softKv = az keyvault list-deleted `
+    --query "[?properties.vaultId && contains(properties.vaultId, '$($env:TF_VAR_resource_group_name)')].name" -o tsv 2>$null
+foreach ($kv in ($softKv -split "`n" | Where-Object { $_ })) {
+    $kv = $kv.Trim()
+    az keyvault purge --name $kv --no-wait 2>$null | Out-Null
+    Write-Ok "Purged Key Vault: $kv"
+}
+
+if (-not $softCog -and -not $softKv) {
+    Write-Ok "No soft-deleted resources to purge"
+}
+
 # ── Terraform Apply ─────────────────────────────────────────────────────────
 
 Write-Step "Applying Terraform (this may take a few minutes)"
