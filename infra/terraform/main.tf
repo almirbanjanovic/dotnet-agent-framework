@@ -676,7 +676,9 @@ module "entra" {
   redirect_uris = [
     # Local dev fallback (Blazor on AppHost port 5008, HTTP — MSAL allows http for localhost)
     "http://localhost:5008/authentication/login-callback",
+    "http://localhost:5008/authentication/logout-callback",
     "https://${module.agc.frontend_fqdn}/authentication/login-callback",
+    "https://${module.agc.frontend_fqdn}/authentication/logout-callback",
   ]
 }
 

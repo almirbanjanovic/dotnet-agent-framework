@@ -1,5 +1,6 @@
 using Contoso.BlazorUi;
 using Contoso.BlazorUi.Services;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Authentication;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
@@ -20,11 +21,26 @@ builder.Services.AddScoped<ChatPanelState>();
 var bffBaseUrl = BlazorUiConfiguration.GetBffBaseUrl(builder.Configuration);
 var useDevAuth = BlazorUiConfiguration.IsDevAuthEnabled(builder.Configuration, builder.HostEnvironment);
 
+// "BffPublic" is a no-auth named client used for catalog endpoints
+// (products, product images) that the BFF marks AllowAnonymous so
+// anonymous visitors can browse the store before signing in. Always
+// registered — both dev-auth and MSAL modes resolve it from the
+// IHttpClientFactory below.
+builder.Services.AddHttpClient("BffPublic", client => client.BaseAddress = new Uri(bffBaseUrl));
+
 if (useDevAuth)
 {
     // Local / dev: no MSAL, customer dropdown selects identity. BffApiClient
-    // sends X-Customer-Id; BFF reads that in InMemory mode.
-    builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri(bffBaseUrl) });
+    // sends X-Customer-Id; BFF reads that in InMemory mode. The "Bff" client
+    // is bare (no auth handler) — dev-auth doesn't issue tokens.
+    builder.Services.AddHttpClient("Bff", client => client.BaseAddress = new Uri(bffBaseUrl));
+
+    // Without MSAL there's no AuthenticationStateProvider in DI, which would
+    // break <CascadingAuthenticationState> / <AuthorizeView> in MainLayout.
+    // Register a stub that always reports anonymous; dev-auth mode drives
+    // the UI from AuthStateProvider.SelectedCustomer, not framework auth state.
+    builder.Services.AddAuthorizationCore();
+    builder.Services.AddScoped<AuthenticationStateProvider, DevAuthStateProvider>();
 }
 else
 {
@@ -55,11 +71,18 @@ else
 
     builder.Services.AddHttpClient("Bff", client => client.BaseAddress = new Uri(bffBaseUrl))
         .AddHttpMessageHandler<BffAuthorizationMessageHandler>();
-
-    builder.Services.AddScoped(sp =>
-        sp.GetRequiredService<IHttpClientFactory>().CreateClient("Bff"));
 }
 
-builder.Services.AddScoped<BffApiClient>();
+// BffApiClient takes both the authenticated and the public HttpClient.
+// In dev-auth mode they're functionally identical (no auth handler); in
+// MSAL mode only the auth client carries the bearer-token handler.
+builder.Services.AddScoped<BffApiClient>(sp =>
+{
+    var factory = sp.GetRequiredService<IHttpClientFactory>();
+    return new BffApiClient(
+        factory.CreateClient("Bff"),
+        factory.CreateClient("BffPublic"),
+        sp.GetRequiredService<AuthStateProvider>());
+});
 
 await builder.Build().RunAsync();

@@ -1,5 +1,4 @@
 @page "/"
-@attribute [Authorize]
 @inject BffApiClient BffApi
 @inject NavigationManager Navigation
 @inject CartService Cart
@@ -25,14 +24,19 @@
                            OnClick="@(() => Navigation.NavigateTo("/browse"))">
                     Shop the catalog
                 </MudButton>
-                <MudButton Variant="Variant.Text"
-                           Color="Color.Inherit"
-                           Size="Size.Large"
-                           StartIcon="@Icons.Material.Filled.SupportAgent"
-                           OnClick="@(() => ChatPanel.Open())"
-                           Style="color: #fff;">
-                    Ask the experts
-                </MudButton>
+                @* Chat is gated behind sign-in (the chat endpoint requires
+                   auth and ChatBubble is hidden for anonymous MSAL users),
+                   so don't surface this CTA to anonymous visitors. *@
+                <SignedInOnly>
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Inherit"
+                               Size="Size.Large"
+                               StartIcon="@Icons.Material.Filled.SupportAgent"
+                               OnClick="@(() => ChatPanel.Open())"
+                               Style="color: #fff;">
+                        Ask the experts
+                    </MudButton>
+                </SignedInOnly>
             </div>
         </div>
         <div class="hero-art" aria-hidden="true">

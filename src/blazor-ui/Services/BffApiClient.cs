@@ -6,12 +6,36 @@ using Microsoft.AspNetCore.Components.WebAssembly.Http;
 
 namespace Contoso.BlazorUi.Services;
 
-public sealed class BffApiClient(HttpClient httpClient, AuthStateProvider authStateProvider)
+public sealed class BffApiClient
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
     };
+
+    private readonly HttpClient httpClient;       // authenticated calls (BFF requires JWT)
+    private readonly HttpClient publicHttpClient; // catalog calls (anonymous-friendly endpoints)
+    private readonly AuthStateProvider authStateProvider;
+
+    /// <summary>
+    /// Production constructor: separate HttpClients for authenticated vs.
+    /// public BFF endpoints. The public client must NOT carry the MSAL
+    /// auth handler so anonymous catalog browsing works without a token.
+    /// </summary>
+    public BffApiClient(HttpClient authClient, HttpClient publicClient, AuthStateProvider authStateProvider)
+    {
+        this.httpClient = authClient;
+        this.publicHttpClient = publicClient;
+        this.authStateProvider = authStateProvider;
+    }
+
+    /// <summary>
+    /// Test-friendly constructor: routes both auth and public calls through
+    /// the same HttpClient (typically a stub handler that returns canned
+    /// responses regardless of bearer token).
+    /// </summary>
+    public BffApiClient(HttpClient httpClient, AuthStateProvider authStateProvider)
+        : this(httpClient, httpClient, authStateProvider) { }
 
     public async Task<ChatResponse> SendChatAsync(ChatRequest request, CancellationToken ct = default)
     {
@@ -175,8 +199,12 @@ public sealed class BffApiClient(HttpClient httpClient, AuthStateProvider authSt
             url += "?" + string.Join("&", queryParts);
         }
 
+        // Catalog browsing is anonymous-friendly: send via the public
+        // client so no Authorization header is attached. Authenticated
+        // visitors still hit the same BFF endpoint without a token because
+        // products are not per-customer data.
         using var httpRequest = CreateRequest(HttpMethod.Get, url);
-        using var response = await httpClient.SendAsync(httpRequest, ct);
+        using var response = await publicHttpClient.SendAsync(httpRequest, ct);
         response.EnsureSuccessStatusCode();
 
         var products = await response.Content.ReadFromJsonAsync<IReadOnlyList<Product>>(JsonOptions, ct);
@@ -186,7 +214,7 @@ public sealed class BffApiClient(HttpClient httpClient, AuthStateProvider authSt
     public async Task<Product?> GetProductAsync(string id, CancellationToken ct = default)
     {
         using var httpRequest = CreateRequest(HttpMethod.Get, $"/api/v1/products/{id}");
-        using var response = await httpClient.SendAsync(httpRequest, ct);
+        using var response = await publicHttpClient.SendAsync(httpRequest, ct);
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             return null;

@@ -115,12 +115,14 @@ if (useEntraAuth)
     meEndpoint.RequireAuthorization();
     customerEndpoint.RequireAuthorization();
     ordersEndpoint.RequireAuthorization();
-    productsEndpoint.RequireAuthorization();
-    productEndpoint.RequireAuthorization();
     placeOrderEndpoint.RequireAuthorization();
-    // Product images are public-by-design (in production they would live on
-    // a CDN / public blob container). <img src=...> can't attach a Bearer
-    // token, so requiring auth here would 401 every product card.
+    // Catalog browsing (products + product images) is public-by-design.
+    // The Blazor UI exposes Home / Browse / ProductDetail to anonymous
+    // visitors so the site behaves like a normal e-commerce store; only
+    // per-customer actions (cart, checkout, orders, profile, chat) require
+    // sign-in. <img src=...> also can't attach a Bearer token.
+    productsEndpoint.AllowAnonymous();
+    productEndpoint.AllowAnonymous();
     imageEndpoint.AllowAnonymous();
 }
 

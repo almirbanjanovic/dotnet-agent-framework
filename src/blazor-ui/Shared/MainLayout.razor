@@ -4,6 +4,7 @@
 @inject ChatPanelState ChatPanel
 @inject NavigationManager Navigation
 @inject BffApiClient BffApi
+@inject AuthenticationStateProvider AuthState
 @implements IDisposable
 
 <MudLayout>
@@ -68,10 +69,12 @@
                     </div>
                     <MudDivider />
                 }
-                <MudMenuItem Icon="@Icons.Material.Outlined.ReceiptLong" Href="/orders">My orders</MudMenuItem>
-                <MudMenuItem Icon="@Icons.Material.Outlined.Person" Href="/profile">My profile</MudMenuItem>
                 @if (AuthStateProvider.UseDevAuth)
                 {
+                    @* Dev-auth mode: per-customer items always show because the
+                       impersonation dropdown auto-picks a seeded customer. *@
+                    <MudMenuItem Icon="@Icons.Material.Outlined.ReceiptLong" Href="/orders">My orders</MudMenuItem>
+                    <MudMenuItem Icon="@Icons.Material.Outlined.Person" Href="/profile">My profile</MudMenuItem>
                     <MudDivider />
                     <div class="impersonate-label">Impersonate (dev only)</div>
                     @foreach (var customer in AuthStateProvider.Customers)
@@ -83,8 +86,20 @@
                 }
                 else
                 {
-                    <MudDivider />
-                    <MudMenuItem Icon="@Icons.Material.Outlined.Logout" Href="/authentication/logout">Sign out</MudMenuItem>
+                    @* MSAL mode: per-customer items + Sign out only when the
+                       framework AuthenticationStateProvider says we're signed
+                       in. Anonymous visitors get a single "Sign in" item. *@
+                    <AuthorizeView>
+                        <Authorized>
+                            <MudMenuItem Icon="@Icons.Material.Outlined.ReceiptLong" Href="/orders">My orders</MudMenuItem>
+                            <MudMenuItem Icon="@Icons.Material.Outlined.Person" Href="/profile">My profile</MudMenuItem>
+                            <MudDivider />
+                            <MudMenuItem Icon="@Icons.Material.Outlined.Logout" OnClick="BeginSignOut">Sign out</MudMenuItem>
+                        </Authorized>
+                        <NotAuthorized>
+                            <MudMenuItem Icon="@Icons.Material.Outlined.Login" OnClick="BeginSignIn">Sign in</MudMenuItem>
+                        </NotAuthorized>
+                    </AuthorizeView>
                 }
             </ChildContent>
         </MudMenu>
@@ -109,7 +124,12 @@
                 <div>
                     <div class="footer-heading">Customer care</div>
                     <a class="footer-link" href="/orders">Order status</a>
-                    <a class="footer-link" href="#" @onclick="OpenChat" @onclick:preventDefault="true">Chat with an expert</a>
+                    @* Chat is hidden for anonymous MSAL users (ChatBubble +
+                       BFF chat endpoint both require auth); don't surface a
+                       link that would open a hidden panel. *@
+                    <SignedInOnly>
+                        <a class="footer-link" href="#" @onclick="OpenChat" @onclick:preventDefault="true">Chat with an expert</a>
+                    </SignedInOnly>
                     <a class="footer-link" href="/profile">Account &amp; loyalty</a>
                 </div>
             </div>
@@ -117,7 +137,21 @@
         </footer>
     </MudMainContent>
 
-    <ChatBubble />
+    @if (AuthStateProvider.UseDevAuth)
+    {
+        <ChatBubble />
+    }
+    else
+    {
+        @* MSAL mode: hide ChatBubble for anonymous visitors — the chat
+           endpoint requires auth and would 401 on every send. Comes back
+           automatically once the user signs in. *@
+        <AuthorizeView>
+            <Authorized>
+                <ChatBubble />
+            </Authorized>
+        </AuthorizeView>
+    }
 </MudLayout>
 
 @code {
@@ -142,8 +176,21 @@
 
         // Real-Entra mode: ask the BFF "who am I?" once after sign-in so the
         // top-bar greeting and per-customer pages have a customer ID. Dev-auth
-        // mode short-circuits inside LoadSignedInCustomerAsync.
-        await AuthStateProvider.LoadSignedInCustomerAsync(BffApi);
+        // mode short-circuits inside LoadSignedInCustomerAsync. We also skip
+        // the call entirely for anonymous visitors in MSAL mode — /api/v1/me
+        // requires a JWT and would otherwise 401 every catalog-only browse.
+        if (AuthStateProvider.UseDevAuth)
+        {
+            await AuthStateProvider.LoadSignedInCustomerAsync(BffApi);
+        }
+        else
+        {
+            var state = await AuthState.GetAuthenticationStateAsync();
+            if (state.User.Identity?.IsAuthenticated == true)
+            {
+                await AuthStateProvider.LoadSignedInCustomerAsync(BffApi);
+            }
+        }
     }
 
     private void OnSearchKeyDown(KeyboardEventArgs e)
@@ -160,6 +207,16 @@
     private void OpenCart() => Navigation.NavigateTo("/cart");
 
     private void OpenChat() => ChatPanel.Open();
+
+    // MSAL's RemoteAuthenticatorView refuses logouts that arrive at
+    // /authentication/logout via a plain navigation ("The logout was not
+    // initiated from within the page."). NavigateToLogout sets the session
+    // state MSAL expects before redirecting, so the logout flow proceeds.
+    private void BeginSignOut() => Navigation.NavigateToLogout("authentication/logout");
+
+    // Symmetric to BeginSignOut: NavigateToLogin records the current URL
+    // so MSAL can return the user here after they finish authenticating.
+    private void BeginSignIn() => Navigation.NavigateToLogin("authentication/login");
 
     private void HandleStateChanged() => InvokeAsync(StateHasChanged);
 

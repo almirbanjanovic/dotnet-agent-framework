@@ -1,0 +1,26 @@
+@* Renders ChildContent only when the user can act as a signed-in customer:
+   - In dev-auth mode the impersonation dropdown auto-picks a customer, so
+     the content always shows.
+   - In MSAL mode the framework AuthenticationStateProvider must report
+     the user as authenticated.
+   Used to hide actions that need a per-customer identity (Add to cart,
+   chat CTAs) from anonymous catalog visitors so we don't silently drop
+   their cart on the MSAL login redirect or open a hidden chat panel. *@
+@inject AuthStateProvider AuthStateProvider
+
+@if (AuthStateProvider.UseDevAuth)
+{
+    @ChildContent
+}
+else
+{
+    <AuthorizeView>
+        <Authorized>
+            @ChildContent
+        </Authorized>
+    </AuthorizeView>
+}
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

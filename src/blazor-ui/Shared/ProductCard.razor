@@ -19,14 +19,19 @@
         </div>
         <div class="product-card-footer">
             <span class="product-card-price">@Product.Price.ToString("C")</span>
-            <span @onclick="AddToCart" @onclick:stopPropagation="true" style="display: inline-flex;">
-                <MudIconButton Icon="@Icons.Material.Filled.AddShoppingCart"
-                               Color="Color.Primary"
-                               Variant="Variant.Filled"
-                               Size="Size.Small"
-                               Disabled="@(!Product.InStock)"
-                               aria-label="Add to cart" />
-            </span>
+            @* Hide for anonymous MSAL users — CartService is in-memory and
+               clicking the cart icon triggers an MSAL login redirect that
+               wipes WASM state, silently losing the items they just added. *@
+            <SignedInOnly>
+                <span @onclick="AddToCart" @onclick:stopPropagation="true" style="display: inline-flex;">
+                    <MudIconButton Icon="@Icons.Material.Filled.AddShoppingCart"
+                                   Color="Color.Primary"
+                                   Variant="Variant.Filled"
+                                   Size="Size.Small"
+                                   Disabled="@(!Product.InStock)"
+                                   aria-label="Add to cart" />
+                </span>
+            </SignedInOnly>
         </div>
     </div>
 </article>

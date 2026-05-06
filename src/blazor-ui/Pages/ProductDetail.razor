@@ -1,9 +1,9 @@
 @page "/product/{id}"
-@attribute [Authorize]
 @inject BffApiClient BffApi
 @inject CartService Cart
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
+@inject AuthStateProvider AuthStateProvider
 
 <PageTitle>@(_product?.Name ?? "Product") · Contoso Outdoors</PageTitle>
 
@@ -51,22 +51,43 @@
                                      Variant="Variant.Outlined"
                                      Margin="Margin.Dense"
                                      Style="width: 110px;" />
-                    <MudButton Variant="Variant.Filled"
-                               Color="Color.Primary"
-                               Size="Size.Large"
-                               StartIcon="@Icons.Material.Filled.AddShoppingCart"
-                               Disabled="@(!p.InStock)"
-                               OnClick="HandleAddToCart">
-                        Add to cart
-                    </MudButton>
-                    <MudButton Variant="Variant.Outlined"
-                               Color="Color.Primary"
-                               Size="Size.Large"
-                               StartIcon="@Icons.Material.Filled.ShoppingCartCheckout"
-                               Disabled="@(!p.InStock)"
-                               OnClick="HandleBuyNow">
-                        Buy now
-                    </MudButton>
+                    @* Cart actions require sign-in: CartService is in-memory and
+                       MSAL's login redirect wipes WASM state. Anonymous users
+                       see a "Sign in to add to cart" prompt instead. *@
+                    <SignedInOnly>
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   Size="Size.Large"
+                                   StartIcon="@Icons.Material.Filled.AddShoppingCart"
+                                   Disabled="@(!p.InStock)"
+                                   OnClick="HandleAddToCart">
+                            Add to cart
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Primary"
+                                   Size="Size.Large"
+                                   StartIcon="@Icons.Material.Filled.ShoppingCartCheckout"
+                                   Disabled="@(!p.InStock)"
+                                   OnClick="HandleBuyNow">
+                            Buy now
+                        </MudButton>
+                    </SignedInOnly>
+                    @* Dev-auth always has a "signed in" customer (impersonation
+                       dropdown) so this CTA only applies to anonymous MSAL users. *@
+                    @if (!AuthStateProvider.UseDevAuth)
+                    {
+                        <AuthorizeView>
+                            <NotAuthorized>
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           Size="Size.Large"
+                                           StartIcon="@Icons.Material.Outlined.Login"
+                                           OnClick="HandleSignInToShop">
+                                    Sign in to add to cart
+                                </MudButton>
+                            </NotAuthorized>
+                        </AuthorizeView>
+                    }
                 </div>
                 <ul class="product-detail-features">
                     <li><MudIcon Icon="@Icons.Material.Outlined.LocalShipping" Size="Size.Small" /> Free shipping over $99</li>
@@ -133,6 +154,10 @@
         Cart.Add(_product, _quantity);
         Navigation.NavigateTo("/cart");
     }
+
+    // Anonymous MSAL flow: NavigateToLogin records the current URL so the
+    // user lands back on the same product page after signing in.
+    private void HandleSignInToShop() => Navigation.NavigateToLogin("authentication/login");
 
     private static string Capitalize(string value) =>
         string.IsNullOrEmpty(value) ? value : char.ToUpperInvariant(value[0]) + value[1..];
