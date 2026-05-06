@@ -30,6 +30,30 @@ GitHub Actions workflow. PRs that violate the rule will fail CI.
 If the test fails, **inline the shared code** rather than weakening or
 disabling the test.
 
+### Adversarial review (HARD RULE)
+
+> **ALWAYS DO THIS:** Before declaring any non-trivial task done,
+> validate your findings by debating with **two other models**.
+
+After you have made changes (bug fix, refactor, new feature, security
+fix, architecture change), launch two independent reviewer subagents
+on different models, give each the diff and the user's original
+intent, and ask them to find defects, missed cases, regressions, and
+security issues. Then:
+
+1. **Triage every finding** as TRUE / FALSE POSITIVE / DEFERRED.
+2. **Verify each TRUE finding against source** before fixing — reviewers
+   hallucinate code that doesn't exist.
+3. **Apply true positives** in the same session.
+4. **Re-run build + full test suite** after the second batch of edits.
+5. **Present a verdict matrix** to the user with columns
+   `# | Source | Finding | Severity | Verdict | Action`, plus the list
+   of files changed and the final test count.
+
+Skip the debate only for trivial single-line changes, pure
+documentation edits, or read-only investigations. When in doubt,
+debate.
+
 ## Local development
 
 - The Aspire AppHost forces children to `ASPNETCORE_ENVIRONMENT=Local`
