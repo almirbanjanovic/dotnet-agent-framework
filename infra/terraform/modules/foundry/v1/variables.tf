@@ -33,6 +33,12 @@ variable "deployment_sku_name" {
   type        = string
 }
 
+variable "deployment_capacity" {
+  description = "Capacity for the chat model deployment. For GlobalStandard this is TPM in thousands (e.g., 250 = 250,000 TPM). New Azure OpenAI accounts default to a tiny per-deployment quota (~10K TPM) which is usually too low for an agentic workload — bump this to avoid 429s."
+  type        = number
+  default     = 250
+}
+
 variable "deployment_model_format" {
   description = "Model format (e.g., OpenAI)"
   type        = string

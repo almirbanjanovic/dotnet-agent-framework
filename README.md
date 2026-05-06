@@ -165,10 +165,10 @@ docs/
   config-naming-standard.md       → Key Vault naming convention (PascalCase--Hierarchy)
   implementation-plan.md          → Component-by-component build plan
   local-development.md            → Local Track: Foundry-only, services run via dotnet run
-  lab-0.md                        → Both tracks, Lab 0: Prerequisites + Bootstrap (choose your track)
-  lab-1.md                        → Both tracks, Lab 1: Infrastructure, Validation & Data Seeding
-  lab-2.md                        → Both tracks, Lab 2: Single & Multi-Agent Workflows (Microsoft Agent Framework)
-  lab-3.md                        → Both tracks, Lab 3: Human-in-the-Loop Workflows (durable, ambient agents)
+  labs/                           → Track-scoped lab instructions (Local + Full Azure)
+    README.md                     → Track index (pick Local vs Full Azure)
+    local/lab-0.md … lab-3.md     → Local Track: bootstrap → Foundry deploy → MAF labs
+    full-azure/lab-0.md … lab-3.md → Full Azure Track: bootstrap → AKS deploy → MAF labs
   security.md                     → Security architecture (auth, RBAC, network)
 
 infra/
@@ -236,9 +236,9 @@ This repo supports two deployment tracks. Pick one based on what you're trying t
 | **Knowledge base** | In-memory vector search over `data/contoso-sharepoint/**/*.txt` | Azure AI Search (PDFs, semantic ranker) |
 | **User auth** | Microsoft Entra ID via MSAL (8 test users in your tenant) | Microsoft Entra ID via MSAL (8 test users in your tenant) |
 | **Start command** | `./infra/setup-local.ps1` then `dotnet run --project src/AppHost` | `./infra/init.ps1` then `./infra/deploy.ps1` |
-| **Guide** | [Local Track →](docs/local-development.md) | [Lab 0 →](docs/lab-0.md) then [Lab 1 →](docs/lab-1.md) |
+| **Guide** | [docs/local-development.md](docs/local-development.md) plus [Local Track labs](docs/labs/local/) | [Full Azure Track labs](docs/labs/full-azure/) |
 
-After Lab 1 (either track), continue with [Lab 2 — Single & Multi-Agent Workflows](docs/lab-2.md) and [Lab 3 — Human-in-the-Loop Workflows](docs/lab-3.md). Both labs preserve the same two-track structure.
+Each track is its own folder under [`docs/labs/`](docs/labs/) so you can read straight through without any "Local vs Full Azure" interleaving. Pick once and stay in that folder.
 
 Both tracks use Azure AI Foundry for chat completions and embeddings, authenticated via `DefaultAzureCredential` — no API keys are stored in either path.
 
@@ -259,7 +259,7 @@ Aspire dashboard: `https://localhost:15888`. Blazor UI: `http://localhost:5008`.
 ./infra/deploy.ps1                     # Lab 1: provision + seed everything
 ```
 
-Full guide: [docs/lab-0.md](docs/lab-0.md) → [docs/lab-1.md](docs/lab-1.md) → [docs/lab-2.md](docs/lab-2.md) → [docs/lab-3.md](docs/lab-3.md).
+Full guide: [Lab 0](docs/labs/full-azure/lab-0.md) → [Lab 1](docs/labs/full-azure/lab-1.md) → [Lab 2](docs/labs/full-azure/lab-2.md) → [Lab 3](docs/labs/full-azure/lab-3.md).
 
 ## Notes
 

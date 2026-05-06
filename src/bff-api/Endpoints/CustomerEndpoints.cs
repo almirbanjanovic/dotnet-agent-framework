@@ -39,9 +39,21 @@ internal static class CustomerEndpoints
         CustomerContext customerContext,
         CrmApiClient crmApiClient,
         HttpContext httpContext,
+        ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
+        var logger = loggerFactory.CreateLogger("Contoso.BffApi.Endpoints.Me");
+
+        var user = httpContext.User;
+        var claimsSummary = string.Join(", ", user.Claims
+            .Select(c => $"{c.Type}={c.Value}")
+            .Take(20));
+
         var customerId = customerContext.GetCustomerId();
+        logger.LogInformation(
+            "GET /me — IsAuthenticated={IsAuth}, ResolvedCustomerId={CustomerId}, Claims=[{Claims}]",
+            user.Identity?.IsAuthenticated, customerId, claimsSummary);
+
         if (string.IsNullOrWhiteSpace(customerId))
         {
             return Results.Json(new
@@ -55,7 +67,6 @@ internal static class CustomerEndpoints
         // Best-effort: read display name + email from the JWT for the
         // top-bar "Welcome, Anna" experience even if the CRM record is
         // missing. The CRM customer is the source of truth for ID.
-        var user = httpContext.User;
         var displayName = user.FindFirst("name")?.Value
             ?? user.FindFirst(ClaimTypes.Name)?.Value;
         var email = user.FindFirst("preferred_username")?.Value

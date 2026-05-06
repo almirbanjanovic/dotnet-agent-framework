@@ -98,8 +98,12 @@ public class ChatPipelineIntegrationTests
     }
 
     [Fact]
-    public async Task ChatEndpoint_OrchestratorError_ProxiesStatusCode()
+    public async Task ChatEndpoint_OrchestratorError_Returns502WithDiagnosticBody()
     {
+        // Whatever the upstream agent returns (4xx or 5xx with whatever body),
+        // the BFF normalises it to 502 BadGateway with a JSON body the UI can
+        // render. We never proxy raw upstream payloads to the browser because
+        // they may be empty (a vanilla 500 page) or non-JSON.
         using var factory = new BffApiWebApplicationFactory(_ =>
             new HttpResponseMessage(HttpStatusCode.BadRequest)
             {
@@ -114,9 +118,10 @@ public class ChatPipelineIntegrationTests
         request.Headers.Add("X-Customer-Id", "cust-1");
         var response = await client.SendAsync(request);
 
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.StatusCode.Should().Be(HttpStatusCode.BadGateway);
         var payload = await response.Content.ReadAsStringAsync();
-        payload.Should().Be("orchestrator-failed");
+        payload.Should().Contain("OrchestratorError");
+        payload.Should().Contain("orchestrator-failed");
     }
 
     [Fact]

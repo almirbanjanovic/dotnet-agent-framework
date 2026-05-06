@@ -85,6 +85,12 @@ variable "oai_deployment_sku_name" {
   type        = string
 }
 
+variable "oai_deployment_capacity" {
+  description = "Capacity for the chat model deployment. For GlobalStandard this is TPM in thousands (250 = 250,000 TPM)."
+  type        = number
+  default     = 250
+}
+
 variable "oai_deployment_model_format" {
   description = "Azure OpenAI model format"
   type        = string

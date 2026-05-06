@@ -18,7 +18,8 @@ internal sealed class FoundryHealthCheck(ProductAgentFactory agentFactory, Syste
             var agent = agentFactory.CreateAgent(promptProvider.Prompt, new List<AITool>());
             var options = new ChatClientAgentRunOptions(new ChatOptions
             {
-                MaxOutputTokens = 1,
+                // OpenAI Responses API requires MaxOutputTokens >= 16.
+                MaxOutputTokens = 16,
                 Temperature = 0,
                 ToolMode = ChatToolMode.None
             });

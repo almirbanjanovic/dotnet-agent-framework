@@ -31,8 +31,11 @@ internal static class ChatEndpoint
         IConversationStore conversationStore,
         OrchestratorClient orchestratorClient,
         CustomerContext customerContext,
+        ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
+        var logger = loggerFactory.CreateLogger("Contoso.BffApi.Endpoints.Chat");
+
         if (string.IsNullOrWhiteSpace(request.Message))
         {
             return Results.BadRequest(new { error = "message is required." });
@@ -72,37 +75,74 @@ internal static class ChatEndpoint
             new ChatMessage("user", request.Message, DateTimeOffset.UtcNow),
             cancellationToken);
 
-        using var response = await orchestratorClient.SendAsync(
-            customerId,
-            request.Message,
-            historyForOrchestrator,
-            cancellationToken);
-        var payload = await response.Content.ReadAsStringAsync(cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var contentType = response.Content.Headers.ContentType?.ToString() ?? "application/json";
-            return Results.Content(payload, contentType, statusCode: (int)response.StatusCode);
-        }
-
-        AgentChatResponse? agentResponse = null;
+        HttpResponseMessage? response = null;
+        string payload;
         try
         {
-            agentResponse = JsonSerializer.Deserialize<AgentChatResponse>(payload, JsonOptions);
+            response = await orchestratorClient.SendAsync(
+                customerId,
+                request.Message,
+                historyForOrchestrator,
+                cancellationToken);
+            payload = await response.Content.ReadAsStringAsync(cancellationToken);
         }
-        catch (JsonException)
+        catch (Exception ex)
         {
-            // Orchestrator returned 200 with non-JSON — surface the raw payload as the assistant reply.
+            logger.LogError(ex, "Orchestrator call failed for customer {CustomerId}", customerId);
+            response?.Dispose();
+            return Results.Json(
+                new
+                {
+                    error = ex.GetType().Name,
+                    message = $"The AI agent is currently unavailable: {ex.Message}",
+                    conversationId = conversation.Id
+                },
+                statusCode: StatusCodes.Status502BadGateway);
         }
 
-        var assistantMessage = agentResponse?.Response ?? payload;
-        var toolCalls = agentResponse?.ToolCalls ?? Array.Empty<ToolCallInfo>();
+        try
+        {
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning(
+                    "Orchestrator returned {StatusCode} for customer {CustomerId}. Body: {Body}",
+                    (int)response.StatusCode, customerId, payload);
 
-        await conversationStore.AddMessageAsync(
-            conversation.Id,
-            new ChatMessage("assistant", assistantMessage, DateTimeOffset.UtcNow),
-            cancellationToken);
+                // Always return JSON the UI can render — never proxy an empty body.
+                var safeBody = string.IsNullOrWhiteSpace(payload) ? "(empty response)" : payload;
+                return Results.Json(
+                    new
+                    {
+                        error = "OrchestratorError",
+                        message = $"The AI agent returned {(int)response.StatusCode}: {safeBody}",
+                        conversationId = conversation.Id
+                    },
+                    statusCode: StatusCodes.Status502BadGateway);
+            }
 
-        return Results.Ok(new ChatResponse(conversation.Id, assistantMessage, toolCalls));
+            AgentChatResponse? agentResponse = null;
+            try
+            {
+                agentResponse = JsonSerializer.Deserialize<AgentChatResponse>(payload, JsonOptions);
+            }
+            catch (JsonException)
+            {
+                // Orchestrator returned 200 with non-JSON — surface the raw payload as the assistant reply.
+            }
+
+            var assistantMessage = agentResponse?.Response ?? payload;
+            var toolCalls = agentResponse?.ToolCalls ?? Array.Empty<ToolCallInfo>();
+
+            await conversationStore.AddMessageAsync(
+                conversation.Id,
+                new ChatMessage("assistant", assistantMessage, DateTimeOffset.UtcNow),
+                cancellationToken);
+
+            return Results.Ok(new ChatResponse(conversation.Id, assistantMessage, toolCalls));
+        }
+        finally
+        {
+            response.Dispose();
+        }
     }
 }

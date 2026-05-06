@@ -4,12 +4,17 @@
 #
 # Idempotency: terraform owns these users completely. The setup-local script
 # deletes any orphan UPNs in Entra (left from a prior failed/destroyed run)
-# BEFORE running `terraform apply`, so the create path here always starts
-# from a clean slate. We deliberately do NOT use a Terraform `import` block:
-# that path failed in practice because `data.azuread_users` returned empty
-# results in some tenants AND because `import` blocks driven by an `auto.tfvars`
-# variable still produced "will be created" plans without honoring the
-# import. Delete-then-create is simpler, deterministic, and Terraform-only.
+# BEFORE running `terraform apply` — but ONLY if the UPN is missing from
+# Terraform state. Users that are already managed by TF are left untouched,
+# so repeat `setup-local` runs are a no-op for them: no recreate, no
+# password rotation, no invalidated browser sessions.
+#
+# We deliberately do NOT use a Terraform `import` block: that path failed
+# in practice because `data.azuread_users` returned empty results in some
+# tenants AND because `import` blocks driven by an `auto.tfvars` variable
+# still produced "will be created" plans without honoring the import.
+# Selective delete-then-create (genuine orphans only) is simpler,
+# deterministic, and Terraform-only.
 # =============================================================================
 
 locals {
@@ -30,8 +35,9 @@ locals {
 
 # -----------------------------------------------------------------------------
 # Random Passwords (human-readable format: Contoso-<Pet>-<Number>!#)
-# Always freshly generated — setup-local deletes orphan users before apply
-# so every `azuread_user.test` is a brand-new create that uses this password.
+# These resources have no `keepers`, so they stay stable across applies —
+# the password only changes when the random_pet / random_integer entry is
+# removed from state (i.e. after a `terraform destroy`).
 # -----------------------------------------------------------------------------
 
 resource "random_pet" "user_password_pet" {

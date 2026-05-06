@@ -290,13 +290,17 @@ fi
 
 # ── Delete orphan Entra test users ──────────────────────────────────────────
 #
-# Terraform owns these users completely. If a UPN already exists in the
-# tenant, it is leftover state from a prior run that errored or was
-# destroyed without removing the Entra objects (Entra deletes are not
-# transactional with Terraform state). Nothing outside Terraform is
-# supposed to create these UPNs, so we delete any orphans here — the
-# subsequent `terraform apply` then creates them fresh from a clean slate.
-step "Deleting orphan Entra test users (if any)"
+# Terraform owns these test users. They live in tenant-wide Entra, so a
+# `terraform destroy` followed by `terraform apply` (or any state loss) can
+# leave the UPN in Entra without a matching state entry — the next apply
+# would then 409 with "user already exists".
+#
+# To avoid that we delete ONLY genuine orphans: UPNs that exist in Entra
+# but have no corresponding `azuread_user.test["<key>"]` entry in Terraform
+# state. Users that are already managed by Terraform are left alone, so
+# repeat runs of setup-local are a no-op for them — no recreate, no
+# password rotation, no invalidated browser sessions.
+step "Checking for orphan Entra test users"
 
 tenant_domain=$(az rest --method GET --url 'https://graph.microsoft.com/v1.0/domains' \
     --query "value[?isDefault].id | [0]" -o tsv 2>/dev/null || true)
@@ -305,6 +309,16 @@ if [[ -z "$tenant_domain" ]]; then
     exit 1
 fi
 ok "Tenant default domain: $tenant_domain"
+
+# Snapshot the list of test users currently in Terraform state so we can
+# tell "managed by TF" (skip) from "true orphan" (delete). Single remote-
+# state read; subsequent UPN lookups are local string matches.
+managed_user_keys=""
+if tf_state_lines=$(terraform -chdir="$TERRAFORM_DIR" state list 2>/dev/null); then
+    # Extract the bracketed key from lines like:
+    #   module.entra.azuread_user.test["anna"]
+    managed_user_keys=$(echo "$tf_state_lines" | grep -oE 'azuread_user\.test\["[^"]+"\]' | sed -E 's/.*\["([^"]+)"\].*/\1/' || true)
+fi
 
 # Mirror of `var.test_users` defaults in
 # infra/terraform/modules/entra/v1/variables.tf — keep in sync.
@@ -319,10 +333,17 @@ TEST_USER_NICKS=(emma.wilson-local james.chen-local sarah.miller-local david.par
 
 # Build JSON map of {key: oid} for users that exist.
 deleted_count=0
+skipped_count=0
 for i in "${!TEST_USER_KEYS[@]}"; do
+    key="${TEST_USER_KEYS[$i]}"
     upn="${TEST_USER_NICKS[$i]}@${tenant_domain}"
     oid=$(az ad user show --id "$upn" --query id -o tsv 2>/dev/null || true)
     if [[ -z "$oid" ]]; then
+        continue
+    fi
+    if echo "$managed_user_keys" | grep -qx "$key"; then
+        # Already in TF state — leave it alone. terraform apply will be a no-op.
+        skipped_count=$((skipped_count + 1))
         continue
     fi
     if ! az ad user delete --id "$upn" 2>/dev/null; then
@@ -333,7 +354,11 @@ for i in "${!TEST_USER_KEYS[@]}"; do
     deleted_count=$((deleted_count + 1))
 done
 if [[ $deleted_count -eq 0 ]]; then
-    ok "No orphan test users found"
+    if [[ $skipped_count -gt 0 ]]; then
+        ok "$skipped_count test user(s) already managed by Terraform — leaving as-is"
+    else
+        ok "No orphan test users found"
+    fi
 fi
 
 # ── Terraform Apply ─────────────────────────────────────────────────────────
@@ -365,12 +390,15 @@ test_user_passwords_json=$(terraform -chdir="$TERRAFORM_DIR" output -json test_u
 
 # ── Write test-user credentials to a gitignored file ───────────────
 #
-# Each `terraform apply` rotates the 8 test-user passwords (we delete
-# orphans before applying so creates are always fresh). Printing them to the
-# terminal isn't practical for lab students — they need to copy individual
-# passwords back into the Blazor sign-in dialog as they exercise different
-# customer scenarios. Write them to a per-clone, gitignored file at the repo
-# root instead. The file is rewritten in full on every apply so it always
+# Passwords are stable across `setup-local` runs — the random_pet /
+# random_integer resources backing them stay in Terraform state, and we
+# only delete genuine orphans (UPNs not in TF state) before applying.
+# A password only changes after a `setup-local --cleanup` (or a manual
+# `terraform destroy`) followed by a fresh setup. Lab students need to
+# copy individual passwords back into the Blazor sign-in dialog as they
+# exercise different customer scenarios; printing them to the terminal
+# isn't practical, so we write them to a per-clone gitignored file at the
+# repo root. The file is rewritten in full on every apply so it always
 # reflects the live passwords.
 step "Writing test-user credentials"
 
@@ -391,7 +419,8 @@ lines = [
     "# Local-dev test-user credentials",
     f"# Generated: {datetime.datetime.now().astimezone().strftime('%Y-%m-%d %H:%M:%S %z')}",
     f"# Tenant:    {tenant}",
-    "# WARNING:   gitignored — do not commit. Each setup-local run rotates these passwords.",
+    "# WARNING:   gitignored — do not commit. Passwords persist across setup-local runs;",
+    "#            they only change after a --cleanup followed by a fresh setup.",
     "",
     f"{'key':<7}  {'upn':<50}  password",
     f"{'---':<7}  {'---':<50}  ---",
@@ -486,7 +515,7 @@ echo -e "\033[32m============================================================\03
 echo ""
 echo "  Sign-in credentials for the 8 test users have been written to:"
 echo -e "    \033[33m${credentials_relative}\033[0m"
-echo -e "    \033[90m(gitignored — each apply rotates the passwords)\033[0m"
+echo -e "    \033[90m(gitignored — passwords persist across runs; --cleanup rotates them)\033[0m"
 echo ""
 echo "  Port Map:"
 for port in $(echo "${!PORT_MAP[@]}" | tr ' ' '\n' | sort -n); do

@@ -24,7 +24,7 @@ Terraform provisions the **AGC resource itself** but does **not** install the
 ALB Controller (the Kubernetes operator that watches `Gateway` and `HTTPRoute`
 custom resources and programs the AGC). That install happens once via the
 Microsoft-published Helm chart, and is a manual step in
-[Lab 1 Step 4](../../../../docs/lab-1.md).
+[Full Azure Lab 1, Step 4](../../../../docs/labs/full-azure/lab-1.md#step-4--deploy-the-8-services-to-aks).
 
 The short version (full instructions in
 [the upstream BYO Helm guide](https://learn.microsoft.com/en-us/azure/application-gateway/for-containers/quickstart-deploy-application-gateway-for-containers-alb-controller-helm)):

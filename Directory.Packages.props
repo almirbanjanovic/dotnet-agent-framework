@@ -11,7 +11,7 @@
 
   <ItemGroup>
     <!-- Aspire -->
-    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.2.3" />
+    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.2.4" />
 
     <!-- Azure SDK -->
     <PackageVersion Include="Azure.AI.OpenAI" Version="2.1.0" />

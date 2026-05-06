@@ -122,7 +122,7 @@ The `conversations` container lives in the **Agents** Cosmos DB account (Eventua
 
 ### Prerequisites
 
-See [Lab 1](../docs/lab-1.md) for prerequisites and step-by-step instructions.
+See [Full Azure Lab 1](../docs/labs/full-azure/lab-1.md) for prerequisites and step-by-step instructions.
 
 ### How data gets loaded
 

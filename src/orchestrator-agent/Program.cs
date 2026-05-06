@@ -58,6 +58,31 @@ builder.Services.AddHealthChecks()
 
 var app = builder.Build();
 
+// Surface unhandled exceptions as JSON so callers (BFF / browser) get the
+// actual error message instead of an empty 500.
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        var feature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+        var ex = feature?.Error;
+        var logger = context.RequestServices
+            .GetRequiredService<ILoggerFactory>()
+            .CreateLogger("Contoso.OrchestratorAgent.UnhandledException");
+        logger.LogError(ex, "Unhandled exception on {Path}", context.Request.Path);
+
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsJsonAsync(new
+        {
+            error = ex?.GetType().Name ?? "InternalServerError",
+            message = ex?.Message ?? "An unhandled exception occurred.",
+            stack = ex?.StackTrace?.Split('\n').Take(5).ToArray(),
+            path = context.Request.Path.Value
+        });
+    });
+});
+
 app.MapHealthChecks("/health", new HealthCheckOptions { Predicate = _ => false });
 app.MapHealthChecks("/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
 

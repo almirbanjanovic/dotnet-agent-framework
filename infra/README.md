@@ -2,7 +2,7 @@
 
 This folder contains all Terraform infrastructure-as-code and bootstrap scripts for the .NET Agent Framework.
 
-> **For step-by-step deployment instructions, see [Lab 0 — Bootstrap](../docs/lab-0.md) and [Lab 1 — Infrastructure, Validation & Data Seeding](../docs/lab-1.md).**
+> **For step-by-step deployment instructions, see the [labs index](../docs/labs/README.md) — pick a track (Local or Full Azure) and follow Lab 0 → Lab 1 in that folder.**
 
 ## Architecture
 
@@ -138,7 +138,7 @@ After `terraform apply`, the following outputs are displayed:
 | `entra_test_user_upns` | Test user login emails |
 | `tls_cert_secret_id` | TLS cert Key Vault secret ID |
 
-All secrets (OpenAI endpoint, Cosmos DB endpoint, deployment names) are automatically written to Key Vault by Terraform. See [Lab 1 Step 2](../docs/lab-1.md#step-2--configure-app-settings) for pulling them into local config.
+All secrets (OpenAI endpoint, Cosmos DB endpoint, deployment names) are automatically written to Key Vault by Terraform. See [Full Azure Lab 1, Step 2](../docs/labs/full-azure/lab-1.md#step-2--configure-app-settings) for pulling them into local config.
 
 > **Note:** All resources use identity-based (RBAC) authentication. Key-based auth is disabled on Cosmos DB and AI Foundry. No API keys or database keys are stored in Key Vault or exposed in Terraform outputs.
 

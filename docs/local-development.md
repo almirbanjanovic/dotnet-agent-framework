@@ -2,7 +2,7 @@
 
 > ## 📍 You are on the **Local Track** — “Foundry only, everything else local”
 >
-> | | Local Track *(this page)* | [Full Azure Track](lab-0.md) → [Lab 1](lab-1.md) |
+> | | Local Track *(this page)* | [Full Azure Track — Lab 0](labs/full-azure/lab-0.md) → [Lab 1](labs/full-azure/lab-1.md) |
 > |---|---|---|
 > | Azure resources | 1 (Foundry only) | 14+ (Foundry, Cosmos×2, AI Search, AKS, ACR, Storage, Key Vault, identities, networking) |
 > | Setup time | ~10 min | ~45–60 min |

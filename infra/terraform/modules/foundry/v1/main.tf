@@ -89,7 +89,8 @@ resource "azurerm_cognitive_deployment" "this" {
   }
 
   sku {
-    name = var.deployment_sku_name
+    name     = var.deployment_sku_name
+    capacity = var.deployment_capacity
   }
 
   version_upgrade_option = var.version_upgrade_option

@@ -97,7 +97,10 @@ internal sealed class AIAgentIntentClassifierClient : IIntentClassifierClient
         _agent = agent;
         _runOptions = new ChatClientAgentRunOptions(new ChatOptions
         {
-            MaxOutputTokens = 5,
+            // The OpenAI Responses API rejects values below 16. We only need
+            // a single token in practice ("CRM" or "PRODUCT"), but the model
+            // server requires the minimum of 16.
+            MaxOutputTokens = 16,
             Temperature = 0,
             ToolMode = ChatToolMode.None
         });

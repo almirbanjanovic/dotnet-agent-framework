@@ -53,6 +53,21 @@ public sealed class AuthStateProvider
 
     public string? Email { get; private set; }
 
+    /// <summary>
+    /// When <see cref="LoadSignedInCustomerAsync"/> fails or the BFF returns
+    /// no customer mapping, this captures a short message that the UI can
+    /// surface to the user (e.g. on the Profile page) instead of silently
+    /// showing an empty state.
+    /// </summary>
+    public string? LastLoadError { get; private set; }
+
+    /// <summary>
+    /// Becomes <c>true</c> after the first <see cref="LoadSignedInCustomerAsync"/>
+    /// call completes (success or failure). Lets pages distinguish "still
+    /// loading" from "tried and got nothing".
+    /// </summary>
+    public bool HasAttemptedLoad { get; private set; }
+
     public void SetCustomer(CustomerOption? customer)
     {
         if (customer is null || SelectedCustomer?.Id == customer.Id)
@@ -81,6 +96,8 @@ public sealed class AuthStateProvider
             var me = await client.GetMeAsync(ct);
             if (string.IsNullOrWhiteSpace(me.CustomerId))
             {
+                LastLoadError = "Signed in successfully, but the BFF could not map your account to a Contoso Outdoors customer record. "
+                    + $"(BFF returned displayName='{me.DisplayName}', email='{me.Email}'.)";
                 return;
             }
 
@@ -96,13 +113,18 @@ public sealed class AuthStateProvider
 
             SelectedCustomer = new CustomerOption(me.CustomerId, displayName);
             Email = me.Email;
+            LastLoadError = null;
             CustomerChanged?.Invoke();
         }
-        catch
+        catch (Exception ex)
         {
-            // Best-effort. The shell renders a generic "shopping" experience
-            // even if /me fails; pages that need a customer ID will surface
-            // their own errors.
+            // Surface the failure on the Profile page so we stop debugging blind.
+            LastLoadError = $"GET /api/v1/me failed: {ex.GetType().Name}: {ex.Message}";
+        }
+        finally
+        {
+            HasAttemptedLoad = true;
+            CustomerChanged?.Invoke();
         }
     }
 }

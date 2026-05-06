@@ -13,12 +13,12 @@
 >   `foundry_project_endpoint`, `chat_deployment_name`, `embedding_deployment_name`,
 >   `tenant_id`, `bff_client_id`, plus the Entra test-user outputs.
 > - Optional Microsoft Entra ID — Entra is now mandatory on **both**
->   tracks (Local + Full Azure). See [docs/lab-0.md](lab-0.md).
+>   tracks (Local + Full Azure). See [docs/labs/README.md](labs/README.md).
 >
 > **For the current local-dev workflow, see:**
 > - [`docs/local-development.md`](local-development.md) — how it actually works today
-> - [`docs/lab-0.md`](lab-0.md) — bootstrap steps
-> - [`docs/lab-1.md`](lab-1.md) — first deployment
+> - [`docs/labs/local/lab-0.md`](labs/local/lab-0.md) — bootstrap steps (Local Track)
+> - [`docs/labs/local/lab-1.md`](labs/local/lab-1.md) — first deployment (Local Track)
 >
 > The text below is preserved only as a record of the original design
 > intent. Anything in it that conflicts with the docs above is wrong.

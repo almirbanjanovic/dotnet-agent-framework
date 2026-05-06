@@ -35,6 +35,12 @@
             <MudText Typo="Typo.body2" Color="Color.Secondary">
                 We couldn't find a Contoso Outdoors customer record matching your account.
             </MudText>
+            @if (!string.IsNullOrWhiteSpace(AuthStateProvider.LastLoadError))
+            {
+                <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mt-4" Style="text-align: left;">
+                    <MudText Typo="Typo.body2"><strong>Diagnostic:</strong> @AuthStateProvider.LastLoadError</MudText>
+                </MudAlert>
+            }
         </MudPaper>
     }
     else
@@ -148,7 +154,11 @@
         {
             if (AuthStateProvider.SelectedCustomer is null)
             {
-                _isLoading = false;
+                // Stay in the skeleton state until AuthStateProvider has at
+                // least *tried* to load /me. Once HasAttemptedLoad is true
+                // and we still have no customer, the empty-state branch
+                // (with diagnostic message) will render.
+                _isLoading = !AuthStateProvider.HasAttemptedLoad;
                 return;
             }
 
@@ -160,7 +170,10 @@
         }
         finally
         {
-            _isLoading = false;
+            if (AuthStateProvider.SelectedCustomer is not null || AuthStateProvider.HasAttemptedLoad)
+            {
+                _isLoading = false;
+            }
         }
     }
 

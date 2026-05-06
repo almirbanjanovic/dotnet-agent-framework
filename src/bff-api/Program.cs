@@ -53,6 +53,33 @@ ConfigureCors(builder);
 
 var app = builder.Build();
 
+// IMPORTANT: ExceptionHandler must run BEFORE UseCors so that the response
+// produced for an unhandled exception still flows through the CORS middleware
+// and gets the Access-Control-Allow-Origin header. Without this, a 500 from
+// (for example) the orchestrator surfaces in the browser as a generic CORS
+// failure with no useful message.
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        var feature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+        var ex = feature?.Error;
+        var logger = context.RequestServices
+            .GetRequiredService<ILoggerFactory>()
+            .CreateLogger("Contoso.BffApi.UnhandledException");
+        logger.LogError(ex, "Unhandled exception on {Path}", context.Request.Path);
+
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsJsonAsync(new
+        {
+            error = ex?.GetType().Name ?? "InternalServerError",
+            message = ex?.Message ?? "An unhandled exception occurred.",
+            path = context.Request.Path.Value
+        });
+    });
+});
+
 app.UseCors("BlazorUI");
 
 if (useEntraAuth)
@@ -168,6 +195,17 @@ static void ConfigureAuth(WebApplicationBuilder builder, bool useEntraAuth)
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["AzureAd:ClientId"] = bffClientId
+        });
+    }
+
+    // Microsoft.Identity.Web requires AzureAd:Instance to validate tokens.
+    // Default to public Entra so neither developers nor CI/CD have to set
+    // this for the common case; sovereign clouds can override in config.
+    if (string.IsNullOrWhiteSpace(builder.Configuration["AzureAd:Instance"]))
+    {
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["AzureAd:Instance"] = "https://login.microsoftonline.com/"
         });
     }
 

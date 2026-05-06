@@ -33,6 +33,7 @@ module "foundry" {
   account_kind                  = "AIServices"
   sku_name                      = "S0"
   deployment_sku_name           = "GlobalStandard"
+  deployment_capacity           = 250
   deployment_model_format       = "OpenAI"
   deployment_model_name         = var.chat_model_name
   deployment_model_version      = var.chat_model_version
@@ -40,7 +41,7 @@ module "foundry" {
   embedding_model_name          = var.embedding_model_name
   embedding_model_version       = var.embedding_model_version
   embedding_sku_name            = "GlobalStandard"
-  embedding_capacity            = 120
+  embedding_capacity            = 250
   local_auth_enabled            = false
   public_network_access_enabled = true
   allowed_ips                   = [local.deployer_ip]

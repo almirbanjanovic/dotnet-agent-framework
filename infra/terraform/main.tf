@@ -41,6 +41,7 @@ module "foundry" {
   account_kind             = var.cognitive_account_kind
   sku_name                 = var.oai_sku_name
   deployment_sku_name      = var.oai_deployment_sku_name
+  deployment_capacity      = var.oai_deployment_capacity
   deployment_model_format  = var.oai_deployment_model_format
   deployment_model_name    = var.oai_deployment_model_name
   deployment_model_version = var.oai_deployment_model_version
