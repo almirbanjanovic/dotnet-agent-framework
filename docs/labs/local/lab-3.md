@@ -8,13 +8,13 @@
 This lab introduces a fundamentally different agent topology than Lab 2:
 
 - **Lab 2** is **synchronous** — a user sends a chat message, agents run, a response comes back in seconds.
-- **Lab 3** is **ambient and durable** — *no human starts the work*. Events arrive continuously (return requests, large refund claims, suspicious order patterns), agents investigate in parallel, and the workflow **pauses indefinitely** waiting for a human to approve or reject the recommended action. Hours, days, or weeks may pass between the analysis and the human decision. Processes will restart in the meantime.
+- **Lab 3** is **ambient** — *no human starts the work*. Events arrive continuously (return requests, large refund claims, suspicious order patterns), agents investigate in parallel, and the workflow **pauses** waiting for a human to approve or reject the recommended action. Minutes, hours, or days may pass between the analysis and the human decision.
 
 This is the pattern behind real-world systems like fraud detection, IT incident triage, loan underwriting, and content moderation. It exercises four primitives that simple "user asks, agent answers" loops never need:
 
 1. **Fan-out / fan-in** — one alert dispatches to N specialist agents in parallel; an aggregator combines their findings.
 2. **Human-in-the-loop with timeout** — the workflow blocks on an external event (analyst decision) racing a timer (auto-escalate after 72h).
-3. **Durable replay** — when the worker process dies after step 5 of 8, a new worker reads the event log and resumes at step 6 without re-running steps 1-5.
+3. **Durable replay** — when the worker process dies after step 5 of 8, a new worker reads the event log and resumes at step 6 without re-running steps 1-5. *On the Local Track this is intentionally **not** wired up — the in-memory queue is wiped on restart so you can see the durability gap; the [Full Azure Track](../full-azure/lab-3.md) puts Durable Task Scheduler in front to close it.*
 4. **Stateful agent conversations across the pause** — when the analyst rejects the recommendation and asks for re-analysis, the agents pick up with full context.
 
 You'll build a **Refund Risk Workflow** for Contoso Outdoors:
@@ -25,7 +25,7 @@ You'll build a **Refund Risk Workflow** for Contoso Outdoors:
 - **Human gate:** if the assessment is anything other than `approve`, the workflow pauses and adds a card to the **Operations review queue**. An ops user opens the Blazor `/operations` page, reads the agents' findings, and clicks **Approve**, **Reject**, or **Re-investigate with feedback**.
 - **Action:** the workflow either calls `crm-mcp.create_support_ticket` (for refund processing) or sends the rejection back to the customer.
 
-By the end you'll have a working ambient agent that survives `Ctrl+C` mid-investigation and resumes correctly — and you'll see exactly which durability gap motivates the [Full Azure Track](../full-azure/lab-3.md).
+By the end you'll have a working ambient agent — fan-out to three specialists, aggregator, paused human gate, action — and you'll see exactly which durability gap (`Ctrl+C` between investigation and approval drops the queue on the Local Track) motivates the [Full Azure Track](../full-azure/lab-3.md).
 
 ### Microsoft Agent Framework primer (Workflows)
 
@@ -128,7 +128,9 @@ Edit Contoso.FraudWorkflow.csproj — add the same package versions used elsewhe
     <PackageReference Include="Azure.AI.OpenAI" />
     <PackageReference Include="Azure.Identity" />
     <PackageReference Include="ModelContextProtocol" />
-    <PackageReference Include="Microsoft.AspNetCore.SignalR" />
+    <!-- SignalR ships with Microsoft.NET.Sdk.Web's framework reference;
+         no PackageReference is required (and adding one would fail under
+         this repo's central package management). -->
   </ItemGroup>
 </Project>
 ```
@@ -294,7 +296,19 @@ Map it in Program.cs:
 
 ```csharp
 builder.Services.AddSignalR();
-app.MapHub<OperationsHub>("/hubs/operations");
+
+// The Operations dashboard runs in the Blazor host on a different origin
+// (http://localhost:5008). Allow it to open the SignalR connection (incl.
+// the Sec-WebSocket-Protocol upgrade) and POST decisions back.
+const string OperationsCors = "operations-ui";
+builder.Services.AddCors(o => o.AddPolicy(OperationsCors, p => p
+    .WithOrigins("http://localhost:5008")
+    .AllowAnyHeader()
+    .AllowAnyMethod()
+    .AllowCredentials()));
+
+app.UseCors(OperationsCors);
+app.MapHub<OperationsHub>("/hubs/operations").RequireCors(OperationsCors);
 ```
 
 ## Step 6 — Add the Blazor operations page
@@ -303,8 +317,6 @@ In src/blazor-ui/Pages/ create Operations.razor:
 
 ```razor
 @page "/operations"
-@inject HttpClient Http
-@inject NavigationManager Nav
 @implements IAsyncDisposable
 
 <h2>Refund risk reviews</h2>
@@ -337,7 +349,11 @@ else
     protected override async Task OnInitializedAsync()
     {
         _hub = new HubConnectionBuilder()
-            .WithUrl(Nav.ToAbsoluteUri("/hubs/operations"))   // BFF proxies to fraud-workflow
+            // The hub is mapped in fraud-workflow (5010), not in the Blazor
+            // host (5008). Talking to it directly keeps the lab small; in
+            // production you'd put a BFF proxy in front so the browser only
+            // sees one origin.
+            .WithUrl("http://localhost:5010/hubs/operations")
             .WithAutomaticReconnect()
             .Build();
 
@@ -353,7 +369,13 @@ else
 
     private async Task Decide(string alertId, ApprovalDecision decision)
     {
-        await Http.PostAsJsonAsync("/api/v1/operations/decisions",
+        // The decisions endpoint lives on fraud-workflow (5010) too. The
+        // injected HttpClient is configured against the BFF (5007), so we
+        // build a one-off request here. Wiring a BFF proxy is left as a
+        // production-shape exercise.
+        using var client = new HttpClient();
+        await client.PostAsJsonAsync(
+            "http://localhost:5010/api/v1/operations/decisions",
             new { AlertId = alertId, Decision = decision });
         _pending.RemoveAll(p => p.AlertId == alertId);
     }
@@ -365,7 +387,7 @@ else
 }
 ```
 
-Add a navigation entry to NavMenu.razor pointing at `/operations`.
+Add a navigation entry pointing at `/operations` — the simplest place is the `category-nav` block (or the user-account `MudMenu`) in [`src/blazor-ui/Shared/MainLayout.razor`](../../../src/blazor-ui/Shared/MainLayout.razor). For a quick demo, you can also just type `http://localhost:5008/operations` directly into the second browser window.
 
 ## Step 7 — End-to-end test
 
@@ -373,19 +395,19 @@ Restart `dotnet run --project src/AppHost`. Confirm `fraud-workflow` is green in
 
 Open two browser windows:
 
-- **Window A** (incognito) — sign in to the Blazor UI at `http://localhost:5008` as a customer (e.g., `emma.wilson-local@<your-tenant-domain>`). All 8 UPNs + their current passwords live in **`local-dev-credentials.txt` at the repo root** — the file `setup-local` wrote in Lab 1. `cat local-dev-credentials.txt` (or open it in your editor) to grab the password for whichever user you want to sign in as. Pick **Emma Wilson** in the customer picker, open the chat, and ask:
+- **Window A** (incognito) — sign in to the Blazor UI at `http://localhost:5008` as **sarah.miller-local@<your-tenant-domain>**, who maps to **customer 103** (the actual owner of order 1003 — a $349.99 Basecamp 4P Tent). UPN + password live in **`local-dev-credentials.txt` at the repo root** — the file `setup-local` wrote in Lab 1. `cat local-dev-credentials.txt` (or open it in your editor) to grab the password. Open the chat panel (click **Ask the experts** on the home page or the floating chat icon at the bottom-right of any page), and ask:
 
-  > I'd like a refund for order 1003 — the boots arrived damaged. The total was $285.
+  > I'd like a refund for order 1003 — the tent arrived with a torn rainfly. The total was $349.99.
 
-  In production a real customer-experience surface would have a **Refund this order** button on the order detail page that POSTs `{ customerId, orderId, amount, reason }` to `bff-api/api/v1/refunds`, and the BFF would forward to `fraud-workflow`. We haven't built that button in this lab — for now, the chat prompt above is the customer trigger and the `returns-agent` (built in Lab 2) is responsible for collecting the structured fields and calling `fraud-workflow` over HTTP.
+  In production a real customer-experience surface would have a **Refund this order** button on the order detail page that POSTs `{ customerId, orderId, amount, reason }` to `bff-api/api/v1/refunds`, and the BFF would forward to `fraud-workflow`. We haven't built that button (or the BFF endpoint, or the `returns-agent` → `fraud-workflow` HTTP call) in this lab — the chat prompt above is purely descriptive of where the trigger would fire. For now, simulate the customer-side POST as shown in the gap callout below.
 
-  > **Lab gap (acknowledged):** wiring the BFF refund endpoint and the order-page button is left as an exercise. Until that's done you can simulate the customer-side POST from the **Aspire dashboard**: open `fraud-workflow` → **Endpoints** → use the built-in HTTP tab to send `POST /api/v1/refunds` with the body below. **Do not** make a habit of running production-shaped traffic through a CLI — it bypasses the very BFF/auth path the rest of the labs prove out.
+  > **Lab gap (acknowledged):** wiring the BFF refund endpoint, the order-page button, and the `returns-agent` → `fraud-workflow` HTTP call is left as an exercise. Until that's done you can simulate the customer-side POST from the **Aspire dashboard**: open `fraud-workflow` → **Endpoints** → use the built-in HTTP tab to send `POST /api/v1/refunds` with the body below. **Do not** make a habit of running production-shaped traffic through a CLI — it bypasses the very BFF/auth path the rest of the labs prove out.
 
   ```json
-  { "customerId": "101", "orderId": "1003", "amount": 285.00, "reason": "Boots damaged on arrival" }
+  { "customerId": "103", "orderId": "1003", "amount": 349.99, "reason": "Tent rainfly torn on arrival" }
   ```
 
-- **Window B** (separate browser profile) — sign in as a different test user (UPN + password again from **`local-dev-credentials.txt`** at the repo root — e.g., the `lisa` row, which is `lisa.torres-local@<your-tenant-domain>`) and navigate to `/operations`. In production this would be an account with the `Operations` app role; for the Local Track lab, any signed-in user can see the queue.
+- **Window B** (separate browser profile) — sign in as a different test user (UPN + password again from **`local-dev-credentials.txt`** at the repo root — e.g., the `lisa` row, which is `lisa.torres-local@<your-tenant-domain>`) and navigate to `http://localhost:5008/operations`. In production this would be an account with the `Operations` app role; for the Local Track lab, any signed-in user can see the queue.
 
 Within ~5 seconds, a review card should appear in Window B with the three agents' findings. Click **Approve** — the call returns `204` and the workflow runs the action (creates a support ticket via `crm-mcp.create_support_ticket`).
 
@@ -408,7 +430,7 @@ On the **Local Track**, the pending review is **lost** — `InMemoryApprovalGate
 - [ ] Submitting a refund returns `202 Accepted` with an `alertId`
 - [ ] A review card appears on `/operations` within ~5 seconds
 - [ ] Each card shows three agent findings with risk scores
-- [ ] Approving creates a support ticket (verify by GET `http://localhost:5001/api/v1/customers/101/tickets`)
+- [ ] Approving creates a support ticket (verify by GET `http://localhost:5001/api/v1/customers/103/tickets`)
 - [ ] Rejecting closes the alert with no ticket created
 - [ ] `ComponentIndependenceTests` is still green after adding the new component
 

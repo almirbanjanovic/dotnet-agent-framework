@@ -80,7 +80,9 @@ Open the Aspire dashboard at `https://localhost:15888`. Confirm 8 services are g
 
 ## Step 2 — Single-agent pattern: drive `crm-agent` through the chat UI
 
-Open `http://localhost:5008`, sign in as **emma.wilson-local@<your-tenant-domain>** (UPN + password come from **`local-dev-credentials.txt` at the repo root** — the file `setup-local` wrote in Lab 1; `cat local-dev-credentials.txt` to see all 8), and pick **Emma Wilson** in the customer picker. Type into the chat:
+Open `http://localhost:5008` and sign in as **emma.wilson-local@<your-tenant-domain>** (UPN + password come from **`local-dev-credentials.txt` at the repo root** — the file `setup-local` wrote in Lab 1; `cat local-dev-credentials.txt` to see all 8). The BFF maps the signed-in UPN to **Emma Wilson (customer 101)** automatically via the `AzureAd:CustomerMap` it received from `setup-local` — there is no customer picker.
+
+Open the chat panel by clicking **Ask the experts** in the green hero on the home page (or the floating chat icon in the bottom-right corner of any page), and send:
 
 > Where is my last order?
 
@@ -104,10 +106,10 @@ The wire shape `bff-api` returns to the browser is:
 ```json
 {
   "conversationId": "...",
-  "response": "Your most recent order is #1003 ...",
+  "response": "Your most recent order is #1001 — TrailBlazer Hiking Boots, $189.99, shipped to Portland OR ...",
   "toolCalls": [
     { "name": "get_customer_orders", "arguments": { "customerId": "101" } },
-    { "name": "get_order_detail",    "arguments": { "orderId": "1003" } }
+    { "name": "get_order_detail",    "arguments": { "orderId": "1001" } }
   ]
 }
 ```
@@ -167,7 +169,7 @@ In the **same** chat session (do **not** start a new one), send a follow-up:
 
 > What's the return window for that?
 
-The Blazor UI is keeping a `history` array on the client and sending the prior turns back with each request — that's what lets the model resolve "that" to order #1003 without re-asking. Open the browser **Network** tab and look at the request body for the new `chat` POST: you'll see your previous user/assistant turns inside the `history` array.
+The Blazor UI is keeping a `history` array on the client and sending the prior turns back with each request — that's what lets the model resolve "that" to order #1001 (the boots) without re-asking. Open the browser **Network** tab and look at the request body for the new `chat` POST: you'll see your previous user/assistant turns inside the `history` array.
 
 Now open the Aspire dashboard's **Traces** tab and find the new trace. The model's tool choice should be different this turn — instead of `get_customer_orders`, you should see a span for `knowledge-mcp` `call_tool: search_knowledge_base` (the one tool that MCP server exposes). Same agent, same code, different tool — picked by the model based on intent. That's the whole point of runtime tool discovery: the agent doesn't pre-select tools, the model does.
 
