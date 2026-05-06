@@ -4,16 +4,52 @@
 @inject IJSRuntime JsRuntime
 @implements IDisposable
 
-@if (!ChatPanel.IsOpen)
+@if (ChatPanel.IsClosed)
 {
-    <button class="chat-bubble-fab" @onclick="ChatPanel.Toggle" aria-label="Open chat assistant">
+    <button class="chat-bubble-fab @(_runFabPulse ? "fab-pulse" : "")"
+            @onclick="ChatPanel.Toggle"
+            aria-label="Open chat assistant">
         <MudIcon Icon="@Icons.Material.Filled.SupportAgent" />
         <span>Need help?</span>
     </button>
 }
+else if (ChatPanel.IsMinimized)
+{
+    @* role="button" + tabindex on a <div> avoids the nested-button HTML
+       that was previously a <button> wrapping a <MudIconButton>. The
+       inner close button is now a real, independently-focusable
+       sibling. *@
+    <div class="chat-minimized-bar"
+         role="button"
+         tabindex="0"
+         @onclick="ChatPanel.Open"
+         @onkeydown="HandleMinimizedKeyDown"
+         aria-label="Expand chat assistant">
+        <span class="chat-minimized-avatar">AI</span>
+        <span class="chat-minimized-label">
+            Contoso Assistant
+            @if (_messages.Count > 0)
+            {
+                <span class="chat-minimized-sub">@_messages.Count message@(_messages.Count == 1 ? "" : "s") · click to expand</span>
+            }
+            else
+            {
+                <span class="chat-minimized-sub">Click to expand</span>
+            }
+        </span>
+        <span class="chat-minimized-close-wrap"
+              @onclick="HandleMinimizedClose"
+              @onclick:stopPropagation="true"
+              @onkeydown:stopPropagation="true">
+            <MudIconButton Icon="@Icons.Material.Filled.Close"
+                           Size="Size.Small"
+                           aria-label="Close chat" />
+        </span>
+    </div>
+}
 else
 {
-    <div class="chat-panel-floating">
+    <div id="@PanelContainerId" class="chat-panel-floating @(_runPulse ? "panel-pulse" : "")">
         <div class="chat-panel-header">
             <div class="chat-panel-title">
                 <span class="chat-panel-avatar">AI</span>
@@ -22,10 +58,16 @@ else
                     <div class="chat-panel-status">Online · Powered by AI agents</div>
                 </div>
             </div>
-            <MudIconButton Icon="@Icons.Material.Filled.Close"
-                           Size="Size.Small"
-                           OnClick="ChatPanel.Close"
-                           aria-label="Close chat" />
+            <div class="chat-panel-header-actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Remove"
+                               Size="Size.Small"
+                               OnClick="ChatPanel.Minimize"
+                               aria-label="Minimize chat" />
+                <MudIconButton Icon="@Icons.Material.Filled.Close"
+                               Size="Size.Small"
+                               OnClick="ChatPanel.Close"
+                               aria-label="Close chat" />
+            </div>
         </div>
 
         <div id="@ScrollContainerId" class="chat-panel-messages">
@@ -93,10 +135,20 @@ else
             }
         </div>
 
-        <div class="chat-panel-composer">
+        <div id="@ComposerWrapperId" class="chat-panel-composer">
             @if (!string.IsNullOrWhiteSpace(_errorMessage))
             {
-                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-2">@_errorMessage</MudAlert>
+                <MudAlert Severity="Severity.Error"
+                          Dense="true"
+                          ShowCloseIcon="true"
+                          CloseIconClicked="@(() => _errorMessage = null)"
+                          Class="mb-2">@_errorMessage</MudAlert>
+            }
+            @if (AuthStateProvider.SelectedCustomer is null)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">
+                    Sign in to chat with our experts.
+                </MudAlert>
             }
             <MudTextField @bind-Value="_currentMessage"
                           Variant="Variant.Outlined"
@@ -106,7 +158,7 @@ else
                           OnKeyDown="HandleKeyDown" />
             <div class="chat-panel-send-row">
                 <span class="chat-panel-hint">
-                    <kbd>Enter</kbd> to send
+                    <kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for newline
                 </span>
                 <MudButton Variant="Variant.Filled"
                            Color="Color.Primary"
@@ -123,6 +175,8 @@ else
 
 @code {
     private const string ScrollContainerId = "chat-panel-scroll";
+    private const string PanelContainerId = "chat-panel-container";
+    private const string ComposerWrapperId = "chat-panel-composer-wrapper";
 
     private static readonly string[] _suggestedPrompts =
     [
@@ -149,6 +203,22 @@ else
     private string? _errorMessage;
     private bool _isSending;
     private bool _scrollPending;
+    private bool _focusPending;
+    private bool _runPulse;
+    private bool _runFabPulse;
+    private bool _fabDiscoveryChecked;
+
+    // Track previous mode so we only auto-focus on actual transitions
+    // INTO Open — repeated Open() calls (which we still want to pulse)
+    // must not steal focus from another input the user is in. (B.4/A.5)
+    private ChatPanelMode _lastObservedMode = ChatPanelMode.Closed;
+
+    // Cancellation for the delayed "clear pulse class" tasks. Bound to
+    // component lifetime so we don't mutate a disposed component or
+    // leak orphan tasks. (A.2/B.1)
+    private CancellationTokenSource? _pulseClearCts;
+    private CancellationTokenSource? _fabPulseClearCts;
+    private bool _disposed;
 
     // ── Streaming-state for the in-flight assistant turn ──
     private string? _streamingText;          // null when not streaming; otherwise the token-by-token assembled text
@@ -175,9 +245,32 @@ else
 
     private async Task HandleKeyDown(KeyboardEventArgs e)
     {
+        if (e.Key == "Escape")
+        {
+            // ESC collapses (preserves conversation) — standard popup
+            // dismiss affordance. Reviewer A.4/B.7.
+            ChatPanel.Minimize();
+            return;
+        }
         if (e.Key == "Enter" && !e.ShiftKey)
         {
             await SendAsync();
+        }
+    }
+
+    private void HandleMinimizedClose() => ChatPanel.Close();
+
+    private void HandleMinimizedKeyDown(KeyboardEventArgs e)
+    {
+        // The minimized bar is a div role="button"; surface keyboard
+        // activation as a click-equivalent.
+        if (e.Key == "Enter" || e.Key == " " || e.Key == "Spacebar")
+        {
+            ChatPanel.Open();
+        }
+        else if (e.Key == "Escape")
+        {
+            ChatPanel.Close();
         }
     }
 
@@ -318,6 +411,43 @@ else
             _scrollPending = false;
             await JsRuntime.InvokeVoidAsync("scrollChatToBottom", ScrollContainerId);
         }
+
+        if (_focusPending && ChatPanel.IsOpen)
+        {
+            _focusPending = false;
+            // Best-effort focus — ignore JSDisconnectedException etc.
+            try
+            {
+                await JsRuntime.InvokeVoidAsync("focusChatInput", ComposerWrapperId);
+            }
+            catch
+            {
+                // Pre-rendering, disconnect, or missing element — non-fatal.
+            }
+        }
+
+        // First-load FAB discovery pulse — fires once per browser via
+        // localStorage so returning users aren't pestered.
+        if (!_fabDiscoveryChecked && ChatPanel.IsClosed)
+        {
+            // Set BEFORE the await so a re-render during the JS call
+            // can't enter this branch a second time. (B.2)
+            _fabDiscoveryChecked = true;
+            try
+            {
+                var firstSeen = await JsRuntime.InvokeAsync<bool>("markChatFabSeen");
+                if (firstSeen)
+                {
+                    _runFabPulse = true;
+                    StateHasChanged();
+                    await ScheduleClearAsync(2400, isFabPulse: true);
+                }
+            }
+            catch
+            {
+                // Pre-rendering / no localStorage — silently skip.
+            }
+        }
     }
 
     private void HandleCustomerChanged()
@@ -332,11 +462,107 @@ else
         _ = InvokeAsync(StateHasChanged);
     }
 
-    private void HandleChanged() => InvokeAsync(StateHasChanged);
+    private void HandleChanged()
+    {
+        var prevMode = _lastObservedMode;
+        _lastObservedMode = ChatPanel.Mode;
+
+        // When Open() was called, run the attention animation. Auto-focus
+        // ONLY when transitioning from a non-Open mode so repeat Open()
+        // calls (e.g. footer link while user is typing in the search box)
+        // don't steal focus. (A.5/B.4)
+        if (ChatPanel.IsOpen && ChatPanel.PulseRequested)
+        {
+            ChatPanel.AcknowledgePulse();
+            if (prevMode != ChatPanelMode.Open)
+            {
+                _focusPending = true;
+            }
+            _ = TriggerAttentionPulseAsync();
+        }
+        else
+        {
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    /// <summary>
+    /// CSS animations don't auto-restart when a class is re-added on
+    /// the same element. To guarantee every Open() shows a fresh pulse,
+    /// we briefly remove the class, force a render, then re-add it. (A.1)
+    /// </summary>
+    private async Task TriggerAttentionPulseAsync()
+    {
+        // Cancel any in-flight clear from a previous pulse.
+        _pulseClearCts?.Cancel();
+        _pulseClearCts?.Dispose();
+        _pulseClearCts = null;
+
+        if (_disposed) return;
+
+        _runPulse = false;
+        await InvokeAsync(StateHasChanged);
+        // Yield so the DOM actually reflects the class removal before
+        // we add it back. Without this, Blazor batches both updates
+        // into one render and the animation never restarts.
+        await Task.Yield();
+
+        if (_disposed) return;
+
+        _runPulse = true;
+        await InvokeAsync(StateHasChanged);
+        await ScheduleClearAsync(900, isFabPulse: false);
+    }
+
+    private async Task ScheduleClearAsync(int delayMs, bool isFabPulse)
+    {
+        var cts = new CancellationTokenSource();
+        if (isFabPulse)
+        {
+            _fabPulseClearCts?.Cancel();
+            _fabPulseClearCts?.Dispose();
+            _fabPulseClearCts = cts;
+        }
+        else
+        {
+            _pulseClearCts?.Cancel();
+            _pulseClearCts?.Dispose();
+            _pulseClearCts = cts;
+        }
+
+        try
+        {
+            await Task.Delay(delayMs, cts.Token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+
+        if (_disposed || cts.IsCancellationRequested)
+        {
+            return;
+        }
+
+        if (isFabPulse)
+        {
+            _runFabPulse = false;
+        }
+        else
+        {
+            _runPulse = false;
+        }
+        await InvokeAsync(StateHasChanged);
+    }
 
     public void Dispose()
     {
+        _disposed = true;
         ChatPanel.Changed -= HandleChanged;
         AuthStateProvider.CustomerChanged -= HandleCustomerChanged;
+        _pulseClearCts?.Cancel();
+        _pulseClearCts?.Dispose();
+        _fabPulseClearCts?.Cancel();
+        _fabPulseClearCts?.Dispose();
     }
 }

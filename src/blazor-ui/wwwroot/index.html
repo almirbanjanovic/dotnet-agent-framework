@@ -38,6 +38,32 @@
                 container.scrollTop = container.scrollHeight;
             }
         };
+
+        // Move keyboard focus to the chat input when the panel opens so
+        // the user can start typing immediately. Looks for the underlying
+        // <textarea> or <input> inside a MudTextField wrapper.
+        window.focusChatInput = (wrapperId) => {
+            const wrapper = document.getElementById(wrapperId);
+            if (!wrapper) return;
+            const field = wrapper.querySelector('textarea, input');
+            if (field) {
+                // Defer past Blazor's render so the element is actually focusable.
+                requestAnimationFrame(() => field.focus({ preventScroll: true }));
+            }
+        };
+
+        // First-visit FAB attention pulse — returns true the first time
+        // it's called per browser, false thereafter. Used by ChatBubble to
+        // play a one-off discovery animation so users notice the launcher.
+        window.markChatFabSeen = () => {
+            try {
+                if (localStorage.getItem('contoso.chat.fabSeen') === '1') return false;
+                localStorage.setItem('contoso.chat.fabSeen', '1');
+                return true;
+            } catch {
+                return false;
+            }
+        };
     </script>
     <script src="_framework/blazor.webassembly.js"></script>
 </body>
