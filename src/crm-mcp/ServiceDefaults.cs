@@ -24,7 +24,21 @@ internal static class ServiceDefaults
         builder.Services.AddServiceDiscovery();
         builder.Services.ConfigureHttpClientDefaults(http =>
         {
-            http.AddStandardResilienceHandler();
+            // Agent calls (Foundry chat + MCP tool round-trips) routinely take 30+ seconds.
+            // Polly's defaults (10 s per attempt, 30 s total) kill them before they finish, so
+            // we widen them here. Every typed client in this service inherits these settings;
+            // do NOT chain a second .AddStandardResilienceHandler() in Program.cs or you will
+            // stack a second pipeline with the unconfigured defaults.
+            http.AddStandardResilienceHandler(options =>
+            {
+                options.AttemptTimeout.Timeout = TimeSpan.FromMinutes(2);
+                options.TotalRequestTimeout.Timeout = TimeSpan.FromMinutes(5);
+                // Polly validation: SamplingDuration must be >= 2 * AttemptTimeout.
+                options.CircuitBreaker.SamplingDuration = TimeSpan.FromMinutes(4);
+                // Retrying an agent call burns tokens and may duplicate side effects.
+                // One retry is enough to absorb transient transport blips.
+                options.Retry.MaxRetryAttempts = 1;
+            });
             http.AddServiceDiscovery();
         });
 

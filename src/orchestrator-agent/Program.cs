@@ -35,21 +35,23 @@ builder.Services.AddSingleton<AgentRouter>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddTransient<CustomerHeaderForwarder>();
 
+// NOTE: the standard resilience handler is added once for all clients in
+// ServiceDefaults.ConfigureHttpClientDefaults with agent-friendly timeouts.
+// Do NOT add it again here — chaining a second .AddStandardResilienceHandler()
+// stacks a second pipeline that uses the unconfigured 30-second defaults.
 builder.Services.AddHttpClient<CrmAgentClient>(client =>
     {
         var baseUrl = builder.Configuration["CrmAgent:BaseUrl"] ?? "http://localhost:5004";
         client.BaseAddress = new Uri(baseUrl);
     })
-    .AddHttpMessageHandler<CustomerHeaderForwarder>()
-    .AddStandardResilienceHandler();
+    .AddHttpMessageHandler<CustomerHeaderForwarder>();
 
 builder.Services.AddHttpClient<ProductAgentClient>(client =>
     {
         var baseUrl = builder.Configuration["ProductAgent:BaseUrl"] ?? "http://localhost:5005";
         client.BaseAddress = new Uri(baseUrl);
     })
-    .AddHttpMessageHandler<CustomerHeaderForwarder>()
-    .AddStandardResilienceHandler();
+    .AddHttpMessageHandler<CustomerHeaderForwarder>();
 
 builder.Services.AddHealthChecks()
     .AddCheck<CrmAgentHealthCheck>("crm-agent", tags: ["ready"])

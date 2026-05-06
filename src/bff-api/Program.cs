@@ -134,21 +134,23 @@ static void ConfigureHttpClients(WebApplicationBuilder builder)
 {
     builder.Services.AddTransient<CustomerHeaderHandler>();
 
+    // NOTE: the standard resilience handler is added once for all clients in
+    // ServiceDefaults.ConfigureHttpClientDefaults with agent-friendly timeouts.
+    // Do NOT add it again here — chaining a second .AddStandardResilienceHandler()
+    // stacks a second pipeline that uses the unconfigured 30-second defaults.
     builder.Services.AddHttpClient<CrmApiClient>(client =>
         {
             var baseUrl = Program.GetConfigOrDefault(builder.Configuration, "CrmApi:BaseUrl", "http://localhost:5001");
             client.BaseAddress = new Uri(baseUrl);
         })
-        .AddHttpMessageHandler<CustomerHeaderHandler>()
-        .AddStandardResilienceHandler();
+        .AddHttpMessageHandler<CustomerHeaderHandler>();
 
     builder.Services.AddHttpClient<OrchestratorClient>(client =>
         {
             var baseUrl = Program.GetConfigOrDefault(builder.Configuration, "Orchestrator:BaseUrl", "http://localhost:5006");
             client.BaseAddress = new Uri(baseUrl);
         })
-        .AddHttpMessageHandler<CustomerHeaderHandler>()
-        .AddStandardResilienceHandler();
+        .AddHttpMessageHandler<CustomerHeaderHandler>();
 }
 
 static void ConfigureDataServices(WebApplicationBuilder builder, bool useInMemory)

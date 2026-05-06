@@ -32,9 +32,10 @@ var crmApiBaseUrl = builder.Configuration["CrmApi:BaseUrl"]
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddTransient<CustomerHeaderForwarder>();
 
+// The standard resilience handler is added once for all clients in
+// ServiceDefaults.ConfigureHttpClientDefaults; do not add it again here.
 builder.Services.AddHttpClient<CrmApiClient>(client => client.BaseAddress = new Uri(crmApiBaseUrl))
-    .AddHttpMessageHandler<CustomerHeaderForwarder>()
-    .AddStandardResilienceHandler();
+    .AddHttpMessageHandler<CustomerHeaderForwarder>();
 
 builder.Services.AddMcpServer()
     .WithHttpTransport(options => options.Stateless = true)
