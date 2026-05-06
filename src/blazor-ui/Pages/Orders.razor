@@ -134,6 +134,16 @@
     private bool _isLoading = true;
     private string? _errorMessage;
 
+    // Re-entrancy guard: cancels any in-flight LoadOrdersAsync when a new
+    // one starts so we never AddRange the result of a stale fetch on top
+    // of a fresh one (which previously produced duplicate cards on first
+    // hard refresh because CustomerChanged fired twice in a row).
+    private CancellationTokenSource? _loadCts;
+    // Lifecycle guard: HandleCustomerChanged is async void; without this
+    // flag a queued continuation can call StateHasChanged AFTER the
+    // component has been disposed by Blazor's renderer.
+    private bool _disposed;
+
     protected override async Task OnInitializedAsync()
     {
         AuthStateProvider.CustomerChanged += HandleCustomerChanged;
@@ -142,28 +152,66 @@
 
     private async Task LoadOrdersAsync()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        // Cancel any in-flight load and replace the token. Each invocation
+        // OWNS its own CTS and disposes it in the finally block — we never
+        // dispose a CTS that another in-flight call is still holding.
+        var previous = _loadCts;
+        var cts = new CancellationTokenSource();
+        var token = cts.Token;
+        _loadCts = cts;
+        previous?.Cancel();
+
         _isLoading = true;
         _errorMessage = null;
-        _orders.Clear();
 
         try
         {
             if (AuthStateProvider.SelectedCustomer is null)
             {
-                _isLoading = false;
+                _orders.Clear();
                 return;
             }
 
-            var orders = await BffApiClient.GetOrdersAsync(AuthStateProvider.SelectedCustomer.Id);
+            var orders = await BffApiClient.GetOrdersAsync(
+                AuthStateProvider.SelectedCustomer.Id,
+                token);
+
+            // Only the *latest* call is allowed to mutate _orders. If a
+            // newer load started while we were awaiting the HTTP call,
+            // _loadCts no longer points at us — drop our result.
+            if (token.IsCancellationRequested || !ReferenceEquals(_loadCts, cts) || _disposed)
+            {
+                return;
+            }
+
+            _orders.Clear();
             _orders.AddRange(orders);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested || _disposed)
+        {
+            // A newer load (or component teardown) superseded us — silent.
         }
         catch (Exception ex)
         {
-            _errorMessage = $"Unable to load orders: {ex.Message}";
+            if (ReferenceEquals(_loadCts, cts) && !_disposed)
+            {
+                _errorMessage = $"Unable to load orders: {ex.Message}";
+            }
         }
         finally
         {
-            _isLoading = false;
+            if (ReferenceEquals(_loadCts, cts))
+            {
+                _isLoading = false;
+                _loadCts = null;
+            }
+            // Dispose the CTS we OWN, not someone else's.
+            cts.Dispose();
         }
     }
 
@@ -192,12 +240,36 @@
 
     private async void HandleCustomerChanged()
     {
-        await InvokeAsync(LoadOrdersAsync);
-        StateHasChanged();
+        try
+        {
+            await InvokeAsync(async () =>
+            {
+                if (_disposed)
+                {
+                    return;
+                }
+
+                await LoadOrdersAsync();
+
+                if (!_disposed)
+                {
+                    StateHasChanged();
+                }
+            });
+        }
+        catch (ObjectDisposedException)
+        {
+            // Component was disposed while the renderer callback was queued.
+        }
     }
 
     public void Dispose()
     {
+        _disposed = true;
         AuthStateProvider.CustomerChanged -= HandleCustomerChanged;
+        // Cancel only — the owning LoadOrdersAsync disposes its own CTS
+        // in the finally block so we never dispose a CTS another in-flight
+        // operation is still holding.
+        _loadCts?.Cancel();
     }
 }

@@ -1,3 +1,5 @@
+using System.Net;
+using System.Text;
 using Contoso.BlazorUi.Services;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
@@ -55,6 +57,56 @@ public class AuthStateProviderTests
         provider.SetCustomer(new CustomerOption("200", "Test Customer"));
 
         callCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task LoadSignedInCustomerAsync_Success_FiresCustomerChangedExactlyOnce()
+    {
+        // Regression: previously the success path AND the finally block both
+        // invoked CustomerChanged, causing subscribers (e.g. Orders.razor)
+        // to launch two concurrent loads on first hard refresh and render
+        // the same order twice when both responses raced.
+        var configuration = new ConfigurationBuilder().Build();
+        var environment = new TestWebAssemblyHostEnvironment { EnvironmentName = "Production" };
+        var provider = new AuthStateProvider(configuration, environment);
+
+        var handler = new StubHttpMessageHandler(_ => StubHttpMessageHandler.OkJson(
+            """
+            {"customerId":"107","displayName":"Anna Roberts","email":"anna@example.com"}
+            """));
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
+        var bffClient = new Contoso.BlazorUi.Services.BffApiClient(httpClient, provider);
+
+        var callCount = 0;
+        provider.CustomerChanged += () => callCount++;
+
+        await provider.LoadSignedInCustomerAsync(bffClient);
+
+        callCount.Should().Be(1, "each call must fire CustomerChanged exactly once — " +
+            "two events on the success path made Orders.razor double-load and dedup-lessly merge results");
+        provider.SelectedCustomer!.Id.Should().Be("107");
+        provider.HasAttemptedLoad.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task LoadSignedInCustomerAsync_Failure_FiresCustomerChangedExactlyOnce()
+    {
+        var configuration = new ConfigurationBuilder().Build();
+        var environment = new TestWebAssemblyHostEnvironment { EnvironmentName = "Production" };
+        var provider = new AuthStateProvider(configuration, environment);
+
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
+        var bffClient = new Contoso.BlazorUi.Services.BffApiClient(httpClient, provider);
+
+        var callCount = 0;
+        provider.CustomerChanged += () => callCount++;
+
+        await provider.LoadSignedInCustomerAsync(bffClient);
+
+        callCount.Should().Be(1, "failure path must also fire exactly once");
+        provider.HasAttemptedLoad.Should().BeTrue();
+        provider.LastLoadError.Should().NotBeNullOrWhiteSpace();
     }
 
     private static AuthStateProvider CreateProvider()

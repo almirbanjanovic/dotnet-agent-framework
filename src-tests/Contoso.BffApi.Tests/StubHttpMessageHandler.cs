@@ -1,8 +1,9 @@
+using System.Collections.Concurrent;
 using System.Net;
 
 namespace Contoso.BffApi.Tests;
 
-internal sealed class StubHttpMessageHandler : HttpMessageHandler
+public sealed class StubHttpMessageHandler : HttpMessageHandler
 {
     private readonly Func<HttpRequestMessage, HttpResponseMessage> _handler;
 
@@ -11,11 +12,14 @@ internal sealed class StubHttpMessageHandler : HttpMessageHandler
         _handler = handler ?? throw new ArgumentNullException(nameof(handler));
     }
 
-    public List<HttpRequestMessage> Requests { get; } = new();
+    // ConcurrentQueue rather than List<T> — the BFF orders endpoint now
+    // fans out via Parallel.ForEachAsync, so SendAsync can be called from
+    // multiple threads against this same handler.
+    public ConcurrentQueue<HttpRequestMessage> Requests { get; } = new();
 
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        Requests.Add(request);
+        Requests.Enqueue(request);
         return Task.FromResult(_handler(request));
     }
 

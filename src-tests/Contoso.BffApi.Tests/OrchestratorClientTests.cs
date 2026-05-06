@@ -17,7 +17,7 @@ public class OrchestratorClientTests
         await orchestrator.SendAsync("cust-1", "hello");
 
         handler.Requests.Should().ContainSingle();
-        var request = handler.Requests[0];
+        var request = handler.Requests.First();
         request.Method.Should().Be(HttpMethod.Post);
         request.RequestUri!.PathAndQuery.Should().Be("/api/v1/chat");
         var payload = await request.Content!.ReadAsStringAsync();
@@ -77,7 +77,7 @@ public class OrchestratorClientTests
         await orchestrator.GetHealthAsync();
 
         handler.Requests.Should().ContainSingle();
-        var request = handler.Requests[0];
+        var request = handler.Requests.First();
         request.Method.Should().Be(HttpMethod.Get);
         request.RequestUri!.PathAndQuery.Should().Be("/health");
     }

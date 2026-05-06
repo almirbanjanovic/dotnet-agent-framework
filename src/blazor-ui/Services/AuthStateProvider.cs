@@ -114,7 +114,6 @@ public sealed class AuthStateProvider
             SelectedCustomer = new CustomerOption(me.CustomerId, displayName);
             Email = me.Email;
             LastLoadError = null;
-            CustomerChanged?.Invoke();
         }
         catch (Exception ex)
         {
@@ -124,6 +123,11 @@ public sealed class AuthStateProvider
         finally
         {
             HasAttemptedLoad = true;
+            // Fire CustomerChanged exactly ONCE per call. The previous code
+            // fired in both the success path AND the finally block, which
+            // caused subscribers (e.g. Orders.razor) to launch two
+            // concurrent loads on first hard refresh and render duplicate
+            // results when both responses raced.
             CustomerChanged?.Invoke();
         }
     }

@@ -16,7 +16,7 @@ public class CrmApiClientTests
         await crmClient.GetCustomerAsync("123");
 
         handler.Requests.Should().ContainSingle();
-        handler.Requests[0].RequestUri!.PathAndQuery.Should().Be("/api/v1/customers/123");
+        handler.Requests.First().RequestUri!.PathAndQuery.Should().Be("/api/v1/customers/123");
     }
 
     [Fact]
@@ -29,7 +29,7 @@ public class CrmApiClientTests
         await crmClient.GetCustomerOrdersAsync("123");
 
         handler.Requests.Should().ContainSingle();
-        handler.Requests[0].RequestUri!.PathAndQuery.Should().Be("/api/v1/customers/123/orders");
+        handler.Requests.First().RequestUri!.PathAndQuery.Should().Be("/api/v1/customers/123/orders");
     }
 
     [Fact]
@@ -42,6 +42,6 @@ public class CrmApiClientTests
         await crmClient.GetHealthAsync();
 
         handler.Requests.Should().ContainSingle();
-        handler.Requests[0].RequestUri!.PathAndQuery.Should().Be("/health");
+        handler.Requests.First().RequestUri!.PathAndQuery.Should().Be("/health");
     }
 }

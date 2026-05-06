@@ -152,6 +152,11 @@ static void ConfigureHttpClients(WebApplicationBuilder builder)
         {
             var baseUrl = Program.GetConfigOrDefault(builder.Configuration, "CrmApi:BaseUrl", "http://localhost:5001");
             client.BaseAddress = new Uri(baseUrl);
+            // DoS guard: cap upstream response body at 10 MB. The CRM API
+            // returns customer/order JSON which never legitimately exceeds
+            // a few hundred KB; without this cap a compromised or buggy
+            // upstream could cause OutOfMemoryException via JsonNode.Parse.
+            client.MaxResponseContentBufferSize = 10 * 1024 * 1024;
         })
         .AddHttpMessageHandler<CustomerHeaderHandler>();
 

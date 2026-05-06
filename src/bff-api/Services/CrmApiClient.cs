@@ -15,6 +15,9 @@ public sealed class CrmApiClient
     public Task<HttpResponseMessage> GetCustomerOrdersAsync(string customerId, CancellationToken ct = default)
         => _httpClient.GetAsync($"/api/v1/customers/{customerId}/orders", ct);
 
+    public Task<HttpResponseMessage> GetOrderItemsAsync(string orderId, CancellationToken ct = default)
+        => _httpClient.GetAsync($"/api/v1/orders/{Uri.EscapeDataString(orderId)}/items", ct);
+
     public Task<HttpResponseMessage> GetProductsAsync(
         string? query, string? category, bool? inStockOnly, CancellationToken ct = default)
     {
