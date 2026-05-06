@@ -53,8 +53,10 @@ internal static class ChatEndpoint
         IntentClassifier classifier,
         AgentRouter router,
         HttpContext httpContext,
+        ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
+        var logger = loggerFactory.CreateLogger("Contoso.OrchestratorAgent.Endpoints.ChatStream");
         var response = httpContext.Response;
         response.ContentType = "text/event-stream";
         response.Headers["Cache-Control"] = "no-cache";
@@ -78,11 +80,16 @@ internal static class ChatEndpoint
             using var upstream = await router.RouteStreamAsync(intent, request, cancellationToken);
             if (!upstream.IsSuccessStatusCode)
             {
-                // Read but do NOT proxy the upstream body to the BFF / browser —
-                // it may contain a JSON error doc with internals, stack frames,
-                // or echoes of payload data. Status alone is sufficient client-
-                // side; full body is captured in the trace via Activity events.
-                _ = await upstream.Content.ReadAsStringAsync(cancellationToken);
+                // Read the upstream body so operators can diagnose, but do NOT
+                // proxy it to the BFF / browser — it may contain a JSON error
+                // doc with internals, stack frames, or echoes of payload data.
+                var body = await upstream.Content.ReadAsStringAsync(cancellationToken);
+                var truncated = body is null
+                    ? "(empty body)"
+                    : body.Length <= 500 ? body : body.Substring(0, 500) + "…";
+                logger.LogWarning(
+                    "Specialist agent {Agent} returned {StatusCode}. Body (truncated): {Body}",
+                    agentLabel, (int)upstream.StatusCode, truncated);
                 await SseWriter.WriteAsync(
                     response,
                     "error",
@@ -103,8 +110,10 @@ internal static class ChatEndpoint
         }
         catch (Exception ex)
         {
-            // Surface only the type name — ex.Message may include payload
-            // fragments, file paths, or other internals.
+            // Log full exception for operators — client only sees a sanitized
+            // SSE error event below. ex.Message may include payload fragments,
+            // file paths, or other internals.
+            logger.LogError(ex, "Orchestrator stream failed for customer {CustomerId}", request.CustomerId);
             await SseWriter.WriteAsync(
                 response,
                 "error",

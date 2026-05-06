@@ -71,6 +71,30 @@ public class ChatStreamingIntegrationTests
     }
 
     [Fact]
+    public async Task ChatStream_OrchestratorReturnsError_DoesNotLeakUpstreamBody()
+    {
+        // Regression: the SSE error event must NOT include the upstream
+        // body (status code only). The first round of fixes covered the
+        // buffered /chat path; this locks down /chat/stream too.
+        const string sensitiveToken = "SENSITIVE_UPSTREAM_DETAIL_xyz789";
+        using var factory = new BffApiWebApplicationFactory(_ =>
+            new HttpResponseMessage(HttpStatusCode.InternalServerError)
+            {
+                Content = new StringContent(sensitiveToken, Encoding.UTF8, "text/plain")
+            });
+        var client = factory.CreateClient();
+
+        var (events, body) = await ReadStreamAsync(client, "cust-1", "hi");
+
+        var errorEvent = events.LastOrDefault(e => e.Event == "error");
+        errorEvent.Should().NotBeNull();
+        errorEvent!.Data.Should().NotContain(sensitiveToken,
+            "the upstream body must never flow through to the SSE error event");
+        body.Should().NotContain(sensitiveToken,
+            "the upstream body must never appear anywhere in the SSE response");
+    }
+
+    [Fact]
     public async Task ChatStream_MissingMessage_EmitsErrorEvent()
     {
         using var factory = new BffApiWebApplicationFactory();

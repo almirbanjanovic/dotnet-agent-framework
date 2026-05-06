@@ -73,13 +73,18 @@ app.UseExceptionHandler(errorApp =>
         // fragments, file paths, secrets surfaced via wrapping exceptions.
         // Type name is low-sensitivity diagnostic info; full details stay in
         // the server log (logger.LogError above) tied to the trace id.
+        // traceId uses the W3C distributed trace id when an Activity is
+        // active so operators can find the matching trace in APM directly;
+        // falls back to the per-connection ASP.NET id if telemetry is off.
         context.Response.StatusCode = StatusCodes.Status500InternalServerError;
         context.Response.ContentType = "application/json";
         await context.Response.WriteAsJsonAsync(new
         {
             error = ex?.GetType().Name ?? "InternalServerError",
             message = "An internal error occurred. See server logs for details.",
-            traceId = context.TraceIdentifier,
+            traceId = System.Diagnostics.Activity.Current?.TraceId.ToString()
+                ?? context.TraceIdentifier,
+            requestId = context.TraceIdentifier,
             path = context.Request.Path.Value
         });
     });

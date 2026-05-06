@@ -58,8 +58,10 @@ internal static class ChatEndpoint
         CrmMcpClientProvider crmProvider,
         KnowledgeMcpClientProvider knowledgeProvider,
         HttpContext httpContext,
+        ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
+        var logger = loggerFactory.CreateLogger("Contoso.ProductAgent.Endpoints.ChatStream");
         var response = httpContext.Response;
         response.ContentType = "text/event-stream";
         response.Headers["Cache-Control"] = "no-cache";
@@ -115,8 +117,10 @@ internal static class ChatEndpoint
         }
         catch (Exception ex)
         {
-            // Surface only the type name — ex.Message may include payload
-            // fragments, MCP tool args, or other internals.
+            // Log full exception for operators — client only sees a sanitized
+            // SSE error event below. ex.Message may include payload fragments,
+            // MCP tool args, or other internals.
+            logger.LogError(ex, "Product agent stream failed for customer {CustomerId}", request.CustomerId);
             await SseWriter.WriteAsync(
                 response,
                 "error",

@@ -38,8 +38,10 @@ builder.Services.AddHealthChecks()
 
 var app = builder.Build();
 
-// Surface unhandled exceptions as JSON so callers (orchestrator / browser) get
-// the actual error message instead of an empty 500.
+// Surface unhandled exceptions as a structured, generic JSON error response
+// instead of an empty 500 page. ex.Message and stack frames are deliberately
+// withheld from the network response — operators get full diagnostics in the
+// server log, correlated by the W3C trace id.
 app.UseExceptionHandler(errorApp =>
 {
     errorApp.Run(async context =>
@@ -61,7 +63,9 @@ app.UseExceptionHandler(errorApp =>
         {
             error = ex?.GetType().Name ?? "InternalServerError",
             message = "An internal error occurred. See server logs for details.",
-            traceId = context.TraceIdentifier,
+            traceId = System.Diagnostics.Activity.Current?.TraceId.ToString()
+                ?? context.TraceIdentifier,
+            requestId = context.TraceIdentifier,
             path = context.Request.Path.Value
         });
     });

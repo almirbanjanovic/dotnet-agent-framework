@@ -124,7 +124,9 @@ internal static class ChatEndpoint
                 // Truncate the body for the log line — the upstream payload may
                 // contain user-message echoes, addresses, or other PII. Full body
                 // is still emitted at Debug if the operator opts in.
-                var truncated = payload.Length <= 500 ? payload : payload.Substring(0, 500) + "…";
+                var truncated = payload is null
+                    ? "(empty body)"
+                    : payload.Length <= 500 ? payload : payload.Substring(0, 500) + "…";
                 logger.LogWarning(
                     "Orchestrator returned {StatusCode} for customer {CustomerId}. Body (truncated): {Body}",
                     (int)response.StatusCode, customerId, truncated);
@@ -245,14 +247,21 @@ internal static class ChatEndpoint
             if (!upstream.IsSuccessStatusCode)
             {
                 var body = await upstream.Content.ReadAsStringAsync(cancellationToken);
+                // Truncate the upstream body for the warning log — same
+                // PII risk as the buffered branch (see HandleAsync above).
+                var truncated = body is null
+                    ? "(empty body)"
+                    : body.Length <= 500 ? body : body.Substring(0, 500) + "…";
                 logger.LogWarning(
-                    "Orchestrator returned {StatusCode} for customer {CustomerId}. Body: {Body}",
-                    (int)upstream.StatusCode, customerId, body);
+                    "Orchestrator returned {StatusCode} for customer {CustomerId}. Body (truncated): {Body}",
+                    (int)upstream.StatusCode, customerId, truncated);
                 Activity.Current?.SetStatus(ActivityStatusCode.Error, $"Orchestrator {(int)upstream.StatusCode}");
+                // Do NOT echo the upstream body to the browser — same leak
+                // class as the buffered /chat path. Status code is enough.
                 await SseWriter.WriteAsync(
                     response,
                     "error",
-                    new { message = $"The AI agent returned {(int)upstream.StatusCode}: {body}" },
+                    new { message = $"The AI agent returned {(int)upstream.StatusCode}. Please try again." },
                     cancellationToken);
                 return;
             }
