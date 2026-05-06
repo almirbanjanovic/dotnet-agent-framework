@@ -3,6 +3,7 @@ using FluentAssertions;
 
 namespace Contoso.BffApi.Tests;
 
+[Collection(nameof(BffApiFactoryCollection))]
 public class CorsTests
 {
     [Fact]

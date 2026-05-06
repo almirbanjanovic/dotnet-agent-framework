@@ -69,12 +69,17 @@ app.UseExceptionHandler(errorApp =>
             .CreateLogger("Contoso.BffApi.UnhandledException");
         logger.LogError(ex, "Unhandled exception on {Path}", context.Request.Path);
 
+        // Do NOT leak ex.Message to network clients — it can contain payload
+        // fragments, file paths, secrets surfaced via wrapping exceptions.
+        // Type name is low-sensitivity diagnostic info; full details stay in
+        // the server log (logger.LogError above) tied to the trace id.
         context.Response.StatusCode = StatusCodes.Status500InternalServerError;
         context.Response.ContentType = "application/json";
         await context.Response.WriteAsJsonAsync(new
         {
             error = ex?.GetType().Name ?? "InternalServerError",
-            message = ex?.Message ?? "An unhandled exception occurred.",
+            message = "An internal error occurred. See server logs for details.",
+            traceId = context.TraceIdentifier,
             path = context.Request.Path.Value
         });
     });

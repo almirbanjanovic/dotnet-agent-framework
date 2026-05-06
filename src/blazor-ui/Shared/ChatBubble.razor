@@ -29,7 +29,7 @@ else
         </div>
 
         <div id="@ScrollContainerId" class="chat-panel-messages">
-            @if (_messages.Count == 0)
+            @if (_messages.Count == 0 && _streamingText is null)
             {
                 <div class="chat-panel-empty">
                     <span class="chat-empty-emoji">👋</span>
@@ -65,7 +65,28 @@ else
                     <div class="chat-row assistant">
                         <span class="chat-avatar assistant">AI</span>
                         <div class="chat-bubble">
-                            <div class="typing-indicator"><span></span><span></span><span></span></div>
+                            @if (!string.IsNullOrEmpty(_currentStageLabel))
+                            {
+                                <div class="chat-stage-chip">
+                                    <MudIcon Icon="@_currentStageIcon" Size="Size.Small" />
+                                    <span>@_currentStageLabel</span>
+                                </div>
+                            }
+                            @foreach (var tool in _currentToolCalls)
+                            {
+                                <div class="chat-tool-chip">
+                                    <MudIcon Icon="@Icons.Material.Filled.Build" Size="Size.Small" />
+                                    <span><code>@tool</code></span>
+                                </div>
+                            }
+                            @if (!string.IsNullOrEmpty(_streamingText))
+                            {
+                                <div class="markdown-body">@ChatMarkdownRenderer.RenderMarkdown(_streamingText)</div>
+                            }
+                            else if (string.IsNullOrEmpty(_currentStageLabel))
+                            {
+                                <div class="typing-indicator"><span></span><span></span><span></span></div>
+                            }
                         </div>
                     </div>
                 }
@@ -80,7 +101,6 @@ else
             <MudTextField @bind-Value="_currentMessage"
                           Variant="Variant.Outlined"
                           Lines="2"
-                          Disabled="@_isSending"
                           Placeholder="Ask about your orders, returns, or gear..."
                           Margin="Margin.Dense"
                           OnKeyDown="HandleKeyDown" />
@@ -111,12 +131,30 @@ else
         "Recommend a tent for a 3-person summer trip."
     ];
 
+    private static readonly System.Text.Json.JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
+    // Client-side DoS caps — symmetric to BFF caps. A compromised or runaway
+    // server-side stream cannot OOM the browser by sending unbounded tokens or
+    // tool-call events.
+    private const int MaxStreamingChars = 256 * 1024;   // 256 KB
+    private const int MaxToolCalls = 100;
+    private bool _streamCapWarned;
+
     private readonly List<ChatMessage> _messages = new();
     private string? _conversationId;
     private string _currentMessage = string.Empty;
     private string? _errorMessage;
     private bool _isSending;
     private bool _scrollPending;
+
+    // ── Streaming-state for the in-flight assistant turn ──
+    private string? _streamingText;          // null when not streaming; otherwise the token-by-token assembled text
+    private string? _currentStageLabel;      // "Understanding your request…" / "Routed to CRM Agent"
+    private string _currentStageIcon = Icons.Material.Filled.Psychology;
+    private readonly List<string> _currentToolCalls = new();
 
     private bool IsSendDisabled =>
         _isSending ||
@@ -157,12 +195,18 @@ else
         _messages.Add(new ChatMessage("user", message, DateTimeOffset.UtcNow));
         _scrollPending = true;
         _isSending = true;
+        _streamingText = null;
+        _currentStageLabel = null;
+        _currentToolCalls.Clear();
 
         try
         {
-            var response = await BffApi.SendChatAsync(new ChatRequest(message, _conversationId));
-            _conversationId = response.ConversationId;
-            _messages.Add(new ChatMessage("assistant", response.Response, DateTimeOffset.UtcNow));
+            await foreach (var ev in BffApi.SendChatStreamAsync(new ChatRequest(message, _conversationId)))
+            {
+                HandleStreamEvent(ev);
+                _scrollPending = true;
+                StateHasChanged();
+            }
         }
         catch (Exception ex)
         {
@@ -170,8 +214,100 @@ else
         }
         finally
         {
+            // Promote the in-flight streaming text to a final ChatMessage
+            // (if any tokens arrived) and reset streaming state. The final
+            // bubble carries the same content as what was streaming so the
+            // UI doesn't flicker.
+            if (!string.IsNullOrEmpty(_streamingText))
+            {
+                _messages.Add(new ChatMessage("assistant", _streamingText, DateTimeOffset.UtcNow));
+            }
+            _streamingText = null;
+            _currentStageLabel = null;
+            _currentToolCalls.Clear();
             _isSending = false;
             _scrollPending = true;
+            StateHasChanged();
+        }
+    }
+
+    private void HandleStreamEvent(ChatStreamEvent ev)
+    {
+        switch (ev.Event)
+        {
+            case "conversation":
+                {
+                    var data = System.Text.Json.JsonSerializer.Deserialize<ConversationStartData>(ev.Data, JsonOptions);
+                    if (data is { ConversationId: { Length: > 0 } cid })
+                    {
+                        _conversationId = cid;
+                    }
+                    break;
+                }
+            case "stage":
+                {
+                    var data = System.Text.Json.JsonSerializer.Deserialize<StageData>(ev.Data, JsonOptions);
+                    if (data is null) break;
+                    if (string.Equals(data.Stage, "classifying", StringComparison.OrdinalIgnoreCase))
+                    {
+                        _currentStageLabel = "Understanding your request…";
+                        _currentStageIcon = Icons.Material.Filled.Psychology;
+                    }
+                    else if (string.Equals(data.Stage, "routed", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var agentLabel = string.Equals(data.Agent, "product", StringComparison.OrdinalIgnoreCase)
+                            ? "Product Agent"
+                            : "CRM Agent";
+                        _currentStageLabel = $"Routed to {agentLabel}";
+                        _currentStageIcon = Icons.Material.Filled.SmartToy;
+                    }
+                    break;
+                }
+            case "token":
+                {
+                    var data = System.Text.Json.JsonSerializer.Deserialize<TokenData>(ev.Data, JsonOptions);
+                    if (!string.IsNullOrEmpty(data?.Text))
+                    {
+                        var current = _streamingText ?? string.Empty;
+                        var remaining = MaxStreamingChars - current.Length;
+                        if (remaining > 0)
+                        {
+                            _streamingText = data.Text.Length <= remaining
+                                ? current + data.Text
+                                : current + data.Text.Substring(0, remaining);
+                        }
+                        else if (!_streamCapWarned)
+                        {
+                            _streamCapWarned = true;
+                            Console.WriteLine($"[ChatBubble] Streaming text cap ({MaxStreamingChars} chars) reached; further tokens dropped.");
+                        }
+                    }
+                    break;
+                }
+            case "tool":
+                {
+                    var data = System.Text.Json.JsonSerializer.Deserialize<ToolData>(ev.Data, JsonOptions);
+                    if (data is { Name: { Length: > 0 } name } && _currentToolCalls.Count < MaxToolCalls)
+                    {
+                        _currentToolCalls.Add(name);
+                    }
+                    break;
+                }
+            case "done":
+                {
+                    var data = System.Text.Json.JsonSerializer.Deserialize<DoneData>(ev.Data, JsonOptions);
+                    if (data is { ConversationId: { Length: > 0 } cid })
+                    {
+                        _conversationId = cid;
+                    }
+                    break;
+                }
+            case "error":
+                {
+                    var data = System.Text.Json.JsonSerializer.Deserialize<ErrorData>(ev.Data, JsonOptions);
+                    _errorMessage = data?.Message ?? "Unknown error.";
+                    break;
+                }
         }
     }
 
@@ -190,6 +326,9 @@ else
         _messages.Clear();
         _errorMessage = null;
         _currentMessage = string.Empty;
+        _streamingText = null;
+        _currentStageLabel = null;
+        _currentToolCalls.Clear();
         _ = InvokeAsync(StateHasChanged);
     }
 

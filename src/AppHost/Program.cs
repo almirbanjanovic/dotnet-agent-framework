@@ -12,7 +12,13 @@ const string ChildEnvironment = "Local";
 static IResourceBuilder<ProjectResource> AsLocal(IResourceBuilder<ProjectResource> project) =>
     project
         .WithEnvironment("ASPNETCORE_ENVIRONMENT", ChildEnvironment)
-        .WithEnvironment("DOTNET_ENVIRONMENT", ChildEnvironment);
+        .WithEnvironment("DOTNET_ENVIRONMENT", ChildEnvironment)
+        // Restrict DefaultAzureCredential to dev-only credential sources
+        // (Azure CLI, VS, IntelliJ, Azure Developer CLI). Without this every
+        // service spends ~20 ms probing IMDS on 169.254.169.254 (which only
+        // exists inside Azure) before falling back, polluting traces with
+        // bogus `connection_error` spans.
+        .WithEnvironment("AZURE_TOKEN_CREDENTIALS", "dev");
 
 var crmApi = AsLocal(builder.AddProject<Projects.Contoso_CrmApi>("crm-api"))
     .WithHttpEndpoint(port: 5001, name: "http");

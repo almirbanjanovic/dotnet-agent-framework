@@ -7,6 +7,7 @@ using FluentAssertions;
 
 namespace Contoso.BffApi.Tests;
 
+[Collection(nameof(BffApiFactoryCollection))]
 public class ChatPipelineIntegrationTests
 {
     [Fact]
@@ -98,16 +99,18 @@ public class ChatPipelineIntegrationTests
     }
 
     [Fact]
-    public async Task ChatEndpoint_OrchestratorError_Returns502WithDiagnosticBody()
+    public async Task ChatEndpoint_OrchestratorError_Returns502WithSafeBody()
     {
         // Whatever the upstream agent returns (4xx or 5xx with whatever body),
         // the BFF normalises it to 502 BadGateway with a JSON body the UI can
-        // render. We never proxy raw upstream payloads to the browser because
-        // they may be empty (a vanilla 500 page) or non-JSON.
+        // render. We deliberately do NOT echo the upstream body to the
+        // browser — it may contain stack frames, internal exception messages,
+        // payload echoes, or other PII. Operators get the full body in the
+        // server log; clients get a generic message.
         using var factory = new BffApiWebApplicationFactory(_ =>
             new HttpResponseMessage(HttpStatusCode.BadRequest)
             {
-                Content = new StringContent("orchestrator-failed", Encoding.UTF8, "text/plain")
+                Content = new StringContent("orchestrator-failed-with-internal-stack-frame", Encoding.UTF8, "text/plain")
             });
         var client = factory.CreateClient();
 
@@ -121,7 +124,34 @@ public class ChatPipelineIntegrationTests
         response.StatusCode.Should().Be(HttpStatusCode.BadGateway);
         var payload = await response.Content.ReadAsStringAsync();
         payload.Should().Contain("OrchestratorError");
-        payload.Should().Contain("orchestrator-failed");
+        payload.Should().Contain("400");                         // status code is safe diagnostic info
+        payload.Should().NotContain("orchestrator-failed");      // upstream body MUST NOT leak to client
+        payload.Should().NotContain("internal-stack-frame");
+    }
+
+    [Fact]
+    public async Task ChatEndpoint_OrchestratorThrows_DoesNotLeakExceptionMessage()
+    {
+        // Regression test: when the orchestrator HTTP call itself throws
+        // (network failure, DNS, TLS, etc.), the BFF must NOT include
+        // ex.Message in the response body. Wrapping exceptions can include
+        // hostnames, file paths, certificates, or even payload fragments.
+        const string sensitiveToken = "SECRET_INTERNAL_HOSTNAME_42";
+        using var factory = new BffApiWebApplicationFactory(_ =>
+            throw new HttpRequestException(sensitiveToken));
+        var client = factory.CreateClient();
+
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/chat")
+        {
+            Content = JsonContent.Create(new ChatRequest("hi", null))
+        };
+        request.Headers.Add("X-Customer-Id", "cust-1");
+        var response = await client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadGateway);
+        var payload = await response.Content.ReadAsStringAsync();
+        payload.Should().NotContain(sensitiveToken,
+            "ex.Message must never flow through to the browser response");
     }
 
     [Fact]

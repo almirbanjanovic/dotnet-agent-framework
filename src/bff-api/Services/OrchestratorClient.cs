@@ -22,6 +22,24 @@ public sealed class OrchestratorClient
             new OrchestratorChatRequest(customerId, message, history ?? Array.Empty<OrchestratorHistoryMessage>()),
             ct);
 
+    // Opens an SSE stream against the orchestrator. The caller is
+    // responsible for disposing the returned HttpResponseMessage.
+    public Task<HttpResponseMessage> StreamAsync(
+        string customerId,
+        string message,
+        IReadOnlyList<OrchestratorHistoryMessage>? history = null,
+        CancellationToken ct = default)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/chat/stream")
+        {
+            Content = JsonContent.Create(new OrchestratorChatRequest(
+                customerId,
+                message,
+                history ?? Array.Empty<OrchestratorHistoryMessage>()))
+        };
+        return _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+    }
+
     public Task<HttpResponseMessage> GetHealthAsync(CancellationToken ct = default)
         => _httpClient.GetAsync("/health", ct);
 

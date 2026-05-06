@@ -1,6 +1,8 @@
 using System.Net.Http.Json;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Contoso.BlazorUi.Models;
+using Microsoft.AspNetCore.Components.WebAssembly.Http;
 
 namespace Contoso.BlazorUi.Services;
 
@@ -21,6 +23,101 @@ public sealed class BffApiClient(HttpClient httpClient, AuthStateProvider authSt
 
         var result = await response.Content.ReadFromJsonAsync<ChatResponse>(JsonOptions, ct);
         return result ?? throw new InvalidOperationException("Chat response was empty.");
+    }
+
+    // Streams Server-Sent Events from the BFF. Each yielded ChatStreamEvent
+    // carries the SSE event name + raw data JSON. The caller deserializes
+    // the data based on Event using the typed records in
+    // Contoso.BlazorUi.Models.ChatStreamEvent.cs.
+    //
+    // Browser interop: SetBrowserResponseStreamingEnabled(true) tells the
+    // WASM HttpClient to expose the response body as a streaming Stream
+    // instead of buffering the whole thing — this is what makes tokens
+    // visible as they arrive.
+    public async IAsyncEnumerable<ChatStreamEvent> SendChatStreamAsync(
+        ChatRequest request,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        using var httpRequest = CreateRequest(HttpMethod.Post, "/api/v1/chat/stream");
+        httpRequest.Content = JsonContent.Create(request, options: JsonOptions);
+        httpRequest.SetBrowserResponseStreamingEnabled(true);
+
+        using var response = await httpClient.SendAsync(
+            httpRequest,
+            HttpCompletionOption.ResponseHeadersRead,
+            ct);
+        response.EnsureSuccessStatusCode();
+
+        await using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var reader = new StreamReader(stream);
+
+        // SSE state machine (WHATWG-compliant subset):
+        //   - Accumulate `data:` lines per event block, joined by '\n'.
+        //   - Default event name is "message".
+        //   - ':' lines are comments — ignored.
+        //   - Blank line dispatches the buffered event.
+        //   - Field/value separator is the FIRST ':'; an optional single
+        //     space after the colon is stripped.
+        //   - id / retry fields are ignored (no reconnect support needed).
+        string? eventName = null;
+        var dataBuffer = new System.Text.StringBuilder();
+
+        string? line;
+        while ((line = await reader.ReadLineAsync(ct)) is not null)
+        {
+            if (line.Length == 0)
+            {
+                if (dataBuffer.Length > 0)
+                {
+                    yield return new ChatStreamEvent(eventName ?? "message", dataBuffer.ToString());
+                }
+                eventName = null;
+                dataBuffer.Clear();
+                continue;
+            }
+
+            if (line.StartsWith(":", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var colonIdx = line.IndexOf(':');
+            string field, value;
+            if (colonIdx < 0)
+            {
+                field = line;
+                value = string.Empty;
+            }
+            else
+            {
+                field = line.Substring(0, colonIdx);
+                value = line.Substring(colonIdx + 1);
+                if (value.StartsWith(" ", StringComparison.Ordinal))
+                {
+                    value = value.Substring(1);
+                }
+            }
+
+            switch (field)
+            {
+                case "event":
+                    eventName = value;
+                    break;
+                case "data":
+                    if (dataBuffer.Length > 0) dataBuffer.Append('\n');
+                    dataBuffer.Append(value);
+                    break;
+            }
+        }
+
+        // Final block without trailing blank line.
+        // Match the BFF parser: dispatch when EITHER a named event OR data was
+        // accumulated. WHATWG allows event-name-only blocks (e.g. a `done`
+        // sentinel without a body).
+        if (eventName is not null || dataBuffer.Length > 0)
+        {
+            yield return new ChatStreamEvent(eventName ?? "message", dataBuffer.ToString());
+        }
     }
 
     public async Task<MeResponse> GetMeAsync(CancellationToken ct = default)

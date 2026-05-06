@@ -9,6 +9,12 @@ using Contoso.BffApi.Services;
 
 namespace Contoso.BffApi.Tests;
 
+// Tests that spin up BffApiWebApplicationFactory mutate the process-wide
+// `DataMode` environment variable, so they must run sequentially. Any test
+// class that constructs the factory should carry [Collection(nameof(BffApiFactoryCollection))].
+[CollectionDefinition(nameof(BffApiFactoryCollection), DisableParallelization = true)]
+public sealed class BffApiFactoryCollection { }
+
 public sealed class BffApiWebApplicationFactory : WebApplicationFactory<Program>
 {
     private readonly Func<HttpRequestMessage, HttpResponseMessage> _orchestratorResponder;

@@ -73,13 +73,17 @@ app.UseExceptionHandler(errorApp =>
             .CreateLogger("Contoso.OrchestratorAgent.UnhandledException");
         logger.LogError(ex, "Unhandled exception on {Path}", context.Request.Path);
 
+        // Do NOT leak ex.Message or stack traces to network clients — stack
+        // frames disclose namespaces, file paths, and code structure that
+        // accelerate exploitation. Full diagnostics live in the server log
+        // tied to the trace id.
         context.Response.StatusCode = StatusCodes.Status500InternalServerError;
         context.Response.ContentType = "application/json";
         await context.Response.WriteAsJsonAsync(new
         {
             error = ex?.GetType().Name ?? "InternalServerError",
-            message = ex?.Message ?? "An unhandled exception occurred.",
-            stack = ex?.StackTrace?.Split('\n').Take(5).ToArray(),
+            message = "An internal error occurred. See server logs for details.",
+            traceId = context.TraceIdentifier,
             path = context.Request.Path.Value
         });
     });

@@ -65,7 +65,19 @@ internal static class ServiceDefaults
             {
                 tracing.AddSource(builder.Environment.ApplicationName)
                     .AddAspNetCoreInstrumentation()
-                    .AddHttpClientInstrumentation();
+                    .AddHttpClientInstrumentation(o =>
+                    {
+                        // The MCP streamable-HTTP client opens an optional
+                        // server-to-client SSE listen stream by sending
+                        // `GET / Accept: text/event-stream` after every
+                        // session initialize. Stateless servers respond 405
+                        // (per spec) and the client moves on. Suppress these
+                        // probe spans so traces aren't littered with red
+                        // 405s that aren't real failures.
+                        o.FilterHttpRequestMessage = req =>
+                            !(req.Method == HttpMethod.Get
+                                && req.Headers.Accept.Any(h => h.MediaType == "text/event-stream"));
+                    });
             });
 
         if (!string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))

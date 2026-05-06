@@ -8,12 +8,21 @@ namespace Contoso.OrchestratorAgent.Endpoints;
 //      as CRM or PRODUCT.
 //   2. AgentRouter forwards the request (with history) to that specialist
 //      and proxies the response back unchanged.
+//
+// Two flavors:
+//   POST /api/v1/chat        — buffered JSON response (legacy / tests)
+//   POST /api/v1/chat/stream — Server-Sent Events. Emits a `stage` event
+//                              when classification finishes (so the UI can
+//                              show "routed to crm-agent") and then
+//                              proxies the specialist's SSE stream
+//                              (token / tool / done events) verbatim.
 
 internal static class ChatEndpoint
 {
     public static IEndpointRouteBuilder MapChatEndpoint(this IEndpointRouteBuilder app)
     {
         app.MapPost("/api/v1/chat", HandleAsync);
+        app.MapPost("/api/v1/chat/stream", HandleStreamAsync);
         return app;
     }
 
@@ -37,5 +46,70 @@ internal static class ChatEndpoint
         }
 
         return Results.Content(result.Payload, "application/json", statusCode: result.StatusCode);
+    }
+
+    private static async Task HandleStreamAsync(
+        ChatRequest request,
+        IntentClassifier classifier,
+        AgentRouter router,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        var response = httpContext.Response;
+        response.ContentType = "text/event-stream";
+        response.Headers["Cache-Control"] = "no-cache";
+        response.Headers["X-Accel-Buffering"] = "no";
+
+        if (string.IsNullOrWhiteSpace(request.CustomerId) || string.IsNullOrWhiteSpace(request.Message))
+        {
+            await SseWriter.WriteAsync(response, "error", new { message = "customerId and message are required." }, cancellationToken);
+            return;
+        }
+
+        try
+        {
+            await SseWriter.WriteAsync(response, "stage", new { stage = "classifying" }, cancellationToken);
+
+            var intent = await classifier.ClassifyAsync(request.Message, cancellationToken);
+            var agentLabel = intent.Equals("PRODUCT", StringComparison.OrdinalIgnoreCase) ? "product" : "crm";
+
+            await SseWriter.WriteAsync(response, "stage", new { stage = "routed", agent = agentLabel }, cancellationToken);
+
+            using var upstream = await router.RouteStreamAsync(intent, request, cancellationToken);
+            if (!upstream.IsSuccessStatusCode)
+            {
+                // Read but do NOT proxy the upstream body to the BFF / browser —
+                // it may contain a JSON error doc with internals, stack frames,
+                // or echoes of payload data. Status alone is sufficient client-
+                // side; full body is captured in the trace via Activity events.
+                _ = await upstream.Content.ReadAsStringAsync(cancellationToken);
+                await SseWriter.WriteAsync(
+                    response,
+                    "error",
+                    new { message = $"Specialist agent returned {(int)upstream.StatusCode}.", agent = agentLabel },
+                    cancellationToken);
+                return;
+            }
+
+            // Pipe the specialist's SSE bytes straight through. Each SSE
+            // event is already self-delimited so no parsing is required.
+            await using var upstreamStream = await upstream.Content.ReadAsStreamAsync(cancellationToken);
+            await upstreamStream.CopyToAsync(response.Body, cancellationToken);
+            await response.Body.FlushAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Client disconnected.
+        }
+        catch (Exception ex)
+        {
+            // Surface only the type name — ex.Message may include payload
+            // fragments, file paths, or other internals.
+            await SseWriter.WriteAsync(
+                response,
+                "error",
+                new { message = "Specialist agent stream failed.", type = ex.GetType().Name },
+                CancellationToken.None);
+        }
     }
 }
