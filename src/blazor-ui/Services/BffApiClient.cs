@@ -224,6 +224,15 @@ public sealed class BffApiClient(HttpClient httpClient, AuthStateProvider authSt
         return $"{baseAddress}/api/v1/images/{Uri.EscapeDataString(filename)}";
     }
 
+    // Returns the BFF host (no trailing slash) so callers that build their
+    // own /api/v1/images/... URLs — most importantly the chat markdown
+    // renderer — can produce absolute, cross-origin URLs that resolve to
+    // the BFF rather than the WASM host. Without this, <img src="/api/v1/
+    // images/foo.png"> resolves to the UI host (e.g. localhost:5008) and
+    // returns 404 because that route only exists on the BFF (5007).
+    public string BffBaseUrl =>
+        httpClient.BaseAddress?.ToString().TrimEnd('/') ?? string.Empty;
+
     private HttpRequestMessage CreateRequest(HttpMethod method, string uri)
     {
         var request = new HttpRequestMessage(method, uri);

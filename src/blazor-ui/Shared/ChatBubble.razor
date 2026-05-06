@@ -56,7 +56,7 @@ else
                             <span class="chat-avatar assistant">AI</span>
                         }
                         <div class="chat-bubble">
-                            <div class="markdown-body">@ChatMarkdownRenderer.RenderMarkdown(message.Content)</div>
+                            <div class="markdown-body">@ChatMarkdownRenderer.RenderMarkdown(message.Content, BffApi.BffBaseUrl)</div>
                         </div>
                     </div>
                 }
@@ -81,7 +81,7 @@ else
                             }
                             @if (!string.IsNullOrEmpty(_streamingText))
                             {
-                                <div class="markdown-body">@ChatMarkdownRenderer.RenderMarkdown(_streamingText)</div>
+                                <div class="markdown-body">@ChatMarkdownRenderer.RenderMarkdown(_streamingText, BffApi.BffBaseUrl)</div>
                             }
                             else if (string.IsNullOrEmpty(_currentStageLabel))
                             {
