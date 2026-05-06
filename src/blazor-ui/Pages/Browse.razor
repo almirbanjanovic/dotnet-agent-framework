@@ -1,0 +1,151 @@
+@page "/browse"
+@attribute [Authorize]
+@inject BffApiClient BffApi
+@inject NavigationManager Navigation
+
+<PageTitle>Browse · Contoso Outdoors</PageTitle>
+
+<section class="page-section">
+    <div class="section-head">
+        <div>
+            <MudText Typo="Typo.h4" Style="font-weight: 700;">@PageHeading</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                @(_isLoading ? "Loading..." : $"{_products.Count} product{(_products.Count == 1 ? "" : "s")} found.")
+            </MudText>
+        </div>
+        <MudSwitch T="bool"
+                   Value="@_inStockOnly"
+                   ValueChanged="@OnInStockOnlyChanged"
+                   Color="Color.Primary"
+                   Label="In stock only" />
+    </div>
+
+    <div class="filter-chips">
+        <FilterChip Label="All" IsActive="@string.IsNullOrEmpty(_category)" OnSelected="@(() => SetCategory(null))" />
+        @foreach (var cat in _categories)
+        {
+            <FilterChip Label="@cat.Label"
+                        IsActive="@string.Equals(_category, cat.Slug, StringComparison.OrdinalIgnoreCase)"
+                        OnSelected="@(() => SetCategory(cat.Slug))" />
+        }
+    </div>
+
+    @if (_isLoading)
+    {
+        <div class="product-grid">
+            @for (var i = 0; i < 8; i++)
+            {
+                <MudPaper Class="pa-4 product-card-skeleton" Elevation="0">
+                    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="180px" />
+                    <MudSkeleton SkeletonType="SkeletonType.Text" Width="80%" Style="margin-top: 0.75rem;" />
+                    <MudSkeleton SkeletonType="SkeletonType.Text" Width="40%" />
+                </MudPaper>
+            }
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_errorMessage</MudAlert>
+    }
+    else if (_products.Count == 0)
+    {
+        <MudPaper Class="pa-8" Style="text-align: center;" Elevation="0">
+            <MudIcon Icon="@Icons.Material.Outlined.SearchOff" Size="Size.Large" Color="Color.Secondary" />
+            <MudText Typo="Typo.h6" Style="margin-top: 0.75rem;">No matching products</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Try changing the category filter or removing the search term.</MudText>
+        </MudPaper>
+    }
+    else
+    {
+        <div class="product-grid">
+            @foreach (var product in _products)
+            {
+                <ProductCard Product="@product" />
+            }
+        </div>
+    }
+</section>
+
+@code {
+    private record CategoryEntry(string Slug, string Label);
+
+    private static readonly CategoryEntry[] _categories =
+    [
+        new("footwear",    "Footwear"),
+        new("clothing",    "Clothing"),
+        new("backpacks",   "Backpacks"),
+        new("tents",       "Tents"),
+        new("cooking",     "Cooking"),
+        new("accessories", "Accessories")
+    ];
+
+    [SupplyParameterFromQuery] public string? Category { get; set; }
+    [SupplyParameterFromQuery] public string? Query { get; set; }
+
+    private string? _category;
+    private string? _query;
+    private bool _inStockOnly;
+    private List<Product> _products = new();
+    private bool _isLoading = true;
+    private string? _errorMessage;
+
+    private string PageHeading => string.IsNullOrWhiteSpace(_query)
+        ? string.IsNullOrWhiteSpace(_category)
+            ? "All products"
+            : $"{Capitalize(_category!)}"
+        : $"Search: \"{_query}\"";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _category = Category;
+        _query = Query;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        try
+        {
+            _products = (await BffApi.GetProductsAsync(_category, _query, _inStockOnly)).ToList();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Unable to load products: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void SetCategory(string? slug)
+    {
+        var url = "/browse";
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(slug))
+        {
+            parts.Add($"category={Uri.EscapeDataString(slug)}");
+        }
+        if (!string.IsNullOrWhiteSpace(_query))
+        {
+            parts.Add($"query={Uri.EscapeDataString(_query)}");
+        }
+        if (parts.Count > 0)
+        {
+            url += "?" + string.Join("&", parts);
+        }
+
+        Navigation.NavigateTo(url);
+    }
+
+    private async Task OnInStockOnlyChanged(bool value)
+    {
+        _inStockOnly = value;
+        await LoadAsync();
+    }
+
+    private static string Capitalize(string value) =>
+        string.IsNullOrEmpty(value) ? value : char.ToUpperInvariant(value[0]) + value[1..];
+}

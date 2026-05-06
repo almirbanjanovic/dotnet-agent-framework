@@ -14,6 +14,8 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 
 builder.Services.AddMudServices();
 builder.Services.AddScoped<AuthStateProvider>();
+builder.Services.AddScoped<CartService>();
+builder.Services.AddScoped<ChatPanelState>();
 
 var bffBaseUrl = BlazorUiConfiguration.GetBffBaseUrl(builder.Configuration);
 var useDevAuth = BlazorUiConfiguration.IsDevAuthEnabled(builder.Configuration, builder.HostEnvironment);

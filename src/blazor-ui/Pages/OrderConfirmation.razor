@@ -1,0 +1,39 @@
+@page "/orders/confirmation/{id}"
+@attribute [Authorize]
+@inject NavigationManager Navigation
+
+<PageTitle>Order placed · Contoso Outdoors</PageTitle>
+
+<section class="page-section">
+    <div class="confirmation-card">
+        <div class="confirmation-icon">
+            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" />
+        </div>
+        <MudText Typo="Typo.h4" Style="font-weight: 800; margin-bottom: 0.5rem;">Thanks for your order!</MudText>
+        <MudText Typo="Typo.body1" Color="Color.Secondary">
+            Your order <strong>@Id</strong> has been placed and is now being processed.
+        </MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Style="margin-top: 0.75rem;">
+            You'll receive a confirmation email shortly. We'll also notify you when your gear ships.
+        </MudText>
+
+        <div style="display: flex; justify-content: center; gap: 0.75rem; margin-top: 2rem; flex-wrap: wrap;">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Receipt"
+                       OnClick="@(() => Navigation.NavigateTo("/orders"))">
+                View my orders
+            </MudButton>
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Storefront"
+                       OnClick="@(() => Navigation.NavigateTo("/browse"))">
+                Continue shopping
+            </MudButton>
+        </div>
+    </div>
+</section>
+
+@code {
+    [Parameter] public string Id { get; set; } = string.Empty;
+}

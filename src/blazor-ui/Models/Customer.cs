@@ -16,6 +16,9 @@ public sealed class Customer
     [JsonPropertyName("email")]
     public string Email { get; set; } = string.Empty;
 
+    [JsonPropertyName("address")]
+    public string Address { get; set; } = string.Empty;
+
     [JsonPropertyName("loyalty_tier")]
     public string LoyaltyTier { get; set; } = string.Empty;
 

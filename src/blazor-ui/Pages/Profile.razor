@@ -1,15 +1,17 @@
 @page "/profile"
+@attribute [Authorize]
 @implements IDisposable
 @inject BffApiClient BffApiClient
 @inject AuthStateProvider AuthStateProvider
 
 <PageTitle>Profile · Contoso Outdoors</PageTitle>
 
+<section class="page-section">
 <MudStack Spacing="4">
     <div>
-        <MudText Typo="Typo.h4">Customer profile</MudText>
+        <MudText Typo="Typo.h4" Style="font-weight: 700;">Customer profile</MudText>
         <MudText Typo="Typo.body2" Color="Color.Secondary">
-            Account details for the selected customer.
+            Account details on file with Contoso Outdoors.
         </MudText>
     </div>
 
@@ -29,9 +31,9 @@
     {
         <MudPaper Class="pa-8" Style="text-align: center;" Elevation="0">
             <MudIcon Icon="@Icons.Material.Outlined.PersonOutline" Size="Size.Large" Color="Color.Secondary" />
-            <MudText Typo="Typo.h6" Style="margin-top: 0.75rem;">No customer selected</MudText>
+            <MudText Typo="Typo.h6" Style="margin-top: 0.75rem;">Profile unavailable</MudText>
             <MudText Typo="Typo.body2" Color="Color.Secondary">
-                Pick a customer in the top bar to view their profile.
+                We couldn't find a Contoso Outdoors customer record matching your account.
             </MudText>
         </MudPaper>
     }
@@ -76,6 +78,7 @@
         </MudGrid>
     }
 </MudStack>
+</section>
 
 <style>
     .profile-hero {

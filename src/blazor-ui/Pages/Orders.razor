@@ -1,15 +1,19 @@
 @page "/orders"
+@attribute [Authorize]
 @implements IDisposable
 @inject BffApiClient BffApiClient
 @inject AuthStateProvider AuthStateProvider
 
 <PageTitle>Orders · Contoso Outdoors</PageTitle>
 
+<section class="page-section">
 <MudStack Spacing="4">
     <div>
-        <MudText Typo="Typo.h4">Order history</MudText>
+        <MudText Typo="Typo.h4" Style="font-weight: 700;">Order history</MudText>
         <MudText Typo="Typo.body2" Color="Color.Secondary">
-            Recent orders for the selected customer.
+            @(AuthStateProvider.SelectedCustomer is { } c
+                ? $"Recent orders for {c.Name}."
+                : "Sign in to view your order history.")
         </MudText>
     </div>
 
@@ -37,11 +41,15 @@
         <MudPaper Class="pa-8" Style="text-align: center;" Elevation="0">
             <MudIcon Icon="@Icons.Material.Outlined.Inventory2" Size="Size.Large" Color="Color.Secondary" />
             <MudText Typo="Typo.h6" Style="margin-top: 0.75rem;">No orders yet</MudText>
-            <MudText Typo="Typo.body2" Color="Color.Secondary">
-                @(AuthStateProvider.SelectedCustomer is null
-                    ? "Select a customer to view their order history."
-                    : "This customer has no recorded orders.")
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Style="margin-bottom: 1rem;">
+                You haven't placed any orders. Browse the catalog to get started.
             </MudText>
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Storefront"
+                       Href="/browse">
+                Browse products
+            </MudButton>
         </MudPaper>
     }
     else
@@ -119,6 +127,7 @@
         </MudGrid>
     }
 </MudStack>
+</section>
 
 @code {
     private readonly List<Order> _orders = new();

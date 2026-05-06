@@ -1,14 +1,16 @@
-/* ---------- Brand mark in app bar ---------- */
+/* ---------- Brand mark ---------- */
 ::deep .brand-mark {
     display: flex;
     align-items: center;
     gap: 0.6rem;
     margin-left: 0.25rem;
+    text-decoration: none;
+    color: inherit;
 }
 
 ::deep .brand-logo {
-    width: 32px;
-    height: 32px;
+    width: 34px;
+    height: 34px;
     border-radius: 8px;
     background: linear-gradient(135deg, #1F5F3F 0%, #14B8A6 100%);
     display: inline-flex;
@@ -31,7 +33,7 @@
 }
 
 ::deep .brand-tagline {
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: #1F5F3F;
@@ -39,46 +41,178 @@
     margin-top: 1px;
 }
 
-/* ---------- Customer dropdown ---------- */
-::deep .customer-select {
+/* ---------- Category nav (top bar) ---------- */
+::deep .category-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-left: 1.5rem;
+}
+
+::deep .category-link {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #475569;
+    padding: 0.4rem 0.8rem;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+::deep .category-link:hover {
+    background-color: rgba(31, 95, 63, 0.08);
+    color: #1F5F3F;
+}
+
+@media (max-width: 1100px) {
+    ::deep .category-nav { display: none; }
+}
+
+/* ---------- Top-bar search ---------- */
+::deep .topbar-search {
+    width: 280px;
+    margin-right: 0.5rem;
+}
+
+::deep .topbar-search .mud-input-outlined-border {
+    border-radius: 999px;
+}
+
+@media (max-width: 900px) {
+    ::deep .topbar-search { width: 180px; }
+}
+
+/* ---------- Cart button + badge ---------- */
+::deep .cart-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    margin-left: 0.25rem;
+}
+
+::deep .cart-badge {
+    position: absolute;
+    top: 4px;
+    right: 2px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: #D97706;
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+    box-shadow: 0 0 0 2px #fff;
+    pointer-events: none;
+}
+
+/* ---------- Account menu header ---------- */
+::deep .account-header {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.85rem 1rem;
     min-width: 240px;
 }
 
-::deep .customer-select .mud-input-outlined-border {
-    border-radius: 10px;
-}
-
-::deep .customer-avatar {
-    width: 24px;
-    height: 24px;
+::deep .account-avatar {
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     background: linear-gradient(135deg, #D97706 0%, #F59E0B 100%);
-    color: #FFFFFF;
-    font-size: 0.7rem;
+    color: #fff;
+    font-size: 0.8rem;
     font-weight: 700;
     display: inline-flex;
     align-items: center;
     justify-content: center;
 }
 
-/* ---------- Drawer nav links ---------- */
-::deep .mud-drawer .mud-nav-link {
-    font-weight: 500;
-    border-radius: 10px;
-    margin: 2px 8px;
-    padding: 0.55rem 0.85rem;
-    transition: background-color 0.15s ease, color 0.15s ease;
+::deep .account-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #0F1F17;
 }
 
-::deep .mud-drawer .mud-nav-link:hover {
-    background-color: rgba(31, 95, 63, 0.06);
+::deep .account-email {
+    font-size: 0.75rem;
+    color: #64748B;
 }
 
-::deep .mud-drawer .mud-nav-link.active {
-    background-color: rgba(31, 95, 63, 0.10);
-    color: #1F5F3F;
+::deep .impersonate-label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #94A3B8;
+    font-weight: 700;
+    padding: 0.55rem 1rem 0.25rem;
 }
 
-::deep .mud-drawer .mud-nav-link.active .mud-nav-link-icon {
-    color: #1F5F3F;
+/* ---------- Page main: leave space for fixed AppBar ---------- */
+::deep .page-main {
+    padding-top: 64px;
+    min-height: calc(100vh - 64px);
+    display: flex;
+    flex-direction: column;
+}
+
+/* ---------- Footer ---------- */
+::deep .site-footer {
+    margin-top: auto;
+    background: #0F1F17;
+    color: #CBD5D1;
+    padding: 3rem 1.5rem 1.5rem;
+}
+
+::deep .footer-grid {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1.5fr 1fr 1fr;
+    gap: 3rem;
+}
+
+@media (max-width: 700px) {
+    ::deep .footer-grid {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+    }
+}
+
+::deep .footer-heading {
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 0.85rem;
+    font-size: 0.9rem;
+    letter-spacing: 0.02em;
+}
+
+::deep .footer-text {
+    font-size: 0.85rem;
+    line-height: 1.55;
+    color: #94A3B8;
+    max-width: 360px;
+}
+
+::deep .footer-link {
+    display: block;
+    font-size: 0.85rem;
+    color: #CBD5D1;
+    text-decoration: none;
+    padding: 0.2rem 0;
+    transition: color 0.15s ease;
+}
+
+::deep .footer-link:hover { color: #fff; }
+
+::deep .footer-bottom {
+    max-width: 1200px;
+    margin: 2.5rem auto 0;
+    padding-top: 1.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 0.75rem;
+    color: #64748B;
+    text-align: center;
 }

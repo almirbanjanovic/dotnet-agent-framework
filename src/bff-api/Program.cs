@@ -68,16 +68,23 @@ var api = app.MapGroup("/api/v1");
 var chatEndpoint = api.MapChatEndpoint();
 var (conversationsEndpoint, conversationEndpoint) = api.MapConversationEndpoints();
 var imageEndpoint = api.MapImageEndpoint();
-var (customerEndpoint, ordersEndpoint) = api.MapCustomerEndpoints();
+var (meEndpoint, customerEndpoint, ordersEndpoint, productsEndpoint, productEndpoint, placeOrderEndpoint) = api.MapCustomerEndpoints();
 
 if (useEntraAuth)
 {
     chatEndpoint.RequireAuthorization();
     conversationsEndpoint.RequireAuthorization();
     conversationEndpoint.RequireAuthorization();
+    meEndpoint.RequireAuthorization();
     customerEndpoint.RequireAuthorization();
     ordersEndpoint.RequireAuthorization();
-    imageEndpoint.RequireAuthorization();
+    productsEndpoint.RequireAuthorization();
+    productEndpoint.RequireAuthorization();
+    placeOrderEndpoint.RequireAuthorization();
+    // Product images are public-by-design (in production they would live on
+    // a CDN / public blob container). <img src=...> can't attach a Bearer
+    // token, so requiring auth here would 401 every product card.
+    imageEndpoint.AllowAnonymous();
 }
 
 app.Run();

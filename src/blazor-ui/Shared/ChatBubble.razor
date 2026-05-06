@@ -1,0 +1,203 @@
+@inject ChatPanelState ChatPanel
+@inject BffApiClient BffApi
+@inject AuthStateProvider AuthStateProvider
+@inject IJSRuntime JsRuntime
+@implements IDisposable
+
+@if (!ChatPanel.IsOpen)
+{
+    <button class="chat-bubble-fab" @onclick="ChatPanel.Toggle" aria-label="Open chat assistant">
+        <MudIcon Icon="@Icons.Material.Filled.SupportAgent" />
+        <span>Need help?</span>
+    </button>
+}
+else
+{
+    <div class="chat-panel-floating">
+        <div class="chat-panel-header">
+            <div class="chat-panel-title">
+                <span class="chat-panel-avatar">AI</span>
+                <div>
+                    <div class="chat-panel-name">Contoso Assistant</div>
+                    <div class="chat-panel-status">Online · Powered by AI agents</div>
+                </div>
+            </div>
+            <MudIconButton Icon="@Icons.Material.Filled.Close"
+                           Size="Size.Small"
+                           OnClick="ChatPanel.Close"
+                           aria-label="Close chat" />
+        </div>
+
+        <div id="@ScrollContainerId" class="chat-panel-messages">
+            @if (_messages.Count == 0)
+            {
+                <div class="chat-panel-empty">
+                    <span class="chat-empty-emoji">👋</span>
+                    <MudText Typo="Typo.subtitle1" Style="font-weight: 600;">How can we help today?</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Ask about an order, request a return, or get gear recommendations.
+                    </MudText>
+                    <div class="chat-panel-suggestions">
+                        @foreach (var prompt in _suggestedPrompts)
+                        {
+                            <button class="chat-panel-suggestion" @onclick="() => UseSuggestion(prompt)">@prompt</button>
+                        }
+                    </div>
+                </div>
+            }
+            else
+            {
+                @foreach (var message in _messages)
+                {
+                    var isUser = string.Equals(message.Role, "user", StringComparison.OrdinalIgnoreCase);
+                    <div class="chat-row @(isUser ? "user" : "assistant")">
+                        @if (!isUser)
+                        {
+                            <span class="chat-avatar assistant">AI</span>
+                        }
+                        <div class="chat-bubble">
+                            <div class="markdown-body">@ChatMarkdownRenderer.RenderMarkdown(message.Content)</div>
+                        </div>
+                    </div>
+                }
+                @if (_isSending)
+                {
+                    <div class="chat-row assistant">
+                        <span class="chat-avatar assistant">AI</span>
+                        <div class="chat-bubble">
+                            <div class="typing-indicator"><span></span><span></span><span></span></div>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+
+        <div class="chat-panel-composer">
+            @if (!string.IsNullOrWhiteSpace(_errorMessage))
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-2">@_errorMessage</MudAlert>
+            }
+            <MudTextField @bind-Value="_currentMessage"
+                          Variant="Variant.Outlined"
+                          Lines="2"
+                          Disabled="@_isSending"
+                          Placeholder="Ask about your orders, returns, or gear..."
+                          Margin="Margin.Dense"
+                          OnKeyDown="HandleKeyDown" />
+            <div class="chat-panel-send-row">
+                <span class="chat-panel-hint">
+                    <kbd>Enter</kbd> to send
+                </span>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Size="Size.Small"
+                           EndIcon="@Icons.Material.Filled.Send"
+                           OnClick="SendAsync"
+                           Disabled="@IsSendDisabled">
+                    @(_isSending ? "Sending…" : "Send")
+                </MudButton>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private const string ScrollContainerId = "chat-panel-scroll";
+
+    private static readonly string[] _suggestedPrompts =
+    [
+        "Where is my latest order?",
+        "What's your return policy on hiking boots?",
+        "Recommend a tent for a 3-person summer trip."
+    ];
+
+    private readonly List<ChatMessage> _messages = new();
+    private string? _conversationId;
+    private string _currentMessage = string.Empty;
+    private string? _errorMessage;
+    private bool _isSending;
+    private bool _scrollPending;
+
+    private bool IsSendDisabled =>
+        _isSending ||
+        string.IsNullOrWhiteSpace(_currentMessage) ||
+        AuthStateProvider.SelectedCustomer is null;
+
+    protected override void OnInitialized()
+    {
+        ChatPanel.Changed += HandleChanged;
+        AuthStateProvider.CustomerChanged += HandleCustomerChanged;
+    }
+
+    private void UseSuggestion(string prompt)
+    {
+        _currentMessage = prompt;
+        _ = SendAsync();
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendAsync();
+        }
+    }
+
+    private async Task SendAsync()
+    {
+        if (IsSendDisabled)
+        {
+            return;
+        }
+
+        _errorMessage = null;
+        var message = _currentMessage.Trim();
+        _currentMessage = string.Empty;
+
+        _messages.Add(new ChatMessage("user", message, DateTimeOffset.UtcNow));
+        _scrollPending = true;
+        _isSending = true;
+
+        try
+        {
+            var response = await BffApi.SendChatAsync(new ChatRequest(message, _conversationId));
+            _conversationId = response.ConversationId;
+            _messages.Add(new ChatMessage("assistant", response.Response, DateTimeOffset.UtcNow));
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Unable to send message: {ex.Message}";
+        }
+        finally
+        {
+            _isSending = false;
+            _scrollPending = true;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_scrollPending)
+        {
+            _scrollPending = false;
+            await JsRuntime.InvokeVoidAsync("scrollChatToBottom", ScrollContainerId);
+        }
+    }
+
+    private void HandleCustomerChanged()
+    {
+        _conversationId = null;
+        _messages.Clear();
+        _errorMessage = null;
+        _currentMessage = string.Empty;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void HandleChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        ChatPanel.Changed -= HandleChanged;
+        AuthStateProvider.CustomerChanged -= HandleCustomerChanged;
+    }
+}

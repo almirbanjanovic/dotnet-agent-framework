@@ -72,6 +72,75 @@ public sealed class CosmosService : ICosmosService
         return await ExecuteQueryAsync<OrderItem>(_orderItems, query, new PartitionKey(orderId), ct);
     }
 
+    public async Task<(Order order, IReadOnlyList<OrderItem> items)> CreateOrderAsync(
+        string customerId,
+        string? shippingAddress,
+        IEnumerable<(string productId, int quantity)> items,
+        CancellationToken ct = default)
+    {
+        var customer = await GetCustomerByIdAsync(customerId, ct)
+            ?? throw new InvalidOperationException($"Customer '{customerId}' not found.");
+
+        var resolvedItems = new List<OrderItem>();
+        decimal total = 0m;
+
+        foreach (var (productId, quantity) in items)
+        {
+            if (quantity <= 0)
+            {
+                throw new InvalidOperationException($"Quantity for '{productId}' must be greater than zero.");
+            }
+
+            var product = await GetProductByIdAsync(productId, ct)
+                ?? throw new InvalidOperationException($"Product '{productId}' not found.");
+
+            if (!product.InStock)
+            {
+                throw new InvalidOperationException($"Product '{product.Name}' is out of stock.");
+            }
+
+            resolvedItems.Add(new OrderItem
+            {
+                ProductId = product.Id,
+                ProductName = product.Name,
+                Quantity = quantity,
+                UnitPrice = product.Price
+            });
+
+            total += product.Price * quantity;
+        }
+
+        if (resolvedItems.Count == 0)
+        {
+            throw new InvalidOperationException("Order must contain at least one item.");
+        }
+
+        var orderId = $"O-{Guid.NewGuid():N}";
+        var order = new Order
+        {
+            Id = orderId,
+            CustomerId = customerId,
+            OrderDate = DateTime.UtcNow.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+            Status = "processing",
+            TotalAmount = total,
+            ShippingAddress = string.IsNullOrWhiteSpace(shippingAddress) ? customer.Address : shippingAddress,
+            TrackingNumber = null,
+            EstimatedDelivery = DateTime.UtcNow.AddDays(5).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)
+        };
+
+        await _orders.CreateItemAsync(order, new PartitionKey(customerId), cancellationToken: ct);
+
+        for (var index = 0; index < resolvedItems.Count; index++)
+        {
+            var item = resolvedItems[index];
+            item.Id = $"{orderId}-{index + 1}";
+            item.OrderId = orderId;
+            await _orderItems.CreateItemAsync(item, new PartitionKey(orderId), cancellationToken: ct);
+        }
+
+        return (order, resolvedItems);
+    }
+
     // ── Products ───────────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<Product>> GetProductsAsync(

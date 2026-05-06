@@ -1,0 +1,11 @@
+<button class="filter-chip @(IsActive ? "active" : "")" @onclick="HandleClick">
+    @Label
+</button>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = string.Empty;
+    [Parameter] public bool IsActive { get; set; }
+    [Parameter] public EventCallback OnSelected { get; set; }
+
+    private Task HandleClick() => OnSelected.InvokeAsync();
+}

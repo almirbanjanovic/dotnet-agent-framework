@@ -40,12 +40,25 @@ az login
 az account set --subscription "<your-subscription-id>"   # only if you have more than one
 ```
 
+Then trust the ASP.NET Core developer certificate so the Aspire dashboard
+(which serves `https://localhost:15888` and gRPC-calls itself over TLS)
+loads cleanly:
+
+```powershell
+dotnet dev-certs https --trust
+```
+
+Click **Yes** on the OS trust prompt. This is a one-time, per-machine setup —
+without it `dotnet run --project src/AppHost` will start, but the dashboard
+will spew `AuthenticationException: ... UntrustedRoot` until you fix it.
+
 ### Verification checklist
 
 - [ ] `az account show` returns the subscription you intend to deploy into
 - [ ] `az ad signed-in-user show` returns your tenant identity (confirms the Entra side of `az login`)
 - [ ] `dotnet --version` ≥ 9.0
 - [ ] `terraform --version` ≥ 1.14.7
+- [ ] `dotnet dev-certs https --check --trust` reports `A trusted certificate was found.`
 
 ### What's next
 

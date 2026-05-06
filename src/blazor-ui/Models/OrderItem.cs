@@ -18,4 +18,7 @@ public sealed class OrderItem
 
     [JsonPropertyName("quantity")]
     public int Quantity { get; set; }
+
+    [JsonPropertyName("unit_price")]
+    public decimal UnitPrice { get; set; }
 }

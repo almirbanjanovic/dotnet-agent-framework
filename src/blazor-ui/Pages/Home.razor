@@ -1,0 +1,140 @@
+@page "/"
+@attribute [Authorize]
+@inject BffApiClient BffApi
+@inject NavigationManager Navigation
+@inject CartService Cart
+@inject ChatPanelState ChatPanel
+@inject AuthStateProvider AuthStateProvider
+
+<PageTitle>Contoso Outdoors · Premium gear for your next adventure</PageTitle>
+
+<section class="hero">
+    <div class="hero-inner">
+        <div class="hero-copy">
+            <span class="hero-eyebrow">New Spring '26 Collection</span>
+            <h1 class="hero-title">Built for the trail.<br/>Tested by people who live there.</h1>
+            <p class="hero-sub">
+                From sub-2kg ultralight tents to 4-season insulation, every product on this site has been
+                field-tested by our gear team. Free shipping on orders over $99.
+            </p>
+            <div class="hero-cta">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Size="Size.Large"
+                           EndIcon="@Icons.Material.Filled.ArrowForward"
+                           OnClick="@(() => Navigation.NavigateTo("/browse"))">
+                    Shop the catalog
+                </MudButton>
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Inherit"
+                           Size="Size.Large"
+                           StartIcon="@Icons.Material.Filled.SupportAgent"
+                           OnClick="@(() => ChatPanel.Open())"
+                           Style="color: #fff;">
+                    Ask the experts
+                </MudButton>
+            </div>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+            <MudIcon Icon="@Icons.Material.Filled.Terrain" Size="Size.Large" Style="font-size: 14rem; color: rgba(255,255,255,0.16);" />
+        </div>
+    </div>
+</section>
+
+<section class="page-section">
+    <div class="section-head">
+        <div>
+            <MudText Typo="Typo.h4" Style="font-weight: 700;">Shop by category</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Pick your discipline.</MudText>
+        </div>
+    </div>
+    <div class="category-grid">
+        @foreach (var cat in _categories)
+        {
+            <a href="@($"/browse?category={cat.Slug}")" class="category-tile">
+                <MudIcon Icon="@cat.Icon" Size="Size.Large" />
+                <span class="category-tile-label">@cat.Label</span>
+            </a>
+        }
+    </div>
+</section>
+
+<section class="page-section">
+    <div class="section-head">
+        <div>
+            <MudText Typo="Typo.h4" Style="font-weight: 700;">Featured gear</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Top-rated picks from this season's collection.</MudText>
+        </div>
+        <MudButton Variant="Variant.Text"
+                   Color="Color.Primary"
+                   EndIcon="@Icons.Material.Filled.ArrowForward"
+                   OnClick="@(() => Navigation.NavigateTo("/browse"))">
+            See all products
+        </MudButton>
+    </div>
+
+    @if (_isLoading)
+    {
+        <div class="product-grid">
+            @for (var i = 0; i < 4; i++)
+            {
+                <MudPaper Class="pa-4 product-card-skeleton" Elevation="0">
+                    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="180px" />
+                    <MudSkeleton SkeletonType="SkeletonType.Text" Width="80%" Style="margin-top: 0.75rem;" />
+                    <MudSkeleton SkeletonType="SkeletonType.Text" Width="40%" />
+                </MudPaper>
+            }
+        </div>
+    }
+    else if (_featured.Count > 0)
+    {
+        <div class="product-grid">
+            @foreach (var product in _featured)
+            {
+                <ProductCard Product="@product" />
+            }
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_errorMessage</MudAlert>
+    }
+</section>
+
+@code {
+    private record CategoryEntry(string Slug, string Label, string Icon);
+
+    private static readonly CategoryEntry[] _categories =
+    [
+        new("footwear",    "Footwear",    Icons.Material.Filled.Hiking),
+        new("clothing",    "Clothing",    Icons.Material.Filled.Checkroom),
+        new("backpacks",   "Backpacks",   Icons.Material.Filled.Backpack),
+        new("tents",       "Tents",       Icons.Material.Filled.Cabin),
+        new("cooking",     "Cooking",     Icons.Material.Filled.OutdoorGrill),
+        new("accessories", "Accessories", Icons.Material.Filled.Construction)
+    ];
+
+    private List<Product> _featured = new();
+    private bool _isLoading = true;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var products = await BffApi.GetProductsAsync(inStockOnly: true);
+            _featured = products
+                .OrderByDescending(p => p.Rating)
+                .Take(4)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Unable to load featured products: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+}

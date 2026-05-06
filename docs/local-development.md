@@ -364,6 +364,18 @@ Re-run setup; the script regenerates the files:
 ./infra/setup-local.ps1
 ```
 
+### Aspire dashboard logs `AuthenticationException: ... UntrustedRoot`
+
+The ASP.NET Core developer certificate isn't trusted on this machine. The
+dashboard at `https://localhost:15888` then fails to gRPC-call itself over
+TLS. One-time fix:
+
+```powershell
+dotnet dev-certs https --trust
+```
+
+Click **Yes** on the OS trust prompt, then re-run `dotnet run --project src/AppHost`.
+
 ### Components are calling Azure endpoints instead of using in-memory data
 
 This means `appsettings.Local.json` was not loaded. Confirm:

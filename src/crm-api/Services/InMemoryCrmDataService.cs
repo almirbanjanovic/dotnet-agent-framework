@@ -96,6 +96,86 @@ public sealed class InMemoryCrmDataService : ICosmosService
         return Task.FromResult(results);
     }
 
+    public Task<(Order order, IReadOnlyList<OrderItem> items)> CreateOrderAsync(
+        string customerId,
+        string? shippingAddress,
+        IEnumerable<(string productId, int quantity)> items,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+
+        if (!_customers.TryGetValue(customerId, out var customer))
+        {
+            throw new InvalidOperationException($"Customer '{customerId}' not found.");
+        }
+
+        var resolvedItems = new List<OrderItem>();
+        decimal total = 0m;
+
+        foreach (var (productId, quantity) in items)
+        {
+            if (quantity <= 0)
+            {
+                throw new InvalidOperationException($"Quantity for '{productId}' must be greater than zero.");
+            }
+
+            if (!_products.TryGetValue(productId, out var product))
+            {
+                throw new InvalidOperationException($"Product '{productId}' not found.");
+            }
+
+            if (!product.InStock)
+            {
+                throw new InvalidOperationException($"Product '{product.Name}' is out of stock.");
+            }
+
+            resolvedItems.Add(new OrderItem
+            {
+                ProductId = product.Id,
+                ProductName = product.Name,
+                Quantity = quantity,
+                UnitPrice = product.Price
+            });
+
+            total += product.Price * quantity;
+        }
+
+        if (resolvedItems.Count == 0)
+        {
+            throw new InvalidOperationException("Order must contain at least one item.");
+        }
+
+        var nextNumeric = _orders.Keys
+            .Select(id => int.TryParse(id, out var parsed) ? parsed : 0)
+            .DefaultIfEmpty(1000)
+            .Max() + 1;
+        var orderId = nextNumeric.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        var order = new Order
+        {
+            Id = orderId,
+            CustomerId = customerId,
+            OrderDate = DateTime.UtcNow.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+            Status = "processing",
+            TotalAmount = total,
+            ShippingAddress = string.IsNullOrWhiteSpace(shippingAddress) ? customer.Address : shippingAddress,
+            TrackingNumber = null,
+            EstimatedDelivery = DateTime.UtcNow.AddDays(5).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)
+        };
+
+        _orders[orderId] = order;
+
+        for (var index = 0; index < resolvedItems.Count; index++)
+        {
+            var item = resolvedItems[index];
+            item.Id = $"{orderId}-{index + 1}";
+            item.OrderId = orderId;
+            _orderItems[item.Id] = item;
+        }
+
+        return Task.FromResult<(Order, IReadOnlyList<OrderItem>)>((order, resolvedItems));
+    }
+
     // ── Products ───────────────────────────────────────────────────────────
 
     public Task<IReadOnlyList<Product>> GetProductsAsync(

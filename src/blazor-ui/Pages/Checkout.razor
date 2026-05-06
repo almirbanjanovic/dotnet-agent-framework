@@ -1,0 +1,154 @@
+@page "/checkout"
+@attribute [Authorize]
+@inject CartService Cart
+@inject BffApiClient BffApi
+@inject AuthStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Checkout · Contoso Outdoors</PageTitle>
+
+<section class="page-section">
+    <MudText Typo="Typo.h4" Style="font-weight: 700; margin-bottom: 1.5rem;">Checkout</MudText>
+
+    @if (Cart.IsEmpty)
+    {
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+            Your cart is empty. <MudLink Href="/browse">Browse products</MudLink> first.
+        </MudAlert>
+    }
+    else
+    {
+        <div class="cart-grid">
+            <MudPaper Class="pa-6" Elevation="0">
+                <MudText Typo="Typo.h6" Style="font-weight: 700; margin-bottom: 1rem;">Shipping address</MudText>
+                <MudTextField @bind-Value="_shippingAddress"
+                              Label="Address"
+                              Variant="Variant.Outlined"
+                              Lines="3"
+                              Margin="Margin.Dense"
+                              Required="true"
+                              Disabled="@_isPlacing" />
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Style="margin-top: 0.5rem; display: block;">
+                    @(_addressPrefilled
+                        ? "Pre-filled from your customer profile. Edit if needed."
+                        : "Enter the address you'd like this order shipped to.")
+                </MudText>
+
+                <MudText Typo="Typo.h6" Style="font-weight: 700; margin: 1.5rem 0 0.5rem;">Items</MudText>
+                <div class="cart-lines">
+                    @foreach (var line in Cart.Lines)
+                    {
+                        <div class="cart-line">
+                            <img class="cart-line-image"
+                                 src="@BffApi.GetImageUrl(line.ImageFilename)"
+                                 alt="@line.ProductName" />
+                            <div class="cart-line-info">
+                                <span class="cart-line-name">@line.ProductName</span>
+                                <span class="cart-line-price">@line.Quantity × @line.UnitPrice.ToString("C")</span>
+                            </div>
+                            <div class="cart-line-subtotal">@((line.UnitPrice * line.Quantity).ToString("C"))</div>
+                        </div>
+                    }
+                </div>
+            </MudPaper>
+
+            <aside class="cart-summary">
+                <MudText Typo="Typo.h6" Style="font-weight: 700; margin-bottom: 0.5rem;">Order summary</MudText>
+                <div class="cart-summary-row">
+                    <span>Items (@Cart.ItemCount)</span>
+                    <span>@Cart.Subtotal.ToString("C")</span>
+                </div>
+                <div class="cart-summary-row">
+                    <span>Shipping</span>
+                    <span>@(Cart.Subtotal >= 99m ? "Free" : "$9.95")</span>
+                </div>
+                <div class="cart-summary-row cart-summary-total">
+                    <span>Total</span>
+                    <span>@(((Cart.Subtotal + (Cart.Subtotal >= 99m ? 0m : 9.95m))).ToString("C"))</span>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(_errorMessage))
+                {
+                    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mt-3">@_errorMessage</MudAlert>
+                }
+
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Size="Size.Large"
+                           FullWidth="true"
+                           StartIcon="@Icons.Material.Filled.Lock"
+                           Style="margin-top: 1.25rem;"
+                           Disabled="@(_isPlacing || string.IsNullOrWhiteSpace(_shippingAddress))"
+                           OnClick="PlaceOrder">
+                    @(_isPlacing ? "Placing order..." : "Place order")
+                </MudButton>
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Default"
+                           FullWidth="true"
+                           Style="margin-top: 0.5rem;"
+                           Disabled="@_isPlacing"
+                           OnClick="@(() => Navigation.NavigateTo("/cart"))">
+                    Back to cart
+                </MudButton>
+            </aside>
+        </div>
+    }
+</section>
+
+@code {
+    private string _shippingAddress = string.Empty;
+    private bool _isPlacing;
+    private bool _addressPrefilled;
+    private string? _errorMessage;
+
+    [Inject] private BffApiClient BffApiClient { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthStateProvider.SelectedCustomer is { } me)
+        {
+            try
+            {
+                var customer = await BffApiClient.GetCustomerAsync(me.Id);
+                if (!string.IsNullOrWhiteSpace(customer.Address))
+                {
+                    _shippingAddress = customer.Address;
+                    _addressPrefilled = true;
+                }
+            }
+            catch
+            {
+                // Best-effort prefill. User can still type an address.
+            }
+        }
+    }
+
+    private async Task PlaceOrder()
+    {
+        if (Cart.IsEmpty || string.IsNullOrWhiteSpace(_shippingAddress)) return;
+
+        _isPlacing = true;
+        _errorMessage = null;
+
+        try
+        {
+            var request = new PlaceOrderRequest(
+                _shippingAddress,
+                Cart.Lines.Select(l => new PlaceOrderItem(l.ProductId, l.Quantity)).ToList()
+            );
+            var response = await BffApi.PlaceOrderAsync(request);
+            Cart.Clear();
+            Snackbar.Add($"Order {response.Order.Id} placed successfully", Severity.Success);
+            Navigation.NavigateTo($"/orders/confirmation/{response.Order.Id}");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Unable to place order: {ex.Message}";
+        }
+        finally
+        {
+            _isPlacing = false;
+        }
+    }
+}

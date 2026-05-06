@@ -12,6 +12,11 @@ public interface ICosmosService
     Task<Order?> GetOrderByIdAsync(string id, CancellationToken ct = default);
     Task<IReadOnlyList<Order>> GetOrdersByCustomerIdAsync(string customerId, CancellationToken ct = default);
     Task<IReadOnlyList<OrderItem>> GetOrderItemsByOrderIdAsync(string orderId, CancellationToken ct = default);
+    Task<(Order order, IReadOnlyList<OrderItem> items)> CreateOrderAsync(
+        string customerId,
+        string? shippingAddress,
+        IEnumerable<(string productId, int quantity)> items,
+        CancellationToken ct = default);
 
     // Products
     Task<IReadOnlyList<Product>> GetProductsAsync(string? query = null, string? category = null, bool? inStockOnly = null, CancellationToken ct = default);

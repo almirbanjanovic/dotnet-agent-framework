@@ -1,3 +1,4 @@
+using Contoso.CrmApi.Models;
 using Contoso.CrmApi.Services;
 
 namespace Contoso.CrmApi.Endpoints;
@@ -37,6 +38,58 @@ public static class OrderEndpoints
         })
         .WithName("GetOrderItems")
         .WithSummary("Get line items for an order");
+
+        // Place order. Customer identity is taken from the CustomerContext
+        // (X-Customer-Entra-Id header set by the BFF after JWT validation),
+        // never from the request body — clients can only place orders for
+        // themselves.
+        group.MapPost("/orders", async (
+            CreateOrderRequest request,
+            CustomerContext customerContext,
+            ICosmosService cosmos,
+            CancellationToken ct) =>
+        {
+            var customerId = customerContext.GetCustomerEntraId();
+            if (string.IsNullOrWhiteSpace(customerId))
+            {
+                return Results.Problem(
+                    detail: "No customer identity resolved from the request.",
+                    statusCode: StatusCodes.Status401Unauthorized,
+                    title: "Unauthorized");
+            }
+
+            if (request.Items is null || request.Items.Count == 0)
+            {
+                return Results.Problem(
+                    detail: "Order must contain at least one item.",
+                    statusCode: StatusCodes.Status400BadRequest,
+                    title: "Bad Request");
+            }
+
+            try
+            {
+                var (order, items) = await cosmos.CreateOrderAsync(
+                    customerId,
+                    request.ShippingAddress,
+                    request.Items.Select(i => (i.ProductId, i.Quantity)),
+                    ct);
+
+                return Results.Created($"/api/v1/orders/{order.Id}", new
+                {
+                    order,
+                    items
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Problem(
+                    detail: ex.Message,
+                    statusCode: StatusCodes.Status400BadRequest,
+                    title: "Bad Request");
+            }
+        })
+        .WithName("PlaceOrder")
+        .WithSummary("Place a new order for the authenticated customer");
 
         return group;
     }

@@ -1,0 +1,44 @@
+@inject CartService Cart
+@inject NavigationManager Navigation
+@inject BffApiClient BffApi
+
+<article class="product-card" @onclick="OpenDetail">
+    <div class="product-card-image">
+        <img src="@BffApi.GetImageUrl(Product.ImageFilename)" alt="@Product.Name" loading="lazy" />
+        @if (!Product.InStock)
+        {
+            <span class="product-stock-badge out">Out of stock</span>
+        }
+    </div>
+    <div class="product-card-body">
+        <span class="product-card-category">@Product.Category</span>
+        <h3 class="product-card-name">@Product.Name</h3>
+        <div class="product-card-rating">
+            <MudIcon Icon="@Icons.Material.Filled.Star" Size="Size.Small" Style="color: #D97706; vertical-align: middle;" />
+            <span>@Product.Rating.ToString("0.0")</span>
+        </div>
+        <div class="product-card-footer">
+            <span class="product-card-price">@Product.Price.ToString("C")</span>
+            <span @onclick="AddToCart" @onclick:stopPropagation="true" style="display: inline-flex;">
+                <MudIconButton Icon="@Icons.Material.Filled.AddShoppingCart"
+                               Color="Color.Primary"
+                               Variant="Variant.Filled"
+                               Size="Size.Small"
+                               Disabled="@(!Product.InStock)"
+                               aria-label="Add to cart" />
+            </span>
+        </div>
+    </div>
+</article>
+
+@code {
+    [Parameter, EditorRequired]
+    public Product Product { get; set; } = default!;
+
+    private void OpenDetail() => Navigation.NavigateTo($"/product/{Product.Id}");
+
+    private void AddToCart(MouseEventArgs args)
+    {
+        Cart.Add(Product);
+    }
+}

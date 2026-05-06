@@ -1,0 +1,110 @@
+@page "/cart"
+@attribute [Authorize]
+@inject CartService CartSvc
+@inject BffApiClient BffApi
+@inject NavigationManager Navigation
+@implements IDisposable
+
+<PageTitle>Your cart · Contoso Outdoors</PageTitle>
+
+<section class="page-section">
+    <MudText Typo="Typo.h4" Style="font-weight: 700; margin-bottom: 1.5rem;">Your cart</MudText>
+
+    @if (CartSvc.IsEmpty)
+    {
+        <div class="cart-empty">
+            <MudIcon Icon="@Icons.Material.Outlined.ShoppingCart" />
+            <MudText Typo="Typo.h6">Your cart is empty</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Style="margin-bottom: 1.5rem;">
+                Browse the catalog and add some gear to get started.
+            </MudText>
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Storefront"
+                       OnClick="@(() => Navigation.NavigateTo("/browse"))">
+                Browse products
+            </MudButton>
+        </div>
+    }
+    else
+    {
+        <div class="cart-grid">
+            <div class="cart-lines">
+                @foreach (var line in CartSvc.Lines)
+                {
+                    <div class="cart-line">
+                        <img class="cart-line-image"
+                             src="@BffApi.GetImageUrl(line.ImageFilename)"
+                             alt="@line.ProductName" />
+                        <div class="cart-line-info">
+                            <a class="cart-line-name" href="@($"/product/{line.ProductId}")">@line.ProductName</a>
+                            <span class="cart-line-price">@line.UnitPrice.ToString("C") each</span>
+                            <div class="cart-line-controls" style="margin-top: 0.4rem;">
+                                <MudIconButton Icon="@Icons.Material.Filled.Remove"
+                                               Size="Size.Small"
+                                               OnClick="@(() => CartSvc.SetQuantity(line.ProductId, line.Quantity - 1))" />
+                                <span style="min-width: 1.5rem; text-align: center; font-weight: 600;">@line.Quantity</span>
+                                <MudIconButton Icon="@Icons.Material.Filled.Add"
+                                               Size="Size.Small"
+                                               OnClick="@(() => CartSvc.SetQuantity(line.ProductId, line.Quantity + 1))" />
+                                <MudButton Variant="Variant.Text"
+                                           Color="Color.Error"
+                                           Size="Size.Small"
+                                           StartIcon="@Icons.Material.Outlined.Delete"
+                                           OnClick="@(() => CartSvc.Remove(line.ProductId))">
+                                    Remove
+                                </MudButton>
+                            </div>
+                        </div>
+                        <div class="cart-line-subtotal">@((line.UnitPrice * line.Quantity).ToString("C"))</div>
+                    </div>
+                }
+            </div>
+            <aside class="cart-summary">
+                <MudText Typo="Typo.h6" Style="font-weight: 700; margin-bottom: 0.5rem;">Order summary</MudText>
+                <div class="cart-summary-row">
+                    <span>Items (@CartSvc.ItemCount)</span>
+                    <span>@CartSvc.Subtotal.ToString("C")</span>
+                </div>
+                <div class="cart-summary-row">
+                    <span>Shipping</span>
+                    <span>@(CartSvc.Subtotal >= 99m ? "Free" : "$9.95")</span>
+                </div>
+                <div class="cart-summary-row cart-summary-total">
+                    <span>Total</span>
+                    <span>@((CartSvc.Subtotal + (CartSvc.Subtotal >= 99m ? 0m : 9.95m)).ToString("C"))</span>
+                </div>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Size="Size.Large"
+                           FullWidth="true"
+                           EndIcon="@Icons.Material.Filled.ShoppingCartCheckout"
+                           Style="margin-top: 1.25rem;"
+                           OnClick="@(() => Navigation.NavigateTo("/checkout"))">
+                    Proceed to checkout
+                </MudButton>
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Default"
+                           FullWidth="true"
+                           Style="margin-top: 0.5rem;"
+                           OnClick="@(() => Navigation.NavigateTo("/browse"))">
+                    Continue shopping
+                </MudButton>
+            </aside>
+        </div>
+    }
+</section>
+
+@code {
+    protected override void OnInitialized()
+    {
+        CartSvc.Changed += OnCartChanged;
+    }
+
+    private void OnCartChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        CartSvc.Changed -= OnCartChanged;
+    }
+}

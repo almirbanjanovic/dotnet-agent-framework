@@ -1,80 +1,179 @@
 @inherits LayoutComponentBase
 @inject AuthStateProvider AuthStateProvider
+@inject CartService Cart
+@inject ChatPanelState ChatPanel
+@inject NavigationManager Navigation
+@inject BffApiClient BffApi
+@implements IDisposable
 
 <MudLayout>
-    <MudAppBar Color="Color.Inherit" Elevation="0" Dense="true">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Default" Edge="Edge.Start" OnClick="ToggleDrawer" />
-        <div class="brand-mark">
+    <MudAppBar Color="Color.Inherit" Elevation="0" Dense="true" Fixed="true">
+        <a href="/" class="brand-mark" style="text-decoration: none;">
             <div class="brand-logo">
                 <MudIcon Icon="@Icons.Material.Filled.Terrain" Size="Size.Small" Style="color: #fff;" />
             </div>
             <div class="brand-text">
                 <span class="brand-title">Contoso Outdoors</span>
-                <span class="brand-tagline">Customer Care</span>
+                <span class="brand-tagline">Premium Gear · Since 1987</span>
             </div>
+        </a>
+
+        <div class="category-nav">
+            @foreach (var cat in _categories)
+            {
+                <a href="@($"/browse?category={cat.Slug}")" class="category-link">@cat.Label</a>
+            }
         </div>
+
         <MudSpacer />
-        @if (AuthStateProvider.UseDevAuth)
-        {
-            <MudTooltip Text="Switch impersonated customer (Local Track only)">
-                <MudSelect T="CustomerOption"
-                           Value="AuthStateProvider.SelectedCustomer"
-                           ValueChanged="OnCustomerChanged"
-                           Dense="true"
-                           Variant="Variant.Outlined"
-                           Class="customer-select"
-                           AdornmentIcon="@Icons.Material.Filled.PersonOutline"
-                           Adornment="Adornment.Start"
-                           Margin="Margin.Dense"
-                           Placeholder="Select customer">
+
+        <MudTextField @bind-Value="_searchTerm"
+                      Placeholder="Search gear..."
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      Class="topbar-search"
+                      OnKeyDown="OnSearchKeyDown" />
+
+        <div class="cart-wrap">
+            <MudIconButton Icon="@Icons.Material.Outlined.ShoppingCart"
+                           Color="Color.Default"
+                           OnClick="OpenCart"
+                           Class="cart-button"
+                           aria-label="Open cart" />
+            @if (Cart.ItemCount > 0)
+            {
+                <span class="cart-badge">@Cart.ItemCount</span>
+            }
+        </div>
+
+        <MudMenu Icon="@Icons.Material.Filled.AccountCircle"
+                 Color="Color.Default"
+                 AnchorOrigin="Origin.BottomRight"
+                 TransformOrigin="Origin.TopRight"
+                 Dense="true">
+            <ChildContent>
+                @if (AuthStateProvider.SelectedCustomer is not null)
+                {
+                    <div class="account-header">
+                        <div class="account-avatar">@GetInitials(AuthStateProvider.SelectedCustomer.Name)</div>
+                        <div>
+                            <div class="account-name">@AuthStateProvider.SelectedCustomer.Name</div>
+                            @if (!string.IsNullOrWhiteSpace(AuthStateProvider.Email))
+                            {
+                                <div class="account-email">@AuthStateProvider.Email</div>
+                            }
+                        </div>
+                    </div>
+                    <MudDivider />
+                }
+                <MudMenuItem Icon="@Icons.Material.Outlined.ReceiptLong" Href="/orders">My orders</MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Outlined.Person" Href="/profile">My profile</MudMenuItem>
+                @if (AuthStateProvider.UseDevAuth)
+                {
+                    <MudDivider />
+                    <div class="impersonate-label">Impersonate (dev only)</div>
                     @foreach (var customer in AuthStateProvider.Customers)
                     {
-                        <MudSelectItem Value="@customer">
-                            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <span class="customer-avatar">@GetInitials(customer.Name)</span>
-                                <span>@customer.Name</span>
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">#@customer.Id</MudText>
-                            </div>
-                        </MudSelectItem>
+                        <MudMenuItem OnClick="@(() => AuthStateProvider.SetCustomer(customer))">
+                            @customer.Name @(AuthStateProvider.SelectedCustomer?.Id == customer.Id ? " ✓" : "")
+                        </MudMenuItem>
                     }
-                </MudSelect>
-            </MudTooltip>
-        }
+                }
+                else
+                {
+                    <MudDivider />
+                    <MudMenuItem Icon="@Icons.Material.Outlined.Logout" Href="/authentication/logout">Sign out</MudMenuItem>
+                }
+            </ChildContent>
+        </MudMenu>
     </MudAppBar>
 
-    <MudDrawer @bind-Open="_drawerOpen"
-               Variant="DrawerVariant.Responsive"
-               Elevation="0"
-               Class="mud-width-260">
-        <NavMenu />
-    </MudDrawer>
+    <MudMainContent Class="page-main">
+        @Body
 
-    <MudMainContent>
-        <MudContainer MaxWidth="MaxWidth.Large" Class="px-4 py-6">
-            @Body
-        </MudContainer>
+        <footer class="site-footer">
+            <div class="footer-grid">
+                <div>
+                    <div class="footer-heading">Contoso Outdoors</div>
+                    <p class="footer-text">Premium outdoor gear from people who use it. Climbing in Yosemite to thru-hiking the PCT, we test what we sell.</p>
+                </div>
+                <div>
+                    <div class="footer-heading">Shop</div>
+                    @foreach (var cat in _categories)
+                    {
+                        <a href="@($"/browse?category={cat.Slug}")" class="footer-link">@cat.Label</a>
+                    }
+                </div>
+                <div>
+                    <div class="footer-heading">Customer care</div>
+                    <a class="footer-link" href="/orders">Order status</a>
+                    <a class="footer-link" href="#" @onclick="OpenChat" @onclick:preventDefault="true">Chat with an expert</a>
+                    <a class="footer-link" href="/profile">Account &amp; loyalty</a>
+                </div>
+            </div>
+            <div class="footer-bottom">© @DateTime.UtcNow.Year Contoso Outdoors · Demo for the .NET Agent Framework lab</div>
+        </footer>
     </MudMainContent>
+
+    <ChatBubble />
 </MudLayout>
 
 @code {
-    private bool _drawerOpen = true;
+    private record CategoryEntry(string Slug, string Label);
 
-    private void ToggleDrawer()
+    private static readonly CategoryEntry[] _categories =
+    [
+        new("footwear",    "Footwear"),
+        new("clothing",    "Clothing"),
+        new("backpacks",   "Backpacks"),
+        new("tents",       "Tents"),
+        new("cooking",     "Cooking"),
+        new("accessories", "Accessories")
+    ];
+
+    private string _searchTerm = string.Empty;
+
+    protected override async Task OnInitializedAsync()
     {
-        _drawerOpen = !_drawerOpen;
+        Cart.Changed += HandleStateChanged;
+        AuthStateProvider.CustomerChanged += HandleStateChanged;
+
+        // Real-Entra mode: ask the BFF "who am I?" once after sign-in so the
+        // top-bar greeting and per-customer pages have a customer ID. Dev-auth
+        // mode short-circuits inside LoadSignedInCustomerAsync.
+        await AuthStateProvider.LoadSignedInCustomerAsync(BffApi);
     }
 
-    private Task OnCustomerChanged(CustomerOption? customer)
+    private void OnSearchKeyDown(KeyboardEventArgs e)
     {
-        AuthStateProvider.SetCustomer(customer);
-        return Task.CompletedTask;
+        if (e.Key != "Enter" || string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            return;
+        }
+
+        var term = _searchTerm.Trim();
+        Navigation.NavigateTo($"/browse?query={Uri.EscapeDataString(term)}");
     }
+
+    private void OpenCart() => Navigation.NavigateTo("/cart");
+
+    private void OpenChat() => ChatPanel.Open();
+
+    private void HandleStateChanged() => InvokeAsync(StateHasChanged);
 
     private static string GetInitials(string? name)
     {
-        if (string.IsNullOrWhiteSpace(name)) return "??";
+        if (string.IsNullOrWhiteSpace(name)) return "?";
         var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length == 1) return parts[0][..Math.Min(2, parts[0].Length)].ToUpperInvariant();
         return string.Concat(parts[0][0], parts[^1][0]).ToUpperInvariant();
+    }
+
+    public void Dispose()
+    {
+        Cart.Changed -= HandleStateChanged;
+        AuthStateProvider.CustomerChanged -= HandleStateChanged;
     }
 }
