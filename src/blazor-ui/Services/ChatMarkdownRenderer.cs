@@ -57,9 +57,11 @@ internal static class ChatMarkdownRenderer
 
             // Absolute path. If it looks like a BFF image route, host-shift
             // it onto the BFF; otherwise leave it (some other in-app path).
+            // Case-insensitive comparison — ASP.NET Core routing matches
+            // /API/V1/IMAGES/foo.png the same as /api/v1/images/foo.png.
             if (url.StartsWith("/"))
             {
-                if (prefix.Length > 0 && url.StartsWith(BffImagePathPrefix, StringComparison.Ordinal))
+                if (prefix.Length > 0 && url.StartsWith(BffImagePathPrefix, StringComparison.OrdinalIgnoreCase))
                 {
                     return $"![{alt}]({prefix}{url})";
                 }
@@ -68,13 +70,16 @@ internal static class ChatMarkdownRenderer
 
             // Bare filename or relative path — the agent prompt instructs
             // "Reference product images as ![ProductName](imageFilename.png)".
-            // Strip any querystring, normalise separators, take the last
-            // path segment, and produce an absolute BFF URL.
-            var fileName = url.Split('?')[0];
+            // Strip any querystring / fragment, normalise separators, take
+            // the last path segment, and URL-escape so spaces or other
+            // reserved characters in a filename don't produce a malformed
+            // URL on the BFF.
+            var fileName = url.Split('?', '#')[0];
             fileName = fileName.Replace("\\", "/");
             var lastSegment = fileName.Split('/').LastOrDefault() ?? fileName;
+            var escaped = Uri.EscapeDataString(lastSegment);
 
-            return $"![{alt}]({prefix}{BffImagePathPrefix}{lastSegment})";
+            return $"![{alt}]({prefix}{BffImagePathPrefix}{escaped})";
         });
     }
 }

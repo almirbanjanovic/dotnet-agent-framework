@@ -21,4 +21,13 @@ public sealed class OrderItem
 
     [JsonPropertyName("unit_price")]
     public decimal UnitPrice { get; set; }
+
+    // Denormalised from the product catalog by the CRM API. Lets agents
+    // emit `![ProductName](imageFilename)` markdown without needing a
+    // second `get_product_by_id` tool call — and without having to guess
+    // the filename from the product name (which produces 404s, e.g.
+    // `merino-wool-base-layer-top.png` → actual file is
+    // `merino-base-layer-top.png`).
+    [JsonPropertyName("image_filename")]
+    public string ImageFilename { get; set; } = string.Empty;
 }

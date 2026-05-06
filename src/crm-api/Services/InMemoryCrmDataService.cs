@@ -90,8 +90,25 @@ public sealed class InMemoryCrmDataService : ICosmosService
     public Task<IReadOnlyList<OrderItem>> GetOrderItemsByOrderIdAsync(string orderId, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
+        // Project each row with image_filename hydrated from the product
+        // catalog. Without this, agents have to guess the filename from
+        // the product name and end up emitting 404 image URLs in chat
+        // (see: "merino-wool-base-layer-top.png" vs the actual file
+        // "merino-base-layer-top.png").
         IReadOnlyList<OrderItem> results = _orderItems.Values
             .Where(item => string.Equals(item.OrderId, orderId, StringComparison.OrdinalIgnoreCase))
+            .Select(item => new OrderItem
+            {
+                Id = item.Id,
+                OrderId = item.OrderId,
+                ProductId = item.ProductId,
+                ProductName = item.ProductName,
+                Quantity = item.Quantity,
+                UnitPrice = item.UnitPrice,
+                ImageFilename = _products.TryGetValue(item.ProductId, out var product)
+                    ? product.ImageFilename
+                    : string.Empty
+            })
             .ToList();
         return Task.FromResult(results);
     }
@@ -134,7 +151,8 @@ public sealed class InMemoryCrmDataService : ICosmosService
                 ProductId = product.Id,
                 ProductName = product.Name,
                 Quantity = quantity,
-                UnitPrice = product.Price
+                UnitPrice = product.Price,
+                ImageFilename = product.ImageFilename
             });
 
             total += product.Price * quantity;

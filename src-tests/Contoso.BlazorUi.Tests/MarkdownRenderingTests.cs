@@ -46,7 +46,41 @@ public class MarkdownRenderingTests
 
         rewritten.Should().Be("![alt](http://localhost:5007/api/v1/images/photo.png)");
     }
+    [Fact]
+    public void RewriteImageUrls_BffAbsolutePath_DifferentCasing_StillHostShifts()
+    {
+        // ASP.NET Core routing is case-insensitive. The agent might emit
+        // `/API/v1/images/...`; we must still host-shift it onto the BFF.
+        var markdown = "![alt](/API/V1/Images/photo.png)";
 
+        var rewritten = ChatMarkdownRenderer.RewriteImageUrls(markdown, BffBaseUrl);
+
+        rewritten.Should().Be("![alt](http://localhost:5007/API/V1/Images/photo.png)");
+    }
+
+    [Fact]
+    public void RewriteImageUrls_FilenameWithSpaces_IsUrlEscaped()
+    {
+        // A bare filename with reserved characters must be percent-encoded
+        // so the BFF receives a single, unambiguous segment.
+        var markdown = "![alt](my product image.png)";
+
+        var rewritten = ChatMarkdownRenderer.RewriteImageUrls(markdown, BffBaseUrl);
+
+        rewritten.Should().Be("![alt](http://localhost:5007/api/v1/images/my%20product%20image.png)");
+    }
+
+    [Fact]
+    public void RewriteImageUrls_HttpsBaseUrl_ProducesHttpsImageSrc()
+    {
+        // Production deployments use HTTPS — lock in the scheme so a
+        // future regression to a hard-coded http:// can't sneak in.
+        var markdown = "![alt](photo.png)";
+
+        var rewritten = ChatMarkdownRenderer.RewriteImageUrls(markdown, "https://bff.contoso.example.com");
+
+        rewritten.Should().Be("![alt](https://bff.contoso.example.com/api/v1/images/photo.png)");
+    }
     [Fact]
     public void RewriteImageUrls_BffBaseUrlWithTrailingSlash_DoesNotProduceDoubleSlash()
     {

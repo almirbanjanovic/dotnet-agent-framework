@@ -69,7 +69,35 @@ public sealed class CosmosService : ICosmosService
         var query = new QueryDefinition("SELECT * FROM c WHERE c.order_id = @orderId")
             .WithParameter("@orderId", orderId);
 
-        return await ExecuteQueryAsync<OrderItem>(_orderItems, query, new PartitionKey(orderId), ct);
+        var items = await ExecuteQueryAsync<OrderItem>(_orderItems, query, new PartitionKey(orderId), ct);
+
+        // Hydrate image_filename from the product catalog. Order items
+        // stored in Cosmos don't carry it (it lives on Product), so chat
+        // agents would otherwise have to guess and emit 404 image URLs.
+        // Distinct lookup so we don't query the same product twice for
+        // a multi-quantity order.
+        var productIds = items
+            .Select(i => i.ProductId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var imageByProductId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var productId in productIds)
+        {
+            var product = await GetProductByIdAsync(productId, ct);
+            if (product is not null && !string.IsNullOrWhiteSpace(product.ImageFilename))
+            {
+                imageByProductId[productId] = product.ImageFilename;
+            }
+        }
+        foreach (var item in items)
+        {
+            if (imageByProductId.TryGetValue(item.ProductId, out var filename))
+            {
+                item.ImageFilename = filename;
+            }
+        }
+        return items;
     }
 
     public async Task<(Order order, IReadOnlyList<OrderItem> items)> CreateOrderAsync(
@@ -104,7 +132,8 @@ public sealed class CosmosService : ICosmosService
                 ProductId = product.Id,
                 ProductName = product.Name,
                 Quantity = quantity,
-                UnitPrice = product.Price
+                UnitPrice = product.Price,
+                ImageFilename = product.ImageFilename
             });
 
             total += product.Price * quantity;

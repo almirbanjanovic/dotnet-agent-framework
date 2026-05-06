@@ -110,6 +110,28 @@ public class InMemoryCrmDataServiceTests
     }
 
     [Fact]
+    public async Task GetOrderItemsByOrderIdAsync_HydratesImageFilenameFromProductCatalog()
+    {
+        // Order 1007 (Anna's order) contains P012 + P013 — Merino base
+        // layer top + bottom. The chat agent must receive image_filename
+        // populated so it can emit `![X](merino-base-layer-top.png)`
+        // in markdown without guessing the filename from the product
+        // name (the actual file is `merino-base-layer-top.png`, NOT
+        // `merino-wool-base-layer-top.png` as a name-slug guess would
+        // produce). Without this hydration, broken image icons appear
+        // in chat.
+        var service = CreateService();
+
+        var items = await service.GetOrderItemsByOrderIdAsync("1007");
+
+        items.Should().HaveCount(2);
+        var top = items.Should().ContainSingle(i => i.ProductId == "P012").Subject;
+        top.ImageFilename.Should().Be("merino-base-layer-top.png");
+        var bottom = items.Should().ContainSingle(i => i.ProductId == "P013").Subject;
+        bottom.ImageFilename.Should().Be("merino-base-layer-bottom.png");
+    }
+
+    [Fact]
     public async Task GetProductsAsync_NoFilters_ReturnsAll()
     {
         var service = CreateService();
