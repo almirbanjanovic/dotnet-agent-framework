@@ -43,6 +43,19 @@ You will:
 
 > **Why the UI, not curl?** This repo is the customer experience for Contoso Outdoors. Every prompt below should be **typed into the chat panel** by a signed-in test user — that's what exercises the full token → BFF → orchestrator → specialist → MCP path.
 
+### How to trace a chat message
+
+The chat panel uses **Server-Sent Events (SSE)** so the assistant's reply renders token-by-token. That changes what you see in DevTools, so use the right tool for the question you're asking:
+
+| Question | Surface | What you see |
+|----------|---------|--------------|
+| **What was called, in what order, how long did each hop take?** | Aspire dashboard → **Traces** tab (`https://localhost:15888`) | One trace per chat turn, span tree across `bff-api → orchestrator-agent → crm-agent / product-agent → crm-mcp / knowledge-mcp → azure_openai`. This is the canonical surface — the next sections all use it. |
+| **What did the BFF receive / send on the wire?** | Browser DevTools → **Network** tab, filter `stream` | The request appears as a **`fetch`** call to `POST /api/v1/chat/stream` that stays in **Pending** state until the stream finishes, then turns 200. There is **no** old-style `chat` XHR — the buffered endpoint is gone from the UI. |
+| **What were the individual SSE events the browser received?** | Same Network entry → **Response** tab (recent Chromium versions also surface an **EventStream** tab for `text/event-stream` responses) | Sequence of frames in this order: `event: conversation` (from BFF) → `event: stage` ×2 (from orchestrator: `classifying`, then `routed`) → interleaved `event: token` / `event: tool` (from the specialist) → `event: done` (from BFF, after persistence). Failures emit `event: error`. |
+| **What were the per-service logs while it ran?** | Aspire dashboard → **Console Logs** or **Structured Logs** tab, pick a service | Per-service stdout + structured `ILogger` output — useful when a span is red. |
+
+Keep the dashboard's Traces tab open in one browser window and the chat in another so you can see both at once.
+
 ## The architecture you'll exercise
 
 ```text
@@ -86,12 +99,12 @@ Open the chat panel by clicking **Ask the experts** in the green hero on the hom
 
 > Where is my last order?
 
-While the response renders, open the **Aspire dashboard** (`https://localhost:15888`) and click **Traces**. Find the trace started by `bff-api` for `POST /api/v1/chat`. Expand it — the span tree is the entire flow:
+While the response renders, open the **Aspire dashboard** (`https://localhost:15888`) and click **Traces**. Find the trace started by `bff-api` for `POST /api/v1/chat/stream`. Expand it — the span tree is the entire flow:
 
 ```text
-bff-api  POST /api/v1/chat
- └─ orchestrator-agent  POST /api/v1/chat            (intent classifier picks CRM)
-     └─ crm-agent  POST /api/v1/chat                 (the specialist this lab focuses on)
+bff-api  POST /api/v1/chat/stream
+ └─ orchestrator-agent  POST /api/v1/chat/stream     (intent classifier picks CRM)
+     └─ crm-agent  POST /api/v1/chat/stream          (the specialist this lab focuses on)
           ├─ crm-mcp  list_tools                      (runtime tool discovery)
           ├─ knowledge-mcp  list_tools                (runtime tool discovery)
           ├─ azure_openai  chat.completions           (turn 1 — model decides to call get_customer_orders)
@@ -101,20 +114,39 @@ bff-api  POST /api/v1/chat
           └─ azure_openai  chat.completions           (turn 3 — final natural-language reply)
 ```
 
-The wire shape `bff-api` returns to the browser is:
+The trace span propagates via the W3C `traceparent` header, so every hop ends up under the same trace ID. The BFF, orchestrator, and specialist spans are all long-lived — their durations equal the streaming time, because every hop is SSE end-to-end (the orchestrator simply pipes the specialist's bytes through to the BFF, and the BFF pipes them through to the browser).
 
-```json
-{
-  "conversationId": "...",
-  "response": "Your most recent order is #1001 — TrailBlazer Hiking Boots, $189.99, shipped to Portland OR ...",
-  "toolCalls": [
-    { "name": "get_customer_orders", "arguments": { "customerId": "101" } },
-    { "name": "get_order_detail",    "arguments": { "orderId": "1001" } }
-  ]
-}
-```
+Now open browser **DevTools → Network**, filter on `stream`, and click the entry for `POST /api/v1/chat/stream`. The request is a **`fetch`** that stays Pending until the assistant is done. Two tabs to look at:
 
-Open the browser's **DevTools → Network** tab, click the `chat` request, and look at **Response** — you'll see the same `toolCalls` array the dashboard trace already showed you, just from the BFF's vantage point.
+- **Headers** — confirms `content-type: text/event-stream`
+- **Response** — the SSE wire frames the BFF emits, in order:
+
+  ```text
+  event: conversation
+  data: {"conversationId":"..."}
+
+  event: stage
+  data: {"stage":"classifying"}
+
+  event: stage
+  data: {"stage":"routed","agent":"crm"}
+
+  event: tool
+  data: {"name":"get_customer_orders","arguments":{"customerId":"101"}}
+
+  event: token
+  data: {"text":"Your"}
+  event: token
+  data: {"text":" most"}
+  …more token frames, then a second tool call, then more tokens…
+
+  event: done
+  data: {"conversationId":"...","toolCalls":[{"name":"get_customer_orders","arguments":{"customerId":"101"}},{"name":"get_order_detail","arguments":{"orderId":"1001"}}]}
+  ```
+
+  > A failure anywhere in the chain surfaces as `event: error` with `data: {"message":"..."}` instead of `done`.
+
+  These are the same `toolCalls` the trace tree shows you, just framed for the browser. The Aspire trace is faster for understanding the call order; the SSE frames are useful when you need to see exactly what the browser consumed.
 
 ### What just happened
 
@@ -169,7 +201,7 @@ In the **same** chat session (do **not** start a new one), send a follow-up:
 
 > What's the return window for that?
 
-The Blazor UI is keeping a `history` array on the client and sending the prior turns back with each request — that's what lets the model resolve "that" to order #1001 (the boots) without re-asking. Open the browser **Network** tab and look at the request body for the new `chat` POST: you'll see your previous user/assistant turns inside the `history` array.
+The Blazor UI is keeping a `history` array on the client and sending the prior turns back with each request — that's what lets the model resolve "that" to order #1001 (the boots) without re-asking. Open the browser **Network** tab, click the new `chat/stream` request, and look at **Payload** (or **Request** body): you'll see your previous user/assistant turns inside the `history` array. (The request body is plain JSON; only the *response* is streamed.)
 
 Now open the Aspire dashboard's **Traces** tab and find the new trace. The model's tool choice should be different this turn — instead of `get_customer_orders`, you should see a span for `knowledge-mcp` `call_tool: search_knowledge_base` (the one tool that MCP server exposes). Same agent, same code, different tool — picked by the model based on intent. That's the whole point of runtime tool discovery: the agent doesn't pre-select tools, the model does.
 
@@ -358,7 +390,7 @@ Restart AppHost and confirm `returns-agent` is green in the dashboard. Then go b
 
 > When will my refund be processed?
 
-Open the Aspire **Traces** tab — the orchestrator span should now branch into a `returns-agent` `POST /api/v1/chat` span (not `crm-agent`, not `product-agent`). The `crm-agent` and `product-agent` are unchanged — only `returns-agent` (new) and `orchestrator-agent` (one classifier line + one route line) were touched. The fitness test still passes:
+Open the Aspire **Traces** tab — the orchestrator span should now branch into a `returns-agent` `POST /api/v1/chat/stream` span (not `crm-agent`, not `product-agent`). The `crm-agent` and `product-agent` are unchanged — only `returns-agent` (new) and `orchestrator-agent` (one classifier line + one route line) were touched. The fitness test still passes:
 
 ```powershell
 dotnet test src-tests/Contoso.AppHost.Tests/Contoso.AppHost.Tests.csproj
@@ -368,7 +400,7 @@ dotnet test src-tests/Contoso.AppHost.Tests/Contoso.AppHost.Tests.csproj
 
 - [ ] Signed in as Emma in the Blazor UI, asking "Where is my last order?" returns Emma's order data
 - [ ] The Aspire **Traces** tab shows the trace branching `bff-api → orchestrator-agent → crm-agent` with two `crm-mcp` tool spans (`get_customer_orders`, `get_order_detail`)
-- [ ] The browser **Network** tab response for `/api/v1/chat` shows the same tool calls in the `toolCalls` array
+- [ ] The browser **Network** tab shows a single `POST /api/v1/chat/stream` `fetch` request whose **Response** tab contains `event: tool` frames for both tool calls and a final `event: done`
 - [ ] A follow-up turn ("What's the return window for that?") shows a `search_knowledge_base` span instead of CRM tool spans
 - [ ] "Are there any sales on hiking boots?" routes to `product-agent` (visible in the trace tree); "Where is order 1003?" routes to `crm-agent`
 - [ ] After Step 5, "When will my refund be processed?" routes to `returns-agent`

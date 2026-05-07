@@ -77,13 +77,20 @@ Each box is a separate pod with its own workload identity. The orchestrator does
 
 ## Step 1 — Sign in via the Blazor UI
 
-Open `https://{agc-frontend-fqdn}/` (the URL is in the `terraform output` from Lab 1). Sign in as a seeded test user (e.g., `emma.wilson@{your-domain}`). The chat panel uses the same `/api/v1/chat` request shape as the Local Track — you can watch the entire request/response flow in browser dev tools.
+Open `https://{agc-frontend-fqdn}/` (the URL is in the `terraform output` from Lab 1). Sign in as a seeded test user (e.g., `emma.wilson@{your-domain}`). The chat panel uses **Server-Sent Events** at `POST /api/v1/chat/stream` so tokens render as they arrive.
+
+> **Tracing on AKS today.** Distributed tracing (App Insights / Application Map) is **not** wired up in this Track yet — `infra/terraform/diagnostics.tf` only ships Cosmos and Key Vault diagnostics to Log Analytics, and the AKS cluster ships pod stdout via Container Insights. To follow a chat turn end-to-end on Azure, use one of:
+>
+> - **Browser DevTools → Network** — same as the Local Track. The request appears as a long-pending `fetch` to `POST /api/v1/chat/stream`; the **Response** tab shows the SSE event frames (`event: conversation`, `event: stage`, `event: tool`, `event: token`, `event: done`).
+> - **Log Analytics → Container Insights** (workspace provisioned by `module.aks`) — query `ContainerLogV2 | where ContainerName in ("bff-api","orchestrator-agent","crm-agent","product-agent","crm-mcp","knowledge-mcp")` to follow `ILogger` output across pods. To stitch hops together, filter on the W3C `traceparent` header that each service logs.
+>
+> If your goal is the same one-click span tree the Local Track gets from the Aspire dashboard, that requires adding an Application Insights resource + the `Azure.Monitor.OpenTelemetry.AspNetCore` exporter to each `ServiceDefaults.cs`. Tracked separately from this lab.
 
 Pick **Emma Wilson** in the customer picker. Type into the chat:
 
 > Where is my last order?
 
-While the response renders, open **App Insights → Application map** in the Azure portal. The orchestrator → crm-agent → crm-mcp call chain shows up as a multi-hop distributed trace, with `gen_ai.system = "azure_openai"` semantic-convention attributes on the model spans.
+While the response renders, watch the chat panel render token-by-token, then open browser DevTools → Network → click `POST /api/v1/chat/stream` → **Response** tab to confirm the SSE event sequence. To stitch the cross-pod call chain, open **Azure portal → your AKS cluster → Logs** and run the KQL example in the call-out above. (One-click distributed traces require the App Insights wiring noted as a follow-up.)
 
 The wire shape `bff-api` returns to the browser is the same as the Local Track:
 
@@ -160,7 +167,7 @@ Invoke-RestMethod `
 
 The BFF validates the JWT, attaches the customer's Entra object ID as `X-Customer-Entra-Id`, and forwards to the orchestrator. The orchestrator and specialists never see the user's token directly — they only see the customer ID.
 
-Send these two prompts back-to-back and inspect the App Insights Application map between each:
+Send these two prompts back-to-back and inspect Container Insights logs (or DevTools → Network for the SSE response) between each:
 
 > Are there any sales on hiking boots?
 
@@ -315,7 +322,7 @@ The component-independence fitness test (`ComponentIndependenceTests`) and the t
 ## Verification checklist
 
 - [ ] Signing in as a seeded user lets you chat through the Blazor UI
-- [ ] App Insights shows tool-call traces with `gen_ai.system = "azure_openai"` semantic-convention attributes
+- [ ] Container Insights / pod stdout shows the orchestrator and the chosen specialist agent both received the request (filter `ContainerLogV2` by `ContainerName` and the W3C `traceparent` header)
 - [ ] Routing decisions are visible in `orchestrator-agent` pod logs
 - [ ] After Step 3, `kubectl get pods -n contoso` shows a new `returns-agent` pod with the `sa-returns-agent` service account
 - [ ] Asking the orchestrator a refunds question returns a response from `returns-agent` (visible in its pod logs)

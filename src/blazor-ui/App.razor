@@ -1,9 +1,18 @@
-<MudThemeProvider Theme="@Contoso.BlazorUi.Shared.AppTheme.Theme" />
-<MudPopoverProvider />
-<MudDialogProvider />
-<MudSnackbarProvider />
-
+@* CascadingAuthenticationState MUST wrap the MudBlazor providers as well
+   as the Router. MudMenu (and other popover-based components like
+   MudTooltip / MudAutocomplete / MudSelect) render their child content
+   through MudPopoverProvider via a "teleport" pattern; if the popover
+   provider is outside the cascade, every <AuthorizeView> inside a popover
+   throws "Authorization requires a cascading parameter of type
+   Task<AuthenticationState>". Wrapping the entire shell keeps the cascade
+   visible to those teleported subtrees, and is the canonical pattern for
+   any MudBlazor component that may host AuthorizeView in its content. *@
 <CascadingAuthenticationState>
+    <MudThemeProvider Theme="@Contoso.BlazorUi.Shared.AppTheme.Theme" />
+    <MudPopoverProvider />
+    <MudDialogProvider />
+    <MudSnackbarProvider />
+
     <Router AppAssembly="@typeof(App).Assembly">
         <Found Context="routeData">
             <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">

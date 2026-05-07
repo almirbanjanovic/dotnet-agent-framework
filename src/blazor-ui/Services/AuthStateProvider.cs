@@ -18,6 +18,11 @@ namespace Contoso.BlazorUi.Services;
 /// </summary>
 public sealed class AuthStateProvider
 {
+    // Serializes concurrent calls to LoadSignedInCustomerAsync so the initial
+    // OnInitializedAsync check and the AuthenticationStateChanged handler
+    // can't race into two parallel /api/v1/me calls.
+    private readonly SemaphoreSlim _loadGate = new(1, 1);
+
     private readonly List<CustomerOption> _customers =
     [
         new CustomerOption("101", "Emma Wilson"),
@@ -91,45 +96,91 @@ public sealed class AuthStateProvider
             return;
         }
 
+        // Concurrency guard: MainLayout subscribes to AuthenticationStateChanged
+        // BEFORE the initial GetAuthenticationStateAsync() so it cannot miss the
+        // anonymous → signed-in transition. That means two callers (the initial
+        // check and the change-handler) can race here. SemaphoreSlim ensures
+        // only one /api/v1/me call goes out; the second waits, sees that
+        // SelectedCustomer is now populated, and returns.
+        await _loadGate.WaitAsync(ct);
         try
         {
-            var me = await client.GetMeAsync(ct);
-            if (string.IsNullOrWhiteSpace(me.CustomerId))
+            if (SelectedCustomer is not null)
             {
-                LastLoadError = "Signed in successfully, but the BFF could not map your account to a Contoso Outdoors customer record. "
-                    + $"(BFF returned displayName='{me.DisplayName}', email='{me.Email}'.)";
                 return;
             }
 
-            // Prefer the friendly name from the seed list (matches the
-            // capitalization used in product card greetings) when the
-            // resolved customer ID matches one of the 8 seeded customers.
-            // Falls back to whatever the BFF returned.
-            var seeded = _customers.FirstOrDefault(c =>
-                string.Equals(c.Id, me.CustomerId, StringComparison.OrdinalIgnoreCase));
-            var displayName = !string.IsNullOrWhiteSpace(me.DisplayName)
-                ? me.DisplayName!
-                : seeded?.Name ?? $"Customer #{me.CustomerId}";
+            try
+            {
+                var me = await client.GetMeAsync(ct);
+                if (string.IsNullOrWhiteSpace(me.CustomerId))
+                {
+                    LastLoadError = "Signed in successfully, but the BFF could not map your account to a Contoso Outdoors customer record. "
+                        + $"(BFF returned displayName='{me.DisplayName}', email='{me.Email}'.)";
+                    return;
+                }
 
-            SelectedCustomer = new CustomerOption(me.CustomerId, displayName);
-            Email = me.Email;
-            LastLoadError = null;
-        }
-        catch (Exception ex)
-        {
-            // Surface the failure on the Profile page so we stop debugging blind.
-            LastLoadError = $"GET /api/v1/me failed: {ex.GetType().Name}: {ex.Message}";
+                // Prefer the friendly name from the seed list (matches the
+                // capitalization used in product card greetings) when the
+                // resolved customer ID matches one of the 8 seeded customers.
+                // Falls back to whatever the BFF returned.
+                var seeded = _customers.FirstOrDefault(c =>
+                    string.Equals(c.Id, me.CustomerId, StringComparison.OrdinalIgnoreCase));
+                var displayName = !string.IsNullOrWhiteSpace(me.DisplayName)
+                    ? me.DisplayName!
+                    : seeded?.Name ?? $"Customer #{me.CustomerId}";
+
+                SelectedCustomer = new CustomerOption(me.CustomerId, displayName);
+                Email = me.Email;
+                LastLoadError = null;
+            }
+            catch (Exception ex)
+            {
+                // Surface the failure on the Profile page so we stop debugging blind.
+                LastLoadError = $"GET /api/v1/me failed: {ex.GetType().Name}: {ex.Message}";
+            }
+            finally
+            {
+                HasAttemptedLoad = true;
+                // Fire CustomerChanged exactly ONCE per call. The previous code
+                // fired in both the success path AND the finally block, which
+                // caused subscribers (e.g. Orders.razor) to launch two
+                // concurrent loads on first hard refresh and render duplicate
+                // results when both responses raced.
+                CustomerChanged?.Invoke();
+            }
         }
         finally
         {
-            HasAttemptedLoad = true;
-            // Fire CustomerChanged exactly ONCE per call. The previous code
-            // fired in both the success path AND the finally block, which
-            // caused subscribers (e.g. Orders.razor) to launch two
-            // concurrent loads on first hard refresh and render duplicate
-            // results when both responses raced.
-            CustomerChanged?.Invoke();
+            _loadGate.Release();
         }
+    }
+
+    /// <summary>
+    /// Clears the cached signed-in customer state. Called from the layout
+    /// when the framework <c>AuthenticationStateChanged</c> event reports
+    /// the user is anonymous (i.e. they signed out, or signed in as a
+    /// different account). Without this, a sign-out leaves stale data:
+    /// <list type="bullet">
+    ///   <item>Account header keeps showing the previous user's name</item>
+    ///   <item><see cref="LoadSignedInCustomerAsync"/>'s early-return guard
+    ///         (<c>SelectedCustomer is not null</c>) prevents the next
+    ///         user's profile from loading after re-sign-in</item>
+    /// </list>
+    /// No-op in dev-auth mode (the impersonation dropdown owns the state).
+    /// </summary>
+    public void ClearSignedInCustomer()
+    {
+        if (UseDevAuth || SelectedCustomer is null && Email is null && LastLoadError is null && !HasAttemptedLoad)
+        {
+            return;
+        }
+
+        SelectedCustomer = null;
+        Email = null;
+        LastLoadError = null;
+        HasAttemptedLoad = false;
+        CustomerChanged?.Invoke();
     }
 }
 

@@ -48,7 +48,7 @@ The BFF is the sole writer/reader for conversation history in Cosmos DB. The Orc
 
 #### 5. Blazor WASM UI + separate BFF API
 
-The UI is a Blazor WebAssembly SPA with MudBlazor components, deployed as static files in its own container. The BFF is a .NET Minimal API in a separate container. Blazor WASM authenticates via Microsoft.Authentication.Msal (PKCE) and sends Bearer tokens to the BFF. Conversation responses are returned as a single HTTP/JSON payload — there is no streaming protocol between the UI and the BFF. Both UI and backend are .NET.
+The UI is a Blazor WebAssembly SPA with MudBlazor components, deployed as static files in its own container. The BFF is a .NET Minimal API in a separate container. Blazor WASM authenticates via Microsoft.Authentication.Msal (PKCE) and sends Bearer tokens to the BFF. Conversation responses stream from the BFF to the browser as **Server-Sent Events** (`POST /api/v1/chat/stream`, `text/event-stream`) so tokens render as they arrive; the BFF still owns persistence — it assembles the assistant message from the stream and writes it to Cosmos before emitting the final `done` frame. Both UI and backend are .NET.
 
 #### 6. BFF proxies product images (most secure)
 
@@ -64,13 +64,13 @@ Agents get `imageFilename` from the `get_product_detail` tool. They include it a
 Path 1 — Direct data (no agent):
   Browser → Blazor WASM UI → BFF API → CRM API → Cosmos DB (CRM)
 
-Path 2 — Agent chat:
-  Browser → Blazor WASM UI → BFF API → save user msg to Cosmos
-    → Orchestrator Agent (with history) → classify intent
-      → CRM Agent → CRM MCP tools → CRM API → Cosmos DB
-                   → Knowledge MCP tools → AI Search
-      → response back to Orchestrator → BFF
-    → save assistant msg to Cosmos → render in ChatPanel
+Path 2 — Agent chat (Server-Sent Events end-to-end):
+  Browser → Blazor WASM UI → BFF API (POST /api/v1/chat/stream) → save user msg to Cosmos
+    → Orchestrator Agent (POST /api/v1/chat/stream, with history) → classify intent
+      → CRM Agent (POST /api/v1/chat/stream) → CRM MCP tools → CRM API → Cosmos DB
+                                              → Knowledge MCP tools → AI Search
+      → specialist streams `token` / `tool` SSE frames back through Orchestrator → BFF
+    → BFF assembles assistant msg, persists to Cosmos, emits final `done` SSE frame to UI
 
 Path 3 — Product image:
   Browser → BFF /api/images/{filename} → validate → Blob Storage → stream bytes

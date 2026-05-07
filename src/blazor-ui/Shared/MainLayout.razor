@@ -88,7 +88,10 @@
                 {
                     @* MSAL mode: per-customer items + Sign out only when the
                        framework AuthenticationStateProvider says we're signed
-                       in. Anonymous visitors get a single "Sign in" item. *@
+                       in. Anonymous visitors get a single "Sign in" item.
+                       The <Authorizing> slot prevents a blank popover during
+                       the brief window between MudMenu opening and MSAL
+                       resolving the auth-state task. *@
                     <AuthorizeView>
                         <Authorized>
                             <MudMenuItem Icon="@Icons.Material.Outlined.ReceiptLong" Href="/orders">My orders</MudMenuItem>
@@ -99,6 +102,12 @@
                         <NotAuthorized>
                             <MudMenuItem Icon="@Icons.Material.Outlined.Login" OnClick="BeginSignIn">Sign in</MudMenuItem>
                         </NotAuthorized>
+                        <Authorizing>
+                            <MudMenuItem Disabled="true">
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                Loading…
+                            </MudMenuItem>
+                        </Authorizing>
                     </AuthorizeView>
                 }
             </ChildContent>
@@ -185,11 +194,54 @@
         }
         else
         {
+            // Subscribe BEFORE the initial check: MSAL's redirect-callback
+            // path completes the sign-in AFTER MainLayout has already
+            // mounted (the layout is shared with the /authentication/*
+            // pages and isn't re-instantiated when the router lands back
+            // on the destination URL). Without this hook, ChatBubble /
+            // Profile / Orders see SelectedCustomer == null until the
+            // user hits Ctrl+F5.
+            AuthState.AuthenticationStateChanged += HandleAuthenticationStateChanged;
+
             var state = await AuthState.GetAuthenticationStateAsync();
             if (state.User.Identity?.IsAuthenticated == true)
             {
                 await AuthStateProvider.LoadSignedInCustomerAsync(BffApi);
             }
+        }
+    }
+
+    // Re-fires whenever the framework AuthenticationStateProvider notifies
+    // us that the authenticated principal has changed (most importantly:
+    // anonymous → signed-in after MSAL completes the redirect callback,
+    // and signed-in → anonymous after sign-out). Loads the customer once
+    // when authenticated, clears it when anonymous, and triggers a re-render
+    // so dependent UI (greeting, ChatBubble, Profile, Orders) refreshes
+    // without a hard browser reload.
+    private async void HandleAuthenticationStateChanged(Task<AuthenticationState> task)
+    {
+        try
+        {
+            var state = await task;
+            if (state.User.Identity?.IsAuthenticated == true)
+            {
+                await AuthStateProvider.LoadSignedInCustomerAsync(BffApi);
+            }
+            else
+            {
+                // Sign-out (or sign-in as a different account): drop the
+                // cached customer so the next load doesn't early-return on
+                // SelectedCustomer != null and so the account header stops
+                // showing the previous user.
+                AuthStateProvider.ClearSignedInCustomer();
+            }
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception)
+        {
+            // Don't crash the layout on a transient auth-state hiccup;
+            // LoadSignedInCustomerAsync already surfaces failures via
+            // AuthStateProvider.LastLoadError on the Profile page.
         }
     }
 
@@ -232,5 +284,9 @@
     {
         Cart.Changed -= HandleStateChanged;
         AuthStateProvider.CustomerChanged -= HandleStateChanged;
+        if (!AuthStateProvider.UseDevAuth)
+        {
+            AuthState.AuthenticationStateChanged -= HandleAuthenticationStateChanged;
+        }
     }
 }
