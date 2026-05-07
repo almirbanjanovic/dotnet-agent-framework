@@ -3,6 +3,24 @@
 > **Track:** Local — Foundry only, everything else runs on your laptop.
 > Looking for the Full Azure Track instead? See [`../full-azure/lab-1.md`](../full-azure/lab-1.md).
 
+> **Picture this.** It's the end of a long week. You haven't written .NET
+> in months. You want to know one thing before you commit to this stack:
+> *can my laptop, one Azure subscription, and a 60-line C# console app
+> really hold a conversation with a customer?* Lab 1 is the proof. (The
+> functional code is closer to 25 lines once you ignore comments,
+> `using` directives, and the configuration plumbing.)
+>
+> By the end of this lab you'll have:
+>
+> - a one-shot **Joker** agent that prints a single AI-generated joke from
+>   `gpt-4.1` (Step 2), and
+> - the full **8-service Contoso Outdoors stack** running on your laptop,
+>   answering *"what is my last order?"* for the test customer **Emma
+>   Wilson** in your browser (Step 3).
+>
+> ~10 minutes of reading. ~5 minutes of waiting on `terraform apply`. No
+> Kubernetes, no Docker, no AKS — just `dotnet run`.
+
 The Local Track provisions **only Azure AI Foundry** (one resource group, one AI Services account, two model deployments) and runs everything else on your laptop via .NET Aspire with in-memory data services.
 
 ## Prerequisites

@@ -3,6 +3,49 @@
 > **Track:** Local — Foundry only, everything else runs on your laptop.
 > Looking for the Full Azure Track instead? See [`../full-azure/lab-3.md`](../full-azure/lab-3.md).
 
+> **Picture this.** It's Sunday morning. Sarah Miller (test user
+> `sarah`, customer `103`) wakes up to a torn rainfly on the $349.99
+> Basecamp 4P Tent she ordered earlier this year (order `1003` in the
+> seed data — verify with `Get-Content data/contoso-crm/orders.csv`).
+> She opens Contoso Outdoors and clicks **"Refund this order"** —
+> well, *the customer-facing button doesn't exist yet* (Step 7 explains
+> the gap), but pretend. Instantly:
+>
+> - Three agents wake up **in parallel** and start digging:
+>   *is she a serial returner?*, *does her reason match the policy?*,
+>   *is she a long-tenured high-tier customer or a brand-new account?*
+> - They finish, an aggregator combines their scores into a single
+>   recommendation, and the workflow **stops** — waiting for a human
+>   at Contoso Operations to click **Approve / Reject / Re-investigate**.
+> - Minutes (or hours, or days) later, the ops user clicks **Approve**.
+>   The workflow wakes up exactly where it left off and files a support
+>   ticket so finance can issue the refund.
+>
+> That **"STOP and wait for a human"** is the whole point of Lab 3.
+> Labs 1 and 2 never paused — every reply came back in seconds. Here
+> you build a system that's perfectly happy to wait days for a human,
+> then resume the moment the click arrives.
+
+> **Rusty on async workflows? Read this first.** Three things will keep
+> you oriented:
+>
+> 1. **There's no chat box this time.** The trigger is a customer
+>    pressing a button (well, a `POST /api/v1/refunds` simulation — see
+>    Step 7's lab gap). The whole flow runs in the background.
+> 2. **A "workflow" in Microsoft Agent Framework is just a graph of
+>    typed function calls.** Each node (an *executor*) takes a typed
+>    input and emits a typed output. `AddEdge(a, b)` means *"after `a`
+>    finishes, send to `b`"*. `AddFanInBarrierEdge([a, b, c], d)` means
+>    *"wait for all three, then run `d` once"*. That's the whole DSL.
+> 3. **The pause is just an `await`.** The framework offers a built-in
+>    primitive (`ctx.WaitForExternalEventAsync<T>(...)`) that blocks an
+>    executor until an outside event arrives. To keep the lab small, the
+>    `HumanGateExecutor` you'll build in Step 3 uses a thin
+>    `IApprovalGate` abstraction backed by a `TaskCompletionSource` —
+>    same shape, simpler plumbing. (On the Local Track that pause
+>    can't survive a process restart, and Step 8 makes you stare at
+>    exactly that gap.)
+
 ## What you'll learn
 
 This lab introduces a fundamentally different agent topology than Lab 2:
@@ -33,11 +76,11 @@ Labs 1 and 2 used `AIAgent` and `RunAsync` — synchronous calls into a model. T
 
 | Concept | Type | What it does |
 |---------|------|--------------|
-| **Executor** | `Microsoft.Agents.Workflows.Executor<TIn, TOut>` | A single node in the graph — runs in response to a typed input message and emits a typed output message. Wrap each specialist agent in one of these (`AgentExecutor`, `AggregatorExecutor`, `HumanGateExecutor` below). |
-| **WorkflowBuilder** | `Microsoft.Agents.Workflows.WorkflowBuilder` | Fluent DSL for declaring edges between executors. `AddEdge(a, b)` = "after `a` emits, send to `b`". `AddFanInEdges([a, b, c], d)` = "wait for all three, then run `d` once with the combined inputs". |
-| **WorkflowContext** | `Microsoft.Agents.Workflows.WorkflowContext` | The runtime handle inside an executor. Lets you `SendMessageAsync(...)`, `RequestExternalEventAsync(...)`, or read the workflow's state. |
-| **External events** | `ctx.WaitForExternalEventAsync<T>(eventName)` | The point where a workflow **pauses**. The runtime persists state and stops scheduling. When `RaiseEventAsync(eventName, payload)` is called from outside (e.g. an HTTP controller handling an approval click), the workflow resumes from exactly that line. |
-| **Persistence** | `IWorkflowCheckpointStore` | Where workflow state is written between steps. The Local Track uses an in-memory store (`Ctrl+C` ends the workflow) — see the [Full Azure Track](../full-azure/lab-3.md) for the production-grade durable backend. |
+| **Executor** | `Microsoft.Agents.AI.Workflows.Executor<TIn, TOut>` | A single node in the graph — runs in response to a typed input message and emits a typed output message. Wrap each specialist agent in one of these (`AgentExecutor`, `AggregatorExecutor`, `HumanGateExecutor` below). |
+| **WorkflowBuilder** | `Microsoft.Agents.AI.Workflows.WorkflowBuilder` | Fluent DSL for declaring edges between executors. `AddEdge(a, b)` = "after `a` emits, send to `b`". `AddFanInBarrierEdge([a, b, c], d)` = "wait for all three, then run `d` once with the combined inputs". |
+| **WorkflowContext** | `Microsoft.Agents.AI.Workflows.IWorkflowContext` | The runtime handle inside an executor. Lets you `SendMessageAsync(...)` to downstream executors, request external events, or read the workflow's state. |
+| **External events** | `ctx.WaitForExternalEventAsync<T>(eventName)` | The framework's built-in pause primitive. The runtime persists state and stops scheduling. When the external event is raised from outside, the workflow resumes from exactly that line. (This lab uses a thinner `IApprovalGate` + `TaskCompletionSource` instead, to keep the diff small — same idea, less plumbing.) |
+| **Persistence** | `Microsoft.Agents.AI.Workflows.Checkpointing.ICheckpointStore` | Where workflow state is written between steps. The Local Track doesn't wire this up at all (the in-memory `TaskCompletionSource` in `InMemoryApprovalGate` is wiped on restart) — see the [Full Azure Track](../full-azure/lab-3.md) for the production-grade durable backend. |
 
 Three rules that will save you debugging time:
 
@@ -101,6 +144,22 @@ Three rules that will save you debugging time:
 
 The `fraud-workflow` service is a **new component** you'll add — it does not exist in `src/` yet. It follows the same component-independence rule as every other service: no `<ProjectReference>` to any other project under `src/` — only NuGet package references (Microsoft Agent Framework, MCP client, Aspire workload). The same fitness function ([`ComponentIndependenceTests`](../../../src-tests/Contoso.AppHost.Tests/ComponentIndependenceTests.cs)) that guards every other service will guard this one too.
 
+> **A map of what you're about to build.** Each step in this lab adds one
+> piece to the architecture diagram above. Most steps are well under 50
+> lines of C#; Step 6's Blazor page is the chunkiest. If you ever lose
+> the thread, scroll back here.
+>
+> | Step | What you add | What it maps to in the labs you've done |
+> |-----:|--------------|------------------------------------------|
+> | 1 | A new `fraud-workflow` service on port 5010, registered with AppHost. | Same shape as the **Returns Agent** you add in Lab 2 — a fresh `dotnet new web` project plus a `WithHttpEndpoint` line in `AppHost/Program.cs`. |
+> | 2 | Three `AIAgent` wrappers (`OrderHistoryAgent`, `ReturnConditionAgent`, `LoyaltyContextAgent`). | Same `AsAIAgent(...)` + per-request MCP tool-discovery pattern as `crm-agent` in [Lab 2's flow table](lab-2.md#how-a-single-chat-message-travels-file-by-file). The new bit: each one writes to a structured `AgentFinding` record instead of streaming free text. |
+> | 3 | A workflow graph (`WorkflowBuilder`) wiring router → 3 agents (fan-out) → aggregator (fan-in) → human gate. | Brand new — nothing in Lab 2 ran agents in parallel. A single input now spawns three concurrent `RunAsync` calls and the runtime waits for **all three** before proceeding. |
+> | 4 | An in-memory `IApprovalGate` plus two HTTP endpoints: `POST /api/v1/refunds` and `POST /api/v1/operations/decisions`. | The HTTP shape is familiar from Lab 2's BFF endpoints. The new bit is `TaskCompletionSource<ApprovalDecision>` — a one-shot `await` that completes when the ops dashboard POSTs the decision back. |
+> | 5 | A SignalR hub so the ops dashboard learns about new pending reviews in real time. | Conceptually similar to Lab 2's SSE stream — server pushes events to the browser as they happen. SignalR just gives you typed methods (`hub.Clients.All.SendAsync("PendingReviewAdded", ...)`) instead of raw `event:`/`data:` lines. |
+> | 6 | A `/operations` Blazor page that shows pending review cards and posts decisions back. | Same Blazor component shape as the chat panel in Lab 2 — `OnInitializedAsync` opens the connection, `StateHasChanged` re-renders when an event arrives. |
+> | 7 | End-to-end test: customer submits refund → ops user approves → support ticket created. | The first time you watch all six pieces light up at once. |
+> | 8 | Restart the AppHost mid-flow and watch the pending review **disappear**. | The Local Track's deliberate gap. Step 8 is the whole reason the [Full Azure Track Lab 3](../full-azure/lab-3.md) exists. |
+
 ## Step 1 — Scaffold the workflow service
 
 ```powershell
@@ -112,7 +171,7 @@ Remove-Item Contoso.FraudWorkflow
 Pop-Location
 ```
 
-Edit Contoso.FraudWorkflow.csproj — add the same package versions used elsewhere in the repo (check Directory.Packages.props for pinned versions):
+Edit Contoso.FraudWorkflow.csproj — add the same package versions used elsewhere in the repo (check Directory.Packages.props for pinned versions; you'll need to add `Microsoft.Agents.AI.Workflows` to that file too — see note below):
 
 ```xml
 <Project Sdk="Microsoft.NET.Sdk.Web">
@@ -125,6 +184,7 @@ Edit Contoso.FraudWorkflow.csproj — add the same package versions used elsewhe
   <ItemGroup>
     <PackageReference Include="Microsoft.Agents.AI" />
     <PackageReference Include="Microsoft.Agents.AI.OpenAI" />
+    <PackageReference Include="Microsoft.Agents.AI.Workflows" />
     <PackageReference Include="Azure.AI.OpenAI" />
     <PackageReference Include="Azure.Identity" />
     <PackageReference Include="ModelContextProtocol" />
@@ -134,6 +194,17 @@ Edit Contoso.FraudWorkflow.csproj — add the same package versions used elsewhe
   </ItemGroup>
 </Project>
 ```
+
+> **Pin the new package centrally.** This repo uses central package
+> management, so add the version to
+> [`Directory.Packages.props`](../../../Directory.Packages.props)
+> alongside the other `Microsoft.Agents.AI.*` lines. Use whatever
+> 1.0.x version the rest of the `Microsoft.Agents.AI.*` family is
+> already pinned to:
+>
+> ```xml
+> <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.0.0-preview.*" />
+> ```
 
 Add it to the solution and to AppHost:
 
@@ -215,12 +286,30 @@ and the per-request MCP-tool-loading pattern lives in
 
 ## Step 3 — Build the workflow with Microsoft Agent Framework `WorkflowBuilder`
 
-Create Workflows/RefundRiskWorkflow.cs. The Microsoft Agent Framework provides `WorkflowBuilder`, `Executor`, and `WorkflowContext` types for fan-out/fan-in topologies. Use them to wire the executors:
+First, declare the small abstraction the workflow's `HumanGateExecutor`
+will talk to. Create `Services/IApprovalGate.cs`:
+
+```csharp
+public interface IApprovalGate
+{
+    // Returns when the operations user submits a decision (or the token
+    // is cancelled). The implementation in Step 4 backs this with a
+    // TaskCompletionSource per pending alert.
+    Task<ApprovalDecision> WaitForDecisionAsync(
+        string alertId, RefundRiskAssessment assessment, CancellationToken ct);
+}
+
+public enum ApprovalDecision { Approve, Reject, Reinvestigate }
+```
+
+Then create `Workflows/RefundRiskWorkflow.cs`. The Microsoft Agent
+Framework provides `WorkflowBuilder`, `Executor`, and `WorkflowContext`
+types for fan-out/fan-in topologies. Use them to wire the executors:
 
 ```csharp
 public static class RefundRiskWorkflow
 {
-    public static IWorkflow Build(
+    public static Workflow Build(
         OrderHistoryAgent history,
         ReturnConditionAgent condition,
         LoyaltyContextAgent loyalty,
@@ -238,14 +327,14 @@ public static class RefundRiskWorkflow
             .AddEdge(router, historyEx)
             .AddEdge(router, condEx)
             .AddEdge(router, loyaltyEx)
-            .AddFanInEdges(new[] { historyEx, condEx, loyaltyEx }, agg)
+            .AddFanInBarrierEdge(new[] { historyEx, condEx, loyaltyEx }, agg)
             .AddEdge(agg, gate)
             .Build();
     }
 }
 ```
 
-The `HumanGateExecutor` is where the workflow pauses. On the Local Track it asks an in-memory `IApprovalGate` service for the decision — see [Step 4](#step-4--implement-the-in-memory-approval-gate).
+The `HumanGateExecutor` is where the workflow pauses. On the Local Track it asks the in-memory `IApprovalGate` you just declared for the decision — see [Step 4](#step-4--implement-the-in-memory-approval-gate).
 
 ## Step 4 — Implement the in-memory approval gate
 
@@ -467,6 +556,18 @@ On the **Local Track**, the pending review is **lost** — `InMemoryApprovalGate
 - [ ] Approving creates a support ticket (verify by GET `http://localhost:5001/api/v1/customers/103/tickets`)
 - [ ] Rejecting closes the alert with no ticket created
 - [ ] `ComponentIndependenceTests` is still green after adding the new component
+
+> **Glossary** (skim if anything is unfamiliar):
+>
+> - **Workflow** = a graph of executors that the runtime drives for you. You declare nodes and edges; the runtime decides what runs when and in what order.
+> - **Executor** = one node in the workflow graph. Takes a typed input message, does work, emits a typed output message. Wrap your agent in one of these.
+> - **Fan-out** = one input message routed to N executors at the same time. The router executor in Step 3 is the fan-out point.
+> - **Fan-in** = wait for all N executors to emit, then run a single combiner once with the combined results. The aggregator in Step 3 is the fan-in point.
+> - **Human-in-the-loop (HITL)** = a workflow node that pauses until an outside actor (a human, an external service, a timer) raises a named event. Implemented as `await ctx.WaitForExternalEventAsync<T>("...")` — reads like any other `await`.
+> - **Durable** = the workflow's state survives a process restart. The runtime checkpoints every transition; a fresh worker process can read the log and resume from exactly where the dead one left off. **Not implemented on the Local Track** — that's Step 8's lesson.
+> - **Checkpoint** = a snapshot of the workflow's state written between executor invocations. Stored in `Microsoft.Agents.AI.Workflows.Checkpointing.ICheckpointStore` (e.g. `JsonCheckpointStore`, `FileSystemJsonCheckpointStore`).
+> - **Aggregator** = the deterministic, no-LLM step that takes the three agents' findings and decides `approve` / `manual_review` / `escalate`. Pulled out of the LLM loop on purpose so the decision is explainable, testable, and cheap.
+> - **Ambient** = the agent topology pattern this lab teaches. No human kicks off the work; events arrive from the outside and flow through the workflow on their own. Contrast with Lab 2's **interactive** pattern, where every run starts from a chat box.
 
 ## What's next
 

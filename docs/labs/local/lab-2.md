@@ -22,6 +22,21 @@
 >    `RunStreamingAsync` instead of `RunAsync`, and a list of MCP tools
 >    discovered at request time. That's it.
 
+> **Picture this.** Emma is logged in. She types *"where is my order
+> #1001?"* in the chat panel and hits Enter. Six processes on your laptop
+> wake up and pass that question down a chain of HTTP calls. The model
+> (`gpt-4.1`) is asked **about four times**: once to classify the intent,
+> then twice or three more times in the CRM specialist's tool loop
+> (call a tool, see the result, decide what to do next). Two MCP tool
+> servers each get hit at least once, and the answer streams back to
+> the browser token-by-token — typically in a few seconds.
+>
+> **Lab 2 is one long answer to "what just happened when I hit Enter?"**
+> You'll see every box on the architecture diagram light up in the
+> Aspire **Traces** tab, watch SSE frames in the browser DevTools, then
+> add a brand-new **Returns Agent** in Step 5 without touching a line of
+> the existing services.
+
 ## What you'll learn
 
 This lab walks you through two patterns of the [Microsoft Agent Framework](https://learn.microsoft.com/en-us/agent-framework/overview/?pivots=programming-language-csharp) using the agents already shipped in this repo:
@@ -128,6 +143,23 @@ open.
 > - **AppHost** = The .NET Aspire orchestrator project. Reads `src/AppHost/Program.cs`, starts every `Projects.Contoso_*` referenced there as a child process, wires up service discovery and OpenTelemetry, and exposes the dashboard.
 > - **Span / Trace** = OpenTelemetry concepts. A *trace* is one logical request; each *span* is one piece of work in that trace (one HTTP call, one tool execution, one LLM call). They get stitched together by the W3C `traceparent` header that every HTTP hop forwards.
 > - **Classifier** = a one-shot LLM call whose only job is to label the input. Cheap (16 tokens), no tools allowed.
+
+> **Try it before you keep reading.** With `dotnet run --project src/AppHost`
+> running, sign in to the Blazor UI as **emma** (her UPN + password are in
+> `local-dev-credentials.txt` at the repo root), open the Aspire dashboard's
+> **Traces** tab in a second browser window, and type **`where is my order
+> #1001?`** in the chat. You should see:
+>
+> 1. Tokens appearing one at a time in the chat panel — that's rows 12–16
+>    of the table above happening live.
+> 2. A new trace whose span tree covers rows 3, 4, 5, 7, 8, 10, and 11.
+>    Step 10 expands into multiple `azure_openai chat.completions` spans
+>    (one per turn in the model + tool loop) plus an `mcp` span per tool
+>    call — click any `mcp` span to see arguments like
+>    `get_customer_orders(customerId: "101")`.
+>
+> That's the table above made tangible. Everything else in Lab 2 just
+> zooms in on a specific piece of this same flow.
 
 ## The architecture you'll exercise
 
