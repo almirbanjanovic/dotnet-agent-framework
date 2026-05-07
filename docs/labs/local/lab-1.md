@@ -130,6 +130,42 @@ var result = await agent.RunAsync("Tell me a joke about the cloud.");
 
 The same three primitives — `DefaultAzureCredential` → `AIProjectClient.AsAIAgent(...)` → `agent.RunAsync(...)` — are how *every* agent in this repo is built. The richer agents in [Lab 2](lab-2.md) just add **tools** (MCP clients) and **multi-turn history** to the same `AsAIAgent` call.
 
+### When does each line of `simple-agent/Program.cs` actually run?
+
+If you're returning to coding, "when does which line run?" is often murkier
+than the code itself. Here's the timeline for **one** `dotnet run --project src/simple-agent`
+invocation:
+
+| Order | What runs | Triggered by |
+|------:|-----------|--------------|
+| 1 | The .NET runtime starts the process and jumps into `Program.cs`. | `dotnet run` |
+| 2 | `WebApplication.CreateBuilder(args)`-style setup is **skipped** here — `simple-agent` is a console app, not a web server. The first line of `Program.cs` runs immediately. | (none) |
+| 3 | `appsettings.Local.json` (the file `setup-local` wrote next to the project) is loaded so the code can read `Foundry:ProjectEndpoint`, `Foundry:DeploymentName`, and `AzureAd:TenantId`. | The configuration block at the top of `Program.cs` |
+| 4 | A `DefaultAzureCredential` is constructed. **No network call yet** — credentials are lazy; the actual token request happens the first time something asks for it. | Code line `new DefaultAzureCredential(...)` |
+| 5 | `AIProjectClient` is constructed. Still no network call — it's just a typed HTTP client wrapper around the Foundry endpoint. | Code line `new AIProjectClient(...)` |
+| 6 | `.AsAIAgent(model: ..., instructions: ..., name: ...)` returns an `AIAgent` object. Still no network call. | Code line `.AsAIAgent(...)` |
+| 7 | `await agent.RunAsync("Tell me a joke about the cloud.")` — **this is the only line that hits Foundry**. The framework: (a) asks `DefaultAzureCredential` for a token (it walks its provider chain — typically your `az login` token if you signed in with the Azure CLI, otherwise Visual Studio, then Managed Identity, etc.), (b) attaches it as a Bearer header, (c) POSTs your prompt + the system instructions to the chat-completions endpoint of the deployment you named in step 6, (d) waits for the response, (e) returns the model's reply as a `Microsoft.Extensions.AI.ChatResponse`. | Code line `await agent.RunAsync(...)` |
+| 8 | `Console.WriteLine(result)` prints the reply, then the process exits. | Last line of `Program.cs` |
+
+There's no background timer, no implicit reconnect, no event loop. The code
+runs top-to-bottom **once**: the only round-trip to Foundry is the chat
+completion in step 7 (a token-acquisition request to the credential
+provider may also happen the first time, but that's a separate, very fast
+call and is cached for the rest of the process). Then it prints and exits.
+
+> **Why this matters for the rest of the labs.** Every other agent in this
+> repo follows the same shape, just with two additions:
+>
+> - It's hosted in a **web app** (`WebApplication.CreateBuilder(args)`) so the
+>   `agent.RunAsync(...)` call lives inside an HTTP endpoint handler instead
+>   of a top-level statement. Steps 4–6 above happen **once at startup**;
+>   step 7 happens **once per HTTP request**.
+> - The `AIAgent` is built with a list of **tools** (MCP clients). When the
+>   model decides to call one, the framework runs an extra round-trip
+>   ("model says call tool" → "framework calls tool" → "framework gives
+>   result back to model" → "model writes reply"). That's still one
+>   `RunAsync` call from your perspective; the loop is hidden inside.
+
 ## Step 3 — Run the full system
 
 ```bash
@@ -147,6 +183,25 @@ The Aspire AppHost starts all 8 components and a dashboard at **`https://localho
 > Either click that URL (it auto-applies the token) or copy the GUID and paste it into the dashboard's prompt. The token rotates each time you restart AppHost.
 
 Open the Blazor UI at **`http://localhost:5008`** and you'll be redirected to `login.microsoftonline.com`.
+
+> **What are these 8 services and what does each one do?** A quick map so the
+> dashboard isn't a wall of names. Each service is a separate process under
+> `src/`; the port number lets you ping it directly:
+>
+> | Port | Folder under `src/` | Plain-English purpose |
+> |-----:|---------------------|-----------------------|
+> | 5001 | `crm-api/` | Plain web API over the in-memory CSV data (customers, orders, products, tickets). The MCP server below calls this. Has no AI in it. |
+> | 5002 | `crm-mcp/` | An [MCP](https://modelcontextprotocol.io/) server that wraps `crm-api` into 11 LLM-callable "tools" (`get_customer_orders`, `get_order_detail`, etc.). |
+> | 5003 | `knowledge-mcp/` | A second MCP server with one tool: `search_knowledge_base` (RAG over the policy markdown in `data/contoso-sharepoint/`). |
+> | 5004 | `crm-agent/` | The **specialist** for customer/order/support questions. Built from the same three Microsoft Agent Framework lines as `simple-agent`, plus the two MCP tool catalogs. |
+> | 5005 | `product-agent/` | The **specialist** for product/recommendation/pricing questions. Same shape as `crm-agent`, different system prompt. |
+> | 5006 | `orchestrator-agent/` | One short LLM call to label the question (CRM vs PRODUCT), then proxies the request to the right specialist over plain HTTP. |
+> | 5007 | `bff-api/` | "Backend for Frontend." The only thing the browser talks to. Validates the MSAL token, looks up the signed-in user → customer ID, persists the conversation, forwards to the orchestrator. |
+> | 5008 | `blazor-ui/` | The customer-facing Blazor WebAssembly site. The chat panel here is what you use in Lab 2 to drive every scenario. |
+>
+> Lab 2 walks one user message through every box in this table — file by
+> file, method by method — so you can pause anywhere and read the code that
+> just ran.
 
 **Sign in with one of the 8 test users from `local-dev-credentials.txt` at the repo root** (created by `setup-local` in Step 1 — see the callout above). For example, copy the `emma` row's UPN and password into the Microsoft sign-in dialog. The `-local` suffix on every UPN is intentional: it keeps Local-Track UPNs from colliding with the Full Azure Track if both run in the same tenant.
 

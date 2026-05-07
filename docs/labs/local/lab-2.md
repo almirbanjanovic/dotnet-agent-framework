@@ -3,6 +3,25 @@
 > **Track:** Local — Foundry only, everything else runs on your laptop.
 > Looking for the Full Azure Track instead? See [`../full-azure/lab-2.md`](../full-azure/lab-2.md).
 
+> **Rusty on .NET / web apps? Read this first.** This lab is meant to be
+> followed even if you haven't written code in a year. Three things will help:
+>
+> 1. Treat each of the 8 services in the Aspire dashboard as a **separate
+>    program running on its own port**. They communicate by sending HTTP
+>    requests to each other — exactly like calling a public web API.
+> 2. Whenever you see a port number (5001–5008), match it to a folder under
+>    `src/` (e.g. port 5004 = `src/crm-agent/`). The "How a single chat
+>    message travels" table further down maps every port hop to a specific
+>    file and method.
+> 3. Don't memorize the framework. Every agent in this repo is built
+>    around the same **three core lines** you saw in
+>    [Lab 1's `simple-agent`](lab-1.md#how-simple-agent-works-your-first-microsoft-agent-framework-call):
+>    `DefaultAzureCredential` → `AsAIAgent(...)` → `RunAsync(...)`. The
+>    web-hosted agents below add three more things on top — a system
+>    prompt loaded from a markdown file, an HTTP endpoint that calls
+>    `RunStreamingAsync` instead of `RunAsync`, and a list of MCP tools
+>    discovered at request time. That's it.
+
 ## What you'll learn
 
 This lab walks you through two patterns of the [Microsoft Agent Framework](https://learn.microsoft.com/en-us/agent-framework/overview/?pivots=programming-language-csharp) using the agents already shipped in this repo:
@@ -55,6 +74,60 @@ The chat panel uses **Server-Sent Events (SSE)** so the assistant's reply render
 | **What were the per-service logs while it ran?** | Aspire dashboard → **Console Logs** or **Structured Logs** tab, pick a service | Per-service stdout + structured `ILogger` output — useful when a span is red. |
 
 Keep the dashboard's Traces tab open in one browser window and the chat in another so you can see both at once.
+
+## How a single chat message travels (file-by-file)
+
+> **Read this once, even if you skim everything else.** It maps every hop in
+> the architecture diagram below to a specific **file** and **method** so you
+> can pause the lab at any point and read the code that just ran.
+
+Sign in as **emma** (the test user from `local-dev-credentials.txt`),
+type **`Where is my order #1001?`** in the chat panel, and hit Enter. Order
+1001 belongs to Emma (customer `101`) in the seed data, so the example
+below uses real IDs you can verify yourself. Here is what runs, in order,
+on a single laptop. Each step lists the file you'd open in VS Code if you
+wanted to read along — most of these methods are short, and a few (like
+the BFF and Blazor handlers) are longer because they own the SSE plumbing.
+
+| # | Where it runs | File and method | What it does |
+|---|---------------|-----------------|--------------|
+| 1 | Browser (Blazor WASM) | [`src/blazor-ui/Shared/ChatBubble.razor`](../../../src/blazor-ui/Shared/ChatBubble.razor) → `SendAsync()` | Captures the textarea text (when you click Send or press Enter), appends it to the on-page `history` list, and calls the BFF client. |
+| 2 | Browser (Blazor WASM) | [`src/blazor-ui/Services/BffApiClient.cs`](../../../src/blazor-ui/Services/BffApiClient.cs) → `SendChatStreamAsync()` | Opens an HTTP POST to **`/api/v1/chat/stream`** on the BFF and asks the browser to expose the response body as a live stream (so tokens render as they arrive). The MSAL bearer token is attached **automatically** by a registered handler — see [`BffAuthorizationMessageHandler.cs`](../../../src/blazor-ui/Services/BffAuthorizationMessageHandler.cs), wired up in `blazor-ui/Program.cs` via `AddHttpMessageHandler<BffAuthorizationMessageHandler>()`. |
+| 3 | BFF (process on port 5007) | [`src/bff-api/Endpoints/ChatEndpoint.cs`](../../../src/bff-api/Endpoints/ChatEndpoint.cs) → `HandleStreamAsync()` | Validates the JWT, maps the signed-in UPN to a customer ID via `AzureAd:CustomerMap`, loads or creates the conversation, persists the new user message, sets `Content-Type: text/event-stream`, and forwards to the orchestrator. |
+| 4 | Orchestrator (port 5006) | [`src/orchestrator-agent/Endpoints/ChatEndpoint.cs`](../../../src/orchestrator-agent/Endpoints/ChatEndpoint.cs) → `HandleStreamAsync()` | Sends `event: stage data:{"stage":"classifying"}` to the browser, then invokes the intent classifier. |
+| 5 | Orchestrator | [`src/orchestrator-agent/Services/IntentClassifier.cs`](../../../src/orchestrator-agent/Services/IntentClassifier.cs) → `ClassifyAsync()` | One short LLM call to Foundry: *"is this CRM or PRODUCT?"*. The knobs are set inside a `ChatClientAgentRunOptions` (`MaxOutputTokens = 16`, `Temperature = 0`, `ToolMode = ChatToolMode.None`) so the model can only emit a label. (You'll add a third category in Step 5 of this lab.) |
+| 6 | Orchestrator | [`src/orchestrator-agent/Endpoints/ChatEndpoint.cs`](../../../src/orchestrator-agent/Endpoints/ChatEndpoint.cs) → `HandleStreamAsync()` | Sends `event: stage data:{"stage":"routed","agent":"crm"}` to the browser, then asks the router to open a stream against the chosen specialist. |
+| 7 | Orchestrator | [`src/orchestrator-agent/Services/AgentRouter.cs`](../../../src/orchestrator-agent/Services/AgentRouter.cs) → `RouteStreamAsync()` | A `switch` on the intent picks `_crmClient.HttpClient` (port 5004), then opens an HTTP POST to **`/api/v1/chat/stream`** on `crm-agent`. |
+| 8 | crm-agent (port 5004) | [`src/crm-agent/Endpoints/ChatEndpoint.cs`](../../../src/crm-agent/Endpoints/ChatEndpoint.cs) → `HandleStreamAsync()` | Calls `crmProvider.GetClientAsync()` and `knowledgeProvider.GetClientAsync()` to get MCP clients, then `client.ListToolsAsync()` on each to fetch the **tool catalogs at runtime**. The agent now has 12 tools it can choose from. |
+| 9 | crm-agent | [`src/crm-agent/Services/CrmAgentFactory.cs`](../../../src/crm-agent/Services/CrmAgentFactory.cs) → `CreateAgent()` | Builds a fresh `AIAgent` for this request with the system prompt + the 12 tools. |
+| 10 | crm-agent | [`src/crm-agent/Endpoints/ChatEndpoint.cs`](../../../src/crm-agent/Endpoints/ChatEndpoint.cs) → `agent.RunStreamingAsync()` | The model + tool loop runs here. **First** model call: it sees the prompt + history + tool list and decides to call `get_customer_orders(customerId: "101")`. The framework runs the tool and sends the JSON result back. **Second** model call: it decides to call `get_order_detail(orderId: "1001")`. **Third** model call: it has enough info and finally writes the natural-language reply. Each model call is its own `azure_openai chat.completions` span in the trace tree. |
+| 11 | crm-mcp (port 5002) | [`src/crm-mcp/Tools/CustomerTools.cs`](../../../src/crm-mcp/Tools/CustomerTools.cs), [`OrderTools.cs`](../../../src/crm-mcp/Tools/OrderTools.cs), [`ProductTools.cs`](../../../src/crm-mcp/Tools/ProductTools.cs), [`SupportTicketTools.cs`](../../../src/crm-mcp/Tools/SupportTicketTools.cs) | Each tool call from step 10 is one HTTP round-trip. crm-mcp reads from in-memory CSV-backed data and returns JSON. |
+| 12 | crm-agent | [`src/crm-agent/Endpoints/ChatEndpoint.cs`](../../../src/crm-agent/Endpoints/ChatEndpoint.cs) → `HandleStreamAsync()` | As the model writes its reply, each token is wrapped in `event: token data:{"text":"..."}` and flushed back. Tool calls become `event: tool` frames. End-of-reply is `event: done`. |
+| 13 | Orchestrator | [`src/orchestrator-agent/Endpoints/ChatEndpoint.cs`](../../../src/orchestrator-agent/Endpoints/ChatEndpoint.cs) → `HandleStreamAsync()` | Receives the open `HttpResponseMessage` from `RouteStreamAsync()` and pipes the bytes straight into its own response stream with `upstreamStream.CopyToAsync(...)`. **No parsing, no buffering** — the orchestrator never sees a whole reply, just bytes flowing through. That's why the orchestrator span in the trace tree matches the specialist span's duration almost exactly. |
+| 14 | BFF | [`src/bff-api/Endpoints/ChatEndpoint.cs`](../../../src/bff-api/Endpoints/ChatEndpoint.cs) → `HandleStreamAsync()` | Pipes orchestrator bytes back to the browser, but also **assembles** the tokens into a single string in memory so it can persist the assistant's full reply via `PersistAssistantAsync(...)` after the stream ends. Then it emits its own `event: done`. |
+| 15 | Browser | [`src/blazor-ui/Services/BffApiClient.cs`](../../../src/blazor-ui/Services/BffApiClient.cs) → `SendChatStreamAsync()` SSE state machine | Reads the bytes line-by-line, parses SSE event blocks, and yields a `ChatStreamEvent` to the chat bubble for each one. |
+| 16 | Browser | [`src/blazor-ui/Shared/ChatBubble.razor`](../../../src/blazor-ui/Shared/ChatBubble.razor) | Each event triggers a re-render: `token` events append to the assistant bubble, `tool` events show a "🔧 calling tool…" chip, `done` closes the request. |
+
+That's it. **No message broker, no shared C# types, no service mesh.** The
+BFF, orchestrator, and crm-agent all use ordinary ASP.NET middleware
+(authentication, CORS, exception handling) — what's missing is any
+cross-service plumbing. Every box in the architecture diagram below is one
+of these files. When you open the Aspire **Traces** tab in the next step,
+the spans you see line up with steps **3, 4, 7, 8, 10, and 11**. Step 10
+shows up as **multiple** `azure_openai chat.completions` spans (one per
+turn in the model+tool loop) plus an `mcp` span for each tool call — you
+can use this table to translate any span back into the file you want to
+open.
+
+> **Glossary** (skim if anything is unfamiliar):
+>
+> - **BFF** = "Backend for Frontend". The only server the browser talks to. Holds JWT validation, conversation persistence, and the customer-id lookup so the front-end stays simple.
+> - **MCP** = [Model Context Protocol](https://modelcontextprotocol.io/). A small spec for "here is a server that exposes tools an LLM can call". Each MCP server is just an HTTP endpoint that lists its tools and executes them.
+> - **SSE** = Server-Sent Events. A long-lived HTTP response where the server keeps writing `event: …\ndata: …\n\n` blocks. The browser's `fetch` API exposes the response body as a live stream — that's what `httpRequest.SetBrowserResponseStreamingEnabled(true)` (called inside `BffApiClient.SendChatStreamAsync`) opts into.
+> - **JWT** = JSON Web Token. The thing MSAL gives the browser after sign-in; the BFF validates its signature on every request to know which tenant + user is calling.
+> - **AppHost** = The .NET Aspire orchestrator project. Reads `src/AppHost/Program.cs`, starts every `Projects.Contoso_*` referenced there as a child process, wires up service discovery and OpenTelemetry, and exposes the dashboard.
+> - **Span / Trace** = OpenTelemetry concepts. A *trace* is one logical request; each *span* is one piece of work in that trace (one HTTP call, one tool execution, one LLM call). They get stitched together by the W3C `traceparent` header that every HTTP hop forwards.
+> - **Classifier** = a one-shot LLM call whose only job is to label the input. Cheap (16 tokens), no tools allowed.
 
 ## The architecture you'll exercise
 
