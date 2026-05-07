@@ -143,7 +143,21 @@ Remove-Item Contoso.FraudWorkflow
 Pop-Location
 ```
 
-Edit Contoso.FraudWorkflow.csproj — add the same package versions used elsewhere in the repo (check Directory.Packages.props for pinned versions):
+Edit Contoso.FraudWorkflow.csproj. This repo uses **central package
+management** — every `<PackageReference>` in a project file gets its version
+from a matching `<PackageVersion>` line in `Directory.Packages.props`. Server
+SignalR ships in the `Microsoft.AspNetCore.App` framework reference of the
+`Microsoft.NET.Sdk.Web` SDK, so it does **not** need a `<PackageReference>`.
+The Durable Task packages aren't in the repo yet — add their pins to
+`Directory.Packages.props` first:
+
+```xml
+<!-- Directory.Packages.props (alongside the other Microsoft.* lines) -->
+<PackageVersion Include="Microsoft.DurableTask.Client" Version="1.5.0" />
+<PackageVersion Include="Microsoft.DurableTask.Worker" Version="1.5.0" />
+```
+
+Then the project file:
 
 ```xml
 <Project Sdk="Microsoft.NET.Sdk.Web">
@@ -159,14 +173,27 @@ Edit Contoso.FraudWorkflow.csproj — add the same package versions used elsewhe
     <PackageReference Include="Azure.AI.OpenAI" />
     <PackageReference Include="Azure.Identity" />
     <PackageReference Include="ModelContextProtocol" />
-    <PackageReference Include="Microsoft.AspNetCore.SignalR" />
     <PackageReference Include="Microsoft.DurableTask.Client" />
     <PackageReference Include="Microsoft.DurableTask.Worker" />
   </ItemGroup>
 </Project>
 ```
 
-Add it to the solution: `dotnet sln add src/fraud-workflow/Contoso.FraudWorkflow.csproj`.
+Add it to the solution and reference it from the AppHost so Aspire's source
+generator emits `Projects.Contoso_FraudWorkflow`:
+
+```powershell
+dotnet sln add src/fraud-workflow/Contoso.FraudWorkflow.csproj
+```
+
+```xml
+<!-- src/AppHost/Contoso.AppHost.csproj — alongside the other ProjectReference items -->
+<ProjectReference Include="..\fraud-workflow\Contoso.FraudWorkflow.csproj" />
+```
+
+```powershell
+dotnet build src/AppHost/Contoso.AppHost.csproj
+```
 
 ## Step 4 — Create the three specialist agents
 
@@ -183,9 +210,13 @@ public sealed class OrderHistoryAgent
 
     public async Task<AgentFinding> AnalyzeAsync(RefundAlert alert, CancellationToken ct)
     {
-        var prompt = $"""
-            Customer {alert.CustomerId} requests refund for order {alert.OrderId} (amount: ${alert.Amount}).
-            Reason given: "{alert.Reason}"
+        // The prompt template is interpolated with `$$"""..."""` so literal
+        // JSON braces (`{`, `}`) don't have to be escaped — only doubled
+        // `{{ }}` placeholders are interpolated. (`$"""..."""` would treat
+        // every single `{` as the start of an interpolation hole.)
+        var prompt = $$"""
+            Customer {{alert.CustomerId}} requests refund for order {{alert.OrderId}} (amount: ${{alert.Amount}}).
+            Reason given: "{{alert.Reason}}"
 
             Investigate this customer's order and return history. Report:
             - Total orders in last 12 months
@@ -197,7 +228,7 @@ public sealed class OrderHistoryAgent
             """;
 
         var response = await _agent.RunAsync(prompt, cancellationToken: ct);
-        return AgentFinding.Parse(response.Text);
+        return AgentFinding.Parse(response.ToString());
     }
 }
 ```

@@ -86,23 +86,42 @@ Open `https://{agc-frontend-fqdn}/` (the URL is in the `terraform output` from L
 >
 > If your goal is the same one-click span tree the Local Track gets from the Aspire dashboard, that requires adding an Application Insights resource + the `Azure.Monitor.OpenTelemetry.AspNetCore` exporter to each `ServiceDefaults.cs`. Tracked separately from this lab.
 
-Pick **Emma Wilson** in the customer picker. Type into the chat:
+Type into the chat:
 
 > Where is my last order?
 
-While the response renders, watch the chat panel render token-by-token, then open browser DevTools → Network → click `POST /api/v1/chat/stream` → **Response** tab to confirm the SSE event sequence. To stitch the cross-pod call chain, open **Azure portal → your AKS cluster → Logs** and run the KQL example in the call-out above. (One-click distributed traces require the App Insights wiring noted as a follow-up.)
+The BFF maps the signed-in UPN to a customer automatically via
+`AzureAd:CustomerMap` (written by `infra/init.ps1`) — no customer picker is
+shown in MSAL mode, so whichever seeded user you logged in as is who the
+agents will look up. While the response renders, watch the chat panel render
+token-by-token, then open browser DevTools → Network → click
+`POST /api/v1/chat/stream` → **Response** tab to confirm the SSE event sequence.
+To stitch the cross-pod call chain, open **Azure portal → your AKS cluster →
+Logs** and run the KQL example in the call-out above. (One-click distributed
+traces require the App Insights wiring noted as a follow-up.)
 
-The wire shape `bff-api` returns to the browser is the same as the Local Track:
+The SSE wire frames `bff-api` emits to the browser are the same as the Local
+Track:
 
-```json
-{
-  "conversationId": "...",
-  "response": "Your most recent order is #1003 ...",
-  "toolCalls": [
-    { "name": "get_customer_orders", "arguments": { "customerId": "101" } },
-    { "name": "get_order_detail",    "arguments": { "orderId": "1003" } }
-  ]
-}
+```text
+event: conversation
+data: {"conversationId":"..."}
+
+event: stage
+data: {"stage":"classifying"}
+
+event: stage
+data: {"stage":"routed","agent":"crm"}
+
+event: tool
+data: {"name":"get_customer_orders","arguments":{"customerId":"101"}}
+
+event: token
+data: {"text":"Your"}
+…more token frames, a second tool call, more tokens…
+
+event: done
+data: {"conversationId":"...","toolCalls":[{"name":"get_customer_orders","arguments":{"customerId":"101"}},{"name":"get_order_detail","arguments":{"orderId":"1001"}}]}
 ```
 
 ### What just happened (under the hood)
@@ -147,12 +166,16 @@ var toolCalls = ToolCallExtractor.Extract(response);
 
 ## Step 2 — Drive the orchestrator from a script (optional)
 
-If you want to script the same scenarios without going through the UI, acquire a token first:
+If you want to script the same scenarios without going through the UI, acquire
+a token first. The BFF's App ID URI is `api://{bff-client-id}` (the Terraform
+`entra` module sets `identifier_uri = "api://${azuread_application.bff.client_id}"`),
+so resolve the client ID from `terraform output` first:
 
 ```powershell
-$token = (az account get-access-token --resource api://contoso-bff --query accessToken -o tsv)
+$bffClientId = (terraform -chdir=infra/terraform output -raw bff_client_id)
+$token = (az account get-access-token --resource "api://$bffClientId" --query accessToken -o tsv)
 $body = @{
-    customerId = "101"
+    customerId = "103"
     message    = "Where is order 1003?"
     history    = @()
 } | ConvertTo-Json
@@ -210,7 +233,7 @@ This is the exercise that proves the pattern. You'll add a `returns-agent` that 
 The fastest path is to clone `src/crm-agent/`:
 
 ```powershell
-Copy-Item -Recurse src/crm-agent src/returns-agent
+Copy-Item -Recurse src/crm-agent src/returns-agent -Exclude bin,obj,appsettings.Local.json,appsettings.Development.json
 Push-Location src/returns-agent
 Rename-Item Contoso.CrmAgent.csproj Contoso.ReturnsAgent.csproj
 Pop-Location
@@ -285,7 +308,7 @@ Three small edits, in three files:
    }
    ```
 
-2. **`Services/AgentRouter.cs`** — accept the new client in the constructor and add a third branch in `RouteAsync`:
+2. **`Services/AgentRouter.cs`** — accept the new client in the constructor, then add a third branch in **both** `RouteAsync` (used by `/api/v1/chat`) **and** `RouteStreamAsync` (used by the SSE chat panel — the streaming method is what the browser actually exercises, and skipping it leaves RETURNS traffic falling back to crm-agent):
 
    ```csharp
    var client = intent.ToUpperInvariant() switch
@@ -296,7 +319,11 @@ Three small edits, in three files:
    };
    ```
 
-3. **`Program.cs`** — register the typed `HttpClient` next to the other two:
+3. **`Program.cs`** — register the typed `HttpClient` next to the other two.
+   **Do not** add `.AddStandardResilienceHandler()` here — the orchestrator
+   already adds one in `ServiceDefaults.cs` via
+   `ConfigureHttpClientDefaults`, and chaining a second pipeline stacks two
+   sets of timeouts:
 
    ```csharp
    builder.Services.AddHttpClient<ReturnsAgentClient>(client =>
@@ -304,13 +331,43 @@ Three small edits, in three files:
            var baseUrl = builder.Configuration["ReturnsAgent:BaseUrl"] ?? "http://returns-agent:8080";
            client.BaseAddress = new Uri(baseUrl);
        })
-       .AddHttpMessageHandler<CustomerHeaderForwarder>()
-       .AddStandardResilienceHandler();
+       .AddHttpMessageHandler<CustomerHeaderForwarder>();
+   ```
+
+4. **`Endpoints/ChatEndpoint.cs`** — the SSE `stage` event tells the
+   browser which agent the request was routed to. Update the label
+   computation so RETURNS traffic surfaces as `"returns"` in the trace
+   instead of being mis-labelled `"crm"`:
+
+   ```csharp
+   // Replaces the existing
+   //   var agentLabel = intent.Equals("PRODUCT", ...) ? "product" : "crm";
+   var agentLabel = intent.ToUpperInvariant() switch
+   {
+       "PRODUCT" => "product",
+       "RETURNS" => "returns",
+       _         => "crm",
+   };
    ```
 
 ### 3c — Deploy the new component to AKS
 
-1. **Identity** — add a new Terraform `agent-identity` module call in main.tf for `returns-agent` (mirror the existing `crm-agent` block, including the Foundry RBAC and Key Vault access). Re-run `./infra/deploy.ps1`.
+1. **Identity** — add a `returns_agent` entry to the existing `agent_identity`
+   module's `agents` map in `infra/terraform/main.tf` (mirror the existing
+   `crm_agent` entry, including the new `sa-returns-agent` service-account
+   name). The map shape is:
+
+   ```hcl
+   agents = {
+     crm_agent     = { blueprint_display_name = "Contoso CRM Agent",     namespace = var.k8s_namespace, service_account = "sa-crm-agent" }
+     prod_agent    = { blueprint_display_name = "Contoso Product Agent", namespace = var.k8s_namespace, service_account = "sa-prod-agent" }
+     orch_agent    = { blueprint_display_name = "Contoso Orchestrator Agent", namespace = var.k8s_namespace, service_account = "sa-orch-agent" }
+     returns_agent = { blueprint_display_name = "Contoso Returns Agent", namespace = var.k8s_namespace, service_account = "sa-returns-agent" }
+   }
+   ```
+
+   Re-run `./infra/deploy.ps1` so Terraform creates the new agent-identity
+   blueprint, service principal, and federated-identity credential.
 2. **Container image** — clone src/crm-agent/Dockerfile into the new component (no changes needed; the multi-stage build picks up the new csproj).
 3. **Helm chart** — clone src/crm-agent/chart/ into src/returns-agent/chart/, update Chart.yaml, values.yaml (image repository, service account name `sa-returns-agent`), and the ConfigMap keys. Helm template files are reusable.
 4. **NetworkPolicy** — add a new manifest under infra/k8s/manifests/network-policies/ allowing ingress from `orchestrator-agent` and egress to `crm-mcp` + `knowledge-mcp` (mirror crm-agent.yaml).

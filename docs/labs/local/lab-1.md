@@ -136,7 +136,17 @@ The same three primitives — `DefaultAzureCredential` → `AIProjectClient.AsAI
 dotnet run --project src/AppHost
 ```
 
-The Aspire AppHost starts all 8 components and a dashboard at **`https://localhost:15888`**. Open the Blazor UI at **`http://localhost:5008`** and you'll be redirected to `login.microsoftonline.com`.
+The Aspire AppHost starts all 8 components and a dashboard at **`https://localhost:15888`**.
+
+> **Aspire dashboard asks for a token (a GUID).** That's expected — Aspire 9+ guards the dashboard with a per-run browser token. Look at the AppHost console output for a line like:
+>
+> ```text
+> Login to the dashboard at https://localhost:15888/login?t=<GUID>
+> ```
+>
+> Either click that URL (it auto-applies the token) or copy the GUID and paste it into the dashboard's prompt. The token rotates each time you restart AppHost.
+
+Open the Blazor UI at **`http://localhost:5008`** and you'll be redirected to `login.microsoftonline.com`.
 
 **Sign in with one of the 8 test users from `local-dev-credentials.txt` at the repo root** (created by `setup-local` in Step 1 — see the callout above). For example, copy the `emma` row's UPN and password into the Microsoft sign-in dialog. The `-local` suffix on every UPN is intentional: it keeps Local-Track UPNs from colliding with the Full Azure Track if both run in the same tenant.
 

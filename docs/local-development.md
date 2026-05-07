@@ -122,6 +122,8 @@ This starts the Aspire orchestration dashboard (default at **https://localhost:1
 - Port mappings (5001–5008)
 - One-click stop / restart per service
 
+> **The dashboard asks for a token on first load.** Aspire 9+ guards it with a per-run browser token. The AppHost console prints a line like `Login to the dashboard at https://localhost:15888/login?t=<GUID>` — click that URL (or paste the GUID into the prompt). The token rotates each restart.
+
 ### Manual start (optional)
 
 If you prefer to run components individually, open 8 terminals. Each project

@@ -211,11 +211,11 @@ Every prompt you've sent so far has actually gone through `orchestrator-agent` f
 
 > Are there any sales on hiking boots?
 
-Expand the new trace. You should see the orchestrator span branch into a `product-agent` `POST /api/v1/chat` span (no `crm-agent` span at all).
+Expand the new trace. You should see the orchestrator span branch into a `product-agent` `POST /api/v1/chat/stream` span (no `crm-agent` span at all).
 
 > Where is order 1003?
 
-Expand this trace. The orchestrator should branch into a `crm-agent` span instead.
+Expand this trace. The orchestrator should branch into a `crm-agent` `POST /api/v1/chat/stream` span instead.
 
 That's intent-based handoff: the orchestrator made one tiny LLM call to classify (`PRODUCT` vs `CRM`), then forwarded the original message to the right specialist. The orchestrator does **not** call any tool itself — it doesn't even import another agent's code.
 
@@ -249,10 +249,12 @@ This is the exercise that proves the pattern. You'll add a `returns-agent` that 
 
 ### 5a — Scaffold the new component
 
-The fastest path is to clone `src/crm-agent/`:
+The fastest path is to clone `src/crm-agent/`. The `-Exclude` list keeps your
+personal `appsettings.Local.json` (with your Foundry endpoint and tenant ID),
+`bin/`, and `obj/` from leaking into the new component:
 
 ```powershell
-Copy-Item -Recurse src/crm-agent src/returns-agent
+Copy-Item -Recurse src/crm-agent src/returns-agent -Exclude bin,obj,appsettings.Local.json,appsettings.Development.json
 Push-Location src/returns-agent
 Rename-Item Contoso.CrmAgent.csproj Contoso.ReturnsAgent.csproj
 Pop-Location
@@ -280,7 +282,9 @@ Then in the new directory:
      "This is outside my area. Let me connect you with the right specialist."
    ```
 
-4. Update appsettings.Local.json.template to use a new port (`5009`):
+4. Update appsettings.Local.json.template to mirror the existing
+   `src/crm-agent/appsettings.Local.json.template` (the port comes from
+   AppHost's `WithHttpEndpoint(port: 5009, ...)`, not from the template):
 
    ```json
    {
@@ -291,12 +295,24 @@ Then in the new directory:
      "AzureAd":      { "TenantId": "{{TENANT_ID}}" },
      "CrmMcp":       { "BaseUrl": "http://localhost:5002" },
      "KnowledgeMcp": { "BaseUrl": "http://localhost:5003" },
-     "Kestrel":      { "Endpoints": { "Http": { "Url": "http://localhost:5009" } } },
      "Logging":      { "LogLevel": { "Default": "Information" } }
    }
    ```
 
-5. Re-run setup so the template renders:
+5. Teach `setup-local` about the new component. The script's component lists
+   are **hardcoded** (no auto-discovery from `src/`), so you must add
+   `returns-agent` in two places near the top of `infra/setup-local.ps1`
+   (and the equivalent `infra/setup-local.sh` if you're on macOS / Linux):
+
+   ```powershell
+   # $PortMap — add the new port:
+   @{ Port = 5009; Component = "returns-agent" }
+
+   # $TemplateComponents — add the new template:
+   "returns-agent"
+   ```
+
+   Re-run setup so the template renders:
 
    ```powershell
    ./infra/setup-local.ps1
@@ -304,16 +320,40 @@ Then in the new directory:
 
 ### 5b — Register with AppHost
 
-In Program.cs, add the new project after the `productAgent` block:
+The AppHost references each child project by a generated
+`Projects.Contoso_<Name>` symbol. That symbol is emitted by Aspire's source
+generator, which only sees projects via explicit `<ProjectReference>`
+entries in the AppHost's csproj. So the order is:
 
-```csharp
-var returnsAgent = AsLocal(builder.AddProject<Projects.Contoso_ReturnsAgent>("returns-agent"))
-    .WithHttpEndpoint(port: 5009, name: "http")
-    .WithReference(crmMcp)
-    .WithReference(knowledgeMcp);
-```
+1. Add the project to the solution:
 
-Then add `returns-agent` to the `dotnet-agent-framework.sln` (`dotnet sln add src/returns-agent/Contoso.ReturnsAgent.csproj`).
+   ```powershell
+   dotnet sln add src/returns-agent/Contoso.ReturnsAgent.csproj
+   ```
+
+2. Add a `<ProjectReference>` to `src/AppHost/Contoso.AppHost.csproj`
+   alongside the other 8 (order doesn't matter):
+
+   ```xml
+   <ProjectReference Include="..\returns-agent\Contoso.ReturnsAgent.csproj" />
+   ```
+
+3. Restore + build once so the source generator emits the
+   `Projects.Contoso_ReturnsAgent` symbol:
+
+   ```powershell
+   dotnet build src/AppHost/Contoso.AppHost.csproj
+   ```
+
+4. In `src/AppHost/Program.cs`, add the new project after the `productAgent`
+   block:
+
+   ```csharp
+   var returnsAgent = AsLocal(builder.AddProject<Projects.Contoso_ReturnsAgent>("returns-agent"))
+       .WithHttpEndpoint(port: 5009, name: "http")
+       .WithReference(crmMcp)
+       .WithReference(knowledgeMcp);
+   ```
 
 ### 5c — Teach the orchestrator about the new domain
 
@@ -361,9 +401,13 @@ reorganization shows its value — each concern lives where you'd expect):
    }
    ```
 
-2. **`Services/AgentRouter.cs`** — accept the new client in the constructor and add a third branch in `RouteAsync`:
+2. **`Services/AgentRouter.cs`** — accept the new client in the constructor, then add a third branch in **both** `RouteAsync` (used by `/api/v1/chat`) **and** `RouteStreamAsync` (used by the SSE chat panel — this is the one your browser actually exercises):
 
    ```csharp
+   // Replaces the existing `intent.Equals("PRODUCT", ...) ? ... : ...`
+   // ternary in BOTH RouteAsync AND RouteStreamAsync. Without the change
+   // in RouteStreamAsync the SSE chat panel will never reach returns-agent
+   // — it'll fall back to crm-agent.
    var client = intent.ToUpperInvariant() switch
    {
        "PRODUCT" => _productClient.HttpClient,
@@ -372,7 +416,11 @@ reorganization shows its value — each concern lives where you'd expect):
    };
    ```
 
-3. **`Program.cs`** — register the typed `HttpClient` next to the other two:
+3. **`Program.cs`** — register the typed `HttpClient` next to the other two.
+   **Do not** add `.AddStandardResilienceHandler()` here — the orchestrator
+   already adds one in `ServiceDefaults.cs` via
+   `ConfigureHttpClientDefaults`, and chaining a second pipeline stacks two
+   sets of timeouts:
 
    ```csharp
    builder.Services.AddHttpClient<ReturnsAgentClient>(client =>
@@ -380,8 +428,22 @@ reorganization shows its value — each concern lives where you'd expect):
            var baseUrl = builder.Configuration["ReturnsAgent:BaseUrl"] ?? "http://localhost:5009";
            client.BaseAddress = new Uri(baseUrl);
        })
-       .AddHttpMessageHandler<CustomerHeaderForwarder>()
-       .AddStandardResilienceHandler();
+       .AddHttpMessageHandler<CustomerHeaderForwarder>();
+   ```
+
+4. **`Endpoints/ChatEndpoint.cs`** — the SSE `stage` event sends the
+   `agent` field to the browser so it can render "routed to returns-agent".
+   Update the label computation to include the new branch:
+
+   ```csharp
+   // Replaces the existing
+   //   var agentLabel = intent.Equals("PRODUCT", ...) ? "product" : "crm";
+   var agentLabel = intent.ToUpperInvariant() switch
+   {
+       "PRODUCT" => "product",
+       "RETURNS" => "returns",
+       _         => "crm",
+   };
    ```
 
 ### 5d — Verify

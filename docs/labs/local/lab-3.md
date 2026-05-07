@@ -141,6 +141,20 @@ Add it to the solution and to AppHost:
 dotnet sln add src/fraud-workflow/Contoso.FraudWorkflow.csproj
 ```
 
+Add a `<ProjectReference>` to `src/AppHost/Contoso.AppHost.csproj` so the
+Aspire source generator emits `Projects.Contoso_FraudWorkflow`:
+
+```xml
+<ProjectReference Include="..\fraud-workflow\Contoso.FraudWorkflow.csproj" />
+```
+
+Restore + build once before editing the AppHost so the generated symbol is
+available to IntelliSense and the next `dotnet run`:
+
+```powershell
+dotnet build src/AppHost/Contoso.AppHost.csproj
+```
+
 In Program.cs:
 
 ```csharp
@@ -165,9 +179,13 @@ public sealed class OrderHistoryAgent
 
     public async Task<AgentFinding> AnalyzeAsync(RefundAlert alert, CancellationToken ct)
     {
-        var prompt = $"""
-            Customer {alert.CustomerId} requests refund for order {alert.OrderId} (amount: ${alert.Amount}).
-            Reason given: "{alert.Reason}"
+        // The prompt template is interpolated with `$$"""..."""` so literal
+        // JSON braces (`{`, `}`) don't have to be escaped — only doubled
+        // `{{ }}` placeholders are interpolated. (`$"""..."""` would treat
+        // every single `{` as the start of an interpolation hole.)
+        var prompt = $$"""
+            Customer {{alert.CustomerId}} requests refund for order {{alert.OrderId}} (amount: ${{alert.Amount}}).
+            Reason given: "{{alert.Reason}}"
 
             Investigate this customer's order and return history. Report:
             - Total orders in last 12 months
@@ -179,7 +197,7 @@ public sealed class OrderHistoryAgent
             """;
 
         var response = await _agent.RunAsync(prompt, cancellationToken: ct);
-        return AgentFinding.Parse(response.Text);
+        return AgentFinding.Parse(response.ToString());
     }
 }
 ```
@@ -312,6 +330,22 @@ app.MapHub<OperationsHub>("/hubs/operations").RequireCors(OperationsCors);
 ```
 
 ## Step 6 — Add the Blazor operations page
+
+The Blazor WASM SDK doesn't ship the SignalR client, so add it explicitly. This
+repo uses central package management, so the version goes in
+[`Directory.Packages.props`](../../../Directory.Packages.props) and the
+PackageReference (no `Version` attribute) goes in the project. Pin the same
+9.0.x version the rest of the ASP.NET Core stack uses:
+
+```xml
+<!-- Directory.Packages.props (alongside the other Microsoft.AspNetCore.* lines) -->
+<PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="9.0.15" />
+```
+
+```xml
+<!-- src/blazor-ui/Contoso.BlazorUi.csproj (inside <ItemGroup>) -->
+<PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
+```
 
 In src/blazor-ui/Pages/ create Operations.razor:
 
