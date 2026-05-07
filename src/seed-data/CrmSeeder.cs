@@ -189,6 +189,19 @@ public static class CrmSeeder
 
             if (c == '"')
             {
+                // RFC 4180: a doubled quote inside a quoted field
+                // represents a literal quote character (e.g.
+                // `"He said ""hi"""` parses as `He said "hi"`). The CRM
+                // API's CsvDataLoader handles this; the seeder MUST too,
+                // otherwise text containing legitimate quotes is silently
+                // truncated/split when loaded into Cosmos.
+                if (inQuotes && i + 1 < line.Length && line[i + 1] == '"')
+                {
+                    current.Append('"');
+                    i++;
+                    continue;
+                }
+
                 inQuotes = !inQuotes;
             }
             else if (c == ',' && !inQuotes)

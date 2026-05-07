@@ -4,8 +4,11 @@ namespace Contoso.CrmApi.Services;
 
 public interface ICosmosService
 {
-    // Customers
-    Task<IReadOnlyList<Customer>> GetAllCustomersAsync(CancellationToken ct = default);
+    // Customers — note: there is intentionally no GetAllCustomersAsync.
+    // Enumerating the customer table has no legitimate per-customer use
+    // case and is a textbook exfiltration vector if exposed via an MCP
+    // tool. Re-add behind real authorization (admin role, separate
+    // endpoint) if a back-office surface ever needs it.
     Task<Customer?> GetCustomerByIdAsync(string id, CancellationToken ct = default);
 
     // Orders

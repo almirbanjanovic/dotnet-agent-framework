@@ -70,34 +70,57 @@ public sealed class CosmosConversationStore : IConversationStore
 
     public async Task AddMessageAsync(string conversationId, ChatMessage message, CancellationToken ct = default)
     {
-        var document = await GetConversationDocumentAsync(conversationId, ct);
-        if (document is null)
+        // Optimistic-concurrency loop. A naked read → mutate →
+        // ReplaceItemAsync silently loses messages when two requests on the
+        // same conversation race (the second write blindly overwrites the
+        // first's appended message). We use the document's ETag as a
+        // pre-condition and retry on PreconditionFailed (HTTP 412) so both
+        // messages survive. Bound the retry count so a hot conversation
+        // can't loop forever — at that point the operator gets a 5xx and
+        // the client can retry.
+        const int maxAttempts = 5;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            return;
-        }
+            string? etag;
+            ConversationDocument? document;
+            try
+            {
+                var read = await _container.ReadItemAsync<ConversationDocument>(
+                    conversationId,
+                    new PartitionKey(conversationId),
+                    cancellationToken: ct);
+                document = read.Resource;
+                etag = read.ETag;
+            }
+            catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return;
+            }
 
-        document.Messages.Add(message);
-        await _container.ReplaceItemAsync(
-            document,
-            document.Id,
-            new PartitionKey(document.SessionId),
-            cancellationToken: ct);
-    }
+            document.Messages.Add(message);
+            // Bound storage so a chatty client cannot grow the document
+            // past Cosmos's 2 MB hard limit. See ConversationLimits for
+            // rationale; this is a no-op when already within bounds.
+            ConversationLimits.TrimOldest(document.Messages);
 
-    private async Task<ConversationDocument?> GetConversationDocumentAsync(string conversationId, CancellationToken ct)
-    {
-        try
-        {
-            var response = await _container.ReadItemAsync<ConversationDocument>(
-                conversationId,
-                new PartitionKey(conversationId),
-                cancellationToken: ct);
-
-            return response.Resource;
-        }
-        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return null;
+            try
+            {
+                await _container.ReplaceItemAsync(
+                    document,
+                    document.Id,
+                    new PartitionKey(document.SessionId),
+                    new ItemRequestOptions { IfMatchEtag = etag },
+                    cancellationToken: ct);
+                return;
+            }
+            catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
+            {
+                // Another writer beat us — re-read and retry.
+                if (attempt == maxAttempts)
+                {
+                    throw;
+                }
+            }
         }
     }
 

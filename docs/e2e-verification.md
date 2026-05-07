@@ -52,7 +52,7 @@ Tester: _______________
 [ ] Blazor UI loads without 401/403 errors
 [ ] BFF /health returns 200
 [ ] CRM API /health returns 200
-[ ] CRM API /api/v1/customers returns 200 with ≥8 customers
+[ ] CRM API /api/v1/customers/101 returns 200 with the seeded customer profile
 [ ] Blazor UI redirects to login.microsoftonline.com on first visit
 [ ] Sign-in as `emma.wilson@<your-tenant>` succeeds and resolves to customer 101
 [ ] Chat input box is focusable and ready

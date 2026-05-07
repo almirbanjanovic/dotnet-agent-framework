@@ -7,8 +7,15 @@ using Microsoft.Extensions.Logging;
 
 internal sealed class KnowledgeMcpClientProvider : McpClientProvider
 {
-    public KnowledgeMcpClientProvider(IConfiguration configuration, ILoggerFactory loggerFactory)
-        : base("knowledge-mcp", configuration["KnowledgeMcp:BaseUrl"] ?? "http://localhost:5003", loggerFactory)
+    public KnowledgeMcpClientProvider(
+        IConfiguration configuration,
+        IHttpClientFactory httpClientFactory,
+        ILoggerFactory loggerFactory)
+        : base(
+            "knowledge-mcp",
+            configuration["KnowledgeMcp:BaseUrl"] ?? "http://localhost:5003",
+            httpClientFactory,
+            loggerFactory)
     {
     }
 }

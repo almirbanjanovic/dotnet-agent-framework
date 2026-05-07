@@ -59,7 +59,11 @@ public sealed class AzureSearchService : ISearchService
             results.Add(new SearchResult(text, source, score));
         }
 
-        _logger.LogInformation("Azure search returned {Count} results for query '{Query}'.", results.Count, query);
+        _logger.LogInformation("Azure search returned {Count} results (query length: {QueryLength} chars).", results.Count, query.Length);
+        // Full query text is debug-only — search queries can carry PII
+        // (names, addresses, ticket descriptions) that must not appear in
+        // shipped logs by default.
+        _logger.LogDebug("Azure search query: {Query}", query);
 
         return results;
     }

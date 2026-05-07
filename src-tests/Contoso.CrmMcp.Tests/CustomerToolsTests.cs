@@ -11,23 +11,6 @@ namespace Contoso.CrmMcp.Tests;
 public sealed class CustomerToolsTests
 {
     [Fact]
-    public async Task GetAllCustomersAsync_Success_ReturnsSerializedJson()
-    {
-        var customers = new List<Customer>
-        {
-            new() { Id = "C-1", FirstName = "Ada", LastName = "Lovelace" }
-        };
-        var (tools, handler) = CreateTools(System.Text.Json.JsonSerializer.Serialize(customers));
-
-        var response = await tools.GetAllCustomersAsync();
-
-        var payload = JsonDocument.Parse(response);
-        payload.RootElement.GetArrayLength().Should().Be(1);
-        payload.RootElement[0].GetProperty("id").GetString().Should().Be("C-1");
-        handler.Request!.RequestUri!.PathAndQuery.Should().Be("/api/v1/customers");
-    }
-
-    [Fact]
     public async Task GetCustomerDetailAsync_Success_ReturnsSerializedJson()
     {
         var customer = new Customer { Id = "C-42", FirstName = "Grace", LastName = "Hopper" };
@@ -41,14 +24,14 @@ public sealed class CustomerToolsTests
     }
 
     [Fact]
-    public async Task GetAllCustomersAsync_ClientThrows_WrapsInMcpException()
+    public async Task GetCustomerDetailAsync_ClientThrows_WrapsInMcpException()
     {
         var (tools, _) = CreateTools("fail", HttpStatusCode.InternalServerError);
 
-        var act = () => tools.GetAllCustomersAsync();
+        var act = () => tools.GetCustomerDetailAsync("C-42");
 
         await act.Should().ThrowAsync<McpException>()
-            .WithMessage("Failed to list customers.*");
+            .WithMessage("Failed to get customer 'C-42'.*");
     }
 
     private static (CustomerTools Tools, TestHttpMessageHandler Handler) CreateTools(

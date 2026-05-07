@@ -86,8 +86,19 @@ initialize_backend() {
     fi
     # Hash the subscription ID → 8 hex chars (avoids leaking the raw subId
     # prefix into a globally-visible storage account name).
+    # macOS ships `shasum -a 256` (Perl-based, BSD coreutils); GNU/Linux
+    # ships `sha256sum`. Pick whichever is available so the script produces
+    # the same suffix on both platforms (and matches setup-local.ps1's
+    # .NET SHA256, which uses the same UTF-8 byte encoding).
     local suffix
-    suffix=$(printf '%s' "$sub_id" | sha256sum | cut -c1-8)
+    if command -v sha256sum >/dev/null 2>&1; then
+        suffix=$(printf '%s' "$sub_id" | sha256sum | cut -c1-8)
+    elif command -v shasum >/dev/null 2>&1; then
+        suffix=$(printf '%s' "$sub_id" | shasum -a 256 | cut -c1-8)
+    else
+        fail "Neither sha256sum nor shasum is available — install GNU coreutils or use a system with shasum (macOS default)"
+        exit 1
+    fi
     local storage_account="stdotnetagentldtf${suffix}"
     storage_account="${storage_account:0:24}"
     local container_name="tfstate"

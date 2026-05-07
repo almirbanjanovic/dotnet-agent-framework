@@ -27,7 +27,6 @@ The MCP server listens on the URL bound by `ASPNETCORE_URLS` (Aspire AppHost bin
 
 | Tool | Backing endpoint |
 |------|------------------|
-| `get_all_customers` | `GET /api/v1/customers/` |
 | `get_customer_detail` | `GET /api/v1/customers/{id}` |
 | `get_customer_orders` | `GET /api/v1/customers/{id}/orders` |
 | `get_order_detail` | `GET /api/v1/orders/{id}` |

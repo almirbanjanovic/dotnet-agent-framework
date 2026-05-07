@@ -19,9 +19,19 @@ public static class PromotionEndpoints
 
         group.MapGet("/eligible/{customerId}", async (
             string customerId,
+            CustomerContext customerContext,
             ICosmosService cosmos,
             CancellationToken ct) =>
         {
+            // Defense-in-depth: when the BFF forwards X-Customer-Entra-Id,
+            // refuse to leak another customer's eligibility. Empty list
+            // (not 403) so we don't leak the existence of other customer
+            // IDs and the agent path doesn't error.
+            if (!CustomerEndpoints.IsAuthorizedFor(customerContext, customerId))
+            {
+                return Results.Ok(Array.Empty<Models.Promotion>());
+            }
+
             // Look up the customer to get their loyalty tier
             var customer = await cosmos.GetCustomerByIdAsync(customerId, ct);
             if (customer is null)

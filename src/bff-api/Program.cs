@@ -6,9 +6,11 @@ using Contoso.BffApi.HealthChecks;
 using Contoso.BffApi.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Identity.Web;
+using System.Threading.RateLimiting;
 
 // ─────────────────────────────────────────────────────────────────────────
 // BFF API — backend-for-frontend that the Blazor UI talks to.
@@ -28,6 +30,16 @@ builder.Configuration.AddJsonFile(
     $"appsettings.{builder.Environment.EnvironmentName}.json",
     optional: true,
     reloadOnChange: true);
+
+// Cap incoming request bodies. The BFF only accepts small JSON payloads
+// (chat messages, order requests). The chat-message guard via
+// ConversationLimits.ExceedsMessageLimit is enforced AFTER deserialization;
+// this Kestrel-level cap protects the deserializer itself against a hostile
+// or buggy client that submits a multi-MB JSON blob.
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 1 * 1024 * 1024; // 1 MiB
+});
 
 builder.AddServiceDefaults();
 builder.Services.AddHttpContextAccessor();
@@ -50,6 +62,7 @@ ConfigureDataServices(builder, useInMemory);
 ConfigureAuth(builder, useEntraAuth);
 ConfigureHealthChecks(builder, useInMemory);
 ConfigureCors(builder);
+ConfigureRateLimiting(builder);
 
 var app = builder.Build();
 
@@ -98,6 +111,11 @@ if (useEntraAuth)
     app.UseAuthorization();
 }
 
+// Rate limiting MUST run after auth so we can partition by the
+// authenticated customer id (not just the source IP, which is shared
+// behind a corporate NAT or a CDN).
+app.UseRateLimiter();
+
 app.MapHealthChecks("/health", new HealthCheckOptions { Predicate = _ => false });
 app.MapHealthChecks("/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
 
@@ -125,6 +143,20 @@ if (useEntraAuth)
     productEndpoint.AllowAnonymous();
     imageEndpoint.AllowAnonymous();
 }
+
+// Apply rate-limit policies last so they cover both authed and anonymous
+// callers. The "chat" policy is the most expensive (model calls + tool
+// fan-out) and gets the tightest budget.
+chatEndpoint.RequireRateLimiting("chat");
+conversationsEndpoint.RequireRateLimiting("read");
+conversationEndpoint.RequireRateLimiting("read");
+meEndpoint.RequireRateLimiting("read");
+customerEndpoint.RequireRateLimiting("read");
+ordersEndpoint.RequireRateLimiting("read");
+placeOrderEndpoint.RequireRateLimiting("write");
+productsEndpoint.RequireRateLimiting("read");
+productEndpoint.RequireRateLimiting("read");
+imageEndpoint.RequireRateLimiting("read");
 
 app.Run();
 
@@ -257,6 +289,81 @@ static void ConfigureCors(WebApplicationBuilder builder)
     {
         options.AddPolicy("BlazorUI", policy =>
             policy.WithOrigins(uiOrigin).AllowAnyHeader().AllowAnyMethod());
+    });
+}
+
+static void ConfigureRateLimiting(WebApplicationBuilder builder)
+{
+    // Per-customer fixed-window limits. Partitioning by the resolved
+    // customer id (header in dev, JWT subject in production) means a
+    // single chatty user cannot exhaust the budget for everyone behind
+    // the same NAT or CDN edge. When no customer id is present we fall
+    // back to the source IP, which matches anonymous catalog browsing.
+    //
+    // Defaults are deliberately generous — these are guard-rails against
+    // pathological behaviour, not throttles for normal use. Operators
+    // can tune via configuration if real traffic patterns require it.
+    builder.Services.AddRateLimiter(options =>
+    {
+        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+        static string PartitionKey(HttpContext ctx)
+        {
+            var customerCtx = ctx.RequestServices.GetService<CustomerContext>();
+            var id = customerCtx?.GetCustomerId();
+            if (!string.IsNullOrWhiteSpace(id))
+            {
+                return $"cust:{id}";
+            }
+            var ip = ctx.Connection.RemoteIpAddress?.ToString();
+            if (!string.IsNullOrWhiteSpace(ip))
+            {
+                return $"ip:{ip}";
+            }
+            // Last-resort: per-connection key. Stops one anonymous caller
+            // with a missing IP (e.g., Kestrel in-process tests) from
+            // sharing a global "ip:unknown" bucket with every other such
+            // caller and tripping a self-DoS.
+            return $"conn:{ctx.Connection.Id}";
+        }
+
+        // "chat" — the LLM hot path. Each request fans out to the
+        // orchestrator + at least one specialist agent + one or more
+        // MCP servers. 200/min/customer is roughly one chat every 300ms,
+        // far above any human typing cadence.
+        options.AddPolicy("chat", ctx => RateLimitPartition.GetFixedWindowLimiter(
+            PartitionKey(ctx),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 200,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            }));
+
+        // "read" — cheap GETs (product catalog, conversation list, etc).
+        // 1200/min ≈ 20/sec/customer comfortably handles a paginating UI.
+        options.AddPolicy("read", ctx => RateLimitPartition.GetFixedWindowLimiter(
+            PartitionKey(ctx),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 1200,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            }));
+
+        // "write" — POSTs that mutate Cosmos (place order). Tighter
+        // because each request consumes RUs and triggers a write.
+        options.AddPolicy("write", ctx => RateLimitPartition.GetFixedWindowLimiter(
+            PartitionKey(ctx),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 60,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            }));
     });
 }
 

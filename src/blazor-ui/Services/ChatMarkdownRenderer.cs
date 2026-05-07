@@ -10,7 +10,22 @@ internal static class ChatMarkdownRenderer
     private static readonly MarkdownPipeline MarkdownPipeline =
         new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
 
-    private static readonly HtmlSanitizer Sanitizer = new();
+    // Defense in depth: pin the allowed URL schemes explicitly so a future
+    // upgrade of Ganss.Xss that changes its defaults cannot silently widen
+    // the attack surface (e.g. by allowing `data:` or `file:`). This keeps
+    // the chat-output sanitizer to safe link/image schemes only.
+    private static readonly HtmlSanitizer Sanitizer = CreateSanitizer();
+
+    private static HtmlSanitizer CreateSanitizer()
+    {
+        var sanitizer = new HtmlSanitizer();
+        sanitizer.AllowedSchemes.Clear();
+        sanitizer.AllowedSchemes.Add("http");
+        sanitizer.AllowedSchemes.Add("https");
+        sanitizer.AllowedSchemes.Add("mailto");
+        sanitizer.AllowedSchemes.Add("tel");
+        return sanitizer;
+    }
 
     private static readonly Regex ImageRegex =
         new("!\\[(?<alt>[^\\]]*)\\]\\((?<url>[^)]+)\\)", RegexOptions.Compiled);

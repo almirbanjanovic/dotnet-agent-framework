@@ -7,8 +7,15 @@ using Microsoft.Extensions.Logging;
 
 internal sealed class CrmMcpClientProvider : McpClientProvider
 {
-    public CrmMcpClientProvider(IConfiguration configuration, ILoggerFactory loggerFactory)
-        : base("crm-mcp", configuration["CrmMcp:BaseUrl"] ?? "http://localhost:5002", loggerFactory)
+    public CrmMcpClientProvider(
+        IConfiguration configuration,
+        IHttpClientFactory httpClientFactory,
+        ILoggerFactory loggerFactory)
+        : base(
+            "crm-mcp",
+            configuration["CrmMcp:BaseUrl"] ?? "http://localhost:5002",
+            httpClientFactory,
+            loggerFactory)
     {
     }
 }

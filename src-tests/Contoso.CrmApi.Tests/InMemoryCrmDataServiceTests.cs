@@ -10,16 +10,6 @@ public class InMemoryCrmDataServiceTests
         new(TestDataHelper.BuildConfiguration());
 
     [Fact]
-    public async Task GetAllCustomersAsync_WithLoadedData_ReturnsAllCsvCustomers()
-    {
-        var service = CreateService();
-
-        var customers = await service.GetAllCustomersAsync();
-
-        customers.Should().HaveCount(TestDataHelper.CountCsvRows("customers.csv"));
-    }
-
-    [Fact]
     public async Task GetCustomerByIdAsync_ValidId_ReturnsCustomer()
     {
         var service = CreateService();

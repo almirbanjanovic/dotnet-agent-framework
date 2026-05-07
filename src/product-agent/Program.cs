@@ -23,6 +23,19 @@ builder.Configuration.AddJsonFile(
 
 builder.AddServiceDefaults();
 
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddTransient<CustomerHeaderForwarder>();
+
+// Named HttpClients for each MCP backend. The friendly name MUST match
+// what the corresponding McpClientProvider passes as `Name` to the base
+// constructor — that's the key IHttpClientFactory uses to look up the
+// handler chain. Attaching `CustomerHeaderForwarder` here is what makes
+// the inbound `X-Customer-Entra-Id` header propagate downstream.
+builder.Services.AddHttpClient("crm-mcp")
+    .AddHttpMessageHandler<CustomerHeaderForwarder>();
+builder.Services.AddHttpClient("knowledge-mcp")
+    .AddHttpMessageHandler<CustomerHeaderForwarder>();
+
 builder.Services.AddSingleton<CrmMcpClientProvider>();
 builder.Services.AddSingleton<KnowledgeMcpClientProvider>();
 builder.Services.AddSingleton<SystemPromptProvider>();

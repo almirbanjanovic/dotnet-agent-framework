@@ -153,7 +153,7 @@ src/crm-api/
 │   ├── ICosmosService.cs         # Interface for Cosmos operations
 │   └── CosmosService.cs          # Cosmos DB client wrapper (all container operations)
 ├── Endpoints/
-│   ├── CustomerEndpoints.cs      # GET /api/v1/customers, GET /api/v1/customers/{id}
+│   ├── CustomerEndpoints.cs      # GET /api/v1/customers/{id}
 │   ├── OrderEndpoints.cs         # GET /api/v1/orders/{id}, GET /api/v1/customers/{id}/orders
 │   ├── ProductEndpoints.cs       # GET /api/v1/products, GET /api/v1/products/{id}
 │   ├── PromotionEndpoints.cs     # GET /api/v1/promotions, GET /api/v1/promotions/eligible/{customerId}
@@ -174,7 +174,6 @@ src/crm-api.tests/
 ### Endpoints (11 total)
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/v1/customers` | List all customers |
 | GET | `/api/v1/customers/{id}` | Get customer by ID |
 | GET | `/api/v1/customers/{id}/orders` | Get all orders for a customer |
 | GET | `/api/v1/orders/{id}` | Get order by ID (cross-partition query — accepted trade-off) |
@@ -268,7 +267,7 @@ src/crm-mcp/
 ├── Program.cs                    # MCP server host, tool registration, HTTP client setup
 ├── crm-mcp.csproj
 ├── Tools/
-│   ├── CustomerTools.cs          # get_all_customers, get_customer_detail
+│   ├── CustomerTools.cs          # get_customer_detail
 │   ├── OrderTools.cs             # get_customer_orders, get_order_detail, get_order_items
 │   ├── ProductTools.cs           # get_products, get_product_detail
 │   ├── PromotionTools.cs         # get_promotions, get_eligible_promotions
@@ -285,10 +284,9 @@ src/crm-mcp.tests/
 └── Integration/                  # End-to-end MCP protocol tests
 ```
 
-### MCP Tools (11 total)
+### MCP Tools (10 total)
 | Tool Name | CRM API Endpoint | Description |
 |-----------|-----------------|-------------|
-| `get_all_customers` | GET /api/v1/customers | List all customers |
 | `get_customer_detail` | GET /api/v1/customers/{id} | Full customer profile |
 | `get_customer_orders` | GET /api/v1/customers/{id}/orders | Customer's orders |
 | `get_order_detail` | GET /api/v1/orders/{id} | Order with line items |

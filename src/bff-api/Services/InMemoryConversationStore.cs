@@ -19,14 +19,17 @@ public sealed class InMemoryConversationStore : IConversationStore
         };
 
         _conversations[conversation.Id] = conversation;
-        return Task.FromResult(conversation);
+        return Task.FromResult(Snapshot(conversation));
     }
 
     public Task<Conversation?> GetConversationAsync(string conversationId, CancellationToken ct = default)
     {
-        return Task.FromResult(_conversations.TryGetValue(conversationId, out var conversation)
-            ? conversation
-            : null);
+        if (!_conversations.TryGetValue(conversationId, out var conversation))
+        {
+            return Task.FromResult<Conversation?>(null);
+        }
+
+        return Task.FromResult<Conversation?>(Snapshot(conversation));
     }
 
     public Task<IReadOnlyList<Conversation>> GetConversationsByCustomerAsync(string customerId, CancellationToken ct = default)
@@ -34,6 +37,7 @@ public sealed class InMemoryConversationStore : IConversationStore
         var conversations = _conversations.Values
             .Where(conversation => string.Equals(conversation.CustomerId, customerId, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(conversation => conversation.CreatedAt)
+            .Select(Snapshot)
             .ToList();
 
         return Task.FromResult<IReadOnlyList<Conversation>>(conversations);
@@ -46,9 +50,35 @@ public sealed class InMemoryConversationStore : IConversationStore
             lock (conversation.Messages)
             {
                 conversation.Messages.Add(message);
+                // Bound storage so a chatty client cannot grow the
+                // conversation indefinitely. See ConversationLimits for
+                // rationale.
+                ConversationLimits.TrimOldest(conversation.Messages);
             }
         }
 
         return Task.CompletedTask;
+    }
+
+    // Hand callers a defensive copy so they can iterate `Messages` without
+    // racing with `AddMessageAsync` (writers hold `lock(conversation.Messages)`,
+    // but ChatEndpoint readers don't take that lock — without snapshotting,
+    // two concurrent requests on the same conversation race to throw
+    // `InvalidOperationException: Collection was modified...` mid-LINQ).
+    private static Conversation Snapshot(Conversation conversation)
+    {
+        List<ChatMessage> messages;
+        lock (conversation.Messages)
+        {
+            messages = new List<ChatMessage>(conversation.Messages);
+        }
+
+        return new Conversation
+        {
+            Id = conversation.Id,
+            CustomerId = conversation.CustomerId,
+            CreatedAt = conversation.CreatedAt,
+            Messages = messages
+        };
     }
 }

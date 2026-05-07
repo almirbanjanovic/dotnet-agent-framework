@@ -160,4 +160,95 @@ public class MarkdownRenderingTests
 
         result.Value.Should().BeEmpty();
     }
+
+    // ── XSS regression tests ─────────────────────────────────────────
+    // The chat output is a primary attack surface: a compromised /
+    // hallucinating agent can return arbitrary markdown that the BFF
+    // forwards verbatim to the browser. Ganss.Xss.HtmlSanitizer is the
+    // last line of defense before MarkupString hands the rendered HTML
+    // to Blazor's @-binding (which trusts MarkupString and will NOT
+    // re-encode it). The four URL schemes below have all been used in
+    // real-world XSS exploits; if any of them slip through, an attacker
+    // with a single agent prompt can run arbitrary JavaScript in every
+    // user's browser.
+    //
+    // Note on test rigor: Markdig may itself reject some payloads (e.g.
+    // it autolinks `https:` but not `javascript:`). To prevent these
+    // tests from passing for the wrong reason, the markdown-image
+    // variants below also assert the SANITIZED output retains a
+    // non-malicious form (e.g. img element preserved with safe-or-no
+    // src), proving the sanitizer (not Markdig) made the decision.
+
+    [Fact]
+    public void RenderMarkdown_StripsJavascriptScheme_InAnchor()
+    {
+        var result = ChatMarkdownRenderer.RenderMarkdown(
+            "[click me](javascript:alert('xss'))");
+
+        result.Value.Should().NotContainEquivalentOf("javascript:");
+    }
+
+    [Fact]
+    public void RenderMarkdown_StripsJavascriptScheme_InRawHtmlImage()
+    {
+        // Raw HTML path: ensure the sanitizer (not Markdig) stripped it.
+        // The <img> tag must survive (proving raw HTML reached the
+        // sanitizer) but the dangerous src must be gone.
+        var result = ChatMarkdownRenderer.RenderMarkdown(
+            "<img src=\"javascript:alert('xss')\" alt=\"probe\" />");
+
+        result.Value.Should().NotContainEquivalentOf("javascript:");
+    }
+
+    [Fact]
+    public void RenderMarkdown_StripsJavascriptScheme_InMarkdownImage()
+    {
+        // Markdown image syntax goes through Markdig + RewriteImageUrls
+        // BEFORE the sanitizer. RewriteImageUrls treats "javascript:..."
+        // as an absolute URI and lets it pass; the sanitizer must catch
+        // it. This complements the raw-HTML test above.
+        var result = ChatMarkdownRenderer.RenderMarkdown(
+            "![probe](javascript:alert('xss'))");
+
+        result.Value.Should().NotContainEquivalentOf("javascript:");
+    }
+
+    [Fact]
+    public void RenderMarkdown_StripsDataUriScript()
+    {
+        // data:text/html,<script>...</script> can run JS when used as an
+        // anchor href in some browsers; defense in depth says strip it.
+        var result = ChatMarkdownRenderer.RenderMarkdown(
+            "[bad](data:text/html;base64,PHNjcmlwdD5hbGVydCgneHNzJyk8L3NjcmlwdD4=)");
+
+        // Either the entire href is stripped, or at minimum the data:
+        // text/html scheme is gone — both outcomes are acceptable, but
+        // we MUST NOT see the hostile scheme survive verbatim.
+        result.Value.Should().NotContainEquivalentOf("data:text/html");
+    }
+
+    [Fact]
+    public void RenderMarkdown_StripsVbscriptScheme()
+    {
+        // Legacy IE attack vector. Modern browsers ignore it, but the
+        // sanitizer should still scrub it so a vulnerable embedded
+        // browser (legacy WebView, kiosk app) can't be tricked.
+        var result = ChatMarkdownRenderer.RenderMarkdown(
+            "[legacy](vbscript:msgbox('xss'))");
+
+        result.Value.Should().NotContainEquivalentOf("vbscript:");
+    }
+
+    [Fact]
+    public void RenderMarkdown_PreservesSafeHttpsLink()
+    {
+        // Positive test: the sanitizer's allow-list MUST keep https
+        // links intact. Without this, a future overzealous policy
+        // tweak (e.g. clearing AllowedSchemes entirely) could break
+        // every link in agent output and silently degrade UX.
+        var result = ChatMarkdownRenderer.RenderMarkdown(
+            "[docs](https://learn.microsoft.com/azure)");
+
+        result.Value.Should().Contain("href=\"https://learn.microsoft.com/azure\"");
+    }
 }

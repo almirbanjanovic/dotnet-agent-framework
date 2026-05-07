@@ -165,7 +165,6 @@ All CRM tools in a single MCP server — wraps CRM API endpoints for customer pr
 
 | Tool | Description |
 | ------ | ------------- |
-| `get_all_customers` | List all customers with basic info (name, email, loyalty tier) |
 | `get_customer_detail(customer_id)` | Full customer profile |
 | `get_customer_orders(customer_id)` | All orders for a customer |
 | `get_order_detail(order_id)` | Order with line items, shipping status, tracking number |

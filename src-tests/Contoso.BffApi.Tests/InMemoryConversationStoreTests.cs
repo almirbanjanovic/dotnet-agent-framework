@@ -99,4 +99,29 @@ public class InMemoryConversationStoreTests
 
         updated!.Messages.Should().HaveCount(100);
     }
+
+    [Fact]
+    public async Task AddMessageAsync_ExceedingCap_TrimsOldestMessages()
+    {
+        // Belt-and-braces test for the storage bound. A chatty client that
+        // never starts a new conversation must not be able to grow a single
+        // document past the per-conversation cap.
+        var store = new InMemoryConversationStore();
+        var conversation = await store.CreateConversationAsync("cust-1");
+
+        var overflow = ConversationLimits.MaxStoredMessagesPerConversation + 25;
+        for (int i = 0; i < overflow; i++)
+        {
+            await store.AddMessageAsync(
+                conversation.Id,
+                new ChatMessage("user", $"message-{i}", DateTimeOffset.UtcNow));
+        }
+
+        var updated = await store.GetConversationAsync(conversation.Id);
+
+        updated!.Messages.Should().HaveCount(ConversationLimits.MaxStoredMessagesPerConversation);
+        // Oldest messages must be the ones dropped.
+        updated.Messages.First().Content.Should().Be("message-25");
+        updated.Messages.Last().Content.Should().Be($"message-{overflow - 1}");
+    }
 }

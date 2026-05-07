@@ -9,14 +9,15 @@ namespace Contoso.CrmMcp.Tests;
 public sealed class CrmApiClientTests
 {
     [Fact]
-    public async Task GetAllCustomersAsync_ConstructsCorrectUrl()
+    public async Task GetHealthAsync_ConstructsCorrectUrl()
     {
-        var (client, handler) = CreateClient(TestHttpMessageHandler.CreateJson("[]"));
+        var (client, handler) = CreateClient(TestHttpMessageHandler.CreateJson("{}"));
 
-        _ = await client.GetAllCustomersAsync();
+        using var response = await client.GetHealthAsync();
 
         handler.Request!.Method.Should().Be(HttpMethod.Get);
-        handler.Request.RequestUri!.PathAndQuery.Should().Be("/api/v1/customers");
+        handler.Request.RequestUri!.PathAndQuery.Should().Be("/health");
+        response.IsSuccessStatusCode.Should().BeTrue();
     }
 
     [Fact]
@@ -165,7 +166,7 @@ public sealed class CrmApiClientTests
     {
         var (client, _) = CreateClient(TestHttpMessageHandler.CreateJson("bad", HttpStatusCode.BadRequest));
 
-        var act = () => client.GetAllCustomersAsync();
+        var act = () => client.GetCustomerByIdAsync("C-1");
 
         await act.Should().ThrowAsync<HttpRequestException>()
             .WithMessage("CRM API request failed*");

@@ -101,7 +101,46 @@ internal static class ChatEndpoint
             // Pipe the specialist's SSE bytes straight through. Each SSE
             // event is already self-delimited so no parsing is required.
             await using var upstreamStream = await upstream.Content.ReadAsStreamAsync(cancellationToken);
-            await upstreamStream.CopyToAsync(response.Body, cancellationToken);
+
+            // Bound the entire upstream consumption: a stuck or hostile
+            // specialist must not be able to hold a connection open
+            // forever or stream unbounded bytes through us. Linked to
+            // cancellationToken so client disconnects still short-circuit.
+            using var streamTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            streamTimeoutCts.CancelAfter(TimeSpan.FromMinutes(5));
+            var streamCt = streamTimeoutCts.Token;
+
+            // Manual copy loop with a per-stream byte cap. CopyToAsync
+            // would happily buffer 16 MiB+ if the upstream agent went
+            // rogue; this fails fast with a logged warning instead.
+            const long MaxStreamTotalBytes = 16L * 1024 * 1024;
+            var copyBuffer = new byte[16 * 1024];
+            long totalStreamBytes = 0;
+            int bytesRead;
+            while ((bytesRead = await upstreamStream.ReadAsync(copyBuffer.AsMemory(0, copyBuffer.Length), streamCt)) > 0)
+            {
+                totalStreamBytes += bytesRead;
+                if (totalStreamBytes > MaxStreamTotalBytes)
+                {
+                    logger.LogWarning(
+                        "Specialist agent {Agent} stream exceeded {Cap} bytes for customer {CustomerId}; aborting.",
+                        agentLabel, MaxStreamTotalBytes, request.CustomerId);
+                    await SseWriter.WriteAsync(
+                        response,
+                        "error",
+                        new { message = "Specialist agent emitted a response larger than the allowed size.", agent = agentLabel },
+                        cancellationToken);
+                    return;
+                }
+                await response.Body.WriteAsync(copyBuffer.AsMemory(0, bytesRead), cancellationToken);
+                // Flush after each chunk so the BFF (and downstream
+                // browser) sees tokens AS THEY ARRIVE rather than after
+                // Kestrel's internal buffer fills. Without this, manual
+                // copy regresses the streaming UX vs the original
+                // CopyToAsync (which had its own implicit buffering but
+                // tighter coupling to the source flush cadence).
+                await response.Body.FlushAsync(cancellationToken);
+            }
             await response.Body.FlushAsync(cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

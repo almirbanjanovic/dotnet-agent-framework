@@ -17,6 +17,8 @@ on:
       - 'src/AppHost/Program.cs'
       - 'src/**/appsettings.Local.json.template'
       - 'src-tests/Contoso.AppHost.Tests/**'
+      - 'Directory.Packages.props'
+      - 'global.json'
       - '.github/workflows/architecture-fitness.yml'
   push:
     branches: [main]
@@ -25,6 +27,8 @@ on:
       - 'src/AppHost/Program.cs'
       - 'src/**/appsettings.Local.json.template'
       - 'src-tests/Contoso.AppHost.Tests/**'
+      - 'Directory.Packages.props'
+      - 'global.json'
       - '.github/workflows/architecture-fitness.yml'
   workflow_dispatch:
 

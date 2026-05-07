@@ -56,6 +56,16 @@ internal static class ChatEndpoint
             return Results.BadRequest(new { error = "message is required." });
         }
 
+        if (ConversationLimits.ExceedsMessageLimit(request.Message))
+        {
+            // 413 Payload Too Large — we deliberately don't echo the
+            // attempted size to keep the error generic.
+            return Results.Problem(
+                detail: "Message exceeds the maximum allowed size.",
+                statusCode: StatusCodes.Status413PayloadTooLarge,
+                title: "Payload Too Large");
+        }
+
         var customerId = customerContext.GetCustomerId();
         if (string.IsNullOrWhiteSpace(customerId))
         {
@@ -79,9 +89,11 @@ internal static class ChatEndpoint
 
         // Snapshot prior turns BEFORE appending the new user message so the
         // orchestrator sees history as context, not duplicated alongside the
-        // current turn.
-        var historyForOrchestrator = conversation.Messages
-            .Where(m => !string.IsNullOrEmpty(m.Content))
+        // current turn. SelectHistoryForOrchestrator enforces both a count
+        // bound and a UTF-8 byte budget so a few large messages can't blow
+        // the LLM context window.
+        var historyForOrchestrator = ConversationLimits
+            .SelectHistoryForOrchestrator(conversation.Messages)
             .Select(m => new OrchestratorHistoryMessage(m.Role, m.Content))
             .ToArray();
 
@@ -193,6 +205,17 @@ internal static class ChatEndpoint
             return;
         }
 
+        if (ConversationLimits.ExceedsMessageLimit(request.Message))
+        {
+            response.StatusCode = StatusCodes.Status413PayloadTooLarge;
+            await SseWriter.WriteAsync(
+                response,
+                "error",
+                new { message = "Message exceeds the maximum allowed size." },
+                cancellationToken);
+            return;
+        }
+
         var customerId = customerContext.GetCustomerId();
         if (string.IsNullOrWhiteSpace(customerId))
         {
@@ -216,8 +239,8 @@ internal static class ChatEndpoint
             }
         }
 
-        var historyForOrchestrator = conversation.Messages
-            .Where(m => !string.IsNullOrEmpty(m.Content))
+        var historyForOrchestrator = ConversationLimits
+            .SelectHistoryForOrchestrator(conversation.Messages)
             .Select(m => new OrchestratorHistoryMessage(m.Role, m.Content))
             .ToArray();
 
@@ -267,7 +290,30 @@ internal static class ChatEndpoint
             }
 
             await using var upstreamStream = await upstream.Content.ReadAsStreamAsync(cancellationToken);
-            using var reader = new StreamReader(upstreamStream);
+
+            // Bound the entire upstream consumption: a stuck or hostile
+            // orchestrator must not be able to hold a connection open
+            // forever or stream unbounded bytes through us. Linked to
+            // cancellationToken so client disconnects still short-circuit.
+            using var streamTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            streamTimeoutCts.CancelAfter(TimeSpan.FromMinutes(5));
+            var streamCt = streamTimeoutCts.Token;
+
+            // Per-event payload cap — an event larger than this is almost
+            // always a runaway model; we treat it as a stream-fatal error.
+            const int MaxEventDataBytes = 256 * 1024;
+            // Per-stream total cap — defends against a slow drip of legit-
+            // sized events that collectively exhaust memory or bandwidth.
+            const long MaxStreamTotalBytes = 16L * 1024 * 1024;
+
+            // Wrap the upstream stream so even StreamReader.ReadLineAsync
+            // (which has no built-in per-line cap) cannot allocate past
+            // MaxStreamTotalBytes worth of buffer for a single hostile
+            // line without a newline.
+            await using var boundedStream = new BoundedReadStream(upstreamStream, MaxStreamTotalBytes);
+            using var reader = new StreamReader(boundedStream);
+
+            long totalStreamBytes = 0;
 
             // SSE state machine (WHATWG-compliant subset):
             //   - Accumulate `data:` lines per event block, joined by '\n'.
@@ -282,8 +328,24 @@ internal static class ChatEndpoint
             var blockLines = new List<string>(8);
 
             string? line;
-            while ((line = await reader.ReadLineAsync(cancellationToken)) is not null)
+            while ((line = await reader.ReadLineAsync(streamCt)) is not null)
             {
+                // Account for the line plus the implicit newline. Char count
+                // is a UTF-8-pessimistic upper bound (1 char ≥ 1 byte).
+                totalStreamBytes += line.Length + 1;
+                if (totalStreamBytes > MaxStreamTotalBytes)
+                {
+                    logger.LogWarning(
+                        "Orchestrator stream exceeded {Cap} bytes for customer {CustomerId}; aborting.",
+                        MaxStreamTotalBytes, customerId);
+                    await SseWriter.WriteAsync(
+                        response,
+                        "error",
+                        new { message = "Upstream response exceeded the maximum allowed size." },
+                        cancellationToken);
+                    return;
+                }
+
                 if (line.Length == 0)
                 {
                     // Dispatch the buffered event block.
@@ -334,6 +396,18 @@ internal static class ChatEndpoint
                     case "data":
                         if (dataBuffer.Length > 0) dataBuffer.Append('\n');
                         dataBuffer.Append(value);
+                        if (dataBuffer.Length > MaxEventDataBytes)
+                        {
+                            logger.LogWarning(
+                                "Orchestrator emitted SSE event > {Cap} bytes for customer {CustomerId}; aborting.",
+                                MaxEventDataBytes, customerId);
+                            await SseWriter.WriteAsync(
+                                response,
+                                "error",
+                                new { message = "Upstream emitted an event larger than the allowed size." },
+                                cancellationToken);
+                            return;
+                        }
                         break;
                     // id / retry are ignored — we don't support reconnect IDs.
                 }

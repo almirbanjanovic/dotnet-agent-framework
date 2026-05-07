@@ -7,7 +7,11 @@ using ModelContextProtocol.Client;
 // so the next call retries (rather than poisoning the cache).
 //
 // Subclasses (`CrmMcpClientProvider`, `KnowledgeMcpClientProvider`) only
-// supply the backend's friendly name and base URL.
+// supply the backend's friendly name and base URL. The friendly name is
+// also the IHttpClientFactory client name, so the named handler chain
+// (which includes `CustomerHeaderForwarder` to propagate the inbound
+// `X-Customer-Entra-Id` header to the downstream MCP server) is wired in
+// for free.
 //
 // NOTE: This class is duplicated (intentionally) in src/crm-agent. The
 // component-independence rule forbids a shared project; identical code
@@ -16,14 +20,20 @@ using ModelContextProtocol.Client;
 internal abstract class McpClientProvider : IAsyncDisposable
 {
     private readonly ILoggerFactory _loggerFactory;
+    private readonly IHttpClientFactory _httpClientFactory;
     private readonly string _baseUrl;
     private McpClient? _client;
     private readonly SemaphoreSlim _semaphore = new(1, 1);
 
-    protected McpClientProvider(string name, string baseUrl, ILoggerFactory loggerFactory)
+    protected McpClientProvider(
+        string name,
+        string baseUrl,
+        IHttpClientFactory httpClientFactory,
+        ILoggerFactory loggerFactory)
     {
         Name = name;
         _baseUrl = baseUrl;
+        _httpClientFactory = httpClientFactory;
         _loggerFactory = loggerFactory;
     }
 
@@ -57,11 +67,26 @@ internal abstract class McpClientProvider : IAsyncDisposable
 
     protected virtual async Task<McpClient> CreateClientAsync(CancellationToken cancellationToken)
     {
-        var transport = new HttpClientTransport(new HttpClientTransportOptions
-        {
-            Endpoint = new Uri(_baseUrl),
-            Name = Name
-        }, _loggerFactory);
+        // Resolve a named HttpClient so the `CustomerHeaderForwarder`
+        // DelegatingHandler attached to that name in DI runs for every
+        // outbound MCP request. We deliberately do NOT set BaseAddress on
+        // the HttpClient — the transport sends absolute URIs anchored at
+        // `Endpoint`, and a stale BaseAddress would shadow it.
+        //
+        // ownsHttpClient: false — the HttpClient (and its handler chain)
+        // are owned by IHttpClientFactory's pool and must NOT be disposed
+        // by the transport when the McpClient is disposed.
+        var httpClient = _httpClientFactory.CreateClient(Name);
+
+        var transport = new HttpClientTransport(
+            new HttpClientTransportOptions
+            {
+                Endpoint = new Uri(_baseUrl),
+                Name = Name
+            },
+            httpClient,
+            _loggerFactory,
+            ownsHttpClient: false);
 
         return await McpClient.CreateAsync(transport, loggerFactory: _loggerFactory, cancellationToken: cancellationToken);
     }

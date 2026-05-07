@@ -27,7 +27,13 @@ public sealed class GlobalExceptionHandler(
             Type = $"https://httpstatuses.io/{statusCode}",
             Title = title,
             Status = statusCode,
-            Detail = environment.IsDevelopment() ? exception.Message : "An unexpected error occurred.",
+            // Include verbose detail in any non-production environment.
+            // The Aspire AppHost forces children to "Local" (not
+            // "Development"), so checking only IsDevelopment() hides
+            // exception messages from local devs running via AppHost.
+            Detail = environment.IsDevelopment() || environment.IsEnvironment("Local")
+                ? exception.Message
+                : "An unexpected error occurred.",
             Instance = httpContext.Request.Path
         };
 

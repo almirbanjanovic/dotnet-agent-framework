@@ -51,7 +51,10 @@ public sealed class ProductAgentSmokeTests
             })
             .Build();
 
-        var provider = new CrmMcpClientProvider(configuration, NullLoggerFactory.Instance);
+        var provider = new CrmMcpClientProvider(
+            configuration,
+            new StubHttpClientFactory(),
+            NullLoggerFactory.Instance);
 
         provider.Name.Should().Be("crm-mcp");
     }
@@ -66,7 +69,10 @@ public sealed class ProductAgentSmokeTests
             })
             .Build();
 
-        var provider = new KnowledgeMcpClientProvider(configuration, NullLoggerFactory.Instance);
+        var provider = new KnowledgeMcpClientProvider(
+            configuration,
+            new StubHttpClientFactory(),
+            NullLoggerFactory.Instance);
 
         provider.Name.Should().Be("knowledge-mcp");
     }
@@ -76,8 +82,9 @@ public sealed class ProductAgentSmokeTests
     {
         var configuration = new ConfigurationBuilder().Build();
 
-        var crmProvider = new CrmMcpClientProvider(configuration, NullLoggerFactory.Instance);
-        var knowledgeProvider = new KnowledgeMcpClientProvider(configuration, NullLoggerFactory.Instance);
+        var httpClientFactory = new StubHttpClientFactory();
+        var crmProvider = new CrmMcpClientProvider(configuration, httpClientFactory, NullLoggerFactory.Instance);
+        var knowledgeProvider = new KnowledgeMcpClientProvider(configuration, httpClientFactory, NullLoggerFactory.Instance);
 
         crmProvider.Name.Should().Be("crm-mcp");
         knowledgeProvider.Name.Should().Be("knowledge-mcp");
@@ -122,5 +129,17 @@ public sealed class ProductAgentSmokeTests
         public string EnvironmentName { get; set; }
         public string ContentRootPath { get; set; }
         public Microsoft.Extensions.FileProviders.IFileProvider ContentRootFileProvider { get; set; }
+    }
+
+    // The smoke tests only construct the providers and read .Name — they
+    // never let CreateClientAsync run — so the factory is never asked for
+    // a real HttpClient. A throwing stub keeps test memory tiny and makes
+    // misuse loud.
+    private sealed class StubHttpClientFactory : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name)
+            => throw new InvalidOperationException(
+                $"StubHttpClientFactory.CreateClient('{name}') was called; "
+                + "the smoke test should never trigger an MCP connection.");
     }
 }

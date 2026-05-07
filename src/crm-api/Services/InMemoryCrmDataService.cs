@@ -13,6 +13,12 @@ public sealed class InMemoryCrmDataService : ICosmosService
     private readonly ConcurrentDictionary<string, Promotion> _promotions;
     private readonly ConcurrentDictionary<string, SupportTicket> _supportTickets;
 
+    // Atomic counter for next order ID so concurrent CreateOrderAsync calls
+    // never collide. Initialized from the max existing numeric ID at startup
+    // (anything not parseable contributes 0). Using Interlocked.Increment
+    // guarantees uniqueness without locking.
+    private long _nextOrderId;
+
     private static readonly string[] s_loyaltyTierOrder = ["Bronze", "Silver", "Gold", "Platinum"];
 
     public InMemoryCrmDataService(IConfiguration configuration)
@@ -51,16 +57,19 @@ public sealed class InMemoryCrmDataService : ICosmosService
         _supportTickets = new ConcurrentDictionary<string, SupportTicket>(
             CsvDataLoader.LoadSupportTickets(Path.Combine(dataPath, "support-tickets.csv"))
                 .ToDictionary(t => t.Id));
+
+        // Seed the order-id counter from existing data so the first new
+        // order is strictly greater than any seeded order. Non-numeric IDs
+        // contribute 0 (so a real numeric ID always wins).
+        var maxExistingOrderId = _orders.Keys
+            .Select(id => long.TryParse(id, System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var parsed) ? parsed : 0L)
+            .DefaultIfEmpty(1000L)
+            .Max();
+        _nextOrderId = maxExistingOrderId;
     }
 
     // ── Customers ──────────────────────────────────────────────────────────
-
-    public Task<IReadOnlyList<Customer>> GetAllCustomersAsync(CancellationToken ct = default)
-    {
-        ct.ThrowIfCancellationRequested();
-        IReadOnlyList<Customer> results = _customers.Values.ToList();
-        return Task.FromResult(results);
-    }
 
     public Task<Customer?> GetCustomerByIdAsync(string id, CancellationToken ct = default)
     {
@@ -163,10 +172,7 @@ public sealed class InMemoryCrmDataService : ICosmosService
             throw new InvalidOperationException("Order must contain at least one item.");
         }
 
-        var nextNumeric = _orders.Keys
-            .Select(id => int.TryParse(id, out var parsed) ? parsed : 0)
-            .DefaultIfEmpty(1000)
-            .Max() + 1;
+        var nextNumeric = System.Threading.Interlocked.Increment(ref _nextOrderId);
         var orderId = nextNumeric.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
         var order = new Order

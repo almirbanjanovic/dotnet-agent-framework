@@ -183,12 +183,21 @@ public sealed class InMemorySearchService : ISearchService
             return 0;
         }
 
-        var length = Math.Min(a.Length, b.Length);
+        // Embeddings from a single model are always the same dimension. If
+        // that contract is broken (mixed models, partial vector), refuse to
+        // compare — silently scoring on Min(a, b) and dividing by
+        // partial-length norms is mathematically wrong and produces
+        // misleadingly high scores.
+        if (a.Length != b.Length)
+        {
+            return 0;
+        }
+
         double dot = 0;
         double normA = 0;
         double normB = 0;
 
-        for (var i = 0; i < length; i++)
+        for (var i = 0; i < a.Length; i++)
         {
             dot += a[i] * b[i];
             normA += a[i] * a[i];

@@ -90,7 +90,11 @@ public sealed class McpClientProviderTests
         private readonly Func<CancellationToken, Task<McpClient>> _factory;
 
         public TestMcpClientProvider(Func<CancellationToken, Task<McpClient>> factory)
-            : base("test-mcp", "http://localhost", NullLoggerFactory.Instance)
+            : base(
+                "test-mcp",
+                "http://localhost",
+                Substitute.For<IHttpClientFactory>(),
+                NullLoggerFactory.Instance)
         {
             _factory = factory;
         }

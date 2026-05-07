@@ -39,7 +39,7 @@ Each [MCP Server](https://modelcontextprotocol.io/docs/concepts/tools) translate
 
 | MCP Server | Tools | Backend |
 | --- | --- | --- |
-| **CRM MCP** | `get_all_customers`, `get_customer_detail`, `get_customer_orders`, `get_order_detail`, `get_order_items`, `get_products`, `get_product_detail`, `get_promotions`, `get_eligible_promotions`, `get_support_tickets`, `create_support_ticket` | CRM API (HTTP) |
+| **CRM MCP** | `get_customer_detail`, `get_customer_orders`, `get_order_detail`, `get_order_items`, `get_products`, `get_product_detail`, `get_promotions`, `get_eligible_promotions`, `get_support_tickets`, `create_support_ticket` | CRM API (HTTP) |
 | **Knowledge MCP** | `search_knowledge_base` | Azure AI Search (SDK direct) |
 
 #### 4. BFF owns conversation persistence; agents are stateless

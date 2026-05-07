@@ -32,12 +32,6 @@ public sealed class CosmosService : ICosmosService
 
     // ── Customers ──────────────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<Customer>> GetAllCustomersAsync(CancellationToken ct = default)
-    {
-        var query = new QueryDefinition("SELECT * FROM c");
-        return await ExecuteQueryAsync<Customer>(_customers, query, ct: ct);
-    }
-
     public async Task<Customer?> GetCustomerByIdAsync(string id, CancellationToken ct = default)
     {
         return await PointReadAsync<Customer>(_customers, id, new PartitionKey(id), ct);

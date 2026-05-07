@@ -10,10 +10,10 @@ public sealed class CrmApiClient
     }
 
     public Task<HttpResponseMessage> GetCustomerAsync(string customerId, CancellationToken ct = default)
-        => _httpClient.GetAsync($"/api/v1/customers/{customerId}", ct);
+        => _httpClient.GetAsync($"/api/v1/customers/{Uri.EscapeDataString(customerId)}", ct);
 
     public Task<HttpResponseMessage> GetCustomerOrdersAsync(string customerId, CancellationToken ct = default)
-        => _httpClient.GetAsync($"/api/v1/customers/{customerId}/orders", ct);
+        => _httpClient.GetAsync($"/api/v1/customers/{Uri.EscapeDataString(customerId)}/orders", ct);
 
     public Task<HttpResponseMessage> GetOrderItemsAsync(string orderId, CancellationToken ct = default)
         => _httpClient.GetAsync($"/api/v1/orders/{Uri.EscapeDataString(orderId)}/items", ct);
@@ -27,7 +27,7 @@ public sealed class CrmApiClient
     }
 
     public Task<HttpResponseMessage> GetProductByIdAsync(string id, CancellationToken ct = default)
-        => _httpClient.GetAsync($"/api/v1/products/{id}", ct);
+        => _httpClient.GetAsync($"/api/v1/products/{Uri.EscapeDataString(id)}", ct);
 
     public Task<HttpResponseMessage> PlaceOrderAsync(HttpContent body, CancellationToken ct = default)
         => _httpClient.PostAsync("/api/v1/orders", body, ct);

@@ -15,19 +15,14 @@ public sealed class CustomerTools
         _crmApiClient = crmApiClient;
     }
 
-    [McpServerTool(Name = "get_all_customers", ReadOnly = true), Description("List all customers.")]
-    public async Task<string> GetAllCustomersAsync()
-    {
-        try
-        {
-            var customers = await _crmApiClient.GetAllCustomersAsync();
-            return ToolJsonSerializer.Serialize(customers);
-        }
-        catch (Exception ex)
-        {
-            throw new McpException($"Failed to list customers. {ex.Message}", ex);
-        }
-    }
+    // NOTE: a `get_all_customers` tool used to live here. It was removed
+    // because (a) no agent in this repo has a legitimate need to enumerate
+    // every customer and (b) exposing such a tool to an LLM is a textbook
+    // exfiltration vector — a prompt-injection payload could trigger a
+    // dump of the entire customer table. If a back-office / admin surface
+    // ever needs bulk listing, build it as a separate, role-gated tool
+    // (and a separate REST endpoint behind real authorization), not as a
+    // tool any chat session can invoke.
 
     [McpServerTool(Name = "get_customer_detail", ReadOnly = true), Description("Get a customer by ID.")]
     public async Task<string> GetCustomerDetailAsync(

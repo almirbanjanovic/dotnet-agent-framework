@@ -19,33 +19,37 @@ public sealed class CrmApiClient
         _httpClient = httpClient;
     }
 
-    public async Task<IReadOnlyList<Customer>> GetAllCustomersAsync(CancellationToken ct = default)
-    {
-        using var response = await _httpClient.GetAsync("/api/v1/customers", ct);
-        return await ReadAsync<IReadOnlyList<Customer>>(response, ct);
-    }
+    /// <summary>
+    /// Pings the CRM API's <c>/health</c> probe. Used by the MCP server's
+    /// health check to verify backend reachability without leaking
+    /// customer data into a heartbeat call (older versions of this client
+    /// piggy-backed on <c>GET /api/v1/customers</c>, which returned the
+    /// full customer table on every health probe).
+    /// </summary>
+    public async Task<HttpResponseMessage> GetHealthAsync(CancellationToken ct = default)
+        => await _httpClient.GetAsync("/health", ct);
 
     public async Task<Customer?> GetCustomerByIdAsync(string id, CancellationToken ct = default)
     {
-        using var response = await _httpClient.GetAsync($"/api/v1/customers/{id}", ct);
+        using var response = await _httpClient.GetAsync($"/api/v1/customers/{Uri.EscapeDataString(id)}", ct);
         return await ReadAsync<Customer>(response, ct);
     }
 
     public async Task<IReadOnlyList<Order>> GetOrdersByCustomerIdAsync(string customerId, CancellationToken ct = default)
     {
-        using var response = await _httpClient.GetAsync($"/api/v1/customers/{customerId}/orders", ct);
+        using var response = await _httpClient.GetAsync($"/api/v1/customers/{Uri.EscapeDataString(customerId)}/orders", ct);
         return await ReadAsync<IReadOnlyList<Order>>(response, ct);
     }
 
     public async Task<Order?> GetOrderByIdAsync(string id, CancellationToken ct = default)
     {
-        using var response = await _httpClient.GetAsync($"/api/v1/orders/{id}", ct);
+        using var response = await _httpClient.GetAsync($"/api/v1/orders/{Uri.EscapeDataString(id)}", ct);
         return await ReadAsync<Order>(response, ct);
     }
 
     public async Task<IReadOnlyList<OrderItem>> GetOrderItemsByOrderIdAsync(string orderId, CancellationToken ct = default)
     {
-        using var response = await _httpClient.GetAsync($"/api/v1/orders/{orderId}/items", ct);
+        using var response = await _httpClient.GetAsync($"/api/v1/orders/{Uri.EscapeDataString(orderId)}/items", ct);
         return await ReadAsync<IReadOnlyList<OrderItem>>(response, ct);
     }
 
@@ -82,7 +86,7 @@ public sealed class CrmApiClient
 
     public async Task<Product?> GetProductByIdAsync(string id, CancellationToken ct = default)
     {
-        using var response = await _httpClient.GetAsync($"/api/v1/products/{id}", ct);
+        using var response = await _httpClient.GetAsync($"/api/v1/products/{Uri.EscapeDataString(id)}", ct);
         return await ReadAsync<Product>(response, ct);
     }
 
@@ -94,7 +98,7 @@ public sealed class CrmApiClient
 
     public async Task<IReadOnlyList<Promotion>> GetEligiblePromotionsAsync(string customerId, CancellationToken ct = default)
     {
-        using var response = await _httpClient.GetAsync($"/api/v1/promotions/eligible/{customerId}", ct);
+        using var response = await _httpClient.GetAsync($"/api/v1/promotions/eligible/{Uri.EscapeDataString(customerId)}", ct);
         return await ReadAsync<IReadOnlyList<Promotion>>(response, ct);
     }
 
@@ -104,7 +108,7 @@ public sealed class CrmApiClient
         CancellationToken ct = default)
     {
         var path = QueryHelpers.AddQueryString(
-            $"/api/v1/customers/{customerId}/tickets",
+            $"/api/v1/customers/{Uri.EscapeDataString(customerId)}/tickets",
             new Dictionary<string, string?>
             {
                 ["open_only"] = openOnly.ToString().ToLowerInvariant()
