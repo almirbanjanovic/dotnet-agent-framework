@@ -80,7 +80,7 @@ else
                         Ask about an order, request a return, or get gear recommendations.
                     </MudText>
                     <div class="chat-panel-suggestions">
-                        @foreach (var prompt in _suggestedPrompts)
+                        @foreach (var prompt in CurrentSuggestedPrompts)
                         {
                             <button class="chat-panel-suggestion" @onclick="() => UseSuggestion(prompt)">@prompt</button>
                         }
@@ -146,8 +146,12 @@ else
             }
             @if (AuthStateProvider.SelectedCustomer is null)
             {
+                @* Anonymous visitors can chat about general topics (catalog,
+                   policies, recommendations). Account-specific tools are
+                   stripped server-side; this notice tells them why. *@
                 <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">
-                    Sign in to chat with our experts.
+                    Ask anything about our gear, sizing, or policies.
+                    <strong>Sign in</strong> for help with your orders, returns, or account.
                 </MudAlert>
             }
             <MudTextField @bind-Value="_currentMessage"
@@ -186,6 +190,22 @@ else
         "What's your return policy on hiking boots?",
         "Recommend a tent for a 3-person summer trip."
     ];
+
+    // Suggestions for anonymous visitors — deliberately avoid
+    // account-specific prompts ("my orders", "my returns") since the
+    // server will refuse those tool calls and the answer would be a
+    // "please sign in" message.
+    private static readonly string[] _anonymousSuggestedPrompts =
+    [
+        "Recommend a tent for a 3-person summer trip.",
+        "What's your return policy on hiking boots?",
+        "Help me pick a sleeping bag for cold-weather camping."
+    ];
+
+    private string[] CurrentSuggestedPrompts =>
+        AuthStateProvider.SelectedCustomer is null
+            ? _anonymousSuggestedPrompts
+            : _suggestedPrompts;
 
     private static readonly System.Text.Json.JsonSerializerOptions JsonOptions = new()
     {
@@ -246,8 +266,7 @@ else
 
     private bool IsSendDisabled =>
         _isSending ||
-        string.IsNullOrWhiteSpace(_currentMessage) ||
-        AuthStateProvider.SelectedCustomer is null;
+        string.IsNullOrWhiteSpace(_currentMessage);
 
     protected override void OnInitialized()
     {

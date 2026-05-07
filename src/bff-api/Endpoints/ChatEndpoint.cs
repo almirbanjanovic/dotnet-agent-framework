@@ -219,6 +219,11 @@ internal static class ChatEndpoint
         var customerId = customerContext.GetCustomerId();
         if (string.IsNullOrWhiteSpace(customerId))
         {
+            // Set the HTTP status BEFORE the first SSE write so headers
+            // flush as 401, not 200. Otherwise clients (and probes,
+            // logs, EnsureSuccessStatusCode) see a successful stream
+            // that just happens to carry an error event.
+            response.StatusCode = StatusCodes.Status401Unauthorized;
             await SseWriter.WriteAsync(response, "error", new { message = "Unauthorized." }, cancellationToken);
             return;
         }

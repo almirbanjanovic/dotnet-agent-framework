@@ -133,12 +133,9 @@
                 <div>
                     <div class="footer-heading">Customer care</div>
                     <a class="footer-link" href="/orders">Order status</a>
-                    @* Chat is hidden for anonymous MSAL users (ChatBubble +
-                       BFF chat endpoint both require auth); don't surface a
-                       link that would open a hidden panel. *@
-                    <SignedInOnly>
-                        <a class="footer-link" href="#" @onclick="OpenChat" @onclick:preventDefault="true">Chat with an expert</a>
-                    </SignedInOnly>
+                    @* Chat works for everyone (anonymous = general
+                       questions; signed-in = full account help). *@
+                    <a class="footer-link" href="#" @onclick="OpenChat" @onclick:preventDefault="true">Chat with an expert</a>
                     <a class="footer-link" href="/profile">Account &amp; loyalty</a>
                 </div>
             </div>
@@ -146,21 +143,12 @@
         </footer>
     </MudMainContent>
 
-    @if (AuthStateProvider.UseDevAuth)
-    {
-        <ChatBubble />
-    }
-    else
-    {
-        @* MSAL mode: hide ChatBubble for anonymous visitors — the chat
-           endpoint requires auth and would 401 on every send. Comes back
-           automatically once the user signs in. *@
-        <AuthorizeView>
-            <Authorized>
-                <ChatBubble />
-            </Authorized>
-        </AuthorizeView>
-    }
+    @* ChatBubble is rendered for everyone. Anonymous visitors get
+       general-purpose chat (catalog, sizing, return policy,
+       recommendations). Account-specific tools are stripped
+       server-side; ChatBubble itself nudges guests to sign in for
+       order/profile help. *@
+    <ChatBubble />
 </MudLayout>
 
 @code {

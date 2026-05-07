@@ -34,15 +34,26 @@ internal static class ChatEndpoint
             return Results.BadRequest(new { error = "customerId and message are required." });
         }
 
-        // Discover tools from both MCP backends per request.
-        var crmClient = await crmProvider.GetClientAsync(cancellationToken);
+        var isGuest = GuestId.IsGuest(request.CustomerId);
+
+        // Discover tools from the MCP backends per request. For guests we
+        // deliberately skip the CRM MCP entirely — they have no customer
+        // record so any CRM tool call is meaningless and risky (prompt-
+        // injection probing, hallucinated order details). Knowledge MCP
+        // (catalog, return policy, FAQ) remains available.
         var knowledgeClient = await knowledgeProvider.GetClientAsync(cancellationToken);
-
         var tools = new List<AITool>();
-        tools.AddRange(await crmClient.ListToolsAsync(cancellationToken: cancellationToken));
         tools.AddRange(await knowledgeClient.ListToolsAsync(cancellationToken: cancellationToken));
+        if (!isGuest)
+        {
+            var crmClient = await crmProvider.GetClientAsync(cancellationToken);
+            tools.AddRange(await crmClient.ListToolsAsync(cancellationToken: cancellationToken));
+        }
 
-        var agent = agentFactory.CreateAgent(promptProvider.Prompt, tools);
+        var systemPrompt = isGuest
+            ? promptProvider.Prompt + GuestId.AnonymousGuardrail
+            : promptProvider.Prompt;
+        var agent = agentFactory.CreateAgent(systemPrompt, tools);
         var messages = ChatHistoryBinder.Build(request.History, request.CustomerId, request.Message);
         var response = await agent.RunAsync(messages, cancellationToken: cancellationToken);
 
@@ -75,14 +86,23 @@ internal static class ChatEndpoint
 
         try
         {
-            var crmClient = await crmProvider.GetClientAsync(cancellationToken);
+            var isGuest = GuestId.IsGuest(request.CustomerId);
+
+            // Anonymous guests get the Knowledge MCP tools only — see
+            // HandleAsync above for the rationale.
             var knowledgeClient = await knowledgeProvider.GetClientAsync(cancellationToken);
-
             var tools = new List<AITool>();
-            tools.AddRange(await crmClient.ListToolsAsync(cancellationToken: cancellationToken));
             tools.AddRange(await knowledgeClient.ListToolsAsync(cancellationToken: cancellationToken));
+            if (!isGuest)
+            {
+                var crmClient = await crmProvider.GetClientAsync(cancellationToken);
+                tools.AddRange(await crmClient.ListToolsAsync(cancellationToken: cancellationToken));
+            }
 
-            var agent = agentFactory.CreateAgent(promptProvider.Prompt, tools);
+            var systemPrompt = isGuest
+                ? promptProvider.Prompt + GuestId.AnonymousGuardrail
+                : promptProvider.Prompt;
+            var agent = agentFactory.CreateAgent(systemPrompt, tools);
             var messages = ChatHistoryBinder.Build(request.History, request.CustomerId, request.Message);
 
             var emittedToolCalls = new HashSet<string>(StringComparer.Ordinal);

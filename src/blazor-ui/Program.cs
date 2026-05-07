@@ -17,6 +17,7 @@ builder.Services.AddMudServices();
 builder.Services.AddScoped<AuthStateProvider>();
 builder.Services.AddScoped<CartService>();
 builder.Services.AddScoped<ChatPanelState>();
+builder.Services.AddScoped<GuestSessionProvider>();
 
 var bffBaseUrl = BlazorUiConfiguration.GetBffBaseUrl(builder.Configuration);
 var useDevAuth = BlazorUiConfiguration.IsDevAuthEnabled(builder.Configuration, builder.HostEnvironment);
@@ -82,7 +83,9 @@ builder.Services.AddScoped<BffApiClient>(sp =>
     return new BffApiClient(
         factory.CreateClient("Bff"),
         factory.CreateClient("BffPublic"),
-        sp.GetRequiredService<AuthStateProvider>());
+        sp.GetRequiredService<AuthStateProvider>(),
+        sp.GetRequiredService<GuestSessionProvider>(),
+        sp.GetRequiredService<AuthenticationStateProvider>());
 });
 
 await builder.Build().RunAsync();

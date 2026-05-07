@@ -37,7 +37,15 @@ internal static class ChatEndpoint
             return Results.BadRequest(new { error = "customerId and message are required." });
         }
 
-        var intent = await classifier.ClassifyAsync(request.Message, cancellationToken);
+        // Anonymous (guest) sessions never reach CRM — they have no
+        // customer record to look up, no orders, no profile. Skip the
+        // classification round-trip and force PRODUCT directly. The
+        // Product Agent is told it's a guest so it withholds CRM tools
+        // and asks the visitor to sign in for account questions; CRM
+        // Agent independently 403s guest ids as a defense-in-depth.
+        var intent = GuestId.IsGuest(request.CustomerId)
+            ? "PRODUCT"
+            : await classifier.ClassifyAsync(request.Message, cancellationToken);
         var result = await router.RouteAsync(intent, request, cancellationToken);
 
         if (string.IsNullOrWhiteSpace(result.Payload))
@@ -72,7 +80,14 @@ internal static class ChatEndpoint
         {
             await SseWriter.WriteAsync(response, "stage", new { stage = "classifying" }, cancellationToken);
 
-            var intent = await classifier.ClassifyAsync(request.Message, cancellationToken);
+            // Anonymous guests bypass the LLM classifier and go straight
+            // to PRODUCT. (See the buffered branch above for the full
+            // rationale.) The "classifying" stage event is still emitted
+            // so the UI shows the same skeleton; the immediate "routed"
+            // event tells the user what happened.
+            var intent = GuestId.IsGuest(request.CustomerId)
+                ? "PRODUCT"
+                : await classifier.ClassifyAsync(request.Message, cancellationToken);
             var agentLabel = intent.Equals("PRODUCT", StringComparison.OrdinalIgnoreCase) ? "product" : "crm";
 
             await SseWriter.WriteAsync(response, "stage", new { stage = "routed", agent = agentLabel }, cancellationToken);

@@ -127,7 +127,12 @@ var (meEndpoint, customerEndpoint, ordersEndpoint, productsEndpoint, productEndp
 
 if (useEntraAuth)
 {
-    chatEndpoint.RequireAuthorization();
+    // Chat is intentionally NOT RequireAuthorization — the endpoint
+    // accepts both authenticated callers (real customer id from JWT)
+    // and anonymous callers carrying an X-Guest-Session-Id header
+    // (resolved to a "guest-{token}" customer id by CustomerContext).
+    // Per-customer state and downstream tool gating still apply.
+    chatEndpoint.AllowAnonymous();
     conversationsEndpoint.RequireAuthorization();
     conversationEndpoint.RequireAuthorization();
     meEndpoint.RequireAuthorization();
@@ -137,7 +142,7 @@ if (useEntraAuth)
     // Catalog browsing (products + product images) is public-by-design.
     // The Blazor UI exposes Home / Browse / ProductDetail to anonymous
     // visitors so the site behaves like a normal e-commerce store; only
-    // per-customer actions (cart, checkout, orders, profile, chat) require
+    // per-customer actions (cart, checkout, orders, profile) require
     // sign-in. <img src=...> also can't attach a Bearer token.
     productsEndpoint.AllowAnonymous();
     productEndpoint.AllowAnonymous();
@@ -311,7 +316,14 @@ static void ConfigureRateLimiting(WebApplicationBuilder builder)
         {
             var customerCtx = ctx.RequestServices.GetService<CustomerContext>();
             var id = customerCtx?.GetCustomerId();
-            if (!string.IsNullOrWhiteSpace(id))
+
+            // Authenticated callers get a per-customer bucket. Guests
+            // (anonymous chat) DO NOT — their customer id is the
+            // caller-supplied X-Guest-Session-Id token, and an attacker
+            // can rotate it on every request to mint fresh per-bucket
+            // budgets and bypass the cap. Fall through to the per-IP
+            // bucket below, which is stable across token rotation.
+            if (!string.IsNullOrWhiteSpace(id) && !GuestId.IsGuest(id))
             {
                 return $"cust:{id}";
             }

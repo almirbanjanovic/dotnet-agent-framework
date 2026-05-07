@@ -88,14 +88,52 @@ public sealed class ChatEndpointTests
         (await response.Content.ReadAsStringAsync()).Should().Contain("\"reply\"");
     }
 
+    [Fact]
+    public async Task PostChat_GuestCustomerId_BypassesClassifierAndRoutesToProduct()
+    {
+        // Guests must not pay for an LLM classification round-trip and
+        // must never be routed to CRM. The orchestrator forces PRODUCT.
+        var classifierClient = new TestIntentClassifierClient { Response = "CRM" };
+        var crmCalls = 0;
+        var productCalls = 0;
+        var crmHandler = new TestHttpMessageHandler((_, _) =>
+        {
+            crmCalls++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{}")
+            });
+        });
+        var productHandler = new TestHttpMessageHandler((_, _) =>
+        {
+            productCalls++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"reply\":\"product\"}")
+            });
+        });
+        using var factory = CreateFactory(classifierClient, crmHandler, productHandler);
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/chat",
+            new ChatRequest("guest-ABCDEFGH", "Recommend a tent"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        productCalls.Should().Be(1);
+        crmCalls.Should().Be(0);
+        classifierClient.LastPrompt.Should().BeNull("classifier must not be invoked for guests");
+    }
+
     private static WebApplicationFactory<Program> CreateFactory(
         TestIntentClassifierClient classifierClient,
-        TestHttpMessageHandler crmHandler)
+        TestHttpMessageHandler crmHandler,
+        TestHttpMessageHandler? productHandler = null)
     {
         var classifier = new IntentClassifier(classifierClient);
         var router = new AgentRouter(
             new CrmAgentClient(new HttpClient(crmHandler) { BaseAddress = new Uri("http://crm") }),
-            new ProductAgentClient(new HttpClient(TestHttpMessageHandler.Create("{}")) { BaseAddress = new Uri("http://product") }));
+            new ProductAgentClient(new HttpClient(productHandler ?? TestHttpMessageHandler.Create("{}")) { BaseAddress = new Uri("http://product") }));
 
         return new OrchestratorWebApplicationFactory(classifier, router);
     }

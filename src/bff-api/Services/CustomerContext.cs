@@ -37,7 +37,14 @@ public sealed class CustomerContext
         if (_useHeader)
         {
             var header = context.Request.Headers["X-Customer-Id"].ToString();
-            return string.IsNullOrWhiteSpace(header) ? null : header;
+            if (!string.IsNullOrWhiteSpace(header))
+            {
+                return header;
+            }
+            // Dev-auth mode also accepts a guest session header so the
+            // anonymous-chat path works in InMemory tests / local dev
+            // without needing an Entra sign-in.
+            return ResolveGuestSessionId(context);
         }
 
         var user = context.User;
@@ -63,9 +70,30 @@ public sealed class CustomerContext
             }
         }
 
-        return user.FindFirst(ClaimTypes.NameIdentifier)?.Value
+        var subject = user.FindFirst(ClaimTypes.NameIdentifier)?.Value
             ?? user.FindFirst("oid")?.Value
             ?? user.FindFirst("sub")?.Value;
+        if (!string.IsNullOrWhiteSpace(subject))
+        {
+            return subject;
+        }
+
+        // No authenticated subject — fall back to a guest session id from
+        // X-Guest-Session-Id. This is what powers anonymous chat: the
+        // Blazor UI mints a random session id once per browser, the BFF
+        // accepts it as a customer-shaped key for the chat / orchestrator
+        // / agents to partition state on, and downstream agents refuse
+        // any tool call that would require a real customer.
+        return ResolveGuestSessionId(context);
+    }
+
+    private static string? ResolveGuestSessionId(HttpContext context)
+    {
+        // We only consider the header when there is no authenticated
+        // subject — never let an authed user impersonate a guest (or
+        // another customer) by setting the header.
+        var token = context.Request.Headers["X-Guest-Session-Id"].ToString();
+        return GuestId.FromHeader(token);
     }
 
     private static IEnumerable<string?> EnumerateMapLookupKeys(ClaimsPrincipal user)

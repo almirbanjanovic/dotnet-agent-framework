@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Contoso.BlazorUi.Models;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.WebAssembly.Http;
 
 namespace Contoso.BlazorUi.Services;
@@ -16,17 +17,26 @@ public sealed class BffApiClient
     private readonly HttpClient httpClient;       // authenticated calls (BFF requires JWT)
     private readonly HttpClient publicHttpClient; // catalog calls (anonymous-friendly endpoints)
     private readonly AuthStateProvider authStateProvider;
+    private readonly GuestSessionProvider? guestSessionProvider;
+    private readonly AuthenticationStateProvider? authenticationStateProvider;
 
     /// <summary>
     /// Production constructor: separate HttpClients for authenticated vs.
     /// public BFF endpoints. The public client must NOT carry the MSAL
     /// auth handler so anonymous catalog browsing works without a token.
     /// </summary>
-    public BffApiClient(HttpClient authClient, HttpClient publicClient, AuthStateProvider authStateProvider)
+    public BffApiClient(
+        HttpClient authClient,
+        HttpClient publicClient,
+        AuthStateProvider authStateProvider,
+        GuestSessionProvider? guestSessionProvider = null,
+        AuthenticationStateProvider? authenticationStateProvider = null)
     {
         this.httpClient = authClient;
         this.publicHttpClient = publicClient;
         this.authStateProvider = authStateProvider;
+        this.guestSessionProvider = guestSessionProvider;
+        this.authenticationStateProvider = authenticationStateProvider;
     }
 
     /// <summary>
@@ -35,14 +45,15 @@ public sealed class BffApiClient
     /// responses regardless of bearer token).
     /// </summary>
     public BffApiClient(HttpClient httpClient, AuthStateProvider authStateProvider)
-        : this(httpClient, httpClient, authStateProvider) { }
+        : this(httpClient, httpClient, authStateProvider, guestSessionProvider: null, authenticationStateProvider: null) { }
 
     public async Task<ChatResponse> SendChatAsync(ChatRequest request, CancellationToken ct = default)
     {
-        using var httpRequest = CreateRequest(HttpMethod.Post, "/api/v1/chat");
+        var (client, httpRequest) = await CreateChatRequestAsync(HttpMethod.Post, "/api/v1/chat", ct);
+        using var _httpRequest = httpRequest;
         httpRequest.Content = JsonContent.Create(request, options: JsonOptions);
 
-        using var response = await httpClient.SendAsync(httpRequest, ct);
+        using var response = await client.SendAsync(httpRequest, ct);
         response.EnsureSuccessStatusCode();
 
         var result = await response.Content.ReadFromJsonAsync<ChatResponse>(JsonOptions, ct);
@@ -62,11 +73,12 @@ public sealed class BffApiClient
         ChatRequest request,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        using var httpRequest = CreateRequest(HttpMethod.Post, "/api/v1/chat/stream");
+        var (client, httpRequest) = await CreateChatRequestAsync(HttpMethod.Post, "/api/v1/chat/stream", ct);
+        using var _httpRequest = httpRequest;
         httpRequest.Content = JsonContent.Create(request, options: JsonOptions);
         httpRequest.SetBrowserResponseStreamingEnabled(true);
 
-        using var response = await httpClient.SendAsync(
+        using var response = await client.SendAsync(
             httpRequest,
             HttpCompletionOption.ResponseHeadersRead,
             ct);
@@ -271,5 +283,57 @@ public sealed class BffApiClient
         }
 
         return request;
+    }
+
+    // Builds the (HttpClient, HttpRequestMessage) tuple for a chat call.
+    // Anonymous visitors must NOT go through the authenticated client —
+    // BaseAddressAuthorizationMessageHandler would block the request with
+    // AccessTokenNotAvailableException because there is no signed-in user
+    // to mint a token for. They go through the public client and carry an
+    // X-Guest-Session-Id header so the BFF can resolve a stable
+    // "guest-{token}" customer id and partition state on it.
+    private async Task<(HttpClient Client, HttpRequestMessage Request)> CreateChatRequestAsync(
+        HttpMethod method,
+        string uri,
+        CancellationToken ct)
+    {
+        var request = new HttpRequestMessage(method, uri);
+        var customerId = authStateProvider.CustomerId;
+
+        if (!string.IsNullOrWhiteSpace(customerId))
+        {
+            // Dev-auth mode (impersonation dropdown picks a customer): the
+            // BFF reads X-Customer-Id directly. The auth client has no auth
+            // handler in this mode, so it's safe.
+            request.Headers.Add("X-Customer-Id", customerId);
+            return (httpClient, request);
+        }
+
+        // MSAL race window: the framework reports the user is signed in,
+        // but our /api/v1/me call hasn't returned yet (so SelectedCustomer
+        // is still null). Without this branch the chat would go out via
+        // the public client as a guest, orphaning the conversation from
+        // the user's account. Route through the authed client instead so
+        // the bearer token is attached — the BFF resolves the customer
+        // id from the JWT subject and ignores any guest header.
+        if (!authStateProvider.UseDevAuth && authenticationStateProvider is not null)
+        {
+            var authState = await authenticationStateProvider.GetAuthenticationStateAsync();
+            if (authState.User.Identity?.IsAuthenticated == true)
+            {
+                return (httpClient, request);
+            }
+        }
+
+        if (guestSessionProvider is not null)
+        {
+            var token = await guestSessionProvider.GetOrCreateAsync(ct);
+            request.Headers.Add("X-Guest-Session-Id", token);
+        }
+
+        // Public client: no MSAL handler, so an anonymous visitor's
+        // request goes out without an Authorization header (which is
+        // exactly what the BFF's anonymous-chat path expects).
+        return (publicHttpClient, request);
     }
 }

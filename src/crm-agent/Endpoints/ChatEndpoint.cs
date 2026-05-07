@@ -36,6 +36,17 @@ internal static class ChatEndpoint
             return Results.BadRequest(new { error = "customerId and message are required." });
         }
 
+        // Defense in depth: the orchestrator should never route an
+        // anonymous guest to CRM, but if it does we hard-refuse rather
+        // than discover tools and let the LLM start poking at customer
+        // records that don't exist.
+        if (GuestId.IsGuest(request.CustomerId))
+        {
+            return Results.Json(
+                new { error = "AnonymousNotSupported", message = "Sign-in required for account questions." },
+                statusCode: StatusCodes.Status403Forbidden);
+        }
+
         // Discover tools from both MCP backends per request. They're cheap
         // to enumerate and the agent's tool set may evolve at runtime.
         var crmClient = await crmProvider.GetClientAsync(cancellationToken);
@@ -73,6 +84,20 @@ internal static class ChatEndpoint
         if (string.IsNullOrWhiteSpace(request.CustomerId) || string.IsNullOrWhiteSpace(request.Message))
         {
             await SseWriter.WriteAsync(response, "error", new { message = "customerId and message are required." }, cancellationToken);
+            return;
+        }
+
+        // Defense in depth (see HandleAsync above). For the streaming path
+        // we also set the HTTP status so the orchestrator's stream proxy
+        // surfaces a real 403 instead of a successful empty SSE stream.
+        if (GuestId.IsGuest(request.CustomerId))
+        {
+            response.StatusCode = StatusCodes.Status403Forbidden;
+            await SseWriter.WriteAsync(
+                response,
+                "error",
+                new { message = "Sign-in required for account questions." },
+                cancellationToken);
             return;
         }
 

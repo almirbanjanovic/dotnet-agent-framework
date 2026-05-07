@@ -143,6 +143,75 @@ public class CustomerContextTests
         result.Should().Be("explicit-cust");
     }
 
+    [Fact]
+    public void GetCustomerId_JwtMode_AnonymousUserWithGuestHeader_ReturnsGuestId()
+    {
+        // No claims (anonymous endpoint) + valid X-Guest-Session-Id header
+        // → CustomerContext returns the canonical "guest-{token}" id so
+        // chat / orchestrator can partition state on it.
+        var accessor = BuildAccessor(headers: new Dictionary<string, string>
+        {
+            ["X-Guest-Session-Id"] = "ABCDEFGH12345678"
+        });
+        var context = new CustomerContext(accessor, useHeader: false);
+
+        var result = context.GetCustomerId();
+
+        result.Should().Be("guest-ABCDEFGH12345678");
+    }
+
+    [Fact]
+    public void GetCustomerId_JwtMode_AuthenticatedUserCannotImpersonateGuest()
+    {
+        // Authenticated user with both a real subject AND a guest header
+        // → real subject wins. A signed-in user must NEVER be able to
+        // downgrade themselves to a different (or anonymous) identity by
+        // setting the header.
+        var accessor = BuildAccessor(
+            claims: new[] { new Claim(ClaimTypes.NameIdentifier, "real-cust") },
+            headers: new Dictionary<string, string>
+            {
+                ["X-Guest-Session-Id"] = "ABCDEFGH12345678"
+            });
+        var context = new CustomerContext(accessor, useHeader: false);
+
+        var result = context.GetCustomerId();
+
+        result.Should().Be("real-cust");
+    }
+
+    [Fact]
+    public void GetCustomerId_JwtMode_MalformedGuestHeader_ReturnsNull()
+    {
+        // Anonymous user, header present but invalid → null. Endpoint will
+        // 401 instead of partitioning on the bad value.
+        var accessor = BuildAccessor(headers: new Dictionary<string, string>
+        {
+            ["X-Guest-Session-Id"] = "abc;def"
+        });
+        var context = new CustomerContext(accessor, useHeader: false);
+
+        var result = context.GetCustomerId();
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void GetCustomerId_InMemoryMode_FallsBackToGuestHeader()
+    {
+        // Dev-auth mode: no X-Customer-Id, but a valid guest header is
+        // present (e.g. anonymous chat from the Blazor UI).
+        var accessor = BuildAccessor(headers: new Dictionary<string, string>
+        {
+            ["X-Guest-Session-Id"] = "ABCDEFGH12345678"
+        });
+        var context = new CustomerContext(accessor, useHeader: true);
+
+        var result = context.GetCustomerId();
+
+        result.Should().Be("guest-ABCDEFGH12345678");
+    }
+
     private static IHttpContextAccessor BuildAccessor(
         IDictionary<string, string>? headers = null,
         IEnumerable<Claim>? claims = null)
