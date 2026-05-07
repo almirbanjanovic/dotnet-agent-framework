@@ -8,6 +8,14 @@ html, body {
     color: #0F1F17;
 }
 
+/* Single source of truth for the fixed AppBar height. The layout uses
+ * `<MudAppBar Dense="true" Fixed="true">`; this value is what the page
+ * content + auth-shell offset themselves by. If you change `Dense` or
+ * AppBar internals, change this once. */
+:root {
+    --app-appbar-h: 64px;
+}
+
 /* Modern scrollbars */
 *::-webkit-scrollbar {
     width: 10px;
@@ -38,12 +46,18 @@ html, body {
     box-shadow: 0 4px 8px rgba(15, 31, 23, 0.06), 0 12px 24px -8px rgba(15, 31, 23, 0.1);
 }
 
-/* App bar — glass effect */
+/* App bar — solid surface with quiet bottom edge.
+ *
+ * Originally this used `rgba(255,255,255,0.85)` + backdrop-blur for a glass
+ * effect. That looked nice on light pages but the home `.hero` gradient
+ * (dark green → teal) starts at y=64px and leaks through the 15%-transparent
+ * bar, washing out the dark brand text and category links and making them
+ * appear to "bleed into" the green hero. Solid white with a subtle border
+ * + shadow keeps the modern feel without the contrast collapse. */
 .mud-appbar {
-    backdrop-filter: saturate(140%) blur(8px);
-    background-color: rgba(255, 255, 255, 0.85) !important;
-    border-bottom: 1px solid rgba(15, 31, 23, 0.06);
-    box-shadow: none !important;
+    background-color: #ffffff !important;
+    border-bottom: 1px solid rgba(15, 31, 23, 0.10);
+    box-shadow: 0 1px 2px rgba(15, 31, 23, 0.04), 0 4px 10px -6px rgba(15, 31, 23, 0.08) !important;
 }
 
 /* Drawer — quiet right border */
@@ -296,6 +310,76 @@ h1:focus { outline: none; }
     display: flex;
     justify-content: flex-end;
     align-items: center;
+}
+
+/* ---------- Auth flow card (Authentication.razor) ----------
+ * The MSAL RemoteAuthenticatorView per-action templates render inside
+ * this card so the transient "Signing you in…" / "You're signed out"
+ * messages have a clear, branded surface and never get visually swallowed
+ * by the AppBar above. */
+.auth-shell {
+    min-height: calc(100vh - var(--app-appbar-h));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 1.5rem;
+    box-sizing: border-box;
+}
+
+.auth-card {
+    width: 100%;
+    max-width: 460px;
+    background: #fff;
+    border: 1px solid rgba(15, 31, 23, 0.08);
+    border-radius: 14px;
+    box-shadow:
+        0 1px 2px rgba(15, 31, 23, 0.04),
+        0 12px 32px -12px rgba(15, 31, 23, 0.18);
+    padding: 2.5rem 2rem;
+    /* Defensive: many CSS resets don't apply border-box globally, and the
+     * card has padding + max-width. Without border-box the card can
+     * overflow the viewport on narrow screens. */
+    box-sizing: border-box;
+}
+
+.auth-status {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 1rem;
+}
+
+.auth-status-icon {
+    margin-bottom: 0.25rem;
+    min-height: 3rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.auth-status-title {
+    margin: 0;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #0F1F17;
+    letter-spacing: -0.01em;
+}
+
+.auth-status-message {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.55;
+    color: #475569;
+    max-width: 360px;
+    /* Long Entra error messages MUST wrap, not overflow horizontally
+     * past the card edge; otherwise the user sees a clipped error. */
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+
+.auth-status-error .auth-status-title {
+    color: #B91C1C;
 }
 
 /* ---------- Page sections ---------- */

@@ -1,9 +1,133 @@
 @page "/authentication/{action}"
 @using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+@inject NavigationManager Navigation
 
-<RemoteAuthenticatorView Action="@Action" />
+<PageTitle>Contoso Outdoors · @PageHeading()</PageTitle>
+
+@*
+    MSAL's default RemoteAuthenticatorView renders bare <p> elements
+    with no padding/heading, so on /authentication/login|logout|... the
+    "Logging you in…" / "You are signing out…" text sat flush against
+    the AppBar with no visible separation and looked like a rendering bug.
+
+    Wrap each action in a centered card so transient auth states have a
+    clear, branded appearance and don't blend into the page background.
+    Per-action templates override only the action-specific message; we
+    let MSAL handle the actual sign-in/out machinery. *@
+<section class="auth-shell">
+    <div class="auth-card">
+        <RemoteAuthenticatorView Action="@Action">
+            <LoggingIn>
+                @AuthStatus("login", "Signing you in…",
+                    "Redirecting to Microsoft Entra ID. This usually takes a few seconds.",
+                    showHomeButton: false, isError: false)
+            </LoggingIn>
+            <CompletingLoggingIn>
+                @AuthStatus("login", "Finishing sign-in…",
+                    "Verifying your identity and loading your account.",
+                    showHomeButton: false, isError: false)
+            </CompletingLoggingIn>
+            <LogInFailed Context="errorMessage">
+                @AuthStatus("error", "Sign-in didn't complete",
+                    string.IsNullOrWhiteSpace(errorMessage)
+                        ? "Something went wrong. Please try again."
+                        : errorMessage,
+                    showHomeButton: true, isError: true)
+            </LogInFailed>
+            <LogOut>
+                @AuthStatus("logout", "Signing you out…",
+                    "Clearing your session with Microsoft Entra ID.",
+                    showHomeButton: false, isError: false)
+            </LogOut>
+            <CompletingLogOut>
+                @AuthStatus("logout", "Finishing sign-out…",
+                    "Wrapping things up.",
+                    showHomeButton: false, isError: false)
+            </CompletingLogOut>
+            <LogOutSucceeded>
+                @AuthStatus("check", "You're signed out",
+                    "Thanks for visiting. Come back any time.",
+                    showHomeButton: true, isError: false)
+            </LogOutSucceeded>
+            <LogOutFailed Context="errorMessage">
+                @AuthStatus("error", "Sign-out didn't complete",
+                    string.IsNullOrWhiteSpace(errorMessage)
+                        ? "Something went wrong. Please try again."
+                        : errorMessage,
+                    showHomeButton: true, isError: true)
+            </LogOutFailed>
+        </RemoteAuthenticatorView>
+    </div>
+</section>
 
 @code {
     [Parameter]
     public string? Action { get; set; }
+
+    private string PageHeading() => Action switch
+    {
+        "login"             => "Signing in",
+        "login-callback"    => "Finishing sign-in",
+        "login-failed"      => "Sign-in failed",
+        "logout"            => "Signing out",
+        "logout-callback"   => "Finishing sign-out",
+        "logged-out"        => "Signed out",
+        "logout-failed"     => "Sign-out failed",
+        _                    => "Authentication"
+    };
+
+    // Shared visual treatment for every auth-flow action. Renders a
+    // status icon (spinner for in-progress, check/error for terminal),
+    // a heading, a sub-message, and an optional "Back to home" button.
+    //
+    // Accessibility:
+    //  - role="status" + aria-live="polite" so screen readers ANNOUNCE
+    //    state transitions (signing in → finishing → succeeded/failed)
+    //    instead of leaving SR users in silence during the redirect.
+    //  - aria-busy="true" while the spinner is shown so AT can pause
+    //    until the transient state resolves.
+    //  - <h1> (not h2) because this IS the page's primary heading;
+    //    Blazor's FocusOnNavigate (in App.razor) targets `h1` so focus
+    //    moves to the new page on every action transition.
+    private RenderFragment AuthStatus(
+        string icon,
+        string title,
+        string message,
+        bool showHomeButton,
+        bool isError) => __builder =>
+    {
+        var inProgress = icon is "login" or "logout";
+        <div class="auth-status @(isError ? "auth-status-error" : "")"
+             role="status"
+             aria-live="polite"
+             aria-busy="@(inProgress ? "true" : "false")">
+            <div class="auth-status-icon" aria-hidden="true">
+                @switch (icon)
+                {
+                    case "login":
+                    case "logout":
+                        <MudProgressCircular Indeterminate="true" Size="Size.Large" Color="Color.Primary" />
+                        break;
+                    case "check":
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Style="font-size: 3rem;" />
+                        break;
+                    case "error":
+                        <MudIcon Icon="@Icons.Material.Filled.ErrorOutline" Color="Color.Error" Style="font-size: 3rem;" />
+                        break;
+                }
+            </div>
+            <h1 class="auth-status-title">@title</h1>
+            <p class="auth-status-message">@message</p>
+            @if (showHomeButton)
+            {
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Size="Size.Medium"
+                           StartIcon="@Icons.Material.Filled.Home"
+                           OnClick="@(() => Navigation.NavigateTo("/"))">
+                    Back to home
+                </MudButton>
+            }
+        </div>
+    };
 }

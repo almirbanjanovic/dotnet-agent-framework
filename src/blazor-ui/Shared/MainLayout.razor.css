@@ -150,10 +150,13 @@
     padding: 0.55rem 1rem 0.25rem;
 }
 
-/* ---------- Page main: leave space for fixed AppBar ---------- */
+/* ---------- Page main: leave space for fixed AppBar ----------
+ * The offset MUST match the actual rendered AppBar height. We share a
+ * single CSS variable with the auth-shell (defined in wwwroot/css/app.css
+ * `:root`); change once, both layout and auth-flow stay aligned. */
 ::deep .page-main {
-    padding-top: 64px;
-    min-height: calc(100vh - 64px);
+    padding-top: var(--app-appbar-h);
+    min-height: calc(100vh - var(--app-appbar-h));
     display: flex;
     flex-direction: column;
 }

@@ -155,6 +155,8 @@ else
                           Lines="2"
                           Placeholder="Ask about your orders, returns, or gear..."
                           Margin="Margin.Dense"
+                          Immediate="true"
+                          UserAttributes="@_composerUserAttributes"
                           OnKeyDown="HandleKeyDown" />
             <div class="chat-panel-send-row">
                 <span class="chat-panel-hint">
@@ -220,6 +222,22 @@ else
     private CancellationTokenSource? _fabPulseClearCts;
     private bool _disposed;
 
+    // Self-reference for JS → .NET callback used by the composer
+    // "Enter to send" interop. Created lazily on first attach and
+    // disposed in Dispose(). The JS side is idempotent (tags the
+    // wrapper element), but we also gate the interop call on this
+    // flag so we don't make a JS round-trip on every keystroke render
+    // (Immediate="true" causes per-keystroke renders).
+    private DotNetObjectReference<ChatBubble>? _selfRef;
+    private bool _composerJsHooked;
+
+    // Forwarded as `aria-keyshortcuts` so screen readers announce the
+    // non-default Enter-to-send binding on the composer textarea.
+    private static readonly Dictionary<string, object?> _composerUserAttributes = new()
+    {
+        ["aria-keyshortcuts"] = "Enter"
+    };
+
     // ── Streaming-state for the in-flight assistant turn ──
     private string? _streamingText;          // null when not streaming; otherwise the token-by-token assembled text
     private string? _currentStageLabel;      // "Understanding your request…" / "Routed to CRM Agent"
@@ -243,7 +261,7 @@ else
         _ = SendAsync();
     }
 
-    private async Task HandleKeyDown(KeyboardEventArgs e)
+    private void HandleKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Escape")
         {
@@ -252,10 +270,25 @@ else
             ChatPanel.Minimize();
             return;
         }
-        if (e.Key == "Enter" && !e.ShiftKey)
-        {
-            await SendAsync();
-        }
+        // Note: "Enter to send" is handled by attachChatComposerEnter in
+        // index.html, NOT here. MudTextField with Lines>1 renders a
+        // <textarea>, and Blazor's `@onkeydown:preventDefault` directive
+        // is render-time (static), so we cannot conditionally suppress
+        // only the unmodified Enter newline insertion from C#. The JS
+        // helper preventDefaults Enter (no modifiers) and invokes
+        // OnComposerEnterPressed which calls SendAsync.
+    }
+
+    /// <summary>
+    /// Invoked by attachChatComposerEnter (index.html) when the user
+    /// presses Enter without any modifier in the composer textarea.
+    /// Public + [JSInvokable] so the JS interop can reach it.
+    /// </summary>
+    [JSInvokable]
+    public async Task OnComposerEnterPressed()
+    {
+        if (_disposed) return;
+        await InvokeAsync(SendAsync);
     }
 
     private void HandleMinimizedClose() => ChatPanel.Close();
@@ -406,10 +439,37 @@ else
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (_disposed) return;
+
         if (_scrollPending)
         {
             _scrollPending = false;
             await JsRuntime.InvokeVoidAsync("scrollChatToBottom", ScrollContainerId);
+        }
+
+        // Hook the composer textarea's Enter-to-send handler ONCE while
+        // the panel is open. We gate on `_composerJsHooked` because
+        // `Immediate="true"` causes a re-render per keystroke; without
+        // this gate we'd make a JS interop round-trip on every render.
+        // The hook is reset to false in HandleChanged when the panel
+        // transitions out of Open mode (DOM wrapper is unmounted).
+        if (ChatPanel.IsOpen && !_composerJsHooked)
+        {
+            try
+            {
+                _selfRef ??= DotNetObjectReference.Create(this);
+                await JsRuntime.InvokeVoidAsync(
+                    "attachChatComposerEnter", ComposerWrapperId, _selfRef);
+                _composerJsHooked = true;
+            }
+            catch (Microsoft.JSInterop.JSDisconnectedException)
+            {
+                // Circuit is gone — nothing to attach to.
+            }
+            catch (TaskCanceledException)
+            {
+                // Pre-rendering / teardown.
+            }
         }
 
         if (_focusPending && ChatPanel.IsOpen)
@@ -466,6 +526,14 @@ else
     {
         var prevMode = _lastObservedMode;
         _lastObservedMode = ChatPanel.Mode;
+
+        // When the panel leaves Open mode the composer wrapper is unmounted
+        // and our JS keydown listener goes with it. Reset the hook flag so
+        // the next OnAfterRenderAsync re-attaches against the fresh DOM.
+        if (prevMode == ChatPanelMode.Open && ChatPanel.Mode != ChatPanelMode.Open)
+        {
+            _composerJsHooked = false;
+        }
 
         // When Open() was called, run the attention animation. Auto-focus
         // ONLY when transitioning from a non-Open mode so repeat Open()
@@ -564,5 +632,7 @@ else
         _pulseClearCts?.Dispose();
         _fabPulseClearCts?.Cancel();
         _fabPulseClearCts?.Dispose();
+        _selfRef?.Dispose();
+        _selfRef = null;
     }
 }

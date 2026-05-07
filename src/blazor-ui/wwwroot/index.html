@@ -52,6 +52,55 @@
             }
         };
 
+        // Chat composer "Enter to send, Shift+Enter for newline".
+        //
+        // Why JS instead of pure Blazor: MudTextField with Lines>1 renders
+        // a <textarea>. Blazor's `@onkeydown:preventDefault` directive is
+        // evaluated at render-time (static), not per-event, so it cannot
+        // conditionally prevent default only for "Enter without Shift" —
+        // it would also block Shift+Enter newlines, Backspace, arrow keys,
+        // etc. JS interop is the standard workaround for this exact case.
+        //
+        // Idempotent: we tag the wrapper with __contosoComposerHooked so a
+        // re-render (e.g. minimize → open) doesn't double-attach.
+        window.attachChatComposerEnter = (wrapperId, dotnetRef) => {
+            const wrapper = document.getElementById(wrapperId);
+            if (!wrapper || wrapper.__contosoComposerHooked) return;
+            wrapper.__contosoComposerHooked = true;
+
+            wrapper.addEventListener('keydown', (e) => {
+                const t = e.target;
+                if (!t) return;
+                // Only intercept when the focused element is the composer's
+                // own textarea or input — leaves the inner buttons /
+                // suggestion chips alone. (DOM tagName is uppercase for
+                // HTML documents per spec.)
+                if (t.tagName !== 'TEXTAREA' && t.tagName !== 'INPUT') return;
+                if (e.key !== 'Enter') return;
+                // Shift / Ctrl / Alt / Meta + Enter → let the browser do
+                // its default (insert newline / browser shortcut).
+                if (e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
+                // IME composition guard. `isComposing` is the modern
+                // signal; legacy keyCode 229 / key === 'Process' covers
+                // older browsers and some Windows IMEs that fire keydown
+                // for the IME commit Enter without setting isComposing.
+                if (e.isComposing || e.keyCode === 229 || e.key === 'Process') return;
+
+                e.preventDefault();
+                dotnetRef.invokeMethodAsync('OnComposerEnterPressed').catch((err) => {
+                    // Disposed-reference / disconnected-circuit failures
+                    // are expected when the user closes the panel mid-send.
+                    // Anything else is a real bug — surface it.
+                    const msg = (err && err.message) || String(err);
+                    if (/disposed|disconnected|no longer available/i.test(msg)) return;
+                    console.warn('[chat] OnComposerEnterPressed failed:', err);
+                });
+            });
+        };
+
+        // Detach is implicit: the wrapper is removed from the DOM when the
+        // chat panel closes/minimizes, taking the listener with it.
+
         // First-visit FAB attention pulse — returns true the first time
         // it's called per browser, false thereafter. Used by ChatBubble to
         // play a one-off discovery animation so users notice the launcher.
