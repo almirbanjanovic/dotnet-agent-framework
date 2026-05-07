@@ -144,11 +144,21 @@ function Initialize-Backend {
 
     # ── RBAC: Storage Blob Data Contributor for the deployer ──────────────
     # Required for `use_azuread_auth = true` (no storage keys involved).
-    $deployerOid = az ad signed-in-user show --query id -o tsv 2>$null
-    if ([string]::IsNullOrWhiteSpace($deployerOid)) {
-        Write-Fail "Could not determine deployer object ID"
+    # Capture stderr so a CAE token-refresh challenge or missing Graph
+    # consent isn't silently swallowed (which used to surface only as a
+    # generic "Could not determine deployer object ID" message).
+    $deployerOidOutput = az ad signed-in-user show --query id -o tsv 2>&1
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($deployerOidOutput)) {
+        Write-Fail "Could not determine deployer object ID. 'az ad signed-in-user show' said:"
+        Write-Host "  $deployerOidOutput"
+        Write-Host ""
+        Write-Host "Hint: this is usually a stale Azure CLI token (Continuous Access"
+        Write-Host "Evaluation challenge) or missing Microsoft Graph consent. Try:"
+        Write-Host "  az login"
+        Write-Host "  ./infra/setup-local.ps1"
         exit 1
     }
+    $deployerOid = $deployerOidOutput.Trim()
     $stScope = az storage account show --name $storageAccount --resource-group $WorkingResourceGroup --query id -o tsv
     $existingRole = az role assignment list `
         --assignee $deployerOid `

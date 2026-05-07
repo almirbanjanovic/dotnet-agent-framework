@@ -124,12 +124,23 @@ initialize_backend() {
         ok "Storage account already exists"
     fi
 
-    local deployer_oid
-    deployer_oid=$(az ad signed-in-user show --query id -o tsv 2>/dev/null)
-    if [[ -z "$deployer_oid" ]]; then
-        fail "Could not determine deployer object ID"
+    local deployer_oid deployer_oid_output deployer_oid_rc
+    # Capture stderr so a CAE token-refresh challenge or missing Graph
+    # consent isn't silently swallowed (which used to surface only as a
+    # generic "Could not determine deployer object ID" message).
+    deployer_oid_output=$(az ad signed-in-user show --query id -o tsv 2>&1) || true
+    deployer_oid_rc=$?
+    if [[ $deployer_oid_rc -ne 0 || -z "$deployer_oid_output" ]]; then
+        fail "Could not determine deployer object ID. 'az ad signed-in-user show' said:"
+        echo "  $deployer_oid_output"
+        echo ""
+        echo "Hint: this is usually a stale Azure CLI token (Continuous Access"
+        echo "Evaluation challenge) or missing Microsoft Graph consent. Try:"
+        echo "  az login"
+        echo "  ./infra/setup-local.sh"
         exit 1
     fi
+    deployer_oid="$deployer_oid_output"
     local st_scope
     st_scope=$(az storage account show --name "$storage_account" --resource-group "$working_rg" --query id -o tsv)
     local existing_role
