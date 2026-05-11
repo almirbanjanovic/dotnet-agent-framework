@@ -1,0 +1,273 @@
+@page "/tickets"
+@attribute [Authorize]
+@implements IDisposable
+@inject BffApiClient BffApiClient
+@inject AuthStateProvider AuthStateProvider
+
+<PageTitle>Support tickets · Contoso Outdoors</PageTitle>
+
+<section class="page-section">
+<MudStack Spacing="4">
+    <div>
+        <MudText Typo="Typo.h4" Style="font-weight: 700;">Support tickets</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            @(AuthStateProvider.SelectedCustomer is { } c
+                ? $"Returns and support requests for {c.Name}."
+                : "Sign in to view your support tickets.")
+        </MudText>
+    </div>
+
+    @if (_isLoading)
+    {
+        <MudGrid>
+            @for (var i = 0; i < 3; i++)
+            {
+                <MudItem xs="12" md="6" lg="4">
+                    <MudPaper Class="pa-4" Style="height: 200px;">
+                        <MudSkeleton SkeletonType="SkeletonType.Text" Width="60%" />
+                        <MudSkeleton SkeletonType="SkeletonType.Text" Width="40%" />
+                        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="80px" Style="margin-top: 1rem;" />
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+    else if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_errorMessage</MudAlert>
+    }
+    else if (_tickets.Count == 0)
+    {
+        <MudPaper Class="pa-8" Style="text-align: center;" Elevation="0">
+            <MudIcon Icon="@Icons.Material.Outlined.SupportAgent" Size="Size.Large" Color="Color.Secondary" />
+            <MudText Typo="Typo.h6" Style="margin-top: 0.75rem;">No support tickets</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Style="margin-bottom: 1rem;">
+                You haven't opened any support tickets yet. Need a hand? Chat with our team.
+            </MudText>
+        </MudPaper>
+    }
+    else
+    {
+        <MudGrid>
+            @foreach (var ticket in _tickets)
+            {
+                <MudItem xs="12" md="6" lg="4">
+                    <MudCard Class="card-hover" Style="height: 100%;">
+                        <MudCardContent>
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Style="margin-bottom: 0.75rem;">
+                                <div>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Style="text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">
+                                        Ticket
+                                    </MudText>
+                                    <MudText Typo="Typo.h6" Style="line-height: 1.1;">#@ticket.Id</MudText>
+                                </div>
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Class="@GetStatusChipClass(ticket.Status)">
+                                    @ticket.Status
+                                </MudChip>
+                            </MudStack>
+
+                            <MudText Typo="Typo.subtitle1" Style="font-weight: 600; margin-bottom: 0.25rem;">
+                                @(string.IsNullOrWhiteSpace(ticket.Subject) ? "(no subject)" : ticket.Subject)
+                            </MudText>
+
+                            @if (!string.IsNullOrWhiteSpace(ticket.Description))
+                            {
+                                <MudText Typo="Typo.body2" Color="Color.Secondary" Style="margin-bottom: 0.75rem; white-space: pre-wrap;">
+                                    @TrimDescription(ticket.Description)
+                                </MudText>
+                            }
+
+                            <MudStack Spacing="1">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                    <MudIcon Icon="@Icons.Material.Outlined.Category" Size="Size.Small" Color="Color.Secondary" />
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary">@FormatCategory(ticket.Category)</MudText>
+                                </MudStack>
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                    <MudIcon Icon="@Icons.Material.Outlined.Flag" Size="Size.Small" Color="Color.Secondary" />
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary">Priority: @FormatPriority(ticket.Priority)</MudText>
+                                </MudStack>
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                    <MudIcon Icon="@Icons.Material.Outlined.CalendarToday" Size="Size.Small" Color="Color.Secondary" />
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary">Opened @FormatDate(ticket.OpenedAt)</MudText>
+                                </MudStack>
+                                @if (!string.IsNullOrWhiteSpace(ticket.ClosedAt))
+                                {
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                        <MudIcon Icon="@Icons.Material.Outlined.CheckCircle" Size="Size.Small" Color="Color.Secondary" />
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">Closed @FormatDate(ticket.ClosedAt)</MudText>
+                                    </MudStack>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(ticket.OrderId))
+                                {
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                        <MudIcon Icon="@Icons.Material.Outlined.Receipt" Size="Size.Small" Color="Color.Secondary" />
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">Order #@ticket.OrderId</MudText>
+                                    </MudStack>
+                                }
+                            </MudStack>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+</MudStack>
+</section>
+
+@code {
+    private readonly List<SupportTicket> _tickets = new();
+    private bool _isLoading = true;
+    private string? _errorMessage;
+
+    // Re-entrancy + lifecycle guards mirror Orders.razor — see that page for
+    // the rationale (CustomerChanged can fire twice in a row during the
+    // MSAL redirect callback, and async-void handlers must not call
+    // StateHasChanged after the renderer has disposed the component).
+    private CancellationTokenSource? _loadCts;
+    private bool _disposed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        AuthStateProvider.CustomerChanged += HandleCustomerChanged;
+        await LoadTicketsAsync();
+    }
+
+    private async Task LoadTicketsAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        var previous = _loadCts;
+        var cts = new CancellationTokenSource();
+        var token = cts.Token;
+        _loadCts = cts;
+        previous?.Cancel();
+
+        _isLoading = true;
+        _errorMessage = null;
+
+        try
+        {
+            if (AuthStateProvider.SelectedCustomer is null)
+            {
+                _tickets.Clear();
+                return;
+            }
+
+            var tickets = await BffApiClient.GetTicketsAsync(
+                AuthStateProvider.SelectedCustomer.Id,
+                openOnly: null,
+                token);
+
+            if (token.IsCancellationRequested || !ReferenceEquals(_loadCts, cts) || _disposed)
+            {
+                return;
+            }
+
+            _tickets.Clear();
+            // Newest first — opened_at is yyyy-MM-dd from the seed data, so
+            // string ordering matches chronological order. Closed tickets
+            // sink to the bottom of each date band.
+            _tickets.AddRange(tickets
+                .OrderByDescending(t => t.OpenedAt, StringComparer.Ordinal)
+                .ThenBy(t => string.IsNullOrWhiteSpace(t.ClosedAt) ? 0 : 1));
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested || _disposed)
+        {
+        }
+        catch (Exception ex)
+        {
+            if (ReferenceEquals(_loadCts, cts) && !_disposed)
+            {
+                _errorMessage = $"Unable to load support tickets: {ex.Message}";
+            }
+        }
+        finally
+        {
+            if (ReferenceEquals(_loadCts, cts))
+            {
+                _isLoading = false;
+                _loadCts = null;
+            }
+            cts.Dispose();
+        }
+    }
+
+    private static string FormatDate(string? value)
+    {
+        if (DateTime.TryParse(value, out var parsed))
+        {
+            return parsed.ToString("d MMM yyyy");
+        }
+        return value ?? "N/A";
+    }
+
+    private static string FormatCategory(string? category) => category switch
+    {
+        "shipping"      => "Shipping",
+        "product-issue" => "Product issue",
+        "return"        => "Return / refund",
+        "general"       => "General inquiry",
+        null            => "—",
+        ""              => "—",
+        _               => category
+    };
+
+    private static string FormatPriority(string? priority) =>
+        string.IsNullOrWhiteSpace(priority)
+            ? "—"
+            : char.ToUpperInvariant(priority[0]) + priority[1..];
+
+    private static string TrimDescription(string description)
+    {
+        const int Max = 220;
+        return description.Length <= Max
+            ? description
+            : description[..Max].TrimEnd() + "…";
+    }
+
+    private static string GetStatusChipClass(string? status) => status?.ToLowerInvariant() switch
+    {
+        "open"        => "status-chip-warn",
+        "in_progress" => "status-chip-info",
+        "in progress" => "status-chip-info",
+        "pending"     => "status-chip-warn",
+        "resolved"    => "status-chip-success",
+        "closed"      => "status-chip-success",
+        "cancelled"   => "status-chip-muted",
+        _             => "status-chip-info"
+    };
+
+    private async void HandleCustomerChanged()
+    {
+        try
+        {
+            await InvokeAsync(async () =>
+            {
+                if (_disposed)
+                {
+                    return;
+                }
+
+                await LoadTicketsAsync();
+
+                if (!_disposed)
+                {
+                    StateHasChanged();
+                }
+            });
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        AuthStateProvider.CustomerChanged -= HandleCustomerChanged;
+        _loadCts?.Cancel();
+    }
+}

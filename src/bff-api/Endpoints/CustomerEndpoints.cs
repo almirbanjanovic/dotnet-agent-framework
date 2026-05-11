@@ -11,6 +11,7 @@ namespace Contoso.BffApi.Endpoints;
 // /api/v1/me                            → resolved customer for the signed-in JWT
 // /api/v1/customers/{id}                → fetch a single customer
 // /api/v1/customers/{id}/orders         → fetch a customer's orders
+// /api/v1/customers/{id}/tickets        → fetch a customer's support tickets
 // /api/v1/products                      → product catalog (search/filter)
 // /api/v1/products/{id}                 → single product
 // POST /api/v1/orders                   → place an order for the signed-in customer
@@ -24,6 +25,7 @@ internal static class CustomerEndpoints
         RouteHandlerBuilder me,
         RouteHandlerBuilder customer,
         RouteHandlerBuilder orders,
+        RouteHandlerBuilder tickets,
         RouteHandlerBuilder products,
         RouteHandlerBuilder product,
         RouteHandlerBuilder placeOrder) MapCustomerEndpoints(this IEndpointRouteBuilder app)
@@ -31,10 +33,11 @@ internal static class CustomerEndpoints
         var me = app.MapGet("/me", GetMeAsync);
         var customer = app.MapGet("/customers/{id}", GetCustomerAsync);
         var orders = app.MapGet("/customers/{id}/orders", GetOrdersAsync);
+        var tickets = app.MapGet("/customers/{id}/tickets", GetTicketsAsync);
         var products = app.MapGet("/products", GetProductsAsync);
         var product = app.MapGet("/products/{id}", GetProductAsync);
         var placeOrder = app.MapPost("/orders", PlaceOrderAsync);
-        return (me, customer, orders, products, product, placeOrder);
+        return (me, customer, orders, tickets, products, product, placeOrder);
     }
 
     private static async Task<IResult> GetMeAsync(
@@ -123,6 +126,45 @@ internal static class CustomerEndpoints
         }
 
         using var response = await crmApiClient.GetCustomerAsync(id, cancellationToken);
+        return await ProxyResponseAsync(response, cancellationToken);
+    }
+
+    // Proxies CRM API GET /customers/{id}/tickets so the Blazor UI can show
+    // the signed-in customer their support tickets (status, opened-at,
+    // category) without going through the chat agent. Same owner-only
+    // policy as /orders — the route id MUST match the authenticated
+    // customer; we return 404 (not 403) so an attacker can't probe which
+    // customer ids exist. On a CRM error we return a generic 502 instead
+    // of forwarding the upstream body, mirroring the orders handler so we
+    // never leak internal exception details / stack frames / PII to the
+    // browser.
+    private static async Task<IResult> GetTicketsAsync(
+        string id,
+        bool? open_only,
+        CrmApiClient crmApiClient,
+        CustomerContext customerContext,
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
+    {
+        if (!IsAuthorizedForCustomer(id, customerContext))
+        {
+            return Results.NotFound();
+        }
+
+        var logger = loggerFactory.CreateLogger("Contoso.BffApi.Endpoints.Tickets");
+
+        using var response = await crmApiClient.GetCustomerTicketsAsync(id, open_only, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            logger.LogWarning(
+                "CRM API returned {StatusCode} for tickets of customer {CustomerId}.",
+                (int)response.StatusCode, id);
+            return Results.Problem(
+                statusCode: StatusCodes.Status502BadGateway,
+                title: "Failed to load support tickets.",
+                detail: "The CRM service returned an error. Please try again.");
+        }
+
         return await ProxyResponseAsync(response, cancellationToken);
     }
 

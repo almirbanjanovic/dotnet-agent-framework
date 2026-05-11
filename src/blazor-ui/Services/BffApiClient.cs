@@ -186,6 +186,23 @@ public sealed class BffApiClient
         return orders ?? Array.Empty<Order>();
     }
 
+    public async Task<IReadOnlyList<SupportTicket>> GetTicketsAsync(
+        string customerId, bool? openOnly = null, CancellationToken ct = default)
+    {
+        var url = $"/api/v1/customers/{customerId}/tickets";
+        if (openOnly is not null)
+        {
+            url += $"?open_only={(openOnly.Value ? "true" : "false")}";
+        }
+
+        using var httpRequest = CreateRequest(HttpMethod.Get, url);
+        using var response = await httpClient.SendAsync(httpRequest, ct);
+        response.EnsureSuccessStatusCode();
+
+        var tickets = await response.Content.ReadFromJsonAsync<IReadOnlyList<SupportTicket>>(JsonOptions, ct);
+        return tickets ?? Array.Empty<SupportTicket>();
+    }
+
     public async Task<IReadOnlyList<Product>> GetProductsAsync(
         string? category = null,
         string? query = null,

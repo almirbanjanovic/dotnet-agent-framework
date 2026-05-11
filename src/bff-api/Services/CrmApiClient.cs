@@ -15,6 +15,13 @@ public sealed class CrmApiClient
     public Task<HttpResponseMessage> GetCustomerOrdersAsync(string customerId, CancellationToken ct = default)
         => _httpClient.GetAsync($"/api/v1/customers/{Uri.EscapeDataString(customerId)}/orders", ct);
 
+    public Task<HttpResponseMessage> GetCustomerTicketsAsync(string customerId, bool? openOnly = null, CancellationToken ct = default)
+    {
+        // open_only is the same query-param the CRM API accepts; null = omit.
+        var qs = openOnly is null ? string.Empty : $"?open_only={(openOnly.Value ? "true" : "false")}";
+        return _httpClient.GetAsync($"/api/v1/customers/{Uri.EscapeDataString(customerId)}/tickets{qs}", ct);
+    }
+
     public Task<HttpResponseMessage> GetOrderItemsAsync(string orderId, CancellationToken ct = default)
         => _httpClient.GetAsync($"/api/v1/orders/{Uri.EscapeDataString(orderId)}/items", ct);
 

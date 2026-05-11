@@ -123,7 +123,7 @@ var api = app.MapGroup("/api/v1");
 var chatEndpoint = api.MapChatEndpoint();
 var (conversationsEndpoint, conversationEndpoint) = api.MapConversationEndpoints();
 var imageEndpoint = api.MapImageEndpoint();
-var (meEndpoint, customerEndpoint, ordersEndpoint, productsEndpoint, productEndpoint, placeOrderEndpoint) = api.MapCustomerEndpoints();
+var (meEndpoint, customerEndpoint, ordersEndpoint, ticketsEndpoint, productsEndpoint, productEndpoint, placeOrderEndpoint) = api.MapCustomerEndpoints();
 var (submitRefundEndpoint, listPendingEndpoint, submitDecisionEndpoint, getOutcomeEndpoint) = api.MapOperationsEndpoints();
 
 if (useEntraAuth)
@@ -139,6 +139,7 @@ if (useEntraAuth)
     meEndpoint.RequireAuthorization();
     customerEndpoint.RequireAuthorization();
     ordersEndpoint.RequireAuthorization();
+    ticketsEndpoint.RequireAuthorization();
     placeOrderEndpoint.RequireAuthorization();
     // Catalog browsing (products + product images) is public-by-design.
     // The Blazor UI exposes Home / Browse / ProductDetail to anonymous
@@ -167,6 +168,7 @@ conversationEndpoint.RequireRateLimiting("read");
 meEndpoint.RequireRateLimiting("read");
 customerEndpoint.RequireRateLimiting("read");
 ordersEndpoint.RequireRateLimiting("read");
+ticketsEndpoint.RequireRateLimiting("read");
 placeOrderEndpoint.RequireRateLimiting("write");
 productsEndpoint.RequireRateLimiting("read");
 productEndpoint.RequireRateLimiting("read");

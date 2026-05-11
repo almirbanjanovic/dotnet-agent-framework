@@ -48,6 +48,58 @@ public class BffApiClientTests
     }
 
     [Fact]
+    public async Task GetTicketsAsync_NoFilter_UsesUnfilteredUrl()
+    {
+        var handler = new StubHttpMessageHandler(_ => StubHttpMessageHandler.OkJson("[]"));
+        var client = CreateClient(handler, customerId: "cust-1");
+
+        await client.GetTicketsAsync("cust-1");
+
+        handler.Requests.Should().ContainSingle();
+        handler.Requests[0].RequestUri!.PathAndQuery
+            .Should().Be("/api/v1/customers/cust-1/tickets");
+    }
+
+    [Fact]
+    public async Task GetTicketsAsync_OpenOnlyTrue_AppendsQueryString()
+    {
+        var handler = new StubHttpMessageHandler(_ => StubHttpMessageHandler.OkJson("[]"));
+        var client = CreateClient(handler, customerId: "cust-1");
+
+        await client.GetTicketsAsync("cust-1", openOnly: true);
+
+        handler.Requests.Should().ContainSingle();
+        handler.Requests[0].RequestUri!.PathAndQuery
+            .Should().Be("/api/v1/customers/cust-1/tickets?open_only=true");
+    }
+
+    [Fact]
+    public async Task GetTicketsAsync_DeserializesPayload()
+    {
+        const string payload =
+            """
+            [{
+              "id":"t-1","customer_id":"cust-1","order_id":"o-99","category":"return",
+              "subject":"Refund","description":"Wrong size","status":"open","priority":"high",
+              "opened_at":"2025-01-15","closed_at":null
+            }]
+            """;
+        var handler = new StubHttpMessageHandler(_ => StubHttpMessageHandler.OkJson(payload));
+        var client = CreateClient(handler, customerId: "cust-1");
+
+        var tickets = await client.GetTicketsAsync("cust-1");
+
+        tickets.Should().ContainSingle();
+        tickets[0].Id.Should().Be("t-1");
+        tickets[0].CustomerId.Should().Be("cust-1");
+        tickets[0].OrderId.Should().Be("o-99");
+        tickets[0].Category.Should().Be("return");
+        tickets[0].Status.Should().Be("open");
+        tickets[0].Priority.Should().Be("high");
+        tickets[0].ClosedAt.Should().BeNull();
+    }
+
+    [Fact]
     public async Task SendChatAsync_PostsToChatEndpoint()
     {
         var handler = new StubHttpMessageHandler(_ => StubHttpMessageHandler.OkJson(ChatResponseJson()));

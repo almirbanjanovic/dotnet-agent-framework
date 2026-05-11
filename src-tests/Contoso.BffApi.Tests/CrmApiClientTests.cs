@@ -33,6 +33,34 @@ public class CrmApiClientTests
     }
 
     [Fact]
+    public async Task GetCustomerTicketsAsync_NoFilter_OmitsQueryString()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        var client = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
+        var crmClient = new CrmApiClient(client);
+
+        await crmClient.GetCustomerTicketsAsync("123");
+
+        handler.Requests.Should().ContainSingle();
+        handler.Requests.First().RequestUri!.PathAndQuery
+            .Should().Be("/api/v1/customers/123/tickets");
+    }
+
+    [Fact]
+    public async Task GetCustomerTicketsAsync_OpenOnlyTrue_AppendsQueryString()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        var client = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
+        var crmClient = new CrmApiClient(client);
+
+        await crmClient.GetCustomerTicketsAsync("123", openOnly: true);
+
+        handler.Requests.Should().ContainSingle();
+        handler.Requests.First().RequestUri!.PathAndQuery
+            .Should().Be("/api/v1/customers/123/tickets?open_only=true");
+    }
+
+    [Fact]
     public async Task GetHealthAsync_ConstructsCorrectUrl()
     {
         var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));

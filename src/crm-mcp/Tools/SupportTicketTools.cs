@@ -32,9 +32,9 @@ public sealed class SupportTicketTools
         }
     }
 
-    [McpServerTool(Name = "create_support_ticket", ReadOnly = false), Description("Create a new support ticket.")]
+    [McpServerTool(Name = "create_support_ticket", ReadOnly = false), Description("Create a new support ticket. Use this to start a return/refund (category='return'), report a shipping problem (category='shipping'), or escalate a defective product (category='product-issue'). All enum fields are case-sensitive lowercase.")]
     public async Task<string> CreateSupportTicketAsync(
-        [Description("Support ticket request payload.")] CreateTicketRequest request)
+        [Description("Support ticket request payload. Note category and priority are case-sensitive lowercase enums — see field descriptions for allowed values.")] CreateTicketRequest request)
     {
         try
         {
