@@ -8,18 +8,19 @@
 
 *Edit the source: [docs/architecture.drawio](docs/architecture.drawio) — open in [draw.io](https://app.diagrams.net)*
 
-### Components — 8 containers, each independently deployable
+### Components — 9 containers, each independently deployable
 
 | Component | Type | What it does | Calls | Identity |
 | --- | --- | --- | --- | --- |
-| **Blazor WASM UI** | SPA (.NET, MudBlazor) | User interface, MSAL auth, chat panel, conversation history | BFF API (HTTP) | *(none — browser-side)* |
-| **BFF API** | .NET Minimal API | JWT validation, CRM API proxy, image proxy (blob bytes), chat, conversation persistence | CRM API, Orchestrator, Blob Storage, Cosmos DB | `id-bff` |
+| **Blazor WASM UI** | SPA (.NET, MudBlazor) | User interface, MSAL auth, chat panel, conversation history, operations review queue | BFF API (HTTP) | *(none — browser-side)* |
+| **BFF API** | .NET Minimal API | JWT validation, CRM API proxy, image proxy (blob bytes), chat, conversation persistence, fraud-workflow operator proxy | CRM API, Orchestrator, Fraud Workflow, Blob Storage, Cosmos DB | `id-bff` |
 | **CRM API** | .NET Minimal API | All CRM data: customers, orders, products, promotions, support tickets (11 endpoints) | Cosmos DB (CRM) | `id-crm-api` |
 | **CRM MCP** | MCP Server | 11 tools wrapping all CRM API endpoints | CRM API (HTTP) | `id-crm-mcp` |
 | **Knowledge MCP** | MCP Server | 1 tool: `search_knowledge_base` | AI Search (SDK direct) | `id-know-mcp` |
 | **CRM Agent** | Agent | CRM specialist: customers, orders, billing, tickets, policies | CRM MCP + Knowledge MCP, Azure OpenAI | Contoso CRM Agent (agent identity) |
 | **Product Agent** | Agent | Product specialist: catalog, promotions, recommendations, guides | CRM MCP + Knowledge MCP, Azure OpenAI | Contoso Product Agent (agent identity) |
 | **Orchestrator Agent** | Agent | Intent classification, routes to CRM or Product agent | CRM/Product Agent (HTTP), Azure OpenAI | Contoso Orchestrator Agent (agent identity) |
+| **Fraud Workflow** | Workflow Service | Ambient + human-in-the-loop refund-risk assessment: fan-out to 3 specialist agents, aggregator, paused human gate, durable on Azure | CRM MCP + Knowledge MCP, Azure OpenAI, Durable Task Scheduler (Azure track) | Contoso Fraud Workflow (agent identity) |
 
 Each component is fully independent — own models, own Dockerfile, own Helm chart, own test project. No shared project references. Communication between services is HTTP/JSON only. This is enforced by an [automated fitness test](src-tests/Contoso.AppHost.Tests/ComponentIndependenceTests.cs) and a [CI workflow](.github/workflows/architecture-fitness.yml) — see the [edict in `src/README.md`](src/README.md#architectural-edict--component-independence).
 

@@ -19,6 +19,7 @@
     <ProjectReference Include="..\orchestrator-agent\Contoso.OrchestratorAgent.csproj" />
     <ProjectReference Include="..\bff-api\Contoso.BffApi.csproj" />
     <ProjectReference Include="..\blazor-ui\Contoso.BlazorUi.csproj" />
+    <ProjectReference Include="..\fraud-workflow\Contoso.FraudWorkflow.csproj" />
   </ItemGroup>
 
 </Project>

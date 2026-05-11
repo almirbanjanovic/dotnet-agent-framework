@@ -253,6 +253,67 @@ public sealed class BffApiClient
         return result ?? throw new InvalidOperationException("Order response was empty.");
     }
 
+    // ── Operator dashboard (Lab 3 — fraud-workflow) ────────────────────────
+    // All four endpoints are gated by RequireAuthorization() on the BFF, so
+    // we always go through the authenticated client.
+
+    public async Task<IReadOnlyList<RefundRiskAssessment>> GetPendingReviewsAsync(CancellationToken ct = default)
+    {
+        using var httpRequest = CreateRequest(HttpMethod.Get, "/api/v1/operations/pending");
+        using var response = await httpClient.SendAsync(httpRequest, ct);
+        response.EnsureSuccessStatusCode();
+        var result = await response.Content.ReadFromJsonAsync<List<RefundRiskAssessment>>(JsonOptions, ct);
+        return result ?? new List<RefundRiskAssessment>();
+    }
+
+    public async Task SubmitDecisionAsync(DecisionRequest request, CancellationToken ct = default)
+    {
+        using var httpRequest = CreateRequest(HttpMethod.Post, "/api/v1/operations/decisions");
+        httpRequest.Content = JsonContent.Create(request, options: JsonOptions);
+
+        using var response = await httpClient.SendAsync(httpRequest, ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadAsStringAsync(ct);
+            throw new InvalidOperationException(
+                $"Failed to submit decision ({(int)response.StatusCode}): {error}");
+        }
+    }
+
+    // For demo purposes — lets the operator console kick off a synthetic
+    // refund alert without standing up an external upstream.
+    public async Task<JsonElement> SubmitRefundAsync(object body, CancellationToken ct = default)
+    {
+        using var httpRequest = CreateRequest(HttpMethod.Post, "/api/v1/refunds");
+        httpRequest.Content = JsonContent.Create(body, options: JsonOptions);
+
+        using var response = await httpClient.SendAsync(httpRequest, ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadAsStringAsync(ct);
+            throw new InvalidOperationException(
+                $"Failed to submit refund ({(int)response.StatusCode}): {error}");
+        }
+
+        return await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions, ct);
+    }
+
+    public async Task<FinalAction?> GetOutcomeAsync(string alertId, CancellationToken ct = default)
+    {
+        using var httpRequest = CreateRequest(
+            HttpMethod.Get,
+            $"/api/v1/operations/{Uri.EscapeDataString(alertId)}");
+
+        using var response = await httpClient.SendAsync(httpRequest, ct);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<FinalAction>(JsonOptions, ct);
+    }
+
     public string GetImageUrl(string? filename)
     {
         if (string.IsNullOrWhiteSpace(filename))

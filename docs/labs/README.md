@@ -20,6 +20,6 @@ The labs are split by **track** so each folder is a self-contained read-through.
 | 0 | [Local — Lab 0](local/lab-0.md) | [Full Azure — Lab 0](full-azure/lab-0.md) | Bootstrap (tools, accounts, one-time setup) |
 | 1 | [Local — Lab 1](local/lab-1.md) | [Full Azure — Lab 1](full-azure/lab-1.md) | Infrastructure, validation, data seeding |
 | 2 | [Local — Lab 2](local/lab-2.md) | [Full Azure — Lab 2](full-azure/lab-2.md) | Single & multi-agent workflows (Microsoft Agent Framework) |
-| 3 | [Local — Lab 3](local/lab-3.md) | [Full Azure — Lab 3](full-azure/lab-3.md) | Human-in-the-loop, durable, ambient agent workflows |
+| 3 | [Local — Lab 3](local/lab-3.md) | [Full Azure — Lab 3](full-azure/lab-3.md) | Tour the existing `fraud-workflow` service (fan-out, aggregator, paused human gate); on the Full Azure track, harden the gate with Durable Task Scheduler so it survives pod restarts |
 
 You **can** switch tracks later, but the two tracks share no Azure state — anything you provisioned for the other track stays where it is.

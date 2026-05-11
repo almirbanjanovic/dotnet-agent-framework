@@ -75,6 +75,7 @@
                        impersonation dropdown auto-picks a seeded customer. *@
                     <MudMenuItem Icon="@Icons.Material.Outlined.ReceiptLong" Href="/orders">My orders</MudMenuItem>
                     <MudMenuItem Icon="@Icons.Material.Outlined.Person" Href="/profile">My profile</MudMenuItem>
+                    <MudMenuItem Icon="@Icons.Material.Outlined.Verified" Href="/operations">Operations</MudMenuItem>
                     <MudDivider />
                     <div class="impersonate-label">Impersonate (dev only)</div>
                     @foreach (var customer in AuthStateProvider.Customers)
@@ -96,6 +97,7 @@
                         <Authorized>
                             <MudMenuItem Icon="@Icons.Material.Outlined.ReceiptLong" Href="/orders">My orders</MudMenuItem>
                             <MudMenuItem Icon="@Icons.Material.Outlined.Person" Href="/profile">My profile</MudMenuItem>
+                            <MudMenuItem Icon="@Icons.Material.Outlined.Verified" Href="/operations">Operations</MudMenuItem>
                             <MudDivider />
                             <MudMenuItem Icon="@Icons.Material.Outlined.Logout" OnClick="BeginSignOut">Sign out</MudMenuItem>
                         </Authorized>

@@ -25,6 +25,7 @@
     <PackageVersion Include="Microsoft.Agents.AI" Version="1.2.0" />
     <PackageVersion Include="Microsoft.Agents.AI.Foundry" Version="1.2.0" />
     <PackageVersion Include="Microsoft.Agents.AI.OpenAI" Version="1.2.0" />
+    <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.2.0" />
 
     <!-- ASP.NET Core / Blazor -->
     <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="9.0.15" />

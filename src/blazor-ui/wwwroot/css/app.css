@@ -312,6 +312,35 @@ h1:focus { outline: none; }
     align-items: center;
 }
 
+/* ---------- AppBar passthrough classes ----------
+ * `.topbar-search` and `.page-main` are passed via `Class="..."` to MudBlazor
+ * components (MudTextField, MudMainContent). The class lands on those
+ * components' internal root elements which receive NO Blazor scope
+ * attribute, so MainLayout.razor.css can't reach them — the rules MUST
+ * live in this global stylesheet. */
+.topbar-search {
+    width: 280px;
+    margin-right: 0.5rem;
+}
+
+.topbar-search .mud-input-outlined-border {
+    border-radius: 999px;
+}
+
+@media (max-width: 900px) {
+    .topbar-search { width: 180px; }
+}
+
+.page-main {
+    /* Offset MUST match the actual rendered AppBar height; --app-appbar-h
+     * is defined on :root above. Change once, both layout and auth-shell
+     * stay aligned. */
+    padding-top: var(--app-appbar-h);
+    min-height: calc(100vh - var(--app-appbar-h));
+    display: flex;
+    flex-direction: column;
+}
+
 /* ---------- Auth flow card (Authentication.razor) ----------
  * The MSAL RemoteAuthenticatorView per-action templates render inside
  * this card so the transient "Signing you in…" / "You're signed out"

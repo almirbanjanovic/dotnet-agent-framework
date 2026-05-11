@@ -23,6 +23,7 @@ declare -A PORT_MAP=(
     [5006]="orchestrator-agent"
     [5007]="bff-api"
     [5008]="blazor-ui"
+    [5010]="fraud-workflow"
 )
 
 # Templates that need Foundry placeholder replacement
@@ -34,6 +35,7 @@ TEMPLATE_COMPONENTS=(
     "orchestrator-agent"
     "bff-api"
     "blazor-ui"
+    "fraud-workflow"
 )
 
 # Templates that are static (no placeholder replacement needed)

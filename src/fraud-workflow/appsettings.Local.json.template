@@ -1,0 +1,22 @@
+{
+  "Foundry": {
+    "ProjectEndpoint": "{{FOUNDRY_PROJECT_ENDPOINT}}",
+    "DeploymentName": "{{CHAT_DEPLOYMENT_NAME}}"
+  },
+  "AzureAd": {
+    "TenantId": "{{TENANT_ID}}"
+  },
+  "CrmMcp": {
+    "BaseUrl": "http://localhost:5002"
+  },
+  "KnowledgeMcp": {
+    "BaseUrl": "http://localhost:5003"
+  },
+  "Refund": {
+    "Threshold": 200.0,
+    "ApprovalTimeout": "3.00:00:00"
+  },
+  "Logging": {
+    "LogLevel": { "Default": "Information" }
+  }
+}

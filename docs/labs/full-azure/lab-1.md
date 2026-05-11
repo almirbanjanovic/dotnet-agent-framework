@@ -323,4 +323,4 @@ After completing all steps, verify:
 Lab 1 is complete. Your Azure environment is fully provisioned, validated, and seeded. Continue with:
 
 - **[Lab 2 — Single & Multi-Agent Workflows](lab-2.md)** — drive the existing CRM / Product / Orchestrator agents directly, then add a third specialist (Returns Agent) without touching the others.
-- **[Lab 3 — Human-in-the-Loop Workflows](lab-3.md)** — build an ambient, durable refund-risk workflow with three parallel agents, an aggregator, and a Blazor operations dashboard for review.
+- **[Lab 3 — Human-in-the-Loop Workflows](lab-3.md)** — tour the existing `fraud-workflow` service, then harden it for production: provision Azure Durable Task Scheduler, swap the in-memory approval gate for a DTS-backed one, gate the operator endpoints on an Entra app role, and prove the workflow survives a deliberate pod kill mid-pause.

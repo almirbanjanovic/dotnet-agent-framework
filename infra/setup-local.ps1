@@ -29,6 +29,7 @@ $PortMap = @(
     @{ Port = 5006; Component = "orchestrator-agent" }
     @{ Port = 5007; Component = "bff-api" }
     @{ Port = 5008; Component = "blazor-ui" }
+    @{ Port = 5010; Component = "fraud-workflow" }
 )
 
 # Templates that need Foundry placeholder replacement
@@ -39,7 +40,8 @@ $TemplateComponents = @(
     "product-agent",
     "orchestrator-agent",
     "bff-api",
-    "blazor-ui"
+    "blazor-ui",
+    "fraud-workflow"
 )
 
 # Templates that are static (no placeholder replacement needed)

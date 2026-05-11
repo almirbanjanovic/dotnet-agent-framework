@@ -6,6 +6,9 @@
   "CrmApi": {
     "BaseUrl": "http://localhost:5001"
   },
+  "FraudWorkflow": {
+    "BaseUrl": "http://localhost:5010"
+  },
   "Storage": {
     "ImagesEndpoint": "",
     "ImagesAccountName": "",

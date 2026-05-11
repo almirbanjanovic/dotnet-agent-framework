@@ -242,4 +242,4 @@ For port maps, troubleshooting, and component-level details, see the [Local Deve
 Lab 1 is complete. Continue with:
 
 - **[Lab 2 — Single & Multi-Agent Workflows](lab-2.md)** — drive the existing CRM / Product / Orchestrator agents directly, then add a third specialist (Returns Agent) without touching the others.
-- **[Lab 3 — Human-in-the-Loop Workflows](lab-3.md)** — build an ambient, durable refund-risk workflow with three parallel agents, an aggregator, and a Blazor operations dashboard for review.
+- **[Lab 3 — Human-in-the-Loop Workflows](lab-3.md)** — tour the existing `fraud-workflow` service: fan-out to three specialist agents, aggregator, paused human gate on the Blazor operations dashboard, then deliberately break the in-process gate to feel the durability gap that motivates the Full Azure track.

@@ -1,69 +1,82 @@
 # Lab 3 — Human-in-the-Loop Workflows (Full Azure Track)
 
-> **Track:** Full Azure — production-shaped: AKS pods, Azure Durable Task Scheduler, GitHub OIDC.
+> **Track:** Full Azure — production-shaped: AKS pods, Azure Durable Task Scheduler (DTS), GitHub OIDC, Entra workload identity.
 > Looking for the Local Track instead? See [`../local/lab-3.md`](../local/lab-3.md).
+
+> **Picture this.** The Local Track had you simulate a refund, watch
+> three agents fan out, click **Approve** in the operations dashboard,
+> and then deliberately `Ctrl+C` the AppHost — at which point the
+> pending review evaporated. That gap (in-process `TaskCompletionSource`
+> dies with the worker) is **the** thing the Full Azure Track closes.
+> Same workflow shape, same Blazor UI, same three specialist agents —
+> but the human gate now sits behind Azure Durable Task Scheduler so it
+> survives pod restarts, multi-replica deployments, AKS node rebuilds,
+> and the 72-hour timer that auto-escalates abandoned reviews.
+
+> **What this lab is NOT.** It is *not* "rebuild fraud-workflow on Azure
+> from scratch". The [`fraud-workflow`](../../../src/fraud-workflow/)
+> service already exists and is wired into the AppHost — exactly the
+> code you toured in the Local Track. This lab adds **only the durable
+> + production-gating layer**: provision DTS, swap the in-memory
+> approval gate for a DTS-backed one, gate the operator endpoints on an
+> Entra app role, ship the pod to AKS, then prove it survives a
+> deliberate pod kill mid-pause.
 
 ## What you'll learn
 
 This lab introduces a fundamentally different agent topology than Lab 2:
 
 - **Lab 2** is **synchronous** — a user sends a chat message, agents run, a response comes back in seconds.
-- **Lab 3** is **ambient and durable** — *no human starts the work*. Events arrive continuously (return requests, large refund claims, suspicious order patterns), agents investigate in parallel, and the workflow **pauses indefinitely** waiting for a human to approve or reject the recommended action. Hours, days, or weeks may pass between the analysis and the human decision. Pods will restart in the meantime.
+- **Lab 3 (Full Azure)** is **ambient and durable** — *no human starts the work*. Events arrive continuously (return requests, large refund claims, suspicious order patterns), agents investigate in parallel, and the workflow **pauses indefinitely** waiting for a human to approve or reject the recommended action. Hours, days, or weeks may pass between the analysis and the human decision. Pods will restart in the meantime.
 
-This is the pattern behind real-world systems like fraud detection, IT incident triage, loan underwriting, and content moderation. The Full Azure Track exercises four primitives that simple "user asks, agent answers" loops never need:
+This is the pattern behind real-world systems like fraud detection, IT incident triage, loan underwriting, and content moderation. Across the Local Track and the Full Azure Track you exercise four primitives that simple "user asks, agent answers" loops never need:
 
-1. **Fan-out / fan-in** — one alert dispatches to N specialist agents in parallel; an aggregator combines their findings.
-2. **Human-in-the-loop with timeout** — the workflow blocks on an external event (analyst decision) racing a timer (auto-escalate after 72h).
-3. **Durable replay** — when the worker pod is killed mid-step, a new pod reads the event log from Azure Durable Task Scheduler (DTS) and resumes deterministically.
-4. **Stateful agent conversations across the pause** — when the analyst rejects the recommendation and asks for re-analysis, the agents pick up with full context.
+1. **Fan-out / fan-in** — one alert dispatches to N specialist agents in parallel; an aggregator combines their findings. *(Already implemented — shared with the Local Track.)*
+2. **Human-in-the-loop with timeout** — the workflow blocks on an external event (analyst decision) racing a timer (auto-escalate after 72h). *(In-memory on Local Track; durable on this track.)*
+3. **Durable replay** — when the worker pod is killed mid-step, a new pod reads the event log from Azure Durable Task Scheduler and resumes deterministically. *(This track only.)*
+4. **Stateful agent conversations across the pause** — when the analyst rejects the recommendation and asks for re-analysis, the agents pick up with full context. *(Hardened on this track because state outlives the pod.)*
 
-You'll build a **Refund Risk Workflow** for Contoso Outdoors:
+The system you're hardening is the **Refund Risk Workflow** for Contoso Outdoors — same flow described in the [Local Track lab](../local/lab-3.md#step-1--read-the-workflow-assembly): a customer requests a refund, three specialists fan out to analyze it, the aggregator picks `approve`/`manual_review`/`escalate`, and (when not auto-approved) a human at Contoso Operations decides.
 
-- **Trigger:** a customer submits a refund request over a configurable threshold (default $200).
-- **Investigation:** three specialist agents run in parallel — `OrderHistoryAgent` (is this customer a serial returner?), `ReturnConditionAgent` (does the description match the product/policy?), `LoyaltyContextAgent` (Bronze customer with first-ever return vs. Platinum with 50 prior orders?).
-- **Aggregation:** a non-LLM aggregator combines risk scores into a single `RefundRiskAssessment` (`approve` / `manual_review` / `escalate`).
-- **Human gate:** if the assessment is anything other than `approve`, the workflow pauses on a DTS external-event subscription. An ops user opens the Blazor `/operations` page, reads the agents' findings, and clicks **Approve**, **Reject**, or **Re-investigate with feedback**.
-- **Action:** the workflow either calls `crm-mcp.create_support_ticket` (for refund processing) or sends the rejection back to the customer.
-
-By the end you'll have an ambient agent that survives pod restarts and an automatic 72-hour escalation timer.
+By the end of this lab the same workflow runs on AKS with durable state — kill the pod mid-pause and the new pod resumes from exactly the right line, and a 72-hour timer auto-escalates abandoned reviews even if every operator is on PTO.
 
 ### Microsoft Agent Framework primer (Workflows)
 
-Labs 1 and 2 used `AIAgent` and `RunAsync` — synchronous calls into a model. This lab adds the **Workflows** side of the framework, which lets you wire agents into a graph that the runtime executes for you.
+If you skipped the Local Track, the Workflows primer there walks the
+core types — read [the table in `../local/lab-3.md`](../local/lab-3.md#microsoft-agent-framework-primer-workflows)
+before continuing. The summary is:
 
-| Concept | Type | What it does |
-|---------|------|--------------|
-| **Executor** | `Microsoft.Agents.Workflows.Executor<TIn, TOut>` | A single node in the graph — runs in response to a typed input message and emits a typed output message. Wrap each specialist agent in one of these (`AgentExecutor`, `AggregatorExecutor`, `HumanGateExecutor` below). |
-| **WorkflowBuilder** | `Microsoft.Agents.Workflows.WorkflowBuilder` | Fluent DSL for declaring edges between executors. `AddEdge(a, b)` = "after `a` emits, send to `b`". `AddFanInEdges([a, b, c], d)` = "wait for all three, then run `d` once with the combined inputs". |
-| **WorkflowContext** | `Microsoft.Agents.Workflows.WorkflowContext` | The runtime handle inside an executor. Lets you `SendMessageAsync(...)`, `RequestExternalEventAsync(...)`, or read the workflow's state. |
-| **External events** | `ctx.WaitForExternalEventAsync<T>(eventName)` | The point where a workflow **pauses**. The runtime persists state in DTS and stops scheduling. When `RaiseEventAsync(eventName, payload)` is called from outside (e.g. an HTTP controller handling an approval click), the workflow resumes from exactly that line. |
-| **Persistence** | `IWorkflowCheckpointStore` (DTS-backed) | Workflow state is written between steps to **Azure Durable Task Scheduler**, a managed append-only event log. A crashed worker resumes mid-flow. |
+- **Executor** — one node, typed input → typed output. The repo has 5: [router](../../../src/fraud-workflow/Workflows/RouterExecutor.cs), 3 [agent executors](../../../src/fraud-workflow/Workflows/AgentExecutors.cs), [aggregator](../../../src/fraud-workflow/Workflows/AggregatorExecutor.cs), [human gate](../../../src/fraud-workflow/Workflows/HumanGateExecutor.cs).
+- **WorkflowBuilder** — fluent DSL: `AddFanOutEdge`, `AddFanInBarrierEdge`, `AddEdge`. The graph is assembled in [`RefundRiskWorkflow.cs`](../../../src/fraud-workflow/Workflows/RefundRiskWorkflow.cs).
+- **External events** — the framework's pause primitive (`ctx.WaitForExternalEventAsync<T>(...)`). For dependency hygiene the repo wraps the same pattern behind [`IApprovalGate`](../../../src/fraud-workflow/Services/IApprovalGate.cs).
+- **Persistence** — `Microsoft.Agents.AI.Workflows.Checkpointing.ICheckpointStore` (e.g. `JsonCheckpointStore`, `FileSystemJsonCheckpointStore`). The Local Track wires no checkpoint store at all; this lab adds DTS as the checkpoint backend so a pod restart resumes from the last saved transition.
 
-Three rules that will save you debugging time:
+The three rules that save you debugging time stay identical:
 
-1. **Executors must be deterministic given their inputs.** The runtime *replays* executor calls when it resumes from a checkpoint. Side effects (DB writes, MCP tool calls) belong inside agent executors, but anything in the workflow plumbing should be pure.
-2. **Pauses are awaits, not callbacks.** `var decision = await ctx.WaitForExternalEventAsync<ApprovalDecision>("ApprovalDecision");` reads exactly like a normal `await`. The runtime is what makes the gap between "send" and "resume" survive process restarts.
-3. **One workflow instance per business event.** Each refund alert produces a fresh workflow run with its own ID. The Operations UI lists in-flight runs by that ID; DTS keys checkpoints by it.
+1. **Executors must be deterministic given their inputs.** The runtime *replays* executor calls when it resumes from a checkpoint. Side effects (DB writes, MCP tool calls) belong inside agent executors, but anything in the workflow plumbing should be pure. This becomes load-bearing on the Full Azure Track because DTS replays are what give you durability.
+2. **Pauses are awaits, not callbacks.** `var decision = await gate.WaitForDecisionAsync(...);` reads exactly like a normal `await`. The runtime is what makes the gap between "send" and "resume" survive process restarts.
+3. **One workflow instance per business event.** Each refund alert produces a fresh workflow run with its own `AlertId`. The Operations UI lists in-flight runs by that ID; DTS keys checkpoints by it.
 
 ## Prerequisites
 
-- [Lab 1](lab-1.md) and [Lab 2](lab-2.md) complete.
+- [Local Track Lab 3](../local/lab-3.md) complete — you've toured the code, simulated a refund, approved it, and seen the durability gap when you `Ctrl+C` the AppHost.
+- [Full Azure Track Labs 1 and 2](lab-1.md) complete — Foundry + AKS + Terraform state are already in place.
 - A second browser profile or incognito window to play the **Operations** role separately from the **Customer** role.
 
-## The architecture you'll build
+## The architecture you're hardening
 
 ```text
    Customer submits         ┌─────────────────┐
    refund > $200            │  bff-api        │  POST /api/v1/refunds
-       ─────────────────►   │  /refunds       │  enqueues alert
+       ─────────────────►   │  /refunds       │  proxies to fraud-workflow
                             └────────┬────────┘
                                      │
                                      ▼
                             ┌─────────────────────┐
-                            │  fraud-workflow     │  ← AKS deployment
+                            │  fraud-workflow     │  ← AKS deployment (HPA)
                             │  pod                │     workflow primitives
                             └────────┬────────────┘
-                                     │ fan-out
+                                     │ RouterExecutor (fan-out)
               ┌──────────────────────┼──────────────────────┐
               ▼                      ▼                      ▼
        ┌────────────┐        ┌─────────────────┐    ┌──────────────────┐
@@ -73,344 +86,153 @@ Three rules that will save you debugging time:
        └─────┬──────┘        └────────┬────────┘    └─────────┬────────┘
              │                        │                       │
              └────────────────────────┴───────────────────────┘
-                                      ▼
+                                      ▼ AddFanInBarrierEdge
                             ┌──────────────────────┐
-                            │ risk aggregator      │  pure C#, no LLM
+                            │ AggregatorExecutor   │  pure C#, no LLM
                             │ → RefundRiskAssessment│
                             └────────┬─────────────┘
-                                     │ if risk != "approve"
+                                     │ if RecommendedAction != "approve"
                                      ▼
-                            ┌──────────────────────────┐
-                            │  PAUSE                   │  DTS external event
-                            │  WaitForApprovalAsync()  │  (durable, replayable)
-                            └────────┬─────────────────┘
-                                     │
+                            ┌──────────────────────────────────┐
+                            │  HumanGateExecutor               │  PAUSE
+                            │  await gate.WaitForDecisionAsync │
+                            └────────┬─────────────────────────┘
+                                     │  ┌───────────────────────────────┐
+                                     │  │ DurableTaskApprovalGate       │
+                                     ├──┤ • external-event subscription │
+                                     │  │   in DTS                       │
+                                     │  │ • timer registered in DTS      │
+                                     │  │ • CHECKPOINTED                 │
+                                     │  └───────────────────────────────┘
                           ┌──────────┴──────────────┐
                           ▼                         ▼
               ┌─────────────────────┐     ┌────────────────────┐
               │ Operator clicks     │     │ DTS timer (72h)    │
-              │ Approve / Reject    │     │ → auto-escalate    │
-              │ / Re-investigate    │     └────────────────────┘
-              └──────────┬──────────┘
+              │ Approve / Reject    │     │ → FinalAction.     │
+              │ / Reinvestigate     │     │   Timeout (P1 esc) │
+              └──────────┬──────────┘     └────────────────────┘
                          ▼
                 ┌────────────────────┐
-                │ Action: ticket OR  │
-                │ rejection notice   │
+                │ FinalAction emitted│
+                │ → workflow output  │
                 └────────────────────┘
 ```
 
-The `fraud-workflow` service is a **new component** you'll add — it does not exist in `src/` yet. It follows the same component-independence rule as every other service: no `<ProjectReference>` to any other project under `src/` — only NuGet package references. The same fitness function ([`ComponentIndependenceTests`](../../../src-tests/Contoso.AppHost.Tests/ComponentIndependenceTests.cs)) that guards every other service will guard this one too.
+The single difference from the [Local Track architecture](../local/lab-3.md#the-architecture-youre-exploring) is the dashed box: `IApprovalGate` is no longer backed by a process-local `ConcurrentDictionary<string, TaskCompletionSource>` but by **Azure Durable Task Scheduler**. The contract on `HumanGateExecutor` is unchanged — that's the whole point of having put the gate behind an interface.
 
-> **Background reading.** For a deep dive on **why** durable workflows matter — the wait-for-human problem, replay semantics, exactly-once side effects — read the [.NET Durable Task SDK docs](https://learn.microsoft.com/en-us/azure/durable-task-scheduler/durable-task-sdks/durable-task-sdks). Every primitive in this lab has a direct equivalent in that SDK.
+> **A map of what's where.** The first eight rows already exist in
+> `src/`. The last four are net-new artifacts you produce in this lab.
+>
+> | Concern | Location | Status |
+> |---|---|---|
+> | RouterExecutor | [`src/fraud-workflow/Workflows/RouterExecutor.cs`](../../../src/fraud-workflow/Workflows/RouterExecutor.cs) | Existing |
+> | 3 specialist agents | [`src/fraud-workflow/Agents/`](../../../src/fraud-workflow/Agents/) | Existing |
+> | AggregatorExecutor + RiskAggregator | [`src/fraud-workflow/Workflows/AggregatorExecutor.cs`](../../../src/fraud-workflow/Workflows/AggregatorExecutor.cs), [`Services/RiskAggregator.cs`](../../../src/fraud-workflow/Services/RiskAggregator.cs) | Existing |
+> | HumanGateExecutor + IApprovalGate | [`src/fraud-workflow/Workflows/HumanGateExecutor.cs`](../../../src/fraud-workflow/Workflows/HumanGateExecutor.cs), [`Services/IApprovalGate.cs`](../../../src/fraud-workflow/Services/IApprovalGate.cs) | Existing |
+> | InMemoryApprovalGate (Local-only) | [`src/fraud-workflow/Services/InMemoryApprovalGate.cs`](../../../src/fraud-workflow/Services/InMemoryApprovalGate.cs) | Existing — *your starting point for the swap-in* |
+> | Workflow assembly | [`src/fraud-workflow/Workflows/RefundRiskWorkflow.cs`](../../../src/fraud-workflow/Workflows/RefundRiskWorkflow.cs) | Existing |
+> | BFF proxy + operator endpoints | [`src/bff-api/Endpoints/OperationsEndpoints.cs`](../../../src/bff-api/Endpoints/OperationsEndpoints.cs), [`Services/FraudWorkflowClient.cs`](../../../src/bff-api/Services/FraudWorkflowClient.cs) | Existing |
+> | Operator UI | [`src/blazor-ui/Pages/Operations.razor`](../../../src/blazor-ui/Pages/Operations.razor) | Existing |
+> | DTS task hub (Terraform) | `infra/terraform/modules/durable-task-scheduler/` | **You build** |
+> | `id-fraud-workflow` workload identity | `infra/terraform/modules/agent-identity` reuse | **You build** |
+> | `DurableTaskApprovalGate` impl | `src/fraud-workflow/Services/Durable/` | **You build** |
+> | `Operations` Entra app role + auth gate | `infra/terraform/modules/entra-app-roles/`, `src/bff-api/Program.cs` policy | **You build** |
+> | AKS deployment (Helm) | `src/fraud-workflow/chart/`, `infra/k8s/manifests/network-policies/` | **You build** |
 
-## Step 1 — Provision the DTS task hub
+> **Background reading.** For a deep dive on **why** durable workflows matter — the wait-for-human problem, replay semantics, exactly-once side effects — read the [.NET Durable Task SDK docs](https://learn.microsoft.com/en-us/azure/durable-task-scheduler/durable-task-sdks/durable-task-sdks). Every primitive on this track has a direct equivalent in that SDK.
 
-Add a Terraform module under modules/ — `durable-task-scheduler/`. The DTS resource type is `azurerm_durable_task_scheduler` (preview as of writing). It needs:
+## Step 1 — Re-read the existing workflow code with production eyes
+
+Before you provision a single Azure resource, do a focused re-read of the existing `fraud-workflow` code with the *durability* lens on. Look for the seams the Full Azure Track is going to cross.
+
+1. Open [`Workflows/RefundRiskWorkflow.cs`](../../../src/fraud-workflow/Workflows/RefundRiskWorkflow.cs). Notice that **no `ICheckpointStore` is registered** in the builder. That's the gap — Step 5 below registers DTS as the checkpoint store, no other code change needed.
+2. Open [`Workflows/HumanGateExecutor.cs`](../../../src/fraud-workflow/Workflows/HumanGateExecutor.cs). The whole executor is `await _gate.WaitForDecisionAsync(...)`. Because that `await` is the only mutation in the executor, the runtime can checkpoint state immediately *before* it and replay deterministically.
+3. Open [`Services/IApprovalGate.cs`](../../../src/fraud-workflow/Services/IApprovalGate.cs). Two methods: `WaitForDecisionAsync(alertId, assessment, ct)` and `SubmitDecision(alertId, decision)`. The contract makes no assumption about *where* the wait is held — that's the seam your DTS implementation slots into.
+4. Open [`Services/InMemoryApprovalGate.cs`](../../../src/fraud-workflow/Services/InMemoryApprovalGate.cs). Note the comment block at the top calling out the durability gap, and the linked `CancellationTokenSource` racing the 72-hour timeout against the operator's click. That's the same race you'll express against DTS — but DTS will hold the timer in its event log, not in your process.
+
+That's the whole shape of the swap-in: register a `DurableTaskApprovalGate` in `Program.cs` and register a DTS-backed `ICheckpointStore` on the workflow. *Nothing else in the workflow code changes.*
+
+## Step 2 — Provision the DTS task hub
+
+Add a Terraform module under [`infra/terraform/modules/`](../../../infra/terraform/modules/) named `durable-task-scheduler/`. The DTS resource type is `azurerm_durable_task_scheduler` (preview as of writing — pin the API version in [`providers.tf`](../../../infra/terraform/providers.tf) the same way the other preview services are pinned).
+
+The module needs:
 
 - A scheduler resource (`name`, `location`, `sku = "Dedicated"`).
 - A task hub child resource (`name = "refund-risk-hub"`).
-- RBAC: assign the `Durable Task Data Contributor` role to the `id-fraud-workflow` workload identity (you'll create that in Step 2).
+- An RBAC assignment of the `Durable Task Data Contributor` role to the `id-fraud-workflow` workload identity (created in Step 3) on the task hub scope.
 
-Pin the API version in providers.tf as you do for the other preview services.
+Wire the module into [`infra/terraform/main.tf`](../../../infra/terraform/main.tf) alongside the other module calls. Surface the scheduler endpoint and task hub name as Terraform outputs and route them into the [`k8s-secrets.tf`](../../../infra/terraform/k8s-secrets.tf) ConfigMap so the pod resolves them at startup as `DurableTask:Endpoint` and `DurableTask:TaskHub` (matching the [config naming standard](../../config-naming-standard.md)). The `Refund:ApprovalTimeout` config key (TimeSpan string, e.g. `"72:00:00"` for the 72h SLA, `"00:05:00"` for a demo) is the same in every environment — only the *backend* of the gate changes.
 
-## Step 2 — Provision the agent identity
+> **Why a separate DTS task hub per environment, not per service?** DTS hubs are inexpensive — running one per environment per workload class makes blast-radius reasoning trivial. Sharing a hub across teams means a runaway orchestration in one product can throttle every other team's workflows.
 
-In main.tf, add another `agent-identity` module call mirroring the pattern used for `crm-agent`:
+## Step 3 — Provision the agent identity
 
-```hcl
-module "agent_identity_fraud" {
-  source        = "./modules/agent-identity"
-  base_name     = local.base_name
-  agent_name    = "fraud-workflow"
-  foundry_id    = module.foundry.id
-  keyvault_id   = module.keyvault.id
-  oidc_issuer   = module.aks.oidc_issuer_url
-  namespace     = "contoso"
-  service_account_name = "sa-fraud-workflow"
-}
-```
+Reuse the existing [`agent-identity` module](../../../infra/terraform/modules/) (the same one used by `crm-agent`, `product-agent`, etc.) with a fresh call:
 
-This creates an Entra Agent ID with its own object ID, plus the federated credential and `User Access Administrator`-scoped role assignments on Foundry. See [docs/security.md](../../security.md#agent-authentication) for the full identity story.
+- `agent_name = "fraud-workflow"`
+- `service_account_name = "sa-fraud-workflow"`
+- `namespace = "contoso"`
 
-## Step 3 — Scaffold the workflow service
+This creates an Entra Agent ID with its own object ID, a federated credential bound to the AKS OIDC issuer for `system:serviceaccount:contoso:sa-fraud-workflow`, and the same `User Access Administrator`-scoped role assignments on Foundry that the other agents already have. See [docs/security.md § Agent authentication](../../security.md#agent-authentication) for the full identity story.
 
-```powershell
-mkdir src/fraud-workflow
-Push-Location src/fraud-workflow
-dotnet new web -n Contoso.FraudWorkflow --no-restore
-Move-Item Contoso.FraudWorkflow/* .
-Remove-Item Contoso.FraudWorkflow
-Pop-Location
-```
+The DTS RBAC assignment from Step 2 binds this identity to the task hub. End-state: the pod authenticates to DTS using `DefaultAzureCredential` (federated workload identity → Entra → DTS data plane). No connection strings, no keys.
 
-Edit Contoso.FraudWorkflow.csproj. This repo uses **central package
-management** — every `<PackageReference>` in a project file gets its version
-from a matching `<PackageVersion>` line in `Directory.Packages.props`. Server
-SignalR ships in the `Microsoft.AspNetCore.App` framework reference of the
-`Microsoft.NET.Sdk.Web` SDK, so it does **not** need a `<PackageReference>`.
-The Durable Task packages aren't in the repo yet — add their pins to
-`Directory.Packages.props` first:
+## Step 4 — Build the `DurableTaskApprovalGate`
 
-```xml
-<!-- Directory.Packages.props (alongside the other Microsoft.* lines) -->
-<PackageVersion Include="Microsoft.DurableTask.Client" Version="1.5.0" />
-<PackageVersion Include="Microsoft.DurableTask.Worker" Version="1.5.0" />
-```
+Create `src/fraud-workflow/Services/Durable/DurableTaskApprovalGate.cs` implementing [`IApprovalGate`](../../../src/fraud-workflow/Services/IApprovalGate.cs). The structure mirrors [`InMemoryApprovalGate`](../../../src/fraud-workflow/Services/InMemoryApprovalGate.cs) but the wait is held in DTS instead of in process memory. Two methods:
 
-Then the project file:
+- `WaitForDecisionAsync(alertId, assessment, ct)` — when called from inside the workflow, this is the durable equivalent of the in-memory race: register an external event subscription on DTS for event name `"ApprovalDecision"` and a DTS-backed timer with the configured `Refund:ApprovalTimeout` (default `72:00:00`, TimeSpan format); `await Task.WhenAny(...)` on the two; return the winner. Both the subscription and the timer are part of the orchestration's event log — they survive a pod restart.
+- `SubmitDecision(alertId, decision)` — called by `OperationsEndpoint` from outside the orchestration when the operator clicks Approve/Reject/Reinvestigate. It calls the DTS client's `RaiseEventAsync(orchestrationInstanceId, "ApprovalDecision", decision)`. *This* is the call that resumes the paused workflow.
 
-```xml
-<Project Sdk="Microsoft.NET.Sdk.Web">
-  <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <RootNamespace>Contoso.FraudWorkflow</RootNamespace>
-  </PropertyGroup>
-  <ItemGroup>
-    <PackageReference Include="Microsoft.Agents.AI" />
-    <PackageReference Include="Microsoft.Agents.AI.OpenAI" />
-    <PackageReference Include="Azure.AI.OpenAI" />
-    <PackageReference Include="Azure.Identity" />
-    <PackageReference Include="ModelContextProtocol" />
-    <PackageReference Include="Microsoft.DurableTask.Client" />
-    <PackageReference Include="Microsoft.DurableTask.Worker" />
-  </ItemGroup>
-</Project>
-```
+In [`Program.cs`](../../../src/fraud-workflow/Program.cs), bind the gate registration to environment:
 
-Add it to the solution and reference it from the AppHost so Aspire's source
-generator emits `Projects.Contoso_FraudWorkflow`:
+- `ASPNETCORE_ENVIRONMENT=Local` → `InMemoryApprovalGate` (existing default).
+- All other environments → `DurableTaskApprovalGate`.
+
+Also in `Program.cs`, register a DTS-backed checkpoint store with the workflow runtime so the pre-pause state is persisted, and gate `FraudWorkflowRunner` startup behind a DTS connectivity health check so the pod doesn't go `Ready` until it can reach the task hub.
+
+> **Why an `if (env == Local)` switch in `Program.cs` and not separate
+> binaries?** Two reasons. First, the surface area of the swap is one
+> DI registration — splitting binaries to save one `if` is over-engineering.
+> Second, the `Local` branch is *exercised by the entire test suite*; if
+> we forked binaries, the Local code would silently bit-rot.
+
+## Step 5 — Add an `Operations` Entra app role and gate the BFF endpoints
+
+Customer-facing routes are unchanged. The operator routes need to be **authorized**, **audited**, and **attributable** — every approval click should resolve to a specific Entra identity in App Insights and Cosmos DB.
+
+1. Add a Terraform module `entra-app-roles/` (or extend the existing app-registration module) declaring an `Operations` app role on the BFF's app registration.
+2. Assign the role to a small group of test users (`ContosoOperations` or similar). Verify in the Entra portal.
+3. In [`src/bff-api/Program.cs`](../../../src/bff-api/Program.cs), tighten every `RequireAuthorization()` call on the four operations endpoints (`submitRefundEndpoint`, `listPendingEndpoint`, `submitDecisionEndpoint`, `getOutcomeEndpoint`) to `RequireAuthorization(p => p.RequireRole("Operations"))`. A customer-only user must get `403`, not `200`. (The endpoint mapping itself stays in [`OperationsEndpoints.cs`](../../../src/bff-api/Endpoints/OperationsEndpoints.cs); the auth policy lives in `Program.cs` because that's where the `useEntraAuth` switch is.)
+4. In [`src/blazor-ui/Pages/Operations.razor`](../../../src/blazor-ui/Pages/Operations.razor), tighten `@attribute [Authorize]` to `@attribute [Authorize(Roles = "Operations")]` so non-operators don't even see the menu item resolve.
+
+This is the difference between *demo HITL* and *production HITL*: every approval is attributed to a specific Entra identity in App Insights — and *only* members of `ContosoOperations` can see the queue, much less click a button on it.
+
+## Step 6 — Containerize and deploy to AKS
+
+For each piece, mirror the existing pattern of one of the other agents (`crm-agent` is closest in shape).
+
+1. Add `src/fraud-workflow/Dockerfile` — clone from [`src/crm-agent/Dockerfile`](../../../src/crm-agent/Dockerfile), update the project name. Same multi-stage build, same `dotnet publish` flags, same non-root user.
+2. Add `src/fraud-workflow/chart/` — clone from [`src/crm-agent/chart/`](../../../src/crm-agent/chart/), update `Chart.yaml`, image repository, the service account name (`sa-fraud-workflow`), and the ConfigMap keys for `DurableTask:Endpoint`, `DurableTask:TaskHub`, and `Refund:ApprovalTimeoutHours`.
+3. Add a `NetworkPolicy` under [`infra/k8s/manifests/network-policies/`](../../../infra/k8s/manifests/) allowing egress to the DTS service endpoint (DTS uses gRPC over HTTPS) plus the existing `crm-mcp` and `knowledge-mcp` egress that the other agents already have.
+4. Add the new component to the deploy CI workflow ([`.github/workflows/`](../../../.github/workflows/)) — same `kubectl apply` / `helm upgrade` shape as the existing services.
+
+Roll forward with [`infra/deploy.ps1`](../../../infra/deploy.ps1) (or `deploy.sh` on Linux/macOS). Verify:
 
 ```powershell
-dotnet sln add src/fraud-workflow/Contoso.FraudWorkflow.csproj
+kubectl get pods -n contoso -l app=fraud-workflow
+kubectl logs -n contoso -l app=fraud-workflow --tail=50
 ```
 
-```xml
-<!-- src/AppHost/Contoso.AppHost.csproj — alongside the other ProjectReference items -->
-<ProjectReference Include="..\fraud-workflow\Contoso.FraudWorkflow.csproj" />
-```
+The pod should log `Connected to DTS task hub: refund-risk-hub` and stay `Ready`.
 
-```powershell
-dotnet build src/AppHost/Contoso.AppHost.csproj
-```
-
-## Step 4 — Create the three specialist agents
-
-In src/fraud-workflow/Agents/ create three files. Each is a thin wrapper around `Microsoft.Agents.AI.AIAgent` that loads MCP tools at startup, runs one analysis turn, and returns a structured result.
-
-**OrderHistoryAgent.cs** — looks up the customer's prior orders via `crm-mcp.get_customer_orders` and reports patterns:
-
-```csharp
-public sealed class OrderHistoryAgent
-{
-    private readonly AIAgent _agent;
-
-    public OrderHistoryAgent(AIAgent agent) => _agent = agent;
-
-    public async Task<AgentFinding> AnalyzeAsync(RefundAlert alert, CancellationToken ct)
-    {
-        // The prompt template is interpolated with `$$"""..."""` so literal
-        // JSON braces (`{`, `}`) don't have to be escaped — only doubled
-        // `{{ }}` placeholders are interpolated. (`$"""..."""` would treat
-        // every single `{` as the start of an interpolation hole.)
-        var prompt = $$"""
-            Customer {{alert.CustomerId}} requests refund for order {{alert.OrderId}} (amount: ${{alert.Amount}}).
-            Reason given: "{{alert.Reason}}"
-
-            Investigate this customer's order and return history. Report:
-            - Total orders in last 12 months
-            - Total returns in last 12 months
-            - Return rate as percentage
-            - Any flagged patterns (e.g., serial returner, recent burst of returns)
-
-            Output JSON: { "riskScore": 0.0-1.0, "findings": "...", "evidence": ["...", "..."] }
-            """;
-
-        var response = await _agent.RunAsync(prompt, cancellationToken: ct);
-        return AgentFinding.Parse(response.ToString());
-    }
-}
-```
-
-The other two follow the same shape with different prompts and tool subsets:
-
-- **ReturnConditionAgent** — uses `knowledge-mcp.search_knowledge_base` to fetch the relevant policy section and `crm-mcp.get_order_detail` to fetch the items; reports whether the customer's reason matches a covered scenario.
-- **LoyaltyContextAgent** — uses `crm-mcp.get_customer_detail` for tier and account age; reports whether the customer's profile carries weight.
-
-Wire each agent in `Program.cs` the same way `crm-agent` does — see
-[`src/crm-agent/Services/CrmAgentFactory.cs`](../../../src/crm-agent/Services/CrmAgentFactory.cs)
-and [`src/crm-agent/Endpoints/ChatEndpoint.cs`](../../../src/crm-agent/Endpoints/ChatEndpoint.cs).
-
-## Step 5 — Build the workflow with `WorkflowBuilder`
-
-Create Workflows/RefundRiskWorkflow.cs:
-
-```csharp
-public static class RefundRiskWorkflow
-{
-    public static IWorkflow Build(
-        OrderHistoryAgent history,
-        ReturnConditionAgent condition,
-        LoyaltyContextAgent loyalty,
-        RiskAggregator aggregator,
-        IApprovalGate approvalGate)
-    {
-        var router    = new AlertRouterExecutor();                // fans out alert → 3 executors
-        var historyEx = new AgentExecutor("history",   history);
-        var condEx    = new AgentExecutor("condition", condition);
-        var loyaltyEx = new AgentExecutor("loyalty",   loyalty);
-        var agg       = new AggregatorExecutor("agg",  aggregator);
-        var gate      = new HumanGateExecutor("gate",  approvalGate);
-
-        return new WorkflowBuilder(router)
-            .AddEdge(router, historyEx)
-            .AddEdge(router, condEx)
-            .AddEdge(router, loyaltyEx)
-            .AddFanInEdges(new[] { historyEx, condEx, loyaltyEx }, agg)
-            .AddEdge(agg, gate)
-            .Build();
-    }
-}
-```
-
-The `HumanGateExecutor` is where the workflow pauses. It calls `IApprovalGate.WaitForDecisionAsync` which on the Full Azure Track is backed by DTS — see [Step 6](#step-6--implement-the-dts-backed-approval-gate).
-
-## Step 6 — Implement the DTS-backed approval gate
-
-```csharp
-public sealed class DurableTaskApprovalGate : IApprovalGate
-{
-    public Task<ApprovalDecision> WaitForDecisionAsync(
-        string alertId, RefundRiskAssessment assessment, CancellationToken ct)
-    {
-        // Inside an orchestration function, the executor will call:
-        //   var winner = await Task.WhenAny(
-        //       ctx.WaitForExternalEventAsync<ApprovalDecision>("ApprovalDecision"),
-        //       ctx.CreateTimer(TimeSpan.FromHours(72), ct));
-        // and return the winner.
-        // The HTTP /decisions endpoint calls:
-        //   await durableClient.RaiseEventAsync(instanceId, "ApprovalDecision", decision);
-        ...
-    }
-}
-```
-
-The shape of `WaitForExternalEventAsync` + `CreateTimer` racing under `Task.WhenAny` is the **canonical** durable HITL pattern — the same primitive your team would use for incident triage, loan underwriting, content moderation. The 72-hour timer is persisted in DTS, not in your process; it survives restarts.
-
-## Step 7 — Add a SignalR hub for the operations dashboard
-
-Create Hubs/OperationsHub.cs:
-
-```csharp
-public sealed class OperationsHub : Hub
-{
-    public Task JoinOperations() => Groups.AddToGroupAsync(Context.ConnectionId, "operations");
-}
-```
-
-Map it in Program.cs:
-
-```csharp
-builder.Services.AddSignalR();
-app.MapHub<OperationsHub>("/hubs/operations");
-```
-
-## Step 8 — Add the Blazor operations page
-
-In src/blazor-ui/Pages/ create Operations.razor:
-
-```razor
-@page "/operations"
-@attribute [Authorize(Roles = "Operations")]
-@inject HttpClient Http
-@inject NavigationManager Nav
-@implements IAsyncDisposable
-
-<h2>Refund risk reviews</h2>
-
-@if (_pending.Count == 0)
-{
-    <p><em>No reviews pending.</em></p>
-}
-else
-{
-    foreach (var card in _pending)
-    {
-        <div class="review-card">
-            <h3>Alert @card.AlertId — Customer @card.CustomerId — $@card.Amount</h3>
-            <p><strong>Recommendation:</strong> @card.RecommendedAction (risk: @card.OverallRiskScore)</p>
-            <details><summary>Order history finding</summary><p>@card.HistoryFindings</p></details>
-            <details><summary>Return condition finding</summary><p>@card.ConditionFindings</p></details>
-            <details><summary>Loyalty context finding</summary><p>@card.LoyaltyFindings</p></details>
-            <button @onclick="() => Decide(card.AlertId, ApprovalDecision.Approve)">Approve</button>
-            <button @onclick="() => Decide(card.AlertId, ApprovalDecision.Reject)">Reject</button>
-            <button @onclick="() => Decide(card.AlertId, ApprovalDecision.Reinvestigate)">Re-investigate</button>
-        </div>
-    }
-}
-
-@code {
-    private readonly List<RefundRiskAssessment> _pending = new();
-    private HubConnection? _hub;
-
-    protected override async Task OnInitializedAsync()
-    {
-        _hub = new HubConnectionBuilder()
-            .WithUrl(Nav.ToAbsoluteUri("/hubs/operations"))   // BFF proxies to fraud-workflow
-            .WithAutomaticReconnect()
-            .Build();
-
-        _hub.On<RefundRiskAssessment>("PendingReviewAdded", a =>
-        {
-            _pending.Add(a);
-            InvokeAsync(StateHasChanged);
-        });
-
-        await _hub.StartAsync();
-        await _hub.SendAsync("JoinOperations");
-    }
-
-    private async Task Decide(string alertId, ApprovalDecision decision)
-    {
-        await Http.PostAsJsonAsync("/api/v1/operations/decisions",
-            new { AlertId = alertId, Decision = decision });
-        _pending.RemoveAll(p => p.AlertId == alertId);
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        if (_hub is not null) await _hub.DisposeAsync();
-    }
-}
-```
-
-Add a navigation entry to NavMenu.razor pointing at `/operations`.
-
-## Step 9 — Containerize and deploy
-
-1. Add fraud-workflow/Dockerfile (clone from src/crm-agent/Dockerfile — same multi-stage shape).
-2. Add fraud-workflow/chart/ (clone from src/crm-agent/chart/, update `Chart.yaml`, image repo, service account name `sa-fraud-workflow`, and the ConfigMap keys for DTS endpoint + task hub name).
-3. Add a NetworkPolicy under infra/k8s/manifests/network-policies/ allowing egress to the DTS service endpoint (DTS uses gRPC over HTTPS) plus the existing `crm-mcp` and `knowledge-mcp` egress.
-4. Add the new component to the deploy CI workflow.
-
-## Step 10 — Wire the BFF and Blazor for operator auth
-
-The customer-facing flow is unchanged. The operations dashboard needs additional gating:
-
-- Add an Entra app role `Operations` to the BFF app registration (Terraform module `entra-app-roles`).
-- Assign the `Operations` role to a small group of users.
-- The `Operations.razor` page already has `@attribute [Authorize(Roles = "Operations")]` (added in Step 8).
-- In bff-api/Program.cs, gate the `/api/v1/operations/*` endpoints with `RequireAuthorization(p => p.RequireRole("Operations"))` and proxy them to the `fraud-workflow` service.
-
-This is the difference between *demo HITL* and *production HITL*: the human gate is now an **authorized**, **audited** action — every approval is attributed to a specific Entra identity in App Insights and Cosmos DB.
-
-## Step 11 — Test durability for real
+## Step 7 — Test durability for real
 
 This is the demonstration the Local Track couldn't do.
 
-1. Submit a refund request via the Blazor UI (signed in as `emma.wilson`).
-2. Confirm the review card appears on `/operations`.
+1. Submit a refund request via the Blazor UI (signed in as `emma.wilson` from `local-dev-credentials.txt`).
+2. Confirm the review card appears on `/operations` (the polling loop in [`Operations.razor`](../../../src/blazor-ui/Pages/Operations.razor) picks it up within ~5 seconds).
 3. Drain the `fraud-workflow` deployment:
 
    ```powershell
@@ -418,26 +240,29 @@ This is the demonstration the Local Track couldn't do.
    kubectl scale deployment/fraud-workflow -n contoso --replicas=1
    ```
 
-4. Reload `/operations` — the review card is **still there** (DTS held the event subscription).
-5. Click **Approve** — the new pod picks up the external event from DTS, resumes the orchestration past the gate, and runs the action (`crm-mcp.create_support_ticket`).
+4. Reload `/operations` — the review card is **still there** (DTS held the event subscription and the timer; the new pod re-attached on startup).
+5. Click **Approve refund** — the new pod receives the `RaiseEventAsync` from DTS, resumes the orchestration past the gate, and emits the `FinalAction` outcome.
 
-Watch App Insights → "Application map". The orchestration shows up as a multi-segment operation that spans the restart, with a gap during the worker downtime. That gap is the proof that the workflow was *waiting* in DTS, not running in any worker.
+Open App Insights → **Application map**. The orchestration shows up as a multi-segment operation that spans the restart, with a gap during the worker downtime. That gap is the proof that the workflow was *waiting in DTS*, not running in any worker.
 
-## Step 12 — Run the auto-escalate path
+## Step 8 — Run the auto-escalate path
 
-Submit another refund and **don't approve it**. After 72 hours (or override the timer with a config setting like `ApprovalTimeout = "00:05:00"` for demo purposes), the timer wins the race and the workflow escalates automatically — `crm-mcp.create_support_ticket` is called with `priority = "P1"` and the ops queue clears the card. This is the part that's almost impossible to build correctly without a durable orchestrator.
+Submit another refund and **don't approve it**. After 72 hours (or override the timer with `Refund:ApprovalTimeout = "00:05:00"` for demo purposes — set it via Helm value or ConfigMap and roll the deployment), the timer wins the race against the external event and the workflow emits `FinalAction.Timeout(...)`. A real production handler would, at this point, page on-call or page a supervisor with a P1 escalation; this lab leaves that follow-on action as a stretch exercise (see [What's next](#whats-next)).
+
+This — **a timer racing an external event, both held in durable storage** — is the part that's almost impossible to build correctly without a durable orchestrator.
 
 ## Verification checklist
 
-- [ ] `fraud-workflow` pod is `Ready` in `contoso` namespace
+- [ ] `fraud-workflow` pod is `Ready` in the `contoso` namespace
 - [ ] DTS task hub `refund-risk-hub` exists in the resource group
 - [ ] Workload identity `id-fraud-workflow` has `Durable Task Data Contributor` on the task hub
 - [ ] Submitting a refund through the Blazor UI returns `202` and creates an orchestration instance visible in DTS metrics
 - [ ] `/operations` is gated by the `Operations` role (a customer-only user gets `403`)
-- [ ] Killing the `fraud-workflow` pod mid-pause does **not** lose the pending review
-- [ ] Approving from `/operations` creates a support ticket and the workflow completes
+- [ ] Killing the `fraud-workflow` pod mid-pause does **not** lose the pending review (Step 7)
+- [ ] Approving from `/operations` after a pod restart resumes the workflow and the outcome is recorded
 - [ ] App Insights shows the orchestration as a single distributed trace spanning the restart
-- [ ] The 72h timeout fires and auto-escalates when no decision is given
+- [ ] The 72h timeout fires and produces `FinalAction.Timeout` when no decision is given (Step 8)
+- [ ] `ComponentIndependenceTests` is still green — `fraud-workflow` adds zero project-to-project references even with the DTS code
 
 ## What's next
 
@@ -449,6 +274,8 @@ You've built every primitive needed for ambient, durable, human-gated agent work
 
 Ideas for follow-on labs:
 
+- Wire `FinalAction.Timeout` into a real escalation channel (Teams + PagerDuty) — exercises post-pause side effects with replay safety.
 - Add a **second human gate** (e.g., supervisor approval for refunds > $1000) — exercises nested external events.
 - Add a **stateful conversation entity** so the analyst can ask the agents follow-up questions during review without restarting the whole workflow.
-- Replace the rule-based aggregator with a fourth LLM-backed `RiskJudgeAgent` and compare quality vs. cost.
+- Replace the rule-based [`RiskAggregator`](../../../src/fraud-workflow/Services/RiskAggregator.cs) with a fourth LLM-backed `RiskJudgeAgent` and compare quality vs. cost.
+- Add a real **customer-facing "Refund this order" button** on the Blazor order detail page (today the customer-side flow is exercised via the dashboard's "Simulate refund alert" button or a direct `POST /api/v1/refunds`; the BFF + workflow plumbing already exists end-to-end).

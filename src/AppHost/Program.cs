@@ -45,10 +45,20 @@ var orchestratorAgent = AsLocal(builder.AddProject<Projects.Contoso_Orchestrator
     .WithReference(crmAgent)
     .WithReference(productAgent);
 
+// Refund-risk workflow service (Lab 3). Owns the fan-out / fan-in /
+// human-in-the-loop graph for refund alerts. Pulls findings from CRM +
+// knowledge MCP backends; the operator dashboard lives in Blazor and
+// posts decisions back through the BFF.
+var fraudWorkflow = AsLocal(builder.AddProject<Projects.Contoso_FraudWorkflow>("fraud-workflow"))
+    .WithHttpEndpoint(port: 5010, name: "http")
+    .WithReference(crmMcp)
+    .WithReference(knowledgeMcp);
+
 var bffApi = AsLocal(builder.AddProject<Projects.Contoso_BffApi>("bff-api"))
     .WithHttpEndpoint(port: 5007, name: "http")
     .WithReference(crmApi)
-    .WithReference(orchestratorAgent);
+    .WithReference(orchestratorAgent)
+    .WithReference(fraudWorkflow);
 
 AsLocal(builder.AddProject<Projects.Contoso_BlazorUi>("blazor-ui"))
     .WithHttpEndpoint(port: 5008, name: "http")

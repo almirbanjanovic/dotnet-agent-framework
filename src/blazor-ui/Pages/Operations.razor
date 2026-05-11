@@ -1,0 +1,288 @@
+@page "/operations"
+@attribute [Authorize]
+@implements IAsyncDisposable
+@inject BffApiClient BffApiClient
+@inject ISnackbar Snackbar
+
+<PageTitle>Operations · Contoso Outdoors</PageTitle>
+
+<section class="page-section">
+<MudStack Spacing="4">
+    <div>
+        <MudText Typo="Typo.h4" Style="font-weight: 700;">Refund risk operations</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Review high-risk refund alerts that the workflow has paused for human approval.
+            Each alert was scored by three specialist agents in parallel; the recommended
+            action is shown but the final call is yours.
+        </MudText>
+    </div>
+
+    <MudPaper Class="pa-4" Elevation="0">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudButton StartIcon="@Icons.Material.Filled.Refresh"
+                       Variant="Variant.Outlined"
+                       OnClick="RefreshAsync"
+                       Disabled="@_isLoading">
+                Refresh
+            </MudButton>
+            <MudButton StartIcon="@Icons.Material.Filled.Science"
+                       Variant="Variant.Outlined"
+                       Color="Color.Secondary"
+                       OnClick="SubmitDemoRefundAsync">
+                Simulate refund alert
+            </MudButton>
+            <MudSpacer />
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                Auto-refresh every 5 s
+            </MudText>
+        </MudStack>
+    </MudPaper>
+
+    @if (_isLoading && _pending.Count == 0)
+    {
+        <MudPaper Class="pa-8" Style="text-align: center;" Elevation="0">
+            <MudProgressCircular Indeterminate="true" />
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Style="margin-top: 0.75rem;">
+                Loading pending reviews…
+            </MudText>
+        </MudPaper>
+    }
+    else if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_errorMessage</MudAlert>
+    }
+    else if (_pending.Count == 0)
+    {
+        <MudPaper Class="pa-8" Style="text-align: center;" Elevation="0">
+            <MudIcon Icon="@Icons.Material.Outlined.TaskAlt" Size="Size.Large" Color="Color.Success" />
+            <MudText Typo="Typo.h6" Style="margin-top: 0.75rem;">No pending reviews</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Either no high-risk refunds are queued, or the workflow auto-approved everything below threshold.
+            </MudText>
+        </MudPaper>
+    }
+    else
+    {
+        <MudGrid>
+            @foreach (var assessment in _pending)
+            {
+                <MudItem xs="12" lg="6">
+                    <MudCard Elevation="1" Style="height: 100%;">
+                        <MudCardContent>
+                            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                <MudText Typo="Typo.h6">@assessment.OrderId</MudText>
+                                <MudChip T="string"
+                                         Color="@RiskColor(assessment.OverallRiskScore)"
+                                         Variant="Variant.Filled"
+                                         Size="Size.Small">
+                                    Risk @assessment.OverallRiskScore.ToString("F2")
+                                </MudChip>
+                            </MudStack>
+
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                Customer @assessment.CustomerId · $@assessment.Amount.ToString("F2") · Recommended: @assessment.RecommendedAction
+                            </MudText>
+
+                            <MudText Typo="Typo.body2" Style="margin-top: 0.5rem;">
+                                <strong>Reason:</strong> @assessment.Reason
+                            </MudText>
+
+                            <MudExpansionPanels Class="mt-3" MultiExpansion="true">
+                                @RenderFinding("Order history", assessment.HistoryFinding)
+                                @RenderFinding("Return condition", assessment.ConditionFinding)
+                                @RenderFinding("Loyalty context", assessment.LoyaltyFinding)
+                            </MudExpansionPanels>
+                        </MudCardContent>
+                        <MudCardActions>
+                            <MudButton OnClick="@(() => DecideAsync(assessment.AlertId, "Approve"))"
+                                       Color="Color.Success"
+                                       Variant="Variant.Filled"
+                                       StartIcon="@Icons.Material.Filled.Check"
+                                       Disabled="@_busy.Contains(assessment.AlertId)">
+                                Approve refund
+                            </MudButton>
+                            <MudButton OnClick="@(() => DecideAsync(assessment.AlertId, "Reject"))"
+                                       Color="Color.Error"
+                                       Variant="Variant.Outlined"
+                                       StartIcon="@Icons.Material.Filled.Close"
+                                       Disabled="@_busy.Contains(assessment.AlertId)">
+                                Reject
+                            </MudButton>
+                            <MudButton OnClick="@(() => DecideAsync(assessment.AlertId, "Reinvestigate"))"
+                                       Color="Color.Warning"
+                                       Variant="Variant.Outlined"
+                                       StartIcon="@Icons.Material.Filled.Search"
+                                       Disabled="@_busy.Contains(assessment.AlertId)">
+                                Reinvestigate
+                            </MudButton>
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+</MudStack>
+</section>
+
+@code {
+    private readonly List<RefundRiskAssessment> _pending = new();
+    private readonly HashSet<string> _busy = new(StringComparer.Ordinal);
+    private bool _isLoading;
+    private string? _errorMessage;
+
+    // Polling cancellation: tied to OnAfterRenderAsync's first invocation
+    // and torn down in DisposeAsync. We deliberately use a poll loop
+    // instead of SSE — the chat panel is the only existing streaming
+    // surface in this UI, and adding SignalR for one feature would mean
+    // a new central package + a new server-side endpoint shape.
+    private CancellationTokenSource? _pollCts;
+    private bool _disposed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_disposed)
+        {
+            _pollCts = new CancellationTokenSource();
+            _ = PollLoopAsync(_pollCts.Token);
+        }
+        await Task.CompletedTask;
+    }
+
+    private async Task PollLoopAsync(CancellationToken ct)
+    {
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(5), ct);
+                if (ct.IsCancellationRequested || _disposed)
+                {
+                    return;
+                }
+                await RefreshAsync(silent: true);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected — page unmounted.
+        }
+    }
+
+    private async Task RefreshAsync() => await RefreshAsync(silent: false);
+
+    private async Task RefreshAsync(bool silent)
+    {
+        if (_disposed) return;
+        if (!silent) { _isLoading = true; _errorMessage = null; }
+
+        try
+        {
+            var pending = await BffApiClient.GetPendingReviewsAsync();
+            _pending.Clear();
+            _pending.AddRange(pending);
+        }
+        catch (Exception ex)
+        {
+            if (!silent)
+            {
+                _errorMessage = $"Failed to load pending reviews: {ex.Message}";
+            }
+        }
+        finally
+        {
+            _isLoading = false;
+            if (!_disposed)
+            {
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task DecideAsync(string alertId, string decision)
+    {
+        if (!_busy.Add(alertId)) return;
+        try
+        {
+            await BffApiClient.SubmitDecisionAsync(new DecisionRequest(alertId, decision));
+            Snackbar.Add($"Decision '{decision}' submitted for {alertId}.", Severity.Success);
+            await RefreshAsync(silent: true);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to submit decision: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy.Remove(alertId);
+            if (!_disposed)
+            {
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task SubmitDemoRefundAsync()
+    {
+        try
+        {
+            // Use seeded customer/order ids so the specialist agents'
+            // CRM tool calls actually resolve to data. Customer 103 +
+            // order 1003 (the Basecamp 4P Tent) match the lab narrative
+            // in docs/labs/local/lab-3.md and exist in
+            // data/contoso-crm/customers.csv and orders.csv. Amount is
+            // intentionally above the workflow's default $200 threshold
+            // so the alert exercises the full graph.
+            await BffApiClient.SubmitRefundAsync(new
+            {
+                customerId = "103",
+                orderId    = "1003",
+                amount     = 425.50m,
+                reason     = "Customer reports product arrived damaged but no photos provided."
+            });
+            Snackbar.Add("Demo refund alert submitted. Watch the pending list.", Severity.Info);
+            await RefreshAsync(silent: true);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to submit demo alert: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private static Color RiskColor(double risk) => risk switch
+    {
+        >= 0.67 => Color.Error,
+        >= 0.34 => Color.Warning,
+        _       => Color.Success
+    };
+
+    private RenderFragment RenderFinding(string title, AgentFinding finding) => __builder =>
+    {
+        <MudExpansionPanel Text="@($"{title} — risk {finding.RiskScore:F2}")">
+            <MudText Typo="Typo.body2">@finding.Findings</MudText>
+            @if (finding.Evidence is { Count: > 0 })
+            {
+                <MudStack Spacing="1" Class="mt-2">
+                    @foreach (var ev in finding.Evidence)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">• @ev</MudText>
+                    }
+                </MudStack>
+            }
+        </MudExpansionPanel>
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        if (_pollCts is not null)
+        {
+            await _pollCts.CancelAsync();
+            _pollCts.Dispose();
+        }
+    }
+}

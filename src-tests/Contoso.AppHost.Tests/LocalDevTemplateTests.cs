@@ -42,7 +42,8 @@ public class LocalDevTemplateTests
         {
             "crm-api", "crm-mcp", "knowledge-mcp",
             "crm-agent", "product-agent", "orchestrator-agent",
-            "bff-api", "blazor-ui", "simple-agent"
+            "bff-api", "blazor-ui", "simple-agent",
+            "fraud-workflow"
         };
 
         var missing = components

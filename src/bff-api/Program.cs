@@ -124,6 +124,7 @@ var chatEndpoint = api.MapChatEndpoint();
 var (conversationsEndpoint, conversationEndpoint) = api.MapConversationEndpoints();
 var imageEndpoint = api.MapImageEndpoint();
 var (meEndpoint, customerEndpoint, ordersEndpoint, productsEndpoint, productEndpoint, placeOrderEndpoint) = api.MapCustomerEndpoints();
+var (submitRefundEndpoint, listPendingEndpoint, submitDecisionEndpoint, getOutcomeEndpoint) = api.MapOperationsEndpoints();
 
 if (useEntraAuth)
 {
@@ -147,6 +148,14 @@ if (useEntraAuth)
     productsEndpoint.AllowAnonymous();
     productEndpoint.AllowAnonymous();
     imageEndpoint.AllowAnonymous();
+
+    // Operations dashboard is operator-only. The submit-refund endpoint
+    // is also gated — fraud reviews start with someone (or some service)
+    // posting an alert, never an anonymous request.
+    submitRefundEndpoint.RequireAuthorization();
+    listPendingEndpoint.RequireAuthorization();
+    submitDecisionEndpoint.RequireAuthorization();
+    getOutcomeEndpoint.RequireAuthorization();
 }
 
 // Apply rate-limit policies last so they cover both authed and anonymous
@@ -162,6 +171,14 @@ placeOrderEndpoint.RequireRateLimiting("write");
 productsEndpoint.RequireRateLimiting("read");
 productEndpoint.RequireRateLimiting("read");
 imageEndpoint.RequireRateLimiting("read");
+
+// Operator-side endpoints. Submitting a refund alert and submitting a
+// decision are write operations; listing pending reviews and fetching an
+// outcome are reads.
+submitRefundEndpoint.RequireRateLimiting("write");
+listPendingEndpoint.RequireRateLimiting("read");
+submitDecisionEndpoint.RequireRateLimiting("write");
+getOutcomeEndpoint.RequireRateLimiting("read");
 
 app.Run();
 
@@ -205,6 +222,20 @@ static void ConfigureHttpClients(WebApplicationBuilder builder)
             client.BaseAddress = new Uri(baseUrl);
         })
         .AddHttpMessageHandler<CustomerHeaderHandler>();
+
+    // FraudWorkflowClient is intentionally NOT decorated with the
+    // CustomerHeaderHandler — refund decisions are made by *operators*
+    // (or the workflow itself), not by the customer who triggered the
+    // refund. Forwarding the customer header would mis-attribute audit
+    // records inside the workflow.
+    builder.Services.AddHttpClient<FraudWorkflowClient>(client =>
+        {
+            var baseUrl = Program.GetConfigOrDefault(builder.Configuration, "FraudWorkflow:BaseUrl", "http://localhost:5010");
+            client.BaseAddress = new Uri(baseUrl);
+            // DoS guard for the same reason as CrmApiClient — operations
+            // payloads are always small (sub-100KB), 1 MB is a generous cap.
+            client.MaxResponseContentBufferSize = 1 * 1024 * 1024;
+        });
 }
 
 static void ConfigureDataServices(WebApplicationBuilder builder, bool useInMemory)

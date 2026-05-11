@@ -1,5 +1,17 @@
+/* Blazor scoped-CSS note (do NOT re-add `::deep` to these selectors):
+ * Every element below is rendered DIRECTLY in MainLayout.razor's markup,
+ * so the build adds the layout's scope attribute (b-XXX) to the element
+ * itself. Plain selectors compile to `.brand-mark[b-XXX] { ... }` and
+ * match. `::deep .brand-mark` would compile to `[b-XXX] .brand-mark`
+ * (DESCENDANT selector) and never match because the surrounding MudBlazor
+ * wrappers (header.mud-appbar, etc.) get no scope attribute.
+ *
+ * Rules for `.topbar-search` and `.page-main` live in wwwroot/css/app.css
+ * because those classes are passed via `Class="..."` to MudBlazor child
+ * components, which strip the scope and have no scoped ancestor either. */
+
 /* ---------- Brand mark ---------- */
-::deep .brand-mark {
+.brand-mark {
     display: flex;
     align-items: center;
     gap: 0.6rem;
@@ -8,7 +20,7 @@
     color: inherit;
 }
 
-::deep .brand-logo {
+.brand-logo {
     width: 34px;
     height: 34px;
     border-radius: 8px;
@@ -17,39 +29,42 @@
     align-items: center;
     justify-content: center;
     box-shadow: 0 2px 6px rgba(31, 95, 63, 0.25);
+    flex-shrink: 0;
 }
 
-::deep .brand-text {
+.brand-text {
     display: flex;
     flex-direction: column;
     line-height: 1.1;
 }
 
-::deep .brand-title {
+.brand-title {
     font-weight: 700;
     font-size: 1rem;
     letter-spacing: -0.01em;
     color: #0F1F17;
+    white-space: nowrap;
 }
 
-::deep .brand-tagline {
+.brand-tagline {
     font-size: 0.65rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: #1F5F3F;
     font-weight: 600;
     margin-top: 1px;
+    white-space: nowrap;
 }
 
 /* ---------- Category nav (top bar) ---------- */
-::deep .category-nav {
+.category-nav {
     display: flex;
     align-items: center;
     gap: 0.25rem;
     margin-left: 1.5rem;
 }
 
-::deep .category-link {
+.category-link {
     font-size: 0.85rem;
     font-weight: 500;
     color: #475569;
@@ -59,38 +74,24 @@
     transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-::deep .category-link:hover {
+.category-link:hover {
     background-color: rgba(31, 95, 63, 0.08);
     color: #1F5F3F;
 }
 
 @media (max-width: 1100px) {
-    ::deep .category-nav { display: none; }
-}
-
-/* ---------- Top-bar search ---------- */
-::deep .topbar-search {
-    width: 280px;
-    margin-right: 0.5rem;
-}
-
-::deep .topbar-search .mud-input-outlined-border {
-    border-radius: 999px;
-}
-
-@media (max-width: 900px) {
-    ::deep .topbar-search { width: 180px; }
+    .category-nav { display: none; }
 }
 
 /* ---------- Cart button + badge ---------- */
-::deep .cart-wrap {
+.cart-wrap {
     position: relative;
     display: inline-flex;
     align-items: center;
     margin-left: 0.25rem;
 }
 
-::deep .cart-badge {
+.cart-badge {
     position: absolute;
     top: 4px;
     right: 2px;
@@ -109,7 +110,7 @@
 }
 
 /* ---------- Account menu header ---------- */
-::deep .account-header {
+.account-header {
     display: flex;
     align-items: center;
     gap: 0.65rem;
@@ -117,7 +118,7 @@
     min-width: 240px;
 }
 
-::deep .account-avatar {
+.account-avatar {
     width: 36px;
     height: 36px;
     border-radius: 50%;
@@ -130,18 +131,18 @@
     justify-content: center;
 }
 
-::deep .account-name {
+.account-name {
     font-weight: 600;
     font-size: 0.9rem;
     color: #0F1F17;
 }
 
-::deep .account-email {
+.account-email {
     font-size: 0.75rem;
     color: #64748B;
 }
 
-::deep .impersonate-label {
+.impersonate-label {
     font-size: 0.65rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -150,26 +151,15 @@
     padding: 0.55rem 1rem 0.25rem;
 }
 
-/* ---------- Page main: leave space for fixed AppBar ----------
- * The offset MUST match the actual rendered AppBar height. We share a
- * single CSS variable with the auth-shell (defined in wwwroot/css/app.css
- * `:root`); change once, both layout and auth-flow stay aligned. */
-::deep .page-main {
-    padding-top: var(--app-appbar-h);
-    min-height: calc(100vh - var(--app-appbar-h));
-    display: flex;
-    flex-direction: column;
-}
-
 /* ---------- Footer ---------- */
-::deep .site-footer {
+.site-footer {
     margin-top: auto;
     background: #0F1F17;
     color: #CBD5D1;
     padding: 3rem 1.5rem 1.5rem;
 }
 
-::deep .footer-grid {
+.footer-grid {
     max-width: 1200px;
     margin: 0 auto;
     display: grid;
@@ -178,13 +168,13 @@
 }
 
 @media (max-width: 700px) {
-    ::deep .footer-grid {
+    .footer-grid {
         grid-template-columns: 1fr;
         gap: 2rem;
     }
 }
 
-::deep .footer-heading {
+.footer-heading {
     font-weight: 700;
     color: #fff;
     margin-bottom: 0.85rem;
@@ -192,14 +182,14 @@
     letter-spacing: 0.02em;
 }
 
-::deep .footer-text {
+.footer-text {
     font-size: 0.85rem;
     line-height: 1.55;
     color: #94A3B8;
     max-width: 360px;
 }
 
-::deep .footer-link {
+.footer-link {
     display: block;
     font-size: 0.85rem;
     color: #CBD5D1;
@@ -208,9 +198,9 @@
     transition: color 0.15s ease;
 }
 
-::deep .footer-link:hover { color: #fff; }
+.footer-link:hover { color: #fff; }
 
-::deep .footer-bottom {
+.footer-bottom {
     max-width: 1200px;
     margin: 2.5rem auto 0;
     padding-top: 1.5rem;
