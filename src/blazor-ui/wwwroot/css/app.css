@@ -411,11 +411,19 @@ h1:focus { outline: none; }
     color: #B91C1C;
 }
 
-/* ---------- Page sections ---------- */
+/* ---------- Page sections ----------
+ * `width: 100%` is required because `.page-main` is a flex column
+ * (default align-items: stretch). Without it, the auto horizontal
+ * margins below override `stretch` and the section collapses to its
+ * intrinsic min-content width, breaking every page that uses
+ * `.page-section`. With width: 100% + max-width, the section fills the
+ * row up to 1200px and the auto margins centre any leftover space. */
 .page-section {
+    width: 100%;
     max-width: 1200px;
     margin: 3rem auto;
     padding: 0 1.5rem;
+    box-sizing: border-box;
 }
 .section-head {
     display: flex;
