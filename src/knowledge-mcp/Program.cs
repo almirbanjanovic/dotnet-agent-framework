@@ -36,6 +36,13 @@ else
     builder.Services.AddSingleton<ISearchService, AzureSearchService>();
 }
 
+// Pre-warm the search backend during startup. Critical for the in-memory
+// implementation: without it, the first `search_knowledge_base` tool call
+// has to embed every chunk on the request thread (~30-60 s in practice),
+// which exceeds the agent framework's tool-call timeout and causes the
+// MCP backend to be retried in a loop. No-op for `AzureSearchService`.
+builder.Services.AddHostedService<SearchServiceWarmupHostedService>();
+
 builder.Services.AddMcpServer()
     .WithHttpTransport(options => options.Stateless = true)
     .WithTools<KnowledgeTools>();

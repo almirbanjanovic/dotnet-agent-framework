@@ -101,6 +101,8 @@ public sealed class InMemorySearchService : ISearchService
         return results;
     }
 
+    public Task WarmupAsync(CancellationToken ct = default) => EnsureInitializedAsync(ct);
+
     private async Task EnsureInitializedAsync(CancellationToken ct)
     {
         if (_initialized)
@@ -116,7 +118,14 @@ public sealed class InMemorySearchService : ISearchService
                 return;
             }
 
-            await LoadDocumentsAsync(ct);
+            // Decouple init from the request CT. A request-scoped cancel
+            // (HTTP client timeout, agent framework retry, user disconnect)
+            // would otherwise abort the partially-built embedding cache,
+            // forcing the next caller to restart from chunk 0 and producing
+            // the "knowledge-mcp keeps getting called over and over" loop
+            // observed in the Aspire dashboard. The lock-wait still honours
+            // the request CT so callers can give up; the WORK does not.
+            await LoadDocumentsAsync(CancellationToken.None);
             _initialized = true;
         }
         finally
@@ -135,18 +144,51 @@ public sealed class InMemorySearchService : ISearchService
         var files = Directory.EnumerateFiles(_dataPath, "*.txt", SearchOption.AllDirectories).ToList();
         _logger.LogInformation("Loading knowledge base from {Path} ({Count} files).", _dataPath, files.Count);
 
+        // Stage 1: read every file and chunk it. This is fast (synchronous
+        // string ops) so we don't need to parallelize.
+        var pending = new List<(string Source, string Text)>();
         foreach (var file in files)
         {
             var source = Path.GetRelativePath(_dataPath, file);
             var content = await File.ReadAllTextAsync(file, ct);
             foreach (var chunk in ChunkDocument(content))
             {
-                var vector = await GenerateEmbeddingAsync(chunk, ct);
-                _chunks.Add(new StoredChunk(chunk, vector, source));
+                pending.Add((source, chunk));
             }
         }
 
-        _logger.LogInformation("Embedded {Count} knowledge chunks.", _chunks.Count);
+        if (pending.Count == 0)
+        {
+            _logger.LogInformation("No knowledge chunks discovered under {Path}.", _dataPath);
+            // Even with zero chunks, publish an empty result so we don't
+            // re-scan the disk on every search.
+            _chunks.Clear();
+            return;
+        }
+
+        // Stage 2: embed in batches into a LOCAL list, then publish to
+        // `_chunks` only on full success. If a batch throws (transient
+        // 429, network error, …) we leave the previous cache untouched —
+        // the next caller retries from scratch, but the in-memory state
+        // is never partially populated. (Adversarial review caught a
+        // duplicate-chunks regression where _chunks was appended to in
+        // place, so a retry after a partial success doubled-up entries.)
+        const int batchSize = 16;
+        var staged = new List<StoredChunk>(pending.Count);
+        for (var i = 0; i < pending.Count; i += batchSize)
+        {
+            var slice = pending.Skip(i).Take(batchSize).ToList();
+            var vectors = await GenerateEmbeddingsAsync(slice.Select(p => p.Text).ToList(), ct);
+            for (var j = 0; j < slice.Count; j++)
+            {
+                staged.Add(new StoredChunk(slice[j].Text, vectors[j], slice[j].Source));
+            }
+        }
+
+        _chunks.Clear();
+        _chunks.AddRange(staged);
+
+        _logger.LogInformation("Embedded {Count} knowledge chunks in {Batches} batches.", _chunks.Count, (pending.Count + batchSize - 1) / batchSize);
     }
 
     internal static IEnumerable<string> ChunkDocument(string content)
@@ -174,6 +216,46 @@ public sealed class InMemorySearchService : ISearchService
 
         var response = await _embeddingClient.GenerateEmbeddingAsync(text, cancellationToken: ct);
         return response.Value.ToFloats().Span.ToArray();
+    }
+
+    private async Task<IReadOnlyList<float[]>> GenerateEmbeddingsAsync(IReadOnlyList<string> texts, CancellationToken ct)
+    {
+        if (texts.Count == 0)
+        {
+            return Array.Empty<float[]>();
+        }
+
+        // The test seam only models a per-chunk callback; preserve that
+        // contract by issuing one call per item. Production data sets are
+        // 100s of chunks and need batching; test fixtures are <20 chunks
+        // and the per-chunk path is plenty fast.
+        if (_embeddingGenerator is not null)
+        {
+            var vectors = new float[texts.Count][];
+            for (var i = 0; i < texts.Count; i++)
+            {
+                vectors[i] = await _embeddingGenerator(texts[i], ct);
+            }
+            return vectors;
+        }
+
+        var response = await _embeddingClient.GenerateEmbeddingsAsync(texts, cancellationToken: ct);
+        var collection = response.Value;
+        if (collection.Count != texts.Count)
+        {
+            // The OpenAI embeddings contract guarantees a 1:1 alignment
+            // between input items and returned vectors; if that breaks
+            // we cannot safely zip them with our chunk metadata.
+            throw new InvalidOperationException(
+                $"Embedding response returned {collection.Count} vectors for {texts.Count} inputs.");
+        }
+
+        var result = new float[texts.Count][];
+        for (var i = 0; i < collection.Count; i++)
+        {
+            result[i] = collection[i].ToFloats().Span.ToArray();
+        }
+        return result;
     }
 
     internal static double CosineSimilarity(float[] a, float[] b)

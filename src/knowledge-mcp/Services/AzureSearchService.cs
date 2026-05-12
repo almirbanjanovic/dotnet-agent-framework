@@ -68,6 +68,11 @@ public sealed class AzureSearchService : ISearchService
         return results;
     }
 
+    // Azure AI Search has no per-process warm-up cost — the index is
+    // pre-built and queries are stateless HTTP. The warm-up hook only
+    // exists for the in-memory implementation, which embeds chunks lazily.
+    public Task WarmupAsync(CancellationToken ct = default) => Task.CompletedTask;
+
     private static string? GetFieldValue(SearchDocument document, params string[] fieldNames)
     {
         foreach (var field in fieldNames)
