@@ -144,7 +144,7 @@ All secrets (OpenAI endpoint, Cosmos DB endpoint, deployment names) are automati
 
 ## Recent infrastructure additions
 
-The following resources were added to support the full application architecture (8 containers in AKS):
+The following resources were added to support the full application architecture (8 containers in AKS — the 9th, `fraud-workflow`, ships during Lab 3 with its own Dockerfile, Helm chart, and managed identity):
 
 | Addition | Details |
 | --- | --- |

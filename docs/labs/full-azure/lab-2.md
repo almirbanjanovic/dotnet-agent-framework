@@ -45,7 +45,7 @@ On the Full Azure Track, the agent code is identical to the Local Track. The onl
 ## Prerequisites
 
 - [Lab 1](lab-1.md) completed (infrastructure deployed, services running on AKS).
-- All 8 services healthy (AKS readiness probes green).
+- All 8 services healthy (AKS readiness probes green) — `fraud-workflow` is not yet on AKS at this point in the journey; it ships during Lab 3.
 - A modern browser (Edge, Chrome, Firefox) — you'll drive every scenario through the **Blazor UI** the same way a real customer would.
 
 ## The architecture you'll exercise

@@ -2,6 +2,8 @@
 
 This folder contains all .NET projects for the Contoso Outdoors agent framework. Each project is fully independent — own models, own Dockerfile, own Helm chart, own test project. No shared project references.
 
+> **Deployment status note:** the `fraud-workflow/` project is the **Lab 3 deliverable** — it runs in-process inside the Aspire AppHost on port 5010 and is fully functional locally, but its `Dockerfile`, Helm chart, and dedicated managed identity are added during Lab 3 (Full Azure track). The other 8 services already ship to AKS via Helm + workload identity.
+
 ## Architectural edict — component independence
 
 > **Every project under `src/` must be completely self-contained.**

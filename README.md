@@ -24,6 +24,8 @@
 
 Each component is fully independent — own models, own Dockerfile, own Helm chart, own test project. No shared project references. Communication between services is HTTP/JSON only. This is enforced by an [automated fitness test](src-tests/Contoso.AppHost.Tests/ComponentIndependenceTests.cs) and a [CI workflow](.github/workflows/architecture-fitness.yml) — see the [edict in `src/README.md`](src/README.md#architectural-edict--component-independence).
 
+> **Deployment status:** All 9 services run today inside the **Aspire local dev stack** (`dotnet run --project src/AppHost`). 8 of the 9 (everything except `fraud-workflow`) also have their own `Dockerfile` + Helm chart + Terraform-managed identity and ship to AKS via the Full Azure track. The `fraud-workflow` service is the **Lab 3 deliverable**: the in-process workflow is fully functional under Aspire today, and its AKS deployment artifacts (Dockerfile, Helm chart, dedicated managed identity, Durable Task Scheduler integration) are added during Lab 3.
+
 ### Key architectural decisions
 
 #### 1. Each agent is its own container with its own identity
@@ -40,7 +42,7 @@ Each [MCP Server](https://modelcontextprotocol.io/docs/concepts/tools) translate
 
 | MCP Server | Tools | Backend |
 | --- | --- | --- |
-| **CRM MCP** | `get_customer_detail`, `get_customer_orders`, `get_order_detail`, `get_order_items`, `get_products`, `get_product_detail`, `get_promotions`, `get_eligible_promotions`, `get_support_tickets`, `create_support_ticket` | CRM API (HTTP) |
+| **CRM MCP** | `get_customer_detail`, `get_customer_orders`, `get_order_detail`, `get_order_items`, `get_products`, `get_product_detail`, `get_promotions`, `get_eligible_promotions`, `get_support_tickets`, `create_support_ticket`, `cancel_support_ticket` | CRM API (HTTP) |
 | **Knowledge MCP** | `search_knowledge_base` | Azure AI Search (SDK direct) |
 
 #### 4. BFF owns conversation persistence; agents are stateless
@@ -82,13 +84,16 @@ Path 3 — Product image:
 | Container | Service Type | Identity | Key Connections |
 | --- | --- | --- | --- |
 | blazor-ui | Ingress (public, path: /) | *(none)* | BFF API (HTTP) |
-| bff-api | Ingress (path: /api/*) | `id-bff` | CRM API, Orchestrator, Blob Storage, Cosmos DB |
-| crm-api | ClusterIP | `id-crm-api` | Cosmos DB (CRM) |
+| bff-api | Ingress (path: /api/*) | `id-bff` | CRM API, Orchestrator, Fraud Workflow, Blob Storage, Cosmos DB |
+| crm-api | ClusterIP | `id-crm-api` | Cosmos DB (CRM), Fraud Workflow (refund-risk fan-out) |
 | crm-mcp | ClusterIP | `id-crm-mcp` | CRM API |
 | knowledge-mcp | ClusterIP | `id-know-mcp` | AI Search |
 | crm-agent | ClusterIP | Contoso CRM Agent (agent identity) | CRM MCP, Knowledge MCP, Azure OpenAI |
 | product-agent | ClusterIP | Contoso Product Agent (agent identity) | CRM MCP, Knowledge MCP, Azure OpenAI |
 | orchestrator-agent | ClusterIP | Contoso Orchestrator Agent (agent identity) | CRM Agent, Product Agent, Azure OpenAI |
+| fraud-workflow | ClusterIP | Contoso Fraud Workflow (agent identity) | CRM MCP, Knowledge MCP, Azure OpenAI, Durable Task Scheduler (Full Azure track) |
+
+> **Note on fraud-workflow:** the row above describes the **target** AKS topology after Lab 3. Today the service runs in-process inside Aspire (port 5010) and has no `Dockerfile` / Helm chart / dedicated managed identity yet — those artifacts are added during Lab 3 and are why the **Managed Identities** count below remains at **8** rather than **9**.
 
 ### Data flow
 
@@ -113,7 +118,7 @@ Product images in `data/contoso-images/` are uploaded to a private `product-imag
 | **Cosmos DB** (Agents) | Conversation history + agent session state (Eventual consistency) |
 | **Azure AI Search** | Knowledge base — indexes PDFs via Knowledge Source API (Standard tier, semantic ranker) |
 | **Storage Account** | Product images + SharePoint documents blob storage |
-| **AKS** | Hosts all 8 containers |
+| **AKS** | Hosts all 9 containers |
 | **ACR** | Container image registry |
 | **Key Vault** | Secrets management (endpoints, keys, deployment names) |
 | **Managed Identities** | 8 identities with least-privilege RBAC per component |
@@ -204,6 +209,7 @@ src/
   crm-agent/                      → CRM specialist agent (customers, orders, tickets)
   product-agent/                  → Product specialist agent (catalog, promotions)
   orchestrator-agent/             → Intent classifier + specialist routing
+  fraud-workflow/                 → Refund-risk workflow (fan-out, aggregator, paused human gate)
   blazor-ui/                      → Blazor WebAssembly SPA (MudBlazor + MSAL)
   bff-api/                        → BFF API (.NET): JWT validation, proxy, chat, image proxy
 ```
@@ -232,7 +238,7 @@ This repo supports two deployment tracks. Pick one based on what you're trying t
 | **Setup time** | ~10 min | ~45–60 min |
 | **Cost** | ~$1–5/day (Foundry tokens only) | ~$50–100/day |
 | **Azure resources** | 1 (Foundry) | 14+ (Foundry, Cosmos×2, AI Search, AKS, ACR, Storage, Key Vault, identities, networking) |
-| **Where the 8 services run** | `dotnet run` (Aspire) on your laptop | AKS pods (Helm + workload identity) |
+| **Where the 9 services run** | `dotnet run` (Aspire) on your laptop | AKS pods (Helm + workload identity) |
 | **CRM data** | In-memory from `data/contoso-crm/*.csv` | Cosmos DB (seeded from the same CSVs) |
 | **Knowledge base** | In-memory vector search over `data/contoso-sharepoint/**/*.txt` | Azure AI Search (PDFs, semantic ranker) |
 | **User auth** | Microsoft Entra ID via MSAL (8 test users in your tenant) | Microsoft Entra ID via MSAL (8 test users in your tenant) |
@@ -248,7 +254,7 @@ Both tracks use Azure AI Foundry for chat completions and embeddings, authentica
 ```bash
 az login                               # one-time
 ./infra/setup-local.ps1                # deploy Foundry to your subscription
-dotnet run --project src/AppHost       # all 8 components + Aspire dashboard
+dotnet run --project src/AppHost       # all 9 components + Aspire dashboard
 ```
 
 Aspire dashboard: `https://localhost:15888`. Blazor UI: `http://localhost:5008`. Full guide: [docs/local-development.md](docs/local-development.md).

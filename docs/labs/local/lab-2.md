@@ -6,7 +6,7 @@
 > **Rusty on .NET / web apps? Read this first.** This lab is meant to be
 > followed even if you haven't written code in a year. Three things will help:
 >
-> 1. Treat each of the 8 services in the Aspire dashboard as a **separate
+> 1. Treat each of the 9 services in the Aspire dashboard as a **separate
 >    program running on its own port**. They communicate by sending HTTP
 >    requests to each other — exactly like calling a public web API.
 > 2. Whenever you see a port number (5001–5008), match it to a folder under
@@ -72,7 +72,7 @@ You will:
 ## Prerequisites
 
 - [Lab 1](lab-1.md) completed.
-- All 8 services healthy in the Aspire dashboard.
+- All 9 services healthy in the Aspire dashboard.
 - A modern browser (Edge, Chrome, Firefox) — you'll drive every scenario through the **Blazor UI** the same way a real customer would, and inspect what's happening underneath via the **Aspire dashboard** (`https://localhost:15888`) and the browser's **Network** dev tool.
 
 > **Why the UI, not curl?** This repo is the customer experience for Contoso Outdoors. Every prompt below should be **typed into the chat panel** by a signed-in test user — that's what exercises the full token → BFF → orchestrator → specialist → MCP path.
@@ -194,7 +194,7 @@ Each box is a separate process with its own identity. The orchestrator does **no
 dotnet run --project src/AppHost
 ```
 
-Open the Aspire dashboard at `https://localhost:15888`. Confirm 8 services are green: `crm-api`, `crm-mcp`, `knowledge-mcp`, `crm-agent`, `product-agent`, `orchestrator-agent`, `bff-api`, `blazor-ui`.
+Open the Aspire dashboard at `https://localhost:15888`. Confirm 9 services are green: `crm-api`, `crm-mcp`, `knowledge-mcp`, `crm-agent`, `product-agent`, `orchestrator-agent`, `bff-api`, `blazor-ui`, `fraud-workflow`.
 
 ## Step 2 — Single-agent pattern: drive `crm-agent` through the chat UI
 

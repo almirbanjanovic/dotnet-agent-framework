@@ -190,7 +190,7 @@ call and is cached for the rest of the process). Then it prints and exits.
 dotnet run --project src/AppHost
 ```
 
-The Aspire AppHost starts all 8 components and a dashboard at **`https://localhost:15888`**.
+The Aspire AppHost starts all 9 components and a dashboard at **`https://localhost:15888`**.
 
 > **Aspire dashboard asks for a token (a GUID).** That's expected — Aspire 9+ guards the dashboard with a per-run browser token. Look at the AppHost console output for a line like:
 >
@@ -202,7 +202,7 @@ The Aspire AppHost starts all 8 components and a dashboard at **`https://localho
 
 Open the Blazor UI at **`http://localhost:5008`** and you'll be redirected to `login.microsoftonline.com`.
 
-> **What are these 8 services and what does each one do?** A quick map so the
+> **What are these 9 services and what does each one do?** A quick map so the
 > dashboard isn't a wall of names. Each service is a separate process under
 > `src/`; the port number lets you ping it directly:
 >
@@ -231,7 +231,7 @@ For port maps, troubleshooting, and component-level details, see the [Local Deve
 
 - [ ] `terraform output` in `infra/terraform/local-dev/` returns a Foundry endpoint **and** a `bff_client_id`
 - [ ] `simple-agent` returns a joke from AI Foundry
-- [ ] All 8 services are green in the Aspire dashboard
+- [ ] All 9 services are green in the Aspire dashboard
 - [ ] Blazor UI redirects to `login.microsoftonline.com` on first load
 - [ ] After signing in as `emma.wilson-local@<your-tenant-domain>`, asking "what is my last order?" returns Emma's order data sourced from the in-memory CRM data
 

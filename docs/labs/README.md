@@ -8,7 +8,7 @@ The labs are split by **track** so each folder is a self-contained read-through.
 | Setup time | ~10 min | ~45–60 min |
 | Cost | ~$1–5/day (Foundry tokens only) | ~$50–100/day |
 | Azure resources | 1 (Foundry account + 2 model deployments) | 14+ (Foundry, Cosmos×2, AI Search, AKS, ACR, Storage, Key Vault, identities, networking) |
-| Where the 8 services run | `dotnet run` (Aspire) on your laptop | AKS pods (Helm + workload identity) |
+| Where the 9 services run | `dotnet run` (Aspire) on your laptop | AKS pods (Helm + workload identity) — 8 deployed in Lab 1, `fraud-workflow` joins AKS during Lab 3 |
 | Data | In-memory from `data/` | Cosmos DB + AI Search + Blob Storage |
 | User auth | Microsoft Entra ID via MSAL (8 test users in your tenant) | Microsoft Entra ID via MSAL (8 test users in your tenant) |
 | Bootstrap script | `./infra/setup-local.ps1` | `./infra/init.ps1` then `./infra/deploy.ps1` |

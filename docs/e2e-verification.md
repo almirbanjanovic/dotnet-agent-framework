@@ -2,7 +2,7 @@
 
 This document maps all 8 business scenarios to executable test steps using the local dev stack.
 
-**Last Updated:** 2026-03-24  
+**Last Updated:** 2026-05-12  
 **Tester:** Peter  
 **Status:** Ready for validation
 
@@ -14,13 +14,14 @@ Before running any scenario:
 
 1. **Local dev stack is running:**
    - [ ] `dotnet run --project src/AppHost` is executing in terminal
-   - [ ] All 8 services are healthy and ready
+   - [ ] All 9 services are healthy and ready
 
 2. **Service endpoints are responding:**
-   - [ ] Aspire Dashboard: https://localhost:15888 → shows all 8 services in "Running" state
+   - [ ] Aspire Dashboard: https://localhost:15888 → shows all 9 services in "Running" state
    - [ ] Blazor UI: http://localhost:5008 → loads without auth errors
    - [ ] BFF API health: `curl http://localhost:5007/health` → 200 OK
-   - [ ] CRM API health: `curl http://localhost:5001/api/v1/health` → 200 OK
+   - [ ] CRM API health: `curl http://localhost:5001/health` → 200 OK
+   - [ ] Fraud Workflow health: `curl http://localhost:5010/health` → 200 OK
 
 3. **Seed data is loaded:**
    - [ ] `curl http://localhost:5001/api/v1/customers` → returns all 8+ customers (JSON array, 200 OK)
@@ -54,7 +55,7 @@ Tester: _______________
 [ ] CRM API /health returns 200
 [ ] CRM API /api/v1/customers/101 returns 200 with the seeded customer profile
 [ ] Blazor UI redirects to login.microsoftonline.com on first visit
-[ ] Sign-in as `emma.wilson@<your-tenant>` succeeds and resolves to customer 101
+[ ] Sign-in as `emma.wilson-local@<your-tenant>` succeeds and resolves to customer 101
 [ ] Chat input box is focusable and ready
 [ ] Orchestrator logs show both MCPs connected
 [ ] Knowledge base index is online (Product Agent startup logs confirm)
@@ -74,7 +75,7 @@ Tester: _______________
 
 1. **Sign in as the customer:**
    - [ ] Navigate to http://localhost:5008 (use an incognito window for clean state)
-   - [ ] Sign in as `emma.wilson@<your-tenant>`
+   - [ ] Sign in as `emma.wilson-local@<your-tenant>`
    - [ ] User badge shows "Emma Wilson" — BFF resolved UPN → customer 101
 
 2. **Send query to chat:**
@@ -92,19 +93,19 @@ Tester: _______________
 
 5. **Verify expected data in response:**
    - [ ] Chat response includes order number `1001`
-   - [ ] Chat response includes status: `shipped`
+   - [ ] Chat response includes status: `delivered` (the order was delivered on 2026-03-08 — well outside the 30-day return window)
    - [ ] Chat response includes tracking number: `TRK-29481`
-   - [ ] Chat response includes estimated delivery date
+   - [ ] Chat response includes the delivery date (2026-03-08)
    - [ ] Response is in natural language (not raw JSON)
 
 6. **Verify no hallucination:**
    - [ ] Order 1001 exists in seed data (check CSV: `data/contoso-crm/orders.csv`)
    - [ ] Tracking number `TRK-29481` matches seed data exactly
-   - [ ] Delivery date is reasonable (not 2025 or 2099)
+   - [ ] Delivery date matches the seed (2026-03-08)
 
 ### Pass/Fail Criteria
 
-**PASS:** Response includes Order 1001, tracking TRK-29481, shipped status, and delivery estimate in natural language.  
+**PASS:** Response includes Order 1001, tracking TRK-29481, delivered status, and the 2026-03-08 delivery date in natural language.  
 **FAIL:** Response contains wrong order ID, wrong tracking number, hallucinated data, or errors.
 
 **Result:** ☐ PASS | ☐ FAIL | ☐ BLOCKED  
@@ -117,12 +118,13 @@ Tester: _______________
 **Customer:** James Chen (ID: 102)  
 **User Query:** "I got my hiking boots but they're too small. Can I return them?"  
 **Expected Agent Route:** Orchestrator → CRM Agent  
-**Expected MCP Tools:** `get_customer_orders`, `search_knowledge_base` (return policy + sizing guide)
+**Expected MCP Tools:** `get_customer_orders`, `get_support_tickets` (find ST-003), `search_knowledge_base` (sizing guide)  
+**Seed plot point:** Order 1002 is already in `return-started` and ticket **ST-003** (category=`return`, status=`open`) is active with a live UPS return label `LBL-seed1002`. The right behavior is to surface the *existing* return rather than open a new one. If the customer asks to cancel the return, the agent should call `cancel_support_ticket` — the API voids the label first and reverts the order to `delivered`.
 
 ### Test Steps
 
 1. **Sign in as the customer (incognito or new browser profile):**
-   - [ ] Sign in as `james.chen@<your-tenant>` (customer 102)
+   - [ ] Sign in as `james.chen-local@<your-tenant>` (customer 102)
    - [ ] User badge confirms James Chen
 
 2. **Send query to chat:**
@@ -136,25 +138,30 @@ Tester: _______________
 
 4. **Verify MCP tool calls:**
    - [ ] CRM MCP logs show: `Tool called: get_customer_orders` with `customer_id=102`
-   - [ ] Knowledge MCP logs show: `search_knowledge_base` query contains keywords like "return", "policy", or "sizing"
+   - [ ] CRM MCP logs show: `Tool called: get_support_tickets` with `customer_id=102` (to find ST-003)
+   - [ ] CRM MCP logs show **no** call to `create_support_ticket` (return is already open — don't open a duplicate)
+   - [ ] Knowledge MCP logs may show `search_knowledge_base` for the sizing guide
    - [ ] No errors in either MCP server logs
 
 5. **Verify expected data in response:**
    - [ ] Response mentions Order 1002
    - [ ] Response mentions product: "TrailBlazer Hiking Boots"
-   - [ ] Response confirms order was delivered
-   - [ ] Response mentions the 30-day return window
-   - [ ] Response references boot sizing guide (or similar)
-   - [ ] Response explains return process
+   - [ ] Response acknowledges the order is already in a return (status `return-started`)
+   - [ ] Response surfaces ticket **ST-003** as the existing return
+   - [ ] Response mentions the active prepaid return label (`LBL-seed1002`, UPS) and links to it or to the carrier
+   - [ ] Response offers next steps: drop the package at UPS, or cancel the return if the customer changed their mind, or get sizing help for a fresh order
 
-6. **Verify knowledge base integration:**
-   - [ ] Response contains information from return policy document
-   - [ ] Response contains sizing guidance (not hallucinated)
+6. **(Optional) Verify cancel-side path:**
+   - [ ] Follow up: "Actually, never mind — cancel the return."
+   - [ ] CRM MCP logs show: `Tool called: cancel_support_ticket` with `ticket_id=ST-003`
+   - [ ] CRM API logs show the label was voided **before** the ticket was cancelled
+   - [ ] Query CRM API: `curl http://localhost:5001/api/v1/orders/1002` → status reverts from `return-started` to `delivered`
+   - [ ] Query CRM API: `curl http://localhost:5001/api/v1/tickets/ST-003` → `status=cancelled`, `return_label_status=voided`, `return_label_voided_at` populated
 
 ### Pass/Fail Criteria
 
-**PASS:** Response includes Order 1002, product name, return policy confirmation, sizing guide reference, and return process explanation.  
-**FAIL:** Missing order details, wrong product name, no return policy mention, or hallucinated sizing data.
+**PASS:** Response includes Order 1002, product name, surfaces the existing ST-003 ticket and `LBL-seed1002` UPS label, and does **not** create a duplicate ticket. (Optional cancel path: label voided first, ticket cancelled, order reverted to `delivered`.)  
+**FAIL:** Agent calls `create_support_ticket` (duplicate return), misses ST-003 / the active label, claims the order is still "delivered, can return" without acknowledging the open return, or the cancel path leaves the order in `return-started`.
 
 **Result:** ☐ PASS | ☐ FAIL | ☐ BLOCKED  
 **Notes:** _______________________________________________________________
@@ -171,7 +178,7 @@ Tester: _______________
 ### Test Steps
 
 1. **Sign in as the customer (incognito or new browser profile):**
-   - [ ] Sign in as `sarah.miller@<your-tenant>` (customer 103, Gold tier)
+   - [ ] Sign in as `sarah.miller-local@<your-tenant>` (customer 103, Gold tier)
    - [ ] User badge confirms Sarah Miller
 
 2. **Send query to chat:**
@@ -221,7 +228,7 @@ Tester: _______________
 ### Test Steps
 
 1. **Sign in as the customer (incognito or new browser profile):**
-   - [ ] Sign in as `david.park@<your-tenant>` (customer 104)
+   - [ ] Sign in as `david.park-local@<your-tenant>` (customer 104)
    - [ ] User badge confirms David Park
 
 2. **Send query to chat:**
@@ -273,7 +280,7 @@ Tester: _______________
 ### Test Steps
 
 1. **Sign in as the customer (incognito or new browser profile):**
-   - [ ] Sign in as `lisa.torres@<your-tenant>` (customer 105)
+   - [ ] Sign in as `lisa.torres-local@<your-tenant>` (customer 105)
    - [ ] User badge confirms Lisa Torres
 
 2. **Send query to chat:**
@@ -503,12 +510,12 @@ Tester: _______________
 |----------|-------|--------|-------|
 | 1 | Where's my order? (Emma Wilson) | ☐ PASS ☐ FAIL ☐ BLOCKED | |
 | 2 | Boots don't fit (James Chen) | ☐ PASS ☐ FAIL ☐ BLOCKED | |
-| 3 | Tent deals (Sarah Johnson) | ☐ PASS ☐ FAIL ☐ BLOCKED | |
-| 4 | Jacket damaged (Michael Brown) | ☐ PASS ☐ FAIL ☐ BLOCKED | |
-| 5 | Backpack recommendation (Lisa Anderson) | ☐ PASS ☐ FAIL ☐ BLOCKED | |
-| 6 | Tent care (Tom Garcia) | ☐ PASS ☐ FAIL ☐ BLOCKED | |
-| 7 | Cancel order (Rachel Kim) | ☐ PASS ☐ FAIL ☐ BLOCKED | |
-| 8 | Refund status (David Lee) | ☐ PASS ☐ FAIL ☐ BLOCKED | |
+| 3 | Tent deals (Sarah Miller) | ☐ PASS ☐ FAIL ☐ BLOCKED | |
+| 4 | Jacket damaged (David Park) | ☐ PASS ☐ FAIL ☐ BLOCKED | |
+| 5 | Backpack recommendation (Lisa Torres) | ☐ PASS ☐ FAIL ☐ BLOCKED | |
+| 6 | Tent care (Mike Johnson) | ☐ PASS ☐ FAIL ☐ BLOCKED | |
+| 7 | Cancel order (Anna Roberts) | ☐ PASS ☐ FAIL ☐ BLOCKED | |
+| 8 | Refund status (Tom Garcia) | ☐ PASS ☐ FAIL ☐ BLOCKED | |
 | **TOTAL** | | **___ / 8 PASS** | |
 
 ### Smoke Tests
@@ -535,7 +542,7 @@ Tester: _______________
 
 ### No customers in response
 
-- [ ] Verify `data/seed/customers.csv` exists and has 8+ rows
+- [ ] Verify `data/contoso-crm/customers.csv` exists and has 8+ rows
 - [ ] Check `curl http://localhost:5001/api/v1/customers` returns JSON
 - [ ] Verify CRM API logs show CSV loading on startup
 - [ ] Re-run seed-data project if needed
@@ -591,33 +598,37 @@ Total Runtime: _______________
 
 | ID | Name | Loyalty Tier |
 |----|------|--------------|
-| 101 | Emma Wilson | Silver |
-| 102 | James Chen | Bronze |
-| 103 | Sarah Johnson | Gold |
-| 104 | Michael Brown | Silver |
-| 105 | Lisa Anderson | Platinum |
-| 106 | Tom Garcia | Bronze |
-| 107 | Rachel Kim | Silver |
-| 108 | David Lee | Gold |
+| 101 | Emma Wilson  | Silver |
+| 102 | James Chen   | Bronze |
+| 103 | Sarah Miller | Gold |
+| 104 | David Park   | Silver |
+| 105 | Lisa Torres  | Bronze |
+| 106 | Mike Johnson | Gold |
+| 107 | Anna Roberts | Bronze |
+| 108 | Tom Garcia   | Silver |
 
-### Order Reference (from seed data)
+### Order Reference (from seed data, May 2026 demo)
 
-| Order ID | Customer ID | Product | Status | Tracking | Reference |
-|----------|-------------|---------|--------|----------|-----------|
-| 1001 | 101 | (Unspecified) | shipped | TRK-29481 | Scenario 1 |
-| 1002 | 102 | TrailBlazer Hiking Boots | delivered | (TBD) | Scenario 2 |
-| 1003 | 103 | (Tent - from promotions) | (TBD) | (TBD) | Scenario 3 |
-| 1004 | 104 | Alpine Summit Jacket | delivered | (TBD) | Scenario 4 |
-| 1005 | 105 | (Backpack - from recommendations) | (TBD) | (TBD) | Scenario 5 |
-| 1006 | 106 | Basecamp 4P Tent | delivered | (TBD) | Scenario 6 |
-| 1007 | 107 | (Unspecified) | processing | (TBD) | Scenario 7 |
-| 1008 | 108 | (Returned items) | returned | (TBD) | Scenario 8 |
+| Order ID | Customer ID | Product | Status | Tracking | Order → Delivery | Reference |
+|----------|-------------|---------|--------|----------|------------------|-----------|
+| 1001 | 101 (Emma) | (Unspecified) | delivered | TRK-29481 | 2026-03-01 → 2026-03-08 (out-of-window demo) | Scenario 1 |
+| 1002 | 102 (James) | TrailBlazer Hiking Boots | return-started | TRK-28734 | 2026-04-15 → 2026-04-21 (return ST-003 already open with active label `LBL-seed1002`) | Scenario 2 |
+| 1003 | 103 (Sarah) | Basecamp 4P Tent | delivered | TRK-28190 | 2026-04-25 → 2026-05-01 (within window) | Scenario 3 / Lab 3 plot |
+| 1004 | 104 (David) | Alpine Summit Jacket | delivered | TRK-27956 | 2026-04-18 → 2026-04-24 | Scenario 4 |
+| 1005 | 105 (Lisa) | (Backpack — from recommendations) | processing | — | 2026-05-08 → — | Scenario 5 |
+| 1006 | 106 (Mike) | Basecamp 4P Tent | delivered | TRK-28301 | 2026-04-22 → 2026-04-28 | Scenario 6 |
+| 1007 | 107 (Anna) | (Unspecified) | processing | — | 2026-05-09 → — | Scenario 7 |
+| 1008 | 108 (Tom) | (Returned items) | returned | TRK-25890 | 2026-01-15 → 2026-01-21 | Scenario 8 |
+| 1009 | 109 (Rachel) | (Multi-line) | shipped | TRK-30150 | 2026-05-10 → EDD 2026-05-15 | Active in-flight order (Rachel is *not* a local test user; visible in the BFF as a non-mapped customer) |
+| 1010 | 110 (Carlos) | (Recently delivered) | delivered | TRK-29870 | 2026-04-14 → 2026-04-21 | Within return window (Carlos is *not* a local test user) |
+| 1011 | 103 (Sarah) | (Recently delivered) | delivered | TRK-29915 | 2026-04-22 → 2026-04-28 | Sarah's second order — within window |
+| 1012 | 106 (Mike) | (Older delivered) | delivered | TRK-25650 | 2026-01-20 → 2026-01-26 (second out-of-window demo) | Bonus return-window plot |
 
 ### Service Ports Reference
 
 | Service | Port | Health Endpoint | Purpose |
 |---------|------|-----------------|---------|
-| CRM API | 5001 | `/api/v1/health` | Cosmos DB backend for customers, orders, tickets |
+| CRM API | 5001 | `/health` | Cosmos DB backend for customers, orders, tickets |
 | CRM MCP | 5002 | (none) | Tool server wrapping CRM API |
 | Knowledge MCP | 5003 | (none) | Vector search on policies and guides |
 | CRM Agent | 5004 | (none) | Agent with CRM tools |
@@ -625,6 +636,7 @@ Total Runtime: _______________
 | Orchestrator Agent | 5006 | (none) | Router to specialist agents |
 | BFF API | 5007 | `/health` | Frontend backend, auth, chat orchestration |
 | Blazor UI | 5008 | (none) | WASM front-end with customer auth dropdown |
+| Fraud Workflow | 5010 | `/health` | Refund-risk workflow (fan-out, aggregator, paused human gate) |
 | Aspire Dashboard | 15888 | (web UI) | Service health and logs |
 
 ---
@@ -634,6 +646,7 @@ Total Runtime: _______________
 | Date | Tester | Status | Notes |
 |------|--------|--------|-------|
 | 2026-03-24 | Peter | Draft | Initial E2E verification checklist created mapping all 8 scenarios to testable steps |
+| 2026-05-12 | Peter | Refresh | Updated for the May 2026 seed bump and the return-flow rewrite — Order 1001 expectation flipped from `shipped` to `delivered` (out-of-window demo), Scenario 2 (James) now exercises an open `return-started` ticket with a live `LBL-seed1002` label, customer-name table corrected to match the actual seed data, fraud-workflow added to the service inventory. |
 
 ---
 

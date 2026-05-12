@@ -13,7 +13,7 @@ Customer service agents handle requests ranging from simple product lookups to m
 | System | Description | Data Types |
 | -------- | ------------- | ------------ |
 | **Customer Database** | Customer profiles with loyalty tiers and account status | Names, emails, addresses, loyalty tier (Bronze/Silver/Gold/Platinum) |
-| **Order Management** | Orders with line items, shipping status, and tracking | Order status (placed/processing/shipped/delivered/returned/cancelled), tracking numbers, delivery estimates |
+| **Order Management** | Orders with line items, shipping status, and tracking | Order status (placed/processing/shipped/delivered/return-started/returned/cancelled), tracking numbers, delivery estimates |
 | **Product Catalog** | Full product inventory with descriptions, pricing, and availability | Product details, categories, stock status, ratings, images |
 | **Promotions Engine** | Active sales, discounts, and loyalty-tier-specific deals | Discount percentages, eligible categories, loyalty tier requirements |
 | **Support Tickets** | Customer support cases tied to orders | Ticket status, priority, category (shipping/product-issue/return/general) |
@@ -29,15 +29,17 @@ These scenarios are seeded into the data and have deterministic expected outcome
 ### Scenario 1 — "Where's my order?"
 
 **Customer:** Emma Wilson (ID: 101)
-**Question:** *"I placed an order a few days ago — can you tell me where it is?"*
+**Question:** *"I placed an order a few months ago — can you tell me where it is?"*
 
 **What the agent should do:**
 
-1. Retrieve Emma's orders (agent knows her identity from the auth token) → find Order 1001 (status: `shipped`, tracking: `TRK-29481`)
-2. Report the order is shipped with tracking number and estimated delivery date
+1. Retrieve Emma's orders (agent knows her identity from the auth token) → find Order 1001 (status: `delivered`, tracking: `TRK-29481`, delivered 2026-03-08)
+2. Report the order is delivered with the tracking number
+3. If the customer goes on to ask about returning it, the agent must reject the request — the delivery is more than 30 days ago and falls outside Contoso's standard return window
 
 **Systems accessed:** Customer Database, Order Management
 **Agent route:** Orchestrator → CRM Agent
+**Demo plot point:** Emma's order is intentionally seeded historical so it doubles as the **out-of-window return** demo — the CRM API returns `409 Conflict` with `error: "ReturnWindowExpired"` if the agent tries to file a return for it.
 
 ---
 
@@ -48,12 +50,12 @@ These scenarios are seeded into the data and have deterministic expected outcome
 
 **What the agent should do:**
 
-1. Retrieve James's recent orders → find Order 1002 with "TrailBlazer Hiking Boots" (delivered 5 days ago)
-2. Check the return policy in the knowledge base → within 30-day return window
-3. Confirm eligibility, explain the return process
-4. Offer the boot sizing guide to help pick the right size for a replacement
+1. Retrieve James's recent orders → find Order 1002 with "TrailBlazer Hiking Boots". The order is now in status `return-started` because James has already opened return ticket `ST-003`.
+2. Look up the open ticket via `get_support_tickets` and tell James the return is already in progress — surface the existing return label (`LBL-seed1002`, UPS) and remind him not to use it if he changes his mind (the back-end voids it on cancel).
+3. If the customer says "actually I want to keep them" the agent calls `cancel_support_ticket` — the CRM API voids the return label first (502 if the carrier call fails, ticket stays open) and only then cancels the ticket and reverts the order to `delivered`.
+4. Offer the boot sizing guide so James can pick the right size for a fresh order.
 
-**Systems accessed:** Customer Database, Order Management, Knowledge Base (return policy + boot sizing guide)
+**Systems accessed:** Customer Database, Order Management, Support Tickets, Knowledge Base (return policy + boot sizing guide)
 **Agent route:** Orchestrator → CRM Agent
 
 ---
@@ -174,8 +176,8 @@ All CRM tools in a single MCP server — wraps CRM API endpoints for customer pr
 | `get_promotions()` | All active promotions |
 | `get_eligible_promotions(customer_id)` | Promotions matching customer's loyalty tier |
 | `get_support_tickets(customer_id, open_only?)` | Customer's support tickets (returns ALL categories). Each ticket carries a `comments` field — an append-only audit thread written by the refund workflow on every terminal decision. |
-| `create_support_ticket(customer_id, order_id, category, priority, subject, description)` | Create a new support ticket. Returns are routed automatically: when `category="return"` and `order_id` is set, the CRM API also fires a refund-risk alert into the fraud-workflow human-gate pipeline. Sub-threshold returns auto-resolve immediately; above-threshold returns wait for an operator decision and the ticket status is updated when the decision lands. |
-| `cancel_support_ticket(ticket_id, customer_id)` | Cancel an open ticket on the customer's behalf. No-ops on already-cancelled/resolved tickets. |
+| `create_support_ticket(customer_id, order_id, category, priority, subject, description)` | Create a new support ticket. Returns are routed automatically: when `category="return"` and `order_id` is set, the CRM API enforces the **30-day return window** (`409 ReturnWindowExpired` if `delivered` more than 30 days ago), flips the order's status to `return-started`, and issues a prepaid return shipping label (visible on the new ticket as `return_label_id` / `return_label_carrier`). The CRM API then fires a refund-risk alert into the fraud-workflow human-gate pipeline. Sub-threshold returns auto-resolve immediately; above-threshold returns wait for an operator decision. |
+| `cancel_support_ticket(ticket_id, customer_id)` | Cancel an open ticket on the customer's behalf. For `category="return"` tickets the CRM API voids the prepaid shipping label first (`502 ReturnLabelVoidFailed` if the carrier call throws — the ticket then stays open), then cancels the ticket and reverts the order from `return-started` back to `delivered`. No-ops on already-cancelled/resolved tickets. |
 
 ### Knowledge Base MCP Server
 
@@ -196,7 +198,7 @@ Semantic search over guides, policies, and procedures (RAG pattern).
 | **OrderItems** | `id`, `order_id`, `product_id`, `product_name`, `quantity`, `unit_price` | `id` (FK: `order_id` \u2192 Orders) |
 | **Products** | `id`, `name`, `category`, `description`, `price`, `in_stock`, `rating`, `weight_kg`, `image_filename` | `id` |
 | **Promotions** | `id`, `name`, `description`, `discount_percent`, `eligible_categories`, `min_loyalty_tier`, `start_date`, `end_date`, `active` | `id` |
-| **SupportTickets** | `id`, `customer_id`, `order_id`, `category`, `subject`, `description`, `status`, `priority`, `opened_at`, `closed_at` | `id` (FK: `customer_id` \u2192 Customers, `order_id` \u2192 Orders) |
+| **SupportTickets** | `id`, `customer_id`, `order_id`, `category`, `subject`, `description`, `status`, `priority`, `opened_at`, `closed_at`, `comments`, `return_label_id`, `return_label_carrier`, `return_label_url`, `return_label_status` (`active`/`voided`/`failed`), `return_label_created_at`, `return_label_voided_at` | `id` (FK: `customer_id` → Customers, `order_id` → Orders) |
 
 ### Unstructured Data (PDFs → Azure AI Search via integrated vectorization)
 

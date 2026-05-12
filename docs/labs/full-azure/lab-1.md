@@ -262,6 +262,8 @@ The same three primitives — `DefaultAzureCredential` → `AIProjectClient.AsAI
 
 Lab 1 has provisioned AKS, ACR, and the workload identities, but the Pods themselves aren't running yet. The simplest way to deploy all 8 services in one go is the **Deploy All Services** workflow. It runs build + test for every service, pushes one image per service to ACR, then `helm upgrade --install`s each chart in dependency-aware tiers (CRM API + Knowledge MCP → CRM MCP → CRM/Product agents → Orchestrator → BFF + Blazor UI).
 
+> **Why 8 here and not 9?** The 9th service (`fraud-workflow`) ships in **Lab 3** — its Dockerfile, Helm chart, and dedicated managed identity are added during that lab and `helm upgrade --install`'d at the end of it. Lab 1 + Lab 2 only deploy the original 8.
+
 > **One-time prerequisite — install the Application Gateway for Containers (AGC) ALB Controller.** Terraform provisions the AGC resource (load balancer, frontend FQDN, TLS cert) but does **not** install the in-cluster controller that programs it. Without the controller, the Blazor UI is reachable inside the cluster but **not** from the internet. Follow the upstream Helm install guide once per cluster:
 > [Deploy Application Gateway for Containers ALB Controller (Helm BYO)](https://learn.microsoft.com/en-us/azure/application-gateway/for-containers/quickstart-deploy-application-gateway-for-containers-alb-controller-helm)
 >

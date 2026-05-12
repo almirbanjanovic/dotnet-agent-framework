@@ -39,7 +39,7 @@
 
 ### What This Mode Is
 
-Local dev mode is an **additive** deployment option alongside the existing full Azure deployment. It deploys **only Azure AI Foundry** (AI Services account + 2 model deployments) to Azure, while running everything else — all 8 application components — on the developer's local machine using `dotnet run`.
+Local dev mode is an **additive** deployment option alongside the existing full Azure deployment. It deploys **only Azure AI Foundry** (AI Services account + 2 model deployments) to Azure, while running everything else — all 9 application components — on the developer's local machine using `dotnet run`.
 
 **Key difference from previous versions:** Local dev mode uses **in-memory data** (CSVs loaded at startup) via the **repository pattern**, not emulators. This is simpler, faster, and cleaner for local development.
 
@@ -76,7 +76,7 @@ See **[Local Development Guide](local-development.md)** for the quick-start walk
    → Generates appsettings.Local.json for each component with Foundry credentials
 5. Run: dotnet run --project src/AppHost
    → Starts Aspire orchestration
-   → All 8 components run locally with in-memory data
+   → All 9 components run locally with in-memory data
    → Dashboard at https://localhost:15888
 6. Open browser: https://localhost:5008
 ```
@@ -583,7 +583,7 @@ The setup script does 7 things:
 1. **Check prerequisites** — .NET 9, Azure CLI, Terraform, Cosmos Emulator, Azurite
 2. **Deploy Foundry** — `terraform apply` in `infra/terraform/local-dev/`
 3. **Retrieve Foundry config** — Endpoint, API key, deployment names via `terraform output`
-4. **Generate appsettings.Local.json** — For all 8 components with correct Foundry credentials
+4. **Generate appsettings.Local.json** — For all 9 components with correct Foundry credentials
 5. **Start emulators** — Cosmos DB Emulator + Azurite (if not running)
 6. **Seed data** — Run `src/seed-data` to populate in-memory repos
 7. **Print port map** — Show the developer where everything is running
@@ -609,6 +609,7 @@ The setup script does 7 things:
 | orchestrator-agent | 5006 | HTTP | Agent endpoint |
 | bff-api | 5007 | HTTPS | Backend-for-Frontend |
 | blazor-ui | 5008 | HTTPS | SPA |
+| fraud-workflow | 5010 | HTTP | Refund-risk workflow (fan-out, aggregator, paused human gate) — in-process today, AKS-deployable after Lab 3 |
 | **Aspire Dashboard** | **15888** | **HTTPS** | **Monitoring all components** |
 
 ---
@@ -617,7 +618,7 @@ The setup script does 7 things:
 
 ### When Running Locally
 
-- ✅ All 8 components run as separate processes (or via Aspire orchestration)
+- ✅ All 9 components run as separate processes (or via Aspire orchestration)
 - ✅ Data lives in memory (CSVs loaded at startup)
 - ✅ No emulators needed (repository pattern handles everything)
 - ✅ Foundry deployed to Azure (real API calls)
