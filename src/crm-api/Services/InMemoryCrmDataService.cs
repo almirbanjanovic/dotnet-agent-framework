@@ -316,7 +316,19 @@ public sealed class InMemoryCrmDataService : ICosmosService
             Status = ticket.Status,
             Priority = ticket.Priority,
             OpenedAt = ticket.OpenedAt,
-            ClosedAt = ticket.ClosedAt
+            ClosedAt = ticket.ClosedAt,
+            Comments = ticket.Comments,
+            // Return-label fields. The endpoint writes these via
+            // UpdateTicketAsync after CreateTicketAsync succeeds, but
+            // copy them on create too so the in-memory + Cosmos
+            // backends behave identically when a caller pre-populates
+            // them (CSV seed path).
+            ReturnLabelId = ticket.ReturnLabelId,
+            ReturnLabelCarrier = ticket.ReturnLabelCarrier,
+            ReturnLabelUrl = ticket.ReturnLabelUrl,
+            ReturnLabelStatus = ticket.ReturnLabelStatus,
+            ReturnLabelCreatedAt = ticket.ReturnLabelCreatedAt,
+            ReturnLabelVoidedAt = ticket.ReturnLabelVoidedAt
         };
 
         _supportTickets[created.Id] = created;

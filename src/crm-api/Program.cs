@@ -39,6 +39,16 @@ builder.WebHost.ConfigureKestrel(options =>
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<CustomerContext>();
 
+// System clock seam. Endpoints take TimeProvider from DI so the
+// 30-day return-window gate can be unit-tested with a fixed "today".
+builder.Services.AddSingleton(TimeProvider.System);
+
+// Prepaid return-label issuer. The fake impl is fully offline (no
+// outbound HTTP) and stateless \u2014 safe to register as a singleton even
+// in Cosmos mode where ICosmosService is scoped. A real impl would
+// own its own typed HttpClient and stay singleton.
+builder.Services.AddSingleton<IReturnLabelService, FakeReturnLabelService>();
+
 // Outbound: when a customer creates a category=return ticket the API
 // fans the event out to fraud-workflow as a refund alert. Fire-and-forget
 // from the endpoint's POV — if the workflow is down, the ticket still

@@ -32,7 +32,7 @@ public sealed class SupportTicketTools
         }
     }
 
-    [McpServerTool(Name = "create_support_ticket", ReadOnly = false), Description("Create a new support ticket. Use this to start a return/refund (category='return'), report a shipping problem (category='shipping'), or escalate a defective product (category='product-issue'). All enum fields are case-sensitive lowercase. NOTE: when category='return' AND order_id is set, the back-end automatically opens a refund-risk review for the operations team — do not also tell the customer to email anyone. ELIGIBILITY: a return can only be filed against an order whose current status is 'delivered'. If the customer's order is still 'shipped' or 'processing', tell them they need to wait until it is delivered before a return can be filed; do NOT call this tool. If the order is already 'return-requested' or 'returned', the customer should cancel the existing return ticket first or has nothing to return. The server enforces this and will reject ineligible calls with a 409 — read the error message verbatim back to the customer.")]
+    [McpServerTool(Name = "create_support_ticket", ReadOnly = false), Description("Create a support ticket. category='return' for refunds, 'shipping' for delivery problems, 'product-issue' for defects. All enums lowercase. Returns: order flips to 'return-started' and a prepaid return label is auto-issued (visible as return_label_id/return_label_carrier). RETURN ELIGIBILITY (server enforces with 409 — read the error message verbatim): order status must be 'delivered' AND the delivery date must be within the 30-day return window. Do not call for 'shipped', 'processing', 'cancelled', 'return-started', or 'returned' orders, or for orders delivered more than 30 days ago.")]
     public async Task<string> CreateSupportTicketAsync(
         [Description("Support ticket request payload. Note category and priority are case-sensitive lowercase enums — see field descriptions for allowed values.")] CreateTicketRequest request)
     {
@@ -47,7 +47,7 @@ public sealed class SupportTicketTools
         }
     }
 
-    [McpServerTool(Name = "cancel_support_ticket", ReadOnly = false), Description("Cancel an open support ticket on the customer's behalf. Use this when the customer asks to cancel, withdraw, or 'never mind' a ticket they previously opened. Requires the exact ticket id (e.g. 'ST-001') — call get_support_tickets first to find it. Only works on tickets in status='open'; tickets already cancelled, resolved, or closed will return a 409.")]
+    [McpServerTool(Name = "cancel_support_ticket", ReadOnly = false), Description("Cancel an open support ticket on the customer's behalf. Use this when the customer asks to cancel, withdraw, or 'never mind' a ticket they previously opened. Requires the exact ticket id (e.g. 'ST-001') — call get_support_tickets first to find it. Only works on tickets in status='open'; tickets already cancelled, resolved, or closed will return a 409. For return tickets, cancelling automatically voids the prepaid return shipping label — tell the customer not to use it.")]
     public async Task<string> CancelSupportTicketAsync(
         [Description("Ticket ID to cancel (e.g. 'ST-001'). Must be an EXISTING ticket id returned by get_support_tickets.")] string ticketId,
         [Description("Customer ID that owns the ticket. Used as a fallback when the per-request customer header is absent (tests/local).")] string customerId)

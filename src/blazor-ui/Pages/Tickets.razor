@@ -120,6 +120,46 @@
                                     @ticket.Comments
                                 </MudText>
                             }
+
+                            @* Prepaid return-label panel. Renders for return-category
+                               tickets only. URL is intentionally NOT linkified —
+                               see SECURITY note on the SupportTicket model. *@
+                            @if (!string.IsNullOrWhiteSpace(ticket.ReturnLabelStatus))
+                            {
+                                <MudDivider Class="my-3" />
+                                <MudText Typo="Typo.caption" Color="Color.Secondary"
+                                         Style="text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">
+                                    Return label
+                                </MudText>
+                                @switch (ticket.ReturnLabelStatus?.ToLowerInvariant())
+                                {
+                                    case "active":
+                                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Style="margin-top: 0.25rem;">
+                                            <MudIcon Icon="@Icons.Material.Outlined.LocalShipping" Size="Size.Small" Color="Color.Success" />
+                                            <MudText Typo="Typo.body2">
+                                                @ticket.ReturnLabelId (@ticket.ReturnLabelCarrier)
+                                            </MudText>
+                                        </MudStack>
+                                        break;
+                                    case "voided":
+                                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Style="margin-top: 0.25rem;">
+                                            <MudIcon Icon="@Icons.Material.Outlined.Cancel" Size="Size.Small" Color="Color.Default" />
+                                            <MudText Typo="Typo.body2" Color="Color.Secondary"
+                                                     Style="text-decoration: line-through;">
+                                                @ticket.ReturnLabelId voided@(string.IsNullOrWhiteSpace(ticket.ReturnLabelVoidedAt) ? "" : " on " + FormatDate(ticket.ReturnLabelVoidedAt))
+                                            </MudText>
+                                        </MudStack>
+                                        break;
+                                    case "failed":
+                                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Style="margin-top: 0.25rem;">
+                                            <MudIcon Icon="@Icons.Material.Outlined.Warning" Size="Size.Small" Color="Color.Warning" />
+                                            <MudText Typo="Typo.body2" Color="Color.Warning">
+                                                Label generation failed — contact support.
+                                            </MudText>
+                                        </MudStack>
+                                        break;
+                                }
+                            }
                         </MudCardContent>
                         @if (string.Equals(ticket.Status, "open", StringComparison.OrdinalIgnoreCase))
                         {

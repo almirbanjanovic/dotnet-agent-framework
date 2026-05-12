@@ -342,13 +342,13 @@
         "in transit"        => "status-chip-info",
         "processing"        => "status-chip-warn",
         "pending"           => "status-chip-warn",
-        "return-requested"  => "status-chip-warn",
+        "return-started"    => "status-chip-warn",
         "cancelled"         => "status-chip-muted",
         "returned"          => "status-chip-muted",
         _                   => "status-chip-info"
     };
 
-    // Wire values are kebab-lowercase ('return-requested') for API
+    // Wire values are kebab-lowercase ('return-started') for API
     // contract stability; the chip text needs to read like a sentence.
     private static string FormatStatus(string? status)
     {
@@ -356,7 +356,7 @@
         var lower = status.ToLowerInvariant();
         return lower switch
         {
-            "return-requested" => "Return Requested",
+            "return-started"   => "Return Started",
             _ => char.ToUpperInvariant(lower[0]) + lower[1..]
         };
     }

@@ -50,6 +50,8 @@ public static class SupportTicketEndpoints
             CreateTicketRequest request,
             CustomerContext customerContext,
             ICosmosService cosmos,
+            IReturnLabelService returnLabelService,
+            TimeProvider timeProvider,
             IServiceScopeFactory scopeFactory,
             ILoggerFactory loggerFactory,
             CancellationToken ct) =>
@@ -118,8 +120,8 @@ public static class SupportTicketEndpoints
                 // up through the agent verbatim.
                 if (!string.Equals(order.Status, "delivered", StringComparison.OrdinalIgnoreCase))
                 {
-                    var humanReason = string.Equals(order.Status, "return-requested", StringComparison.OrdinalIgnoreCase)
-                        ? "A return has already been requested for this order. Cancel the existing return ticket before filing a new one."
+                    var humanReason = string.Equals(order.Status, "return-started", StringComparison.OrdinalIgnoreCase)
+                        ? "A return has already been started for this order. Cancel the existing return ticket before filing a new one."
                         : string.Equals(order.Status, "returned", StringComparison.OrdinalIgnoreCase)
                             ? "This order has already been returned."
                             : $"Returns can only be filed once the order has been delivered. Current status: {order.Status}.";
@@ -128,6 +130,32 @@ public static class SupportTicketEndpoints
                         error = "OrderNotReturnable",
                         message = humanReason,
                         order_status = order.Status
+                    });
+                }
+
+                // 30-day return window gate. The policy doc states
+                // "Contoso Outdoors accepts returns within 30 calendar
+                // days from the date of delivery." Without this gate the
+                // agent would happily file a return on a months-old
+                // order (Emma Wilson reported this against a March order
+                // in May). We use the carrier's estimated_delivery as
+                // the closest proxy for the actual delivery date and
+                // fall back to order_date if missing. The helper
+                // returns a customer-readable message; surface it
+                // verbatim so the agent reads it back as-is.
+                var eligibility = ReturnEligibility.IsWithinWindow(
+                    order.EstimatedDelivery,
+                    order.OrderDate,
+                    DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime));
+                if (!eligibility.IsEligible)
+                {
+                    return Results.Conflict(new
+                    {
+                        error = "ReturnWindowExpired",
+                        message = eligibility.Reason!,
+                        order_status = order.Status,
+                        days_since_delivery = eligibility.DaysSinceDelivery,
+                        window_days = ReturnEligibility.WindowDays
                     });
                 }
 
@@ -155,7 +183,7 @@ public static class SupportTicketEndpoints
 
             var created = await cosmos.CreateTicketAsync(ticket, ct);
 
-            // Flip the order to "return-requested" so the customer's
+            // Flip the order to "return-started" so the customer's
             // /orders view immediately reflects the open return. Reverts
             // to "delivered" if the customer cancels the ticket; flips
             // to "returned" on workflow approval. We use the same
@@ -165,7 +193,7 @@ public static class SupportTicketEndpoints
             // status is best-effort UX. Loud log on failure.
             if (returnOrderToFlip is not null)
             {
-                returnOrderToFlip.Status = "return-requested";
+                returnOrderToFlip.Status = "return-started";
                 try
                 {
                     await cosmos.UpdateOrderAsync(returnOrderToFlip, ct);
@@ -175,8 +203,109 @@ public static class SupportTicketEndpoints
                     loggerFactory
                         .CreateLogger("Contoso.CrmApi.SupportTickets")
                         .LogWarning(ex,
-                            "Failed to flip order {OrderId} to return-requested after creating ticket {TicketId}.",
+                            "Failed to flip order {OrderId} to return-started after creating ticket {TicketId}.",
                             returnOrderToFlip.Id, created.Id);
+                }
+            }
+
+            // Issue a prepaid return shipping label. The fake impl is
+            // synchronous + offline; a real impl (Shippo, EasyPost,
+            // carrier API) would do an outbound call here. Two failure
+            // modes are handled explicitly:
+            //
+            //   1. CreateAsync throws → no label exists at the carrier;
+            //      stamp ReturnLabelStatus="failed" so the UI surfaces
+            //      the situation rather than silently leaving a return
+            //      ticket with no label. Customer can cancel and retry.
+            //
+            //   2. CreateAsync succeeds but the follow-up UpdateTicket
+            //      to stamp the fields throws → carrier holds an
+            //      orphaned label with no DB reference. Compensate
+            //      immediately by VoidAsync. If the void ALSO throws,
+            //      log the orphan id loudly so ops can reconcile.
+            //
+            // Persistence and the carrier call after eligibility passes
+            // intentionally use CancellationToken.None so a client
+            // disconnect mid-creation cannot leave us with a created
+            // label and an unstamped ticket.
+            if (string.Equals(created.Category, "return", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(created.OrderId))
+            {
+                var ticketLogger = loggerFactory.CreateLogger("Contoso.CrmApi.SupportTickets");
+                ReturnLabel? issuedLabel = null;
+                try
+                {
+                    issuedLabel = await returnLabelService.CreateAsync(
+                        created.Id, created.OrderId!, CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    ticketLogger.LogWarning(ex,
+                        "Failed to issue return label for ticket {TicketId} (order {OrderId}).",
+                        created.Id, created.OrderId);
+                    created.ReturnLabelStatus = "failed";
+                    try
+                    {
+                        await cosmos.UpdateTicketAsync(created, CancellationToken.None);
+                    }
+                    catch (Exception stampEx)
+                    {
+                        ticketLogger.LogWarning(stampEx,
+                            "Failed to stamp return_label_status=failed on ticket {TicketId}.", created.Id);
+                    }
+                }
+
+                if (issuedLabel is not null)
+                {
+                    created.ReturnLabelId = issuedLabel.Id;
+                    created.ReturnLabelCarrier = issuedLabel.Carrier;
+                    created.ReturnLabelUrl = issuedLabel.Url;
+                    created.ReturnLabelStatus = "active";
+                    created.ReturnLabelCreatedAt = issuedLabel.CreatedAt;
+                    try
+                    {
+                        await cosmos.UpdateTicketAsync(created, CancellationToken.None);
+                    }
+                    catch (Exception stampEx)
+                    {
+                        ticketLogger.LogError(stampEx,
+                            "Stamping return label {LabelId} on ticket {TicketId} failed; attempting carrier-side void to avoid orphan.",
+                            issuedLabel.Id, created.Id);
+                        try
+                        {
+                            await returnLabelService.VoidAsync(issuedLabel.Id, CancellationToken.None);
+                        }
+                        catch (Exception voidEx)
+                        {
+                            // Loud log: ORPHAN LABEL at the carrier with no
+                            // DB record. Operator must reconcile manually.
+                            ticketLogger.LogError(voidEx,
+                                "ORPHAN LABEL {LabelId} (ticket {TicketId}, order {OrderId}) — both stamp and compensating void failed.",
+                                issuedLabel.Id, created.Id, created.OrderId);
+                        }
+                        // Reset in-memory fields so the response we return
+                        // doesn't claim a label that isn't stamped.
+                        created.ReturnLabelId = null;
+                        created.ReturnLabelCarrier = null;
+                        created.ReturnLabelUrl = null;
+                        created.ReturnLabelStatus = "failed";
+                        created.ReturnLabelCreatedAt = null;
+                        // Persist the failed marker too, best-effort, so a
+                        // later GET reflects the same status the response
+                        // body claims (Adv-review A4). If THIS upsert also
+                        // fails the ticket is left without a stamp — not
+                        // worse than before this patch, and already logged.
+                        try
+                        {
+                            await cosmos.UpdateTicketAsync(created, CancellationToken.None);
+                        }
+                        catch (Exception persistEx)
+                        {
+                            ticketLogger.LogWarning(persistEx,
+                                "Failed to persist return_label_status=failed on ticket {TicketId} after compensating void.",
+                                created.Id);
+                        }
+                    }
                 }
             }
 
@@ -190,8 +319,17 @@ public static class SupportTicketEndpoints
             // 201 immediately, the workflow trigger happens in the
             // background, and any failure is logged (not retried) since
             // ops can also start the same alert from the Operations page.
+            //
+            // Adv-review A1: a return whose label issuance FAILED is not
+            // actionable — the customer literally has no way to ship the
+            // item back. Skip the refund-risk run so ops doesn't auto-
+            // resolve the ticket and flip the order to "returned" while
+            // the customer is still waiting for a manually-issued label.
+            // The ticket stays open (status="open", label_status="failed")
+            // and an operator can re-issue the label or take over.
             if (string.Equals(created.Category, "return", StringComparison.OrdinalIgnoreCase) &&
-                !string.IsNullOrWhiteSpace(created.OrderId))
+                !string.IsNullOrWhiteSpace(created.OrderId) &&
+                !string.Equals(created.ReturnLabelStatus, "failed", StringComparison.OrdinalIgnoreCase))
             {
                 // Resolve a fresh scope inside the background task —
                 // ICosmosService is scoped in Cosmos mode, so capturing
@@ -224,6 +362,7 @@ public static class SupportTicketEndpoints
             UpdateTicketStatusRequest request,
             CustomerContext customerContext,
             ICosmosService cosmos,
+            IReturnLabelService returnLabelService,
             ILoggerFactory loggerFactory,
             CancellationToken ct) =>
         {
@@ -270,25 +409,66 @@ public static class SupportTicketEndpoints
                 });
             }
 
+            var ticketLogger = loggerFactory.CreateLogger("Contoso.CrmApi.SupportTickets");
+            var willCancelReturn =
+                string.Equals(existing.Category, "return", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(request.Status, "cancelled", StringComparison.OrdinalIgnoreCase);
+
+            // Cancel-path label void. Order matters: void at the
+            // carrier FIRST, then update the ticket. If the void
+            // throws, return 502 so the customer can retry — leaving
+            // the ticket open with an active label is correct because
+            // a cancelled ticket whose label is still active at the
+            // carrier is the worse failure mode (lost merchandise,
+            // unexpected return shipping cost). Already-voided labels
+            // (or labels that never existed because issuance failed
+            // at create time) are skipped without an external call.
+            string? voidedAt = null;
+            if (willCancelReturn &&
+                !string.IsNullOrWhiteSpace(existing.ReturnLabelId) &&
+                string.Equals(existing.ReturnLabelStatus, "active", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    await returnLabelService.VoidAsync(existing.ReturnLabelId!, CancellationToken.None);
+                    voidedAt = DateTimeOffset.UtcNow.ToString(
+                        "yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
+                }
+                catch (Exception ex)
+                {
+                    ticketLogger.LogError(ex,
+                        "Failed to void return label {LabelId} for ticket {TicketId}; cancellation will not proceed.",
+                        existing.ReturnLabelId, existing.Id);
+                    return Results.Json(new
+                    {
+                        error = "ReturnLabelVoidFailed",
+                        message = "We couldn't void the return shipping label. Please try cancelling again in a moment."
+                    }, statusCode: StatusCodes.Status502BadGateway);
+                }
+            }
+
             existing.Status = request.Status.ToLowerInvariant();
             existing.ClosedAt = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd");
+            if (voidedAt is not null)
+            {
+                existing.ReturnLabelStatus = "voided";
+                existing.ReturnLabelVoidedAt = voidedAt;
+            }
             var updated = await cosmos.UpdateTicketAsync(existing, ct);
 
             // If the customer just cancelled a return ticket, free the
-            // order from "return-requested" so they can re-file later.
+            // order from "return-started" so they can re-file later.
             // Best-effort with a strict require-from guard — we never
             // trample a "returned" or "delivered" state set elsewhere.
             // Resolved (the other allowed customer-set status) does NOT
             // revert, because the workflow's approval path drives
             // "returned".
-            if (string.Equals(existing.Category, "return", StringComparison.OrdinalIgnoreCase) &&
-                !string.IsNullOrWhiteSpace(existing.OrderId) &&
-                string.Equals(existing.Status, "cancelled", StringComparison.OrdinalIgnoreCase))
+            if (willCancelReturn && !string.IsNullOrWhiteSpace(existing.OrderId))
             {
                 await TryFlipOrderStatusAsync(
                     cosmos, existing.OrderId!, targetStatus: "delivered",
-                    requireFromAny: ["return-requested"], ct,
-                    loggerFactory.CreateLogger("Contoso.CrmApi.SupportTickets"));
+                    requireFromAny: ["return-started"], ct,
+                    ticketLogger);
             }
 
             return Results.Ok(updated);
@@ -355,10 +535,10 @@ public static class SupportTicketEndpoints
             // duplicate callback doesn't double-mutate). Reject/timeout
             // intentionally do NOT touch the order — per the existing
             // ApplyDecisionToTicket contract those leave the ticket
-            // open and the order stays in `return-requested` until the
+            // open and the order stays in `return-started` until the
             // customer cancels or a follow-up approval lands.
             //
-            // Self-heal: accept either "return-requested" (the normal
+            // Self-heal: accept either "return-started" (the normal
             // post-create state) OR "delivered" (the recovery state
             // where the create-time flip silently failed). An approved
             // refund must always land the order in "returned". (Adv-
@@ -373,7 +553,7 @@ public static class SupportTicketEndpoints
             {
                 await TryFlipOrderStatusAsync(
                     cosmos, existing.OrderId!, targetStatus: "returned",
-                    requireFromAny: ["return-requested", "delivered"], ct, logger);
+                    requireFromAny: ["return-started", "delivered"], ct, logger);
             }
 
             logger.LogInformation(
@@ -492,7 +672,7 @@ public static class SupportTicketEndpoints
 
         // Mirror onto the order if this call actually closed the ticket
         // (open → resolved). Same self-heal as the callback path: accept
-        // both "return-requested" and "delivered" so a missed create-
+        // both "return-started" and "delivered" so a missed create-
         // time flip still ends in "returned".
         if (!string.IsNullOrWhiteSpace(ticket.OrderId) &&
             string.Equals(priorStatus, "open", StringComparison.OrdinalIgnoreCase) &&
@@ -500,7 +680,7 @@ public static class SupportTicketEndpoints
         {
             await TryFlipOrderStatusAsync(
                 cosmos, ticket.OrderId!, targetStatus: "returned",
-                requireFromAny: ["return-requested", "delivered"], ct, logger);
+                requireFromAny: ["return-started", "delivered"], ct, logger);
         }
 
         logger.LogInformation(
@@ -566,7 +746,7 @@ public static class SupportTicketEndpoints
     //
     // `requireFromAny` lists the acceptable current statuses. Pass more
     // than one to enable self-healing — e.g. the approval path accepts
-    // BOTH "return-requested" (the normal post-create state) AND
+    // BOTH "return-started" (the normal post-create state) AND
     // "delivered" (the recovery state where the create-time flip
     // failed silently). That guarantees an approved refund always lands
     // the order in "returned" regardless of which intermediate writes

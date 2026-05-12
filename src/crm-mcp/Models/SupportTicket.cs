@@ -39,4 +39,26 @@ public sealed class SupportTicket
     // explaining ticket status.
     [JsonPropertyName("comments")]
     public string? Comments { get; set; }
+
+    // Prepaid return label fields (category="return" only). Mirror of
+    // the CRM API contract — duplicated per the component-independence
+    // rule. The agent surfaces ReturnLabelId/Carrier when the customer
+    // asks "what's my return shipping label?".
+    [JsonPropertyName("return_label_id")]
+    public string? ReturnLabelId { get; set; }
+
+    [JsonPropertyName("return_label_carrier")]
+    public string? ReturnLabelCarrier { get; set; }
+
+    [JsonPropertyName("return_label_url")]
+    public string? ReturnLabelUrl { get; set; }
+
+    [JsonPropertyName("return_label_status")]
+    public string? ReturnLabelStatus { get; set; }
+
+    [JsonPropertyName("return_label_created_at")]
+    public string? ReturnLabelCreatedAt { get; set; }
+
+    [JsonPropertyName("return_label_voided_at")]
+    public string? ReturnLabelVoidedAt { get; set; }
 }

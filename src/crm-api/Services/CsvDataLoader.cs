@@ -86,7 +86,16 @@ public static class CsvDataLoader
             OpenedAt = GetField(fields, 8),
             ClosedAt = GetOptionalField(fields, 9),
             // 11th column is optional — seed data may not have it.
-            Comments = fields.Count > 10 ? GetOptionalField(fields, 10) : null
+            Comments = fields.Count > 10 ? GetOptionalField(fields, 10) : null,
+            // Columns 12-17 are the prepaid return-label fields. They
+            // are optional so legacy CSV files (no label columns) still
+            // load. Only return-category tickets ever have them set.
+            ReturnLabelId = fields.Count > 11 ? GetOptionalField(fields, 11) : null,
+            ReturnLabelCarrier = fields.Count > 12 ? GetOptionalField(fields, 12) : null,
+            ReturnLabelUrl = fields.Count > 13 ? GetOptionalField(fields, 13) : null,
+            ReturnLabelStatus = fields.Count > 14 ? GetOptionalField(fields, 14) : null,
+            ReturnLabelCreatedAt = fields.Count > 15 ? GetOptionalField(fields, 15) : null,
+            ReturnLabelVoidedAt = fields.Count > 16 ? GetOptionalField(fields, 16) : null
         });
 
     private static List<T> LoadCsv<T>(string path, Func<IReadOnlyList<string>, T> map)
