@@ -200,6 +200,18 @@ public sealed class InMemoryCrmDataService : ICosmosService
         return Task.FromResult<(Order, IReadOnlyList<OrderItem>)>((order, resolvedItems));
     }
 
+    public Task<Order> UpdateOrderAsync(Order order, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (string.IsNullOrWhiteSpace(order.Id))
+        {
+            throw new InvalidOperationException("Order.Id is required for update.");
+        }
+        // Authoritative replace mirrors UpdateTicketAsync.
+        _orders[order.Id] = order;
+        return Task.FromResult(order);
+    }
+
     // ── Products ───────────────────────────────────────────────────────────
 
     public Task<IReadOnlyList<Product>> GetProductsAsync(

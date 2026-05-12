@@ -164,6 +164,26 @@ public sealed class CosmosService : ICosmosService
         return (order, resolvedItems);
     }
 
+    public async Task<Order> UpdateOrderAsync(Order order, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(order.Id))
+        {
+            throw new InvalidOperationException("Order.Id is required for update.");
+        }
+        if (string.IsNullOrWhiteSpace(order.CustomerId))
+        {
+            throw new InvalidOperationException("Order.CustomerId is required for update (it is the partition key).");
+        }
+        // Orders are partitioned by /customer_id. Upsert keeps the call
+        // idempotent and avoids a separate Read; the endpoint already
+        // loaded the prior record to enforce ownership + state checks.
+        var response = await _orders.UpsertItemAsync(
+            order,
+            new PartitionKey(order.CustomerId),
+            cancellationToken: ct);
+        return response.Resource;
+    }
+
     // ── Products ───────────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<Product>> GetProductsAsync(

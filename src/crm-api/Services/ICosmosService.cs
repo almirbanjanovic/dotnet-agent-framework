@@ -20,6 +20,11 @@ public interface ICosmosService
         string? shippingAddress,
         IEnumerable<(string productId, int quantity)> items,
         CancellationToken ct = default);
+    // Authoritative replace of an order document. Used by the return /
+    // refund flow to mutate `status` (delivered → return-requested →
+    // returned, with reverts on customer cancel or operator reject).
+    // Caller is responsible for loading + mutating the full record.
+    Task<Order> UpdateOrderAsync(Order order, CancellationToken ct = default);
 
     // Products
     Task<IReadOnlyList<Product>> GetProductsAsync(string? query = null, string? category = null, bool? inStockOnly = null, CancellationToken ct = default);

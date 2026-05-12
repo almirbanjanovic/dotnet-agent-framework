@@ -70,7 +70,7 @@
                                     <MudText Typo="Typo.h6" Style="line-height: 1.1;">#@order.Id</MudText>
                                 </div>
                                 <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Class="@GetStatusChipClass(order.Status)">
-                                    @order.Status
+                                    @FormatStatus(order.Status)
                                 </MudChip>
                             </MudStack>
 
@@ -336,16 +336,30 @@
 
     private static string GetStatusChipClass(string? status) => status?.ToLowerInvariant() switch
     {
-        "delivered"   => "status-chip-success",
-        "completed"   => "status-chip-success",
-        "shipped"     => "status-chip-info",
-        "in transit"  => "status-chip-info",
-        "processing"  => "status-chip-warn",
-        "pending"     => "status-chip-warn",
-        "cancelled"   => "status-chip-muted",
-        "returned"    => "status-chip-muted",
-        _             => "status-chip-info"
+        "delivered"         => "status-chip-success",
+        "completed"         => "status-chip-success",
+        "shipped"           => "status-chip-info",
+        "in transit"        => "status-chip-info",
+        "processing"        => "status-chip-warn",
+        "pending"           => "status-chip-warn",
+        "return-requested"  => "status-chip-warn",
+        "cancelled"         => "status-chip-muted",
+        "returned"          => "status-chip-muted",
+        _                   => "status-chip-info"
     };
+
+    // Wire values are kebab-lowercase ('return-requested') for API
+    // contract stability; the chip text needs to read like a sentence.
+    private static string FormatStatus(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status)) return string.Empty;
+        var lower = status.ToLowerInvariant();
+        return lower switch
+        {
+            "return-requested" => "Return Requested",
+            _ => char.ToUpperInvariant(lower[0]) + lower[1..]
+        };
+    }
 
     private async void HandleCustomerChanged()
     {

@@ -87,6 +87,15 @@ public static class SupportTicketEndpoints
             // then receive an alert with attacker customerId + victim
             // orderId + victim amount. Reject the request before
             // persisting the ticket.
+            //
+            // Plus: order-state eligibility gate. A return only makes
+            // sense once the customer actually has the package in hand.
+            // Without this gate the agent will happily file a return on
+            // a Shipped/Processing order, the workflow will approve it,
+            // and the order's status will hang in limbo. Refusing on
+            // the server keeps the LLM honest and matches the policy
+            // documented to customers.
+            Order? returnOrderToFlip = null;
             if (string.Equals(request.Category, "return", StringComparison.OrdinalIgnoreCase) &&
                 !string.IsNullOrWhiteSpace(request.OrderId))
             {
@@ -102,6 +111,27 @@ public static class SupportTicketEndpoints
                         message = $"Order '{request.OrderId}' was not found for this customer."
                     });
                 }
+
+                // Eligibility gate. 409 Conflict (not 400) — the request
+                // is well-formed; the order is just in the wrong state.
+                // The message is customer-readable because it bubbles
+                // up through the agent verbatim.
+                if (!string.Equals(order.Status, "delivered", StringComparison.OrdinalIgnoreCase))
+                {
+                    var humanReason = string.Equals(order.Status, "return-requested", StringComparison.OrdinalIgnoreCase)
+                        ? "A return has already been requested for this order. Cancel the existing return ticket before filing a new one."
+                        : string.Equals(order.Status, "returned", StringComparison.OrdinalIgnoreCase)
+                            ? "This order has already been returned."
+                            : $"Returns can only be filed once the order has been delivered. Current status: {order.Status}.";
+                    return Results.Conflict(new
+                    {
+                        error = "OrderNotReturnable",
+                        message = humanReason,
+                        order_status = order.Status
+                    });
+                }
+
+                returnOrderToFlip = order;
             }
 
             var ticket = new SupportTicket
@@ -124,6 +154,31 @@ public static class SupportTicketEndpoints
             };
 
             var created = await cosmos.CreateTicketAsync(ticket, ct);
+
+            // Flip the order to "return-requested" so the customer's
+            // /orders view immediately reflects the open return. Reverts
+            // to "delivered" if the customer cancels the ticket; flips
+            // to "returned" on workflow approval. We use the same
+            // `order` instance we already loaded for the eligibility
+            // gate (no second round-trip), and we tolerate failure —
+            // the ticket itself is the source of truth, the order
+            // status is best-effort UX. Loud log on failure.
+            if (returnOrderToFlip is not null)
+            {
+                returnOrderToFlip.Status = "return-requested";
+                try
+                {
+                    await cosmos.UpdateOrderAsync(returnOrderToFlip, ct);
+                }
+                catch (Exception ex)
+                {
+                    loggerFactory
+                        .CreateLogger("Contoso.CrmApi.SupportTickets")
+                        .LogWarning(ex,
+                            "Failed to flip order {OrderId} to return-requested after creating ticket {TicketId}.",
+                            returnOrderToFlip.Id, created.Id);
+                }
+            }
 
             // Real-world wiring (was: only the dev "Simulate alert" button
             // on the Operations page could trigger a refund-risk run).
@@ -169,6 +224,7 @@ public static class SupportTicketEndpoints
             UpdateTicketStatusRequest request,
             CustomerContext customerContext,
             ICosmosService cosmos,
+            ILoggerFactory loggerFactory,
             CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(request.Status) ||
@@ -217,6 +273,23 @@ public static class SupportTicketEndpoints
             existing.Status = request.Status.ToLowerInvariant();
             existing.ClosedAt = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd");
             var updated = await cosmos.UpdateTicketAsync(existing, ct);
+
+            // If the customer just cancelled a return ticket, free the
+            // order from "return-requested" so they can re-file later.
+            // Best-effort with a require-from guard — we never trample
+            // a "returned" or "delivered" state set elsewhere. Resolved
+            // (the other allowed customer-set status) does NOT revert,
+            // because the workflow's approval path drives "returned".
+            if (string.Equals(existing.Category, "return", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(existing.OrderId) &&
+                string.Equals(existing.Status, "cancelled", StringComparison.OrdinalIgnoreCase))
+            {
+                await TryFlipOrderStatusAsync(
+                    cosmos, existing.OrderId!, targetStatus: "delivered",
+                    requireFrom: "return-requested", ct,
+                    loggerFactory.CreateLogger("Contoso.CrmApi.SupportTickets"));
+            }
+
             return Results.Ok(updated);
         })
         .WithName("UpdateTicketStatus")
@@ -271,9 +344,30 @@ public static class SupportTicketEndpoints
             // Idempotency: if the ticket is already resolved/cancelled,
             // do NOT mutate the status further. Still append the comment
             // so the audit trail shows the late callback arrived.
+            var priorTicketStatus = existing.Status;
             ApplyDecisionToTicket(existing, request);
 
             var updated = await cosmos.UpdateTicketAsync(existing, ct);
+
+            // Mirror the refund decision onto the order. Only flip when
+            // THIS call transitioned the ticket open→resolved (so a
+            // duplicate callback doesn't double-mutate). Reject/timeout
+            // intentionally do NOT touch the order — per the existing
+            // ApplyDecisionToTicket contract those leave the ticket
+            // open and the order stays in `return-requested` until the
+            // customer cancels or a follow-up approval lands.
+            var didCloseTicket =
+                string.Equals(priorTicketStatus, "open", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(existing.Status, "open", StringComparison.OrdinalIgnoreCase);
+            var isApproval =
+                string.Equals(request.Decision, "approve", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(request.Decision, "below_threshold", StringComparison.OrdinalIgnoreCase);
+            if (didCloseTicket && isApproval && !string.IsNullOrWhiteSpace(existing.OrderId))
+            {
+                await TryFlipOrderStatusAsync(
+                    cosmos, existing.OrderId!, targetStatus: "returned",
+                    requireFrom: "return-requested", ct, logger);
+            }
 
             logger.LogInformation(
                 "Applied refund decision {Decision} (source {Source}) to ticket {TicketId} (alert {AlertId}).",
@@ -379,6 +473,7 @@ public static class SupportTicketEndpoints
         // Don't trample a customer cancel that landed first — only mutate
         // status if the ticket is still open. Either way append the
         // audit line so the late callback is visible.
+        var priorStatus = ticket.Status;
         var request = new RefundDecisionRequest
         {
             Decision = "below_threshold",
@@ -387,6 +482,19 @@ public static class SupportTicketEndpoints
         };
         ApplyDecisionToTicket(ticket, request);
         await cosmos.UpdateTicketAsync(ticket, ct);
+
+        // Mirror onto the order if this call actually closed the ticket
+        // (open → resolved). Same require-from guard as the callback
+        // path so a customer cancel that flipped the order back to
+        // "delivered" mid-window isn't trampled.
+        if (!string.IsNullOrWhiteSpace(ticket.OrderId) &&
+            string.Equals(priorStatus, "open", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(ticket.Status, "open", StringComparison.OrdinalIgnoreCase))
+        {
+            await TryFlipOrderStatusAsync(
+                cosmos, ticket.OrderId!, targetStatus: "returned",
+                requireFrom: "return-requested", ct, logger);
+        }
 
         logger.LogInformation(
             "Auto-resolved ticket {TicketId} as below-threshold (amount ${Amount}).",
@@ -440,6 +548,53 @@ public static class SupportTicketEndpoints
         // For "reject" and "timeout" we deliberately leave status="open"
         // so the customer sees the ticket is still being worked. The
         // appended comment surfaces the reason on the /tickets page.
+    }
+
+    // Best-effort order-status mutation used by the return / refund flow.
+    // Refuses to mutate when the order is not in the expected source
+    // state (so a concurrent customer-cancel or a duplicate refund
+    // callback can't trample a downstream state). Swallows + logs all
+    // exceptions — the ticket is the source of truth, the order's
+    // status is a UX mirror.
+    internal static async Task TryFlipOrderStatusAsync(
+        ICosmosService cosmos,
+        string orderId,
+        string targetStatus,
+        string requireFrom,
+        CancellationToken ct,
+        ILogger logger)
+    {
+        try
+        {
+            var order = await cosmos.GetOrderByIdAsync(orderId, ct);
+            if (order is null)
+            {
+                logger.LogWarning(
+                    "Skipped order-status flip: order {OrderId} not found.", orderId);
+                return;
+            }
+            if (!string.Equals(order.Status, requireFrom, StringComparison.OrdinalIgnoreCase))
+            {
+                // Not an error: a concurrent path (customer cancel,
+                // duplicate callback, manual reset) already moved the
+                // order. Leave it alone.
+                logger.LogInformation(
+                    "Skipped order-status flip for {OrderId}: expected '{From}' but found '{Current}' (target was '{Target}').",
+                    orderId, requireFrom, order.Status, targetStatus);
+                return;
+            }
+            order.Status = targetStatus;
+            await cosmos.UpdateOrderAsync(order, ct);
+            logger.LogInformation(
+                "Flipped order {OrderId} from '{From}' to '{Target}'.",
+                orderId, requireFrom, targetStatus);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "Failed to flip order {OrderId} status from '{From}' to '{Target}'.",
+                orderId, requireFrom, targetStatus);
+        }
     }
 
     // Allowlist of trusted callers. Anything else (including null) is

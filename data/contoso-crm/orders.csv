@@ -1,5 +1,5 @@
 id,customer_id,order_date,status,total_amount,shipping_address,tracking_number,estimated_delivery
-1001,101,2026-03-01,shipped,189.99,"742 Evergreen Trail, Portland OR 97201",TRK-29481,2026-03-08
+1001,101,2026-03-01,delivered,189.99,"742 Evergreen Trail, Portland OR 97201",TRK-29481,2026-03-08
 1002,102,2026-02-25,delivered,159.99,"1580 Summit Ave, Denver CO 80202",TRK-28734,2026-03-01
 1003,103,2026-02-20,delivered,349.99,"2901 Lakeside Dr, Seattle WA 98101",TRK-28190,2026-02-26
 1004,104,2026-02-18,delivered,279.99,"455 Mountain View Rd, Boulder CO 80301",TRK-27956,2026-02-24
