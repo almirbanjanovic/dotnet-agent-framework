@@ -360,6 +360,32 @@
     font-size: 0.85em;
 }
 
+/* Lists. MudBlazor's reset zeros padding on <ul>/<ol>, so with the
+   default list-style-position: outside the bullet glyph renders ~1em
+   to the left of the <li> content box — outside the chat bubble's
+   left padding. Restoring an explicit padding-inline-start keeps the
+   markers inside the bubble. ::deep is required because Markdig's
+   <ul>/<ol>/<li> come from MarkupString and aren't visible to the
+   Razor scope-attribute rewriter. */
+.markdown-body ::deep ul,
+.markdown-body ::deep ol {
+    margin: 0 0 0.4rem;
+    padding-inline-start: 1.25rem;
+}
+
+.markdown-body ::deep ul:last-child,
+.markdown-body ::deep ol:last-child {
+    margin-bottom: 0;
+}
+
+.markdown-body ::deep li {
+    margin: 0.15rem 0;
+}
+
+.markdown-body ::deep li > p {
+    margin: 0;
+}
+
 /* ---------- Activity timeline (behind-the-scenes log) ---------- */
 /* Replaces the single stage chip + tool chips with a chronological
    list of "what the agent is doing right now". Each entry is one row:

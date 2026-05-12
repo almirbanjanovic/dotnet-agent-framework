@@ -245,6 +245,19 @@ code { color: #1F5F3F; background: rgba(31, 95, 63, 0.08); padding: 0.1rem 0.35r
     margin-top: 0.75rem;
 }
 
+/* Lists — see ChatBubble.razor.css for rationale. MudBlazor zeros
+   ul/ol padding; restore enough padding-inline-start so bullets sit
+   inside the message container. */
+.markdown-body ul,
+.markdown-body ol {
+    margin: 0 0 0.5rem;
+    padding-inline-start: 1.25rem;
+}
+.markdown-body ul:last-child,
+.markdown-body ol:last-child { margin-bottom: 0; }
+.markdown-body li { margin: 0.15rem 0; }
+.markdown-body li > p { margin: 0; }
+
 @keyframes fadeUp {
     from { opacity: 0; transform: translateY(4px); }
     to   { opacity: 1; transform: translateY(0); }
