@@ -22,8 +22,11 @@ public interface ICosmosService
         CancellationToken ct = default);
     // Authoritative replace of an order document. Used by the return /
     // refund flow to mutate `status` (delivered → return-requested →
-    // returned, with reverts on customer cancel or operator reject).
-    // Caller is responsible for loading + mutating the full record.
+    // returned, with a revert to `delivered` when the customer cancels
+    // the return ticket). reject/timeout decisions intentionally leave
+    // the order in `return-requested` per the existing
+    // ApplyDecisionToTicket contract. Caller is responsible for loading
+    // + mutating the full record.
     Task<Order> UpdateOrderAsync(Order order, CancellationToken ct = default);
 
     // Products

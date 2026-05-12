@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using Contoso.CrmApi.Models;
 using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Contoso.CrmApi.Tests;
 
@@ -107,6 +108,72 @@ public class SupportTicketReturnFlowTests
 
         var body = await response.Content.ReadAsStringAsync();
         body.Should().Contain("already been returned");
+    }
+
+    [Fact]
+    public async Task CreateTicket_Return_AgainstSeededReturnRequestedOrder_Returns409Conflict()
+    {
+        // Adversarial-review R1 #1: the seed has order 1002 in
+        // `return-requested` because ST-003 is an open return for it.
+        // A second return file against the same order MUST fail.
+        await using var factory = new CrmApiWebApplicationFactory();
+        var client = factory.CreateClient();
+
+        var request = new CreateTicketRequest
+        {
+            CustomerId = "102",
+            OrderId = "1002",
+            Category = "return",
+            Priority = "medium",
+            Subject = "Second return",
+            Description = "Forgot I already filed one."
+        };
+
+        var response = await client.PostAsJsonAsync("/api/v1/tickets", request);
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+
+        var body = await response.Content.ReadAsStringAsync();
+        body.Should().Contain("already been requested");
+    }
+
+    [Fact]
+    public async Task RefundDecision_Approve_SelfHealsWhenOrderStillDelivered()
+    {
+        // Adversarial-review R1 #2: if the create-time order flip
+        // failed silently (try/catch logs and continues), the order
+        // would still be `delivered` when an approve callback lands.
+        // The approve path must self-heal — accept either
+        // `return-requested` OR `delivered` and land at `returned`.
+        //
+        // We simulate "create-time flip failed" by directly resetting
+        // the order's status back to delivered after the create.
+        await using var factory = new CrmApiWebApplicationFactory();
+        var client = factory.CreateClient();
+
+        var ticket = await OpenReturnTicketAsync(client, customerId: "101", orderId: "1001");
+
+        // Force the recovery scenario by reaching into the in-memory
+        // service and resetting the order. (In a real Cosmos failure
+        // scenario the order would have been left at `delivered`
+        // because the upsert never landed.)
+        using (var scope = factory.Services.CreateScope())
+        {
+            var cosmos = scope.ServiceProvider
+                .GetRequiredService<Contoso.CrmApi.Services.ICosmosService>();
+            var order = await cosmos.GetOrderByIdAsync("1001");
+            order!.Status = "delivered";
+            await cosmos.UpdateOrderAsync(order);
+        }
+
+        var body = new { decision = "approve", source = "operator", reason = "ok" };
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/internal/tickets/{ticket!.Id}/refund-decision", body);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var orderResp = await client.GetAsync("/api/v1/orders/1001");
+        var orderAfter = await orderResp.Content.ReadFromJsonAsync<Order>();
+        orderAfter!.Status.Should().Be("returned",
+            "approval must always land the order in `returned` even if the create-time flip was lost");
     }
 
     [Fact]
