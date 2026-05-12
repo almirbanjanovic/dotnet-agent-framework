@@ -57,6 +57,8 @@
         <MudGrid>
             @foreach (var order in _orders)
             {
+                var isExpanded = _expandedOrderIds.Contains(order.Id);
+                var subtotal = order.Items?.Sum(i => i.UnitPrice * i.Quantity) ?? 0m;
                 <MudItem xs="12" md="6" lg="4">
                     <MudCard Class="card-hover" Style="height: 100%;">
                         <MudCardContent>
@@ -99,20 +101,83 @@
 
                             <MudDivider Style="margin: 1rem 0;" />
 
-                            <MudText Typo="Typo.caption" Color="Color.Secondary" Style="text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">
-                                Items
-                            </MudText>
+                            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Style="text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">
+                                    Items (@(order.Items?.Count ?? 0))
+                                </MudText>
+                                @if (order.Items?.Count > 0)
+                                {
+                                    <MudButton Size="Size.Small"
+                                               Variant="Variant.Text"
+                                               Color="Color.Primary"
+                                               EndIcon="@(isExpanded ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                                               OnClick="@(() => ToggleExpanded(order.Id))"
+                                               aria-expanded="@(isExpanded ? "true" : "false")"
+                                               aria-controls="@($"order-details-{order.Id}")">
+                                        @(isExpanded ? "Hide details" : "View details")
+                                    </MudButton>
+                                }
+                            </MudStack>
+
                             @if (order.Items?.Count > 0)
                             {
-                                <MudStack Spacing="0" Style="margin-top: 0.5rem;">
-                                    @foreach (var item in order.Items)
-                                    {
-                                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Style="padding: 0.3rem 0; border-bottom: 1px dashed rgba(15, 31, 23, 0.06);">
-                                            <MudText Typo="Typo.body2">@item.ProductName</MudText>
-                                            <MudText Typo="Typo.body2" Color="Color.Secondary" Style="font-variant-numeric: tabular-nums;">×@item.Quantity</MudText>
+                                @if (!isExpanded)
+                                {
+                                    <MudStack Spacing="0" Style="margin-top: 0.5rem;">
+                                        @foreach (var item in order.Items)
+                                        {
+                                            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Style="padding: 0.3rem 0; border-bottom: 1px dashed rgba(15, 31, 23, 0.06);">
+                                                <MudText Typo="Typo.body2">@item.ProductName</MudText>
+                                                <MudText Typo="Typo.body2" Color="Color.Secondary" Style="font-variant-numeric: tabular-nums;">×@item.Quantity</MudText>
+                                            </MudStack>
+                                        }
+                                    </MudStack>
+                                }
+                                else
+                                {
+                                    <MudStack Spacing="2" Style="margin-top: 0.75rem;" id="@($"order-details-{order.Id}")">
+                                        @foreach (var item in order.Items)
+                                        {
+                                            <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center"
+                                                      Style="padding: 0.5rem 0; border-bottom: 1px dashed rgba(15, 31, 23, 0.08);">
+                                                @if (!string.IsNullOrWhiteSpace(item.ImageFilename))
+                                                {
+                                                    <img src="@BffApiClient.GetImageUrl(item.ImageFilename)"
+                                                         alt="@item.ProductName"
+                                                         style="width: 56px; height: 56px; border-radius: 6px; object-fit: cover; flex-shrink: 0; background: rgba(15,31,23,0.04);" />
+                                                }
+                                                <div style="flex: 1 1 auto; min-width: 0;">
+                                                    <MudText Typo="Typo.body2" Style="font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; word-break: break-word;">@item.ProductName</MudText>
+                                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Style="font-variant-numeric: tabular-nums;">
+                                                        @item.UnitPrice.ToString("C") × @item.Quantity
+                                                    </MudText>
+                                                </div>
+                                                <MudText Typo="Typo.body2" Style="font-weight: 600; font-variant-numeric: tabular-nums; flex-shrink: 0;">
+                                                    @((item.UnitPrice * item.Quantity).ToString("C"))
+                                                </MudText>
+                                            </MudStack>
+                                        }
+
+                                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Style="padding-top: 0.25rem;">
+                                            <MudText Typo="Typo.body2" Color="Color.Secondary">Items subtotal</MudText>
+                                            <MudText Typo="Typo.body2" Style="font-variant-numeric: tabular-nums;">@subtotal.ToString("C")</MudText>
                                         </MudStack>
-                                    }
-                                </MudStack>
+                                        @if (Math.Abs(order.TotalAmount - subtotal) > 0.005m)
+                                        {
+                                            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                                <MudText Typo="Typo.body2" Color="Color.Secondary">Shipping &amp; tax</MudText>
+                                                <MudText Typo="Typo.body2" Style="font-variant-numeric: tabular-nums;">@((order.TotalAmount - subtotal).ToString("C"))</MudText>
+                                            </MudStack>
+                                        }
+                                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center"
+                                                  Style="padding-top: 0.5rem; border-top: 1px solid rgba(15, 31, 23, 0.10);">
+                                            <MudText Typo="Typo.body1" Style="font-weight: 700;">Order total</MudText>
+                                            <MudText Typo="Typo.body1" Style="font-weight: 700; color: #1F5F3F; font-variant-numeric: tabular-nums;">
+                                                @order.TotalAmount.ToString("C")
+                                            </MudText>
+                                        </MudStack>
+                                    </MudStack>
+                                }
                             }
                             else
                             {
@@ -131,6 +196,16 @@
 
 @code {
     private readonly List<Order> _orders = new();
+    // Per-card expansion state. Keyed by Order.Id; entries persist across
+    // re-renders so a refresh of the order list (e.g. CustomerChanged)
+    // doesn't collapse the cards the user just opened. Cleared along with
+    // _orders when the signed-in customer becomes null.
+    private readonly HashSet<string> _expandedOrderIds = new(StringComparer.Ordinal);
+    // Tracks the customer whose orders currently populate _orders, so we
+    // can detect a cross-customer switch and reset _expandedOrderIds —
+    // necessary because order ids are not guaranteed unique across
+    // customers, so the same id from two customers must not share state.
+    private string? _lastLoadedCustomerId;
     private bool _isLoading = true;
     private string? _errorMessage;
 
@@ -174,11 +249,14 @@
             if (AuthStateProvider.SelectedCustomer is null)
             {
                 _orders.Clear();
+                _expandedOrderIds.Clear();
+                _lastLoadedCustomerId = null;
                 return;
             }
 
+            var currentCustomerId = AuthStateProvider.SelectedCustomer.Id;
             var orders = await BffApiClient.GetOrdersAsync(
-                AuthStateProvider.SelectedCustomer.Id,
+                currentCustomerId,
                 token);
 
             // Only the *latest* call is allowed to mutate _orders. If a
@@ -191,6 +269,20 @@
 
             _orders.Clear();
             _orders.AddRange(orders);
+
+            // On a cross-customer switch, drop ALL expansion state — order
+            // ids are scoped per customer and can collide. On a same-customer
+            // reload, prune ids that no longer correspond to a visible order.
+            if (!string.Equals(_lastLoadedCustomerId, currentCustomerId, StringComparison.Ordinal))
+            {
+                _expandedOrderIds.Clear();
+                _lastLoadedCustomerId = currentCustomerId;
+            }
+            else if (_expandedOrderIds.Count > 0)
+            {
+                var liveIds = new HashSet<string>(_orders.Select(o => o.Id), StringComparer.Ordinal);
+                _expandedOrderIds.RemoveWhere(id => !liveIds.Contains(id));
+            }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested || _disposed)
         {
@@ -223,6 +315,23 @@
         }
 
         return value ?? "N/A";
+    }
+
+    // Toggles the per-card expansion state. Adds the id if absent,
+    // removes it if present. Bound only to the "View details" button —
+    // the card itself is intentionally non-clickable so we don't conflict
+    // with MudButton's own click handling (which previously caused
+    // RZ10010 "OnClick used two or more times" on the MudCard wrapper).
+    private void ToggleExpanded(string orderId)
+    {
+        if (string.IsNullOrWhiteSpace(orderId))
+        {
+            return;
+        }
+        if (!_expandedOrderIds.Add(orderId))
+        {
+            _expandedOrderIds.Remove(orderId);
+        }
     }
 
     private static string GetStatusChipClass(string? status) => status?.ToLowerInvariant() switch

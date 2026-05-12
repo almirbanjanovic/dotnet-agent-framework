@@ -115,8 +115,19 @@ internal static class ChatEndpoint
 
             // Track which tool-call IDs have already been emitted so we
             // never duplicate a `tool` event when multiple chunks share the
-            // same FunctionCallContent.
+            // same FunctionCallContent. Same idea for tool_result — the
+            // SDK can stream a result alongside subsequent text chunks.
+            // emittedToolCallNames keeps callId→name so we can label the
+            // tool_result event even when SDK delivers result/call in
+            // separate enumerator iterations.
+            // pendingCallKeys queues call-keys whose results have not yet
+            // arrived, so a result with a null CallId still pairs back to
+            // the most recent unmatched call (instead of generating an
+            // un-pairable random GUID and orphaning the result row in the UI).
             var emittedToolCalls = new HashSet<string>(StringComparer.Ordinal);
+            var emittedToolCallNames = new Dictionary<string, string>(StringComparer.Ordinal);
+            var emittedToolResults = new HashSet<string>(StringComparer.Ordinal);
+            var pendingCallKeys = new Queue<string>();
 
             await foreach (var update in agent.RunStreamingAsync(messages, cancellationToken: cancellationToken))
             {
@@ -127,15 +138,48 @@ internal static class ChatEndpoint
 
                 foreach (var content in update.Contents)
                 {
-                    if (content is FunctionCallContent functionCall &&
-                        emittedToolCalls.Add(functionCall.CallId ?? functionCall.Name))
+                    if (content is FunctionCallContent functionCall)
                     {
-                        var args = functionCall.Arguments ?? new Dictionary<string, object?>();
-                        await SseWriter.WriteAsync(
-                            response,
-                            "tool",
-                            new { name = functionCall.Name, arguments = args },
-                            cancellationToken);
+                        var callKey = functionCall.CallId ?? functionCall.Name;
+                        if (emittedToolCalls.Add(callKey))
+                        {
+                            emittedToolCallNames[callKey] = functionCall.Name;
+                            pendingCallKeys.Enqueue(callKey);
+                            var args = functionCall.Arguments ?? new Dictionary<string, object?>();
+                            await SseWriter.WriteAsync(
+                                response,
+                                "tool",
+                                new { name = functionCall.Name, callId = functionCall.CallId, arguments = args },
+                                cancellationToken);
+                        }
+                    }
+                    else if (content is FunctionResultContent functionResult)
+                    {
+                        // Prefer the explicit CallId when present. Fall back
+                        // to the oldest pending call so the UI can still
+                        // pair the result with its `tool` row in order.
+                        var callKey = functionResult.CallId
+                            ?? (pendingCallKeys.Count > 0 ? pendingCallKeys.Dequeue() : Guid.NewGuid().ToString("N"));
+                        if (emittedToolResults.Add(callKey))
+                        {
+                            var (preview, truncated) = ToolResultPreview.Render(functionResult.Result);
+                            var name = emittedToolCallNames.TryGetValue(callKey, out var n) ? n : "tool";
+                            // Echo back whichever id the UI has — the explicit one
+                            // if present, otherwise the matched fallback key (also
+                            // what the original `tool` event used as callId
+                            // surrogate when CallId was null).
+                            await SseWriter.WriteAsync(
+                                response,
+                                "tool_result",
+                                new
+                                {
+                                    name,
+                                    callId = functionResult.CallId ?? callKey,
+                                    preview,
+                                    truncated
+                                },
+                                cancellationToken);
+                        }
                     }
                 }
             }

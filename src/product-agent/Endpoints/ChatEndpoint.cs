@@ -106,6 +106,13 @@ internal static class ChatEndpoint
             var messages = ChatHistoryBinder.Build(request.History, request.CustomerId, request.Message);
 
             var emittedToolCalls = new HashSet<string>(StringComparer.Ordinal);
+            var emittedToolCallNames = new Dictionary<string, string>(StringComparer.Ordinal);
+            var emittedToolResults = new HashSet<string>(StringComparer.Ordinal);
+            // pendingCallKeys queues call-keys whose results have not yet
+            // arrived, so a result with a null CallId pairs back to the
+            // most recent unmatched call (instead of generating an
+            // un-pairable random GUID and orphaning the result row).
+            var pendingCallKeys = new Queue<string>();
 
             await foreach (var update in agent.RunStreamingAsync(messages, cancellationToken: cancellationToken))
             {
@@ -116,15 +123,41 @@ internal static class ChatEndpoint
 
                 foreach (var content in update.Contents)
                 {
-                    if (content is FunctionCallContent functionCall &&
-                        emittedToolCalls.Add(functionCall.CallId ?? functionCall.Name))
+                    if (content is FunctionCallContent functionCall)
                     {
-                        var args = functionCall.Arguments ?? new Dictionary<string, object?>();
-                        await SseWriter.WriteAsync(
-                            response,
-                            "tool",
-                            new { name = functionCall.Name, arguments = args },
-                            cancellationToken);
+                        var callKey = functionCall.CallId ?? functionCall.Name;
+                        if (emittedToolCalls.Add(callKey))
+                        {
+                            emittedToolCallNames[callKey] = functionCall.Name;
+                            pendingCallKeys.Enqueue(callKey);
+                            var args = functionCall.Arguments ?? new Dictionary<string, object?>();
+                            await SseWriter.WriteAsync(
+                                response,
+                                "tool",
+                                new { name = functionCall.Name, callId = functionCall.CallId, arguments = args },
+                                cancellationToken);
+                        }
+                    }
+                    else if (content is FunctionResultContent functionResult)
+                    {
+                        var callKey = functionResult.CallId
+                            ?? (pendingCallKeys.Count > 0 ? pendingCallKeys.Dequeue() : Guid.NewGuid().ToString("N"));
+                        if (emittedToolResults.Add(callKey))
+                        {
+                            var (preview, truncated) = ToolResultPreview.Render(functionResult.Result);
+                            var name = emittedToolCallNames.TryGetValue(callKey, out var n) ? n : "tool";
+                            await SseWriter.WriteAsync(
+                                response,
+                                "tool_result",
+                                new
+                                {
+                                    name,
+                                    callId = functionResult.CallId ?? callKey,
+                                    preview,
+                                    truncated
+                                },
+                                cancellationToken);
+                        }
                     }
                 }
             }

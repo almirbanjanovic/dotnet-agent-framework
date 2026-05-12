@@ -55,7 +55,7 @@ else
                 <span class="chat-panel-avatar">AI</span>
                 <div>
                     <div class="chat-panel-name">Contoso Assistant</div>
-                    <div class="chat-panel-status">Online · Powered by AI agents</div>
+                    <div class="chat-panel-status">Online · Powered by AI Agents</div>
                 </div>
             </div>
             <div class="chat-panel-header-actions">
@@ -107,25 +107,45 @@ else
                     <div class="chat-row assistant">
                         <span class="chat-avatar assistant">AI</span>
                         <div class="chat-bubble">
-                            @if (!string.IsNullOrEmpty(_currentStageLabel))
+                            @* Behind-the-scenes activity timeline. Built
+                               from server-emitted SSE events: stage,
+                               tool, tool_result. Persists across the
+                               in-flight turn so the user can see the
+                               whole pipeline (classifying → routed →
+                               tool calls + results → response). *@
+                            @if (_activityLog.Count > 0)
                             {
-                                <div class="chat-stage-chip">
-                                    <MudIcon Icon="@_currentStageIcon" Size="Size.Small" />
-                                    <span>@_currentStageLabel</span>
-                                </div>
-                            }
-                            @foreach (var tool in _currentToolCalls)
-                            {
-                                <div class="chat-tool-chip">
-                                    <MudIcon Icon="@Icons.Material.Filled.Build" Size="Size.Small" />
-                                    <span><code>@tool</code></span>
+                                <div class="chat-activity-log" aria-label="Assistant activity">
+                                    @foreach (var entry in _activityLog)
+                                    {
+                                        <div class="chat-activity-entry @(entry.Kind == ActivityKind.Tool ? "is-tool" : entry.Kind == ActivityKind.ToolResult ? "is-result" : "is-stage")">
+                                            <span class="chat-activity-time">@FormatElapsed(entry.ElapsedMs)</span>
+                                            <span class="chat-activity-icon">
+                                                <MudIcon Icon="@entry.Icon" Size="Size.Small" />
+                                            </span>
+                                            <div class="chat-activity-body">
+                                                <div class="chat-activity-title">@entry.Title</div>
+                                                @if (!string.IsNullOrEmpty(entry.Subtitle))
+                                                {
+                                                    <div class="chat-activity-subtitle">@entry.Subtitle</div>
+                                                }
+                                                @if (!string.IsNullOrEmpty(entry.Detail))
+                                                {
+                                                    <details class="chat-activity-detail">
+                                                        <summary>@(entry.Kind == ActivityKind.Tool ? "Arguments" : "Result preview")@(entry.Truncated ? " (truncated)" : "")</summary>
+                                                        <pre><code>@entry.Detail</code></pre>
+                                                    </details>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
                                 </div>
                             }
                             @if (!string.IsNullOrEmpty(_streamingText))
                             {
                                 <div class="markdown-body">@ChatMarkdownRenderer.RenderMarkdown(_streamingText, BffApi.BffBaseUrl)</div>
                             }
-                            else if (string.IsNullOrEmpty(_currentStageLabel))
+                            else if (_activityLog.Count == 0)
                             {
                                 <div class="typing-indicator"><span></span><span></span><span></span></div>
                             }
@@ -216,7 +236,6 @@ else
     // server-side stream cannot OOM the browser by sending unbounded tokens or
     // tool-call events.
     private const int MaxStreamingChars = 256 * 1024;   // 256 KB
-    private const int MaxToolCalls = 100;
     private bool _streamCapWarned;
 
     private readonly List<ChatMessage> _messages = new();
@@ -260,9 +279,35 @@ else
 
     // ── Streaming-state for the in-flight assistant turn ──
     private string? _streamingText;          // null when not streaming; otherwise the token-by-token assembled text
-    private string? _currentStageLabel;      // "Understanding your request…" / "Routed to CRM Agent"
-    private string _currentStageIcon = Icons.Material.Filled.Psychology;
-    private readonly List<string> _currentToolCalls = new();
+    // Chronological log of "behind the scenes" steps for the in-flight
+    // turn. Built from server-emitted SSE events (stage, tool,
+    // tool_result). Cleared on each new SendAsync so the user sees only
+    // the activity for the *current* question.
+    private readonly List<ActivityEntry> _activityLog = new();
+    // Cap entries to keep DOM bounded if a runaway agent emits a flood
+    // of events. (Symmetric to MaxStreamingChars.)
+    private const int MaxActivityEntries = 200;
+    private bool _activityCapWarned;
+    // Stopwatch start for the current turn; used to compute the
+    // elapsed-time badge ("0.8s") on each entry.
+    private long _turnStartTicks;
+    // callId → index in _activityLog for the matching `tool` entry, so a
+    // later `tool_result` can attach its preview to the right row instead
+    // of appearing as an orphan entry.
+    private readonly Dictionary<string, int> _toolEntryByCallId = new(StringComparer.Ordinal);
+
+    private enum ActivityKind { Stage, Tool, ToolResult }
+
+    private sealed class ActivityEntry
+    {
+        public ActivityKind Kind { get; init; }
+        public string Icon { get; init; } = "";
+        public string Title { get; init; } = "";
+        public string? Subtitle { get; set; }
+        public string? Detail { get; set; }       // mutable: tool entry can be enriched with result preview
+        public bool Truncated { get; set; }
+        public long ElapsedMs { get; init; }
+    }
 
     private bool IsSendDisabled =>
         _isSending ||
@@ -341,8 +386,10 @@ else
         _scrollPending = true;
         _isSending = true;
         _streamingText = null;
-        _currentStageLabel = null;
-        _currentToolCalls.Clear();
+        _activityLog.Clear();
+        _toolEntryByCallId.Clear();
+        _activityCapWarned = false;
+        _turnStartTicks = System.Diagnostics.Stopwatch.GetTimestamp();
 
         try
         {
@@ -368,8 +415,8 @@ else
                 _messages.Add(new ChatMessage("assistant", _streamingText, DateTimeOffset.UtcNow));
             }
             _streamingText = null;
-            _currentStageLabel = null;
-            _currentToolCalls.Clear();
+            _activityLog.Clear();
+            _toolEntryByCallId.Clear();
             _isSending = false;
             _scrollPending = true;
             StateHasChanged();
@@ -395,16 +442,28 @@ else
                     if (data is null) break;
                     if (string.Equals(data.Stage, "classifying", StringComparison.OrdinalIgnoreCase))
                     {
-                        _currentStageLabel = "Understanding your request…";
-                        _currentStageIcon = Icons.Material.Filled.Psychology;
+                        AppendActivity(new ActivityEntry
+                        {
+                            Kind = ActivityKind.Stage,
+                            Icon = Icons.Material.Filled.Psychology,
+                            Title = "Understanding your request",
+                            Subtitle = "Routing to the right specialist agent…",
+                            ElapsedMs = ElapsedMs(),
+                        });
                     }
                     else if (string.Equals(data.Stage, "routed", StringComparison.OrdinalIgnoreCase))
                     {
                         var agentLabel = string.Equals(data.Agent, "product", StringComparison.OrdinalIgnoreCase)
                             ? "Product Agent"
                             : "CRM Agent";
-                        _currentStageLabel = $"Routed to {agentLabel}";
-                        _currentStageIcon = Icons.Material.Filled.SmartToy;
+                        AppendActivity(new ActivityEntry
+                        {
+                            Kind = ActivityKind.Stage,
+                            Icon = Icons.Material.Filled.SmartToy,
+                            Title = $"Routed to {agentLabel}",
+                            Subtitle = "Discovering MCP tools and consulting the model…",
+                            ElapsedMs = ElapsedMs(),
+                        });
                     }
                     break;
                 }
@@ -431,10 +490,65 @@ else
                 }
             case "tool":
                 {
-                    var data = System.Text.Json.JsonSerializer.Deserialize<ToolData>(ev.Data, JsonOptions);
-                    if (data is { Name: { Length: > 0 } name } && _currentToolCalls.Count < MaxToolCalls)
+                    var data = System.Text.Json.JsonSerializer.Deserialize<ToolStreamData>(ev.Data, JsonOptions);
+                    if (data is { Name: { Length: > 0 } name })
                     {
-                        _currentToolCalls.Add(name);
+                        var entry = new ActivityEntry
+                        {
+                            Kind = ActivityKind.Tool,
+                            Icon = Icons.Material.Filled.Build,
+                            Title = $"Calling {name}",
+                            Subtitle = "Invoking MCP tool…",
+                            Detail = FormatArguments(data.Arguments),
+                            ElapsedMs = ElapsedMs(),
+                        };
+                        AppendActivity(entry);
+                        if (!string.IsNullOrEmpty(data.CallId))
+                        {
+                            _toolEntryByCallId[data.CallId!] = _activityLog.Count - 1;
+                        }
+                    }
+                    break;
+                }
+            case "tool_result":
+                {
+                    var data = System.Text.Json.JsonSerializer.Deserialize<ToolResultData>(ev.Data, JsonOptions);
+                    if (data is null) break;
+
+                    // Try to enrich the matching `tool` entry first so
+                    // the user sees one row per tool (call + result),
+                    // not two rows.
+                    if (!string.IsNullOrEmpty(data.CallId)
+                        && _toolEntryByCallId.TryGetValue(data.CallId!, out var idx)
+                        && idx >= 0 && idx < _activityLog.Count)
+                    {
+                        var prior = _activityLog[idx];
+                        prior.Subtitle = data.Truncated
+                            ? $"Returned in {FormatElapsed(ElapsedMs() - prior.ElapsedMs)} · result truncated"
+                            : $"Returned in {FormatElapsed(ElapsedMs() - prior.ElapsedMs)}";
+                        // Append the result preview UNDER the args
+                        // so both are visible inside the same row.
+                        var combined = string.IsNullOrEmpty(prior.Detail)
+                            ? $"// result\n{data.Preview}"
+                            : $"{prior.Detail}\n\n// result{(data.Truncated ? " (truncated)" : "")}\n{data.Preview}";
+                        prior.Detail = combined;
+                        prior.Truncated = prior.Truncated || data.Truncated;
+                    }
+                    else
+                    {
+                        // Orphan result (no matching call event seen) —
+                        // still surface it so the user knows something
+                        // happened.
+                        AppendActivity(new ActivityEntry
+                        {
+                            Kind = ActivityKind.ToolResult,
+                            Icon = Icons.Material.Filled.CheckCircleOutline,
+                            Title = $"{data.Name} returned",
+                            Subtitle = data.Truncated ? "Result truncated" : null,
+                            Detail = data.Preview,
+                            Truncated = data.Truncated,
+                            ElapsedMs = ElapsedMs(),
+                        });
                     }
                     break;
                 }
@@ -455,6 +569,68 @@ else
                 }
         }
     }
+
+    // Local extension of ToolData that also captures CallId emitted by
+    // the agents (used to pair a `tool` event with its later
+    // `tool_result`). Kept private to ChatBubble so the public
+    // ChatStreamEvent contract stays minimal.
+    private sealed record ToolStreamData(
+        string Name,
+        string? CallId,
+        IReadOnlyDictionary<string, object?>? Arguments);
+
+    private void AppendActivity(ActivityEntry entry)
+    {
+        if (_activityLog.Count >= MaxActivityEntries)
+        {
+            if (!_activityCapWarned)
+            {
+                _activityCapWarned = true;
+                Console.WriteLine($"[ChatBubble] Activity cap ({MaxActivityEntries}) reached; further entries dropped.");
+            }
+            return;
+        }
+        _activityLog.Add(entry);
+    }
+
+    private long ElapsedMs()
+    {
+        if (_turnStartTicks == 0) return 0;
+        var deltaTicks = System.Diagnostics.Stopwatch.GetTimestamp() - _turnStartTicks;
+        return (long)(deltaTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
+    }
+
+    private static string FormatElapsed(long ms)
+    {
+        if (ms < 1000) return $"{ms} ms";
+        var seconds = ms / 1000.0;
+        return seconds < 10
+            ? $"{seconds:0.0}s"
+            : $"{seconds:0}s";
+    }
+
+    private static string FormatArguments(IReadOnlyDictionary<string, object?>? args)
+    {
+        if (args is null || args.Count == 0) return string.Empty;
+        try
+        {
+            // Pretty-print so the <details> reveal is human-readable.
+            // Bound the output so a giant arg blob can't blow up the DOM.
+            var json = System.Text.Json.JsonSerializer.Serialize(args, _argsJsonOptions);
+            const int max = 1024;
+            return json.Length <= max ? json : json.Substring(0, max) + "…";
+        }
+        catch
+        {
+            // Defensive: never throw from a render-driven helper.
+            return string.Join(", ", args.Keys);
+        }
+    }
+
+    private static readonly System.Text.Json.JsonSerializerOptions _argsJsonOptions = new()
+    {
+        WriteIndented = true
+    };
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -536,8 +712,8 @@ else
         _errorMessage = null;
         _currentMessage = string.Empty;
         _streamingText = null;
-        _currentStageLabel = null;
-        _currentToolCalls.Clear();
+        _activityLog.Clear();
+        _toolEntryByCallId.Clear();
         _ = InvokeAsync(StateHasChanged);
     }
 
