@@ -1,3 +1,5 @@
+using System.Net.Http.Json;
+
 namespace Contoso.BffApi.Services;
 
 public sealed class CrmApiClient
@@ -20,6 +22,21 @@ public sealed class CrmApiClient
         // open_only is the same query-param the CRM API accepts; null = omit.
         var qs = openOnly is null ? string.Empty : $"?open_only={(openOnly.Value ? "true" : "false")}";
         return _httpClient.GetAsync($"/api/v1/customers/{Uri.EscapeDataString(customerId)}/tickets{qs}", ct);
+    }
+
+    public Task<HttpResponseMessage> UpdateTicketStatusAsync(
+        string ticketId, string customerId, string status, CancellationToken ct = default)
+    {
+        // Body carries customer_id as the test/no-header fallback. The CRM
+        // API still prefers the X-Customer-Entra-Id header (forwarded by
+        // the BFF's CustomerHeaderHandler) when present, so a malicious
+        // body cannot mutate someone else's ticket.
+        var content = JsonContent.Create(new
+        {
+            status,
+            customer_id = customerId
+        });
+        return _httpClient.PatchAsync($"/api/v1/tickets/{Uri.EscapeDataString(ticketId)}", content, ct);
     }
 
     public Task<HttpResponseMessage> GetOrderItemsAsync(string orderId, CancellationToken ct = default)

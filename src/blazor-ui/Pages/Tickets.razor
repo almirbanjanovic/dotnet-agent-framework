@@ -3,6 +3,8 @@
 @implements IDisposable
 @inject BffApiClient BffApiClient
 @inject AuthStateProvider AuthStateProvider
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
 
 <PageTitle>Support tickets · Contoso Outdoors</PageTitle>
 
@@ -106,6 +108,18 @@
                                 }
                             </MudStack>
                         </MudCardContent>
+                        @if (string.Equals(ticket.Status, "open", StringComparison.OrdinalIgnoreCase))
+                        {
+                            <MudCardActions>
+                                <MudButton OnClick="@(() => ConfirmCancelAsync(ticket))"
+                                           Color="Color.Error"
+                                           Variant="Variant.Text"
+                                           StartIcon="@Icons.Material.Outlined.Cancel"
+                                           Disabled="@_busyTickets.Contains(ticket.Id)">
+                                    Cancel ticket
+                                </MudButton>
+                            </MudCardActions>
+                        }
                     </MudCard>
                 </MudItem>
             }
@@ -116,6 +130,7 @@
 
 @code {
     private readonly List<SupportTicket> _tickets = new();
+    private readonly HashSet<string> _busyTickets = new(StringComparer.Ordinal);
     private bool _isLoading = true;
     private string? _errorMessage;
 
@@ -192,6 +207,71 @@
                 _loadCts = null;
             }
             cts.Dispose();
+        }
+    }
+
+    private async Task ConfirmCancelAsync(SupportTicket ticket)
+    {
+        if (string.IsNullOrWhiteSpace(ticket.Id))
+        {
+            return;
+        }
+
+        // Browser confirm() is intentional: MudBlazor 9.x's ShowMessageBox
+        // signature changed and a JS confirm is dependency-light, screen-
+        // reader friendly, and identical across browsers.
+        var confirmed = await JS.InvokeAsync<bool>(
+            "confirm",
+            $"Cancel ticket {ticket.Id} \u2014 \"{ticket.Subject}\"?\nThis cannot be undone.");
+
+        if (!confirmed)
+        {
+            return;
+        }
+
+        await CancelTicketAsync(ticket);
+    }
+
+    private async Task CancelTicketAsync(SupportTicket ticket)
+    {
+        var customerId = AuthStateProvider.SelectedCustomer?.Id;
+        if (string.IsNullOrWhiteSpace(customerId) || string.IsNullOrWhiteSpace(ticket.Id))
+        {
+            // SelectedCustomer can flip to null if the user signs out
+            // or switches profiles between the page render and the
+            // click. Fail visibly instead of silently no-op'ing.
+            Snackbar.Add("Sign in again before cancelling tickets.", Severity.Warning);
+            return;
+        }
+
+        if (!_busyTickets.Add(ticket.Id))
+        {
+            return; // already in flight
+        }
+        StateHasChanged();
+
+        try
+        {
+            var updated = await BffApiClient.UpdateTicketStatusAsync(customerId, ticket.Id, "cancelled");
+
+            // Replace the in-memory copy so the card flips out of "open"
+            // and the Cancel button disappears without a full reload.
+            var idx = _tickets.FindIndex(t => string.Equals(t.Id, ticket.Id, StringComparison.Ordinal));
+            if (idx >= 0)
+            {
+                _tickets[idx] = updated;
+            }
+
+            Snackbar.Add($"Ticket {ticket.Id} cancelled.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not cancel ticket: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busyTickets.Remove(ticket.Id);
+            StateHasChanged();
         }
     }
 

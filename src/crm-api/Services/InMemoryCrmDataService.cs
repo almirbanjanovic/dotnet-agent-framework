@@ -307,6 +307,26 @@ public sealed class InMemoryCrmDataService : ICosmosService
         return Task.FromResult(created);
     }
 
+    public Task<SupportTicket?> GetTicketByIdAsync(string id, string customerId, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (_supportTickets.TryGetValue(id, out var ticket) &&
+            string.Equals(ticket.CustomerId, customerId, StringComparison.OrdinalIgnoreCase))
+        {
+            return Task.FromResult<SupportTicket?>(ticket);
+        }
+        return Task.FromResult<SupportTicket?>(null);
+    }
+
+    public Task<SupportTicket> UpdateTicketAsync(SupportTicket ticket, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        // Authoritative replace — the endpoint is responsible for loading,
+        // mutating, and passing the full record. We don’t merge here.
+        _supportTickets[ticket.Id] = ticket;
+        return Task.FromResult(ticket);
+    }
+
     // ── Health ──────────────────────────────────────────────────────────────
 
     public Task<bool> CheckConnectivityAsync(CancellationToken ct = default)

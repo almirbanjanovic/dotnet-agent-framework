@@ -155,4 +155,125 @@ public class TicketsEndpointTests
         body.Should().NotContain("NullReferenceException", "the upstream stack trace must not leak to the browser");
         body.Should().NotContain("connection-string-leak");
     }
+
+    // ----- PATCH /api/v1/customers/{id}/tickets/{ticketId} -----
+
+    [Fact]
+    public async Task PatchTicket_ProxiesToCrmApi_ForOwningCustomer()
+    {
+        HttpRequestMessage? captured = null;
+        using var factory = new BffApiWebApplicationFactory(
+            crmResponder: req =>
+            {
+                captured = req;
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(
+                        "{\"id\":\"t-1\",\"customer_id\":\"107\",\"status\":\"cancelled\"}",
+                        Encoding.UTF8, "application/json")
+                };
+            });
+        var client = factory.CreateClient();
+
+        var request = new HttpRequestMessage(HttpMethod.Patch, "/api/v1/customers/107/tickets/t-1")
+        {
+            Content = new StringContent("{\"status\":\"cancelled\"}", Encoding.UTF8, "application/json")
+        };
+        request.Headers.Add("X-Customer-Id", "107");
+        var response = await client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        captured.Should().NotBeNull();
+        captured!.Method.Should().Be(HttpMethod.Patch);
+        captured.RequestUri!.PathAndQuery.Should().Be("/api/v1/tickets/t-1");
+    }
+
+    [Fact]
+    public async Task PatchTicket_RouteIdDoesNotMatchAuthenticatedCustomer_ReturnsNotFound()
+    {
+        var crmCalls = 0;
+        using var factory = new BffApiWebApplicationFactory(
+            crmResponder: _ =>
+            {
+                Interlocked.Increment(ref crmCalls);
+                return new HttpResponseMessage(HttpStatusCode.OK);
+            });
+        var client = factory.CreateClient();
+
+        // Authenticated as 107 but trying to mutate 108's ticket.
+        var request = new HttpRequestMessage(HttpMethod.Patch, "/api/v1/customers/108/tickets/t-1")
+        {
+            Content = new StringContent("{\"status\":\"cancelled\"}", Encoding.UTF8, "application/json")
+        };
+        request.Headers.Add("X-Customer-Id", "107");
+        var response = await client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        crmCalls.Should().Be(0, "cross-customer mutation must be blocked before reaching the CRM API");
+    }
+
+    [Fact]
+    public async Task PatchTicket_MissingStatus_Returns400()
+    {
+        using var factory = new BffApiWebApplicationFactory(
+            crmResponder: _ => new HttpResponseMessage(HttpStatusCode.OK));
+        var client = factory.CreateClient();
+
+        var request = new HttpRequestMessage(HttpMethod.Patch, "/api/v1/customers/107/tickets/t-1")
+        {
+            Content = new StringContent("{}", Encoding.UTF8, "application/json")
+        };
+        request.Headers.Add("X-Customer-Id", "107");
+        var response = await client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task PatchTicket_CrmReturnsConflict_PassesThrough()
+    {
+        // 409 from the CRM API carries actionable information ("ticket
+        // already cancelled"). The BFF must forward it verbatim — not
+        // mask it as a 502 — so the UI can surface a proper message.
+        using var factory = new BffApiWebApplicationFactory(
+            crmResponder: _ => new HttpResponseMessage(HttpStatusCode.Conflict)
+            {
+                Content = new StringContent(
+                    """{"detail":"Ticket already cancelled."}""",
+                    Encoding.UTF8, "application/json")
+            });
+        var client = factory.CreateClient();
+
+        var request = new HttpRequestMessage(HttpMethod.Patch, "/api/v1/customers/107/tickets/t-1")
+        {
+            Content = new StringContent("{\"status\":\"cancelled\"}", Encoding.UTF8, "application/json")
+        };
+        request.Headers.Add("X-Customer-Id", "107");
+        var response = await client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task PatchTicket_CrmReturnsServerError_BffReturns502WithoutLeakingUpstreamBody()
+    {
+        const string sensitiveCrmBody = """{"trace":"NullReferenceException at Foo.Bar","secret":"redacted"}""";
+        using var factory = new BffApiWebApplicationFactory(
+            crmResponder: _ => new HttpResponseMessage(HttpStatusCode.InternalServerError)
+            {
+                Content = new StringContent(sensitiveCrmBody, Encoding.UTF8, "application/json")
+            });
+        var client = factory.CreateClient();
+
+        var request = new HttpRequestMessage(HttpMethod.Patch, "/api/v1/customers/107/tickets/t-1")
+        {
+            Content = new StringContent("{\"status\":\"cancelled\"}", Encoding.UTF8, "application/json")
+        };
+        request.Headers.Add("X-Customer-Id", "107");
+        var response = await client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadGateway);
+        var body = await response.Content.ReadAsStringAsync();
+        body.Should().NotContain("NullReferenceException");
+    }
 }

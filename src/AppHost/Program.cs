@@ -54,6 +54,13 @@ var fraudWorkflow = AsLocal(builder.AddProject<Projects.Contoso_FraudWorkflow>("
     .WithReference(crmMcp)
     .WithReference(knowledgeMcp);
 
+// Wire the new outbound dependency from CRM API → fraud-workflow.
+// When a customer creates a `category=return` ticket the CRM API fans
+// the event out as a refund alert so the fraud workflow runs against
+// REAL customer activity (the dev “Simulate alert” button on the
+// Operations page is now an alternative trigger, not the only one).
+crmApi.WithReference(fraudWorkflow);
+
 var bffApi = AsLocal(builder.AddProject<Projects.Contoso_BffApi>("bff-api"))
     .WithHttpEndpoint(port: 5007, name: "http")
     .WithReference(crmApi)

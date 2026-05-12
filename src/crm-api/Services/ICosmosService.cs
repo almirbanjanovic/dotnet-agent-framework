@@ -31,7 +31,9 @@ public interface ICosmosService
 
     // Support Tickets
     Task<IReadOnlyList<SupportTicket>> GetTicketsByCustomerIdAsync(string customerId, bool openOnly = false, CancellationToken ct = default);
+    Task<SupportTicket?> GetTicketByIdAsync(string id, string customerId, CancellationToken ct = default);
     Task<SupportTicket> CreateTicketAsync(SupportTicket ticket, CancellationToken ct = default);
+    Task<SupportTicket> UpdateTicketAsync(SupportTicket ticket, CancellationToken ct = default);
 
     // Health
     Task<bool> CheckConnectivityAsync(CancellationToken ct = default);

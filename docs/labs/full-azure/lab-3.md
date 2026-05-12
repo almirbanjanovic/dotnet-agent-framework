@@ -59,23 +59,35 @@ The three rules that save you debugging time stay identical:
 
 ## Prerequisites
 
-- [Local Track Lab 3](../local/lab-3.md) complete — you've toured the code, simulated a refund, approved it, and seen the durability gap when you `Ctrl+C` the AppHost.
+- [Local Track Lab 3](../local/lab-3.md) complete — you've toured the code, triggered a refund through the chat agent (or the synthetic-alert button), approved it, and seen the durability gap when you `Ctrl+C` the AppHost.
 - [Full Azure Track Labs 1 and 2](lab-1.md) complete — Foundry + AKS + Terraform state are already in place.
 - A second browser profile or incognito window to play the **Operations** role separately from the **Customer** role.
 
 ## The architecture you're hardening
 
 ```text
-   Customer submits         ┌─────────────────┐
-   refund > $200            │  bff-api        │  POST /api/v1/refunds
-       ─────────────────►   │  /refunds       │  proxies to fraud-workflow
-                            └────────┬────────┘
-                                     │
-                                     ▼
-                            ┌─────────────────────┐
-                            │  fraud-workflow     │  ← AKS deployment (HPA)
-                            │  pod                │     workflow primitives
-                            └────────┬────────────┘
+   Customer asks the agent      ┌─────────────────┐
+   "refund my order 1003"       │  crm-agent pod  │  create_support_ticket
+       ─────────────────────►   │                 │  category=return, order_id=1003
+                                └────────┬────────┘
+                                         │ MCP
+                                         ▼
+                                ┌─────────────────┐
+                                │  crm-mcp pod    │
+                                └────────┬────────┘
+                                         │ HTTP
+                                         ▼
+                                ┌─────────────────┐  ticket persists synchronously
+                                │  crm-api pod    │  POST /tickets returns 200
+                                │                 │  fire-and-forget background task
+                                │                 │   ─► POST /api/v1/refunds
+                                └────────┬────────┘
+                                         │
+                                         ▼
+                                ┌─────────────────────┐
+                                │  fraud-workflow     │  ← AKS deployment (HPA)
+                                │  pod                │     workflow primitives
+                                └────────┬────────────┘
                                      │ RouterExecutor (fan-out)
               ┌──────────────────────┼──────────────────────┐
               ▼                      ▼                      ▼
@@ -278,4 +290,4 @@ Ideas for follow-on labs:
 - Add a **second human gate** (e.g., supervisor approval for refunds > $1000) — exercises nested external events.
 - Add a **stateful conversation entity** so the analyst can ask the agents follow-up questions during review without restarting the whole workflow.
 - Replace the rule-based [`RiskAggregator`](../../../src/fraud-workflow/Services/RiskAggregator.cs) with a fourth LLM-backed `RiskJudgeAgent` and compare quality vs. cost.
-- Add a real **customer-facing "Refund this order" button** on the Blazor order detail page (today the customer-side flow is exercised via the dashboard's "Simulate refund alert" button or a direct `POST /api/v1/refunds`; the BFF + workflow plumbing already exists end-to-end).
+- The customer-facing entry point today is **the chat agent**: a customer asks for a refund, the agent files a `category=return` ticket against the order, and the CRM API fires-and-forgets the alert to `fraud-workflow`. The Operations dashboard's **Submit synthetic alert (demo)** button stays as a diagnostic shortcut, and `POST http://fraud-workflow/api/v1/refunds` is still callable directly for tests.

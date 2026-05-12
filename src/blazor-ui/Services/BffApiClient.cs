@@ -203,6 +203,31 @@ public sealed class BffApiClient
         return tickets ?? Array.Empty<SupportTicket>();
     }
 
+    // PATCH /api/v1/customers/{customerId}/tickets/{ticketId}. Used by the
+    // /tickets page Cancel affordance. Returns the updated ticket on
+    // success; throws on 4xx/5xx so the page can surface a snackbar.
+    // status is "cancelled" or "resolved" — anything else is rejected by
+    // the BFF + CRM API allow-list.
+    public async Task<SupportTicket> UpdateTicketStatusAsync(
+        string customerId, string ticketId, string status, CancellationToken ct = default)
+    {
+        using var httpRequest = CreateRequest(
+            HttpMethod.Patch,
+            $"/api/v1/customers/{customerId}/tickets/{ticketId}");
+        httpRequest.Content = JsonContent.Create(new { status }, options: JsonOptions);
+
+        using var response = await httpClient.SendAsync(httpRequest, ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadAsStringAsync(ct);
+            throw new InvalidOperationException(
+                $"Failed to update ticket ({(int)response.StatusCode}): {error}");
+        }
+
+        var updated = await response.Content.ReadFromJsonAsync<SupportTicket>(JsonOptions, ct);
+        return updated ?? throw new InvalidOperationException("Ticket update response was empty.");
+    }
+
     public async Task<IReadOnlyList<Product>> GetProductsAsync(
         string? category = null,
         string? query = null,

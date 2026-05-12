@@ -36,10 +36,12 @@
 > **Rusty on async workflows? Read this first.** Three things will keep
 > you oriented:
 >
-> 1. **There's no chat box this time.** The trigger is a customer
->    pressing a button (well, a `POST /api/v1/refunds` simulation — see
->    [Step 4](#step-4--simulate-the-customer-side-refund-trigger)).
->    The whole flow runs in the background.
+> 1. **There's no chat box this time.** The trigger is the customer
+>    asking the agent for a refund — the agent files a return ticket
+>    via the CRM API, and the CRM API then fires-and-forgets a
+>    `POST /api/v1/refunds` to `fraud-workflow`
+>    (see [Step 4](#step-4--trigger-the-customer-side-refund-flow)).
+>    The whole risk-review flow runs in the background.
 > 2. **A "workflow" in Microsoft Agent Framework is just a graph of
 >    typed function calls.** Each node (an *executor*) takes a typed
 >    input and emits a typed output. `AddEdge(a, b)` means *"after `a`
@@ -106,16 +108,28 @@ Three rules that will save you debugging time:
 ## The architecture you're exploring
 
 ```text
-   Customer submits         ┌─────────────────┐
-   refund > $200            │  bff-api        │  POST /api/v1/refunds
-       ─────────────────►   │  /refunds       │  proxies to fraud-workflow
-                            └────────┬────────┘
-                                     │
-                                     ▼
-                            ┌─────────────────────┐
-                            │  fraud-workflow     │  ← Microsoft Agent Framework
-                            │  service (5010)     │     workflow primitives
-                            └────────┬────────────┘
+   Customer asks the agent      ┌─────────────────┐
+   "refund my order 1003"       │  crm-agent      │  create_support_ticket
+       ─────────────────────►   │  (5004)         │  category=return, order_id=1003
+                                └────────┬────────┘
+                                         │ MCP
+                                         ▼
+                                ┌─────────────────┐
+                                │  crm-mcp (5002) │
+                                └────────┬────────┘
+                                         │ HTTP
+                                         ▼
+                                ┌─────────────────┐  ticket persists synchronously
+                                │  crm-api (5001) │  POST /tickets returns 200
+                                │                 │  fire-and-forget background task
+                                │                 │   ─► POST /api/v1/refunds
+                                └────────┬────────┘
+                                         │
+                                         ▼
+                                ┌─────────────────────┐
+                                │  fraud-workflow     │  ← Microsoft Agent Framework
+                                │  service (5010)     │     workflow primitives
+                                └────────┬────────────┘
                                      │ RouterExecutor (fan-out)
               ┌──────────────────────┼──────────────────────┐
               ▼                      ▼                      ▼
@@ -209,7 +223,7 @@ Then open [`Workflows/HumanGateExecutor.cs`](../../../src/fraud-workflow/Workflo
 - If `RecommendedAction == "approve"` it short-circuits and emits `FinalAction.AutoApprove` immediately — no human involvement, no pause.
 - Otherwise it `await`s [`IApprovalGate.WaitForDecisionAsync`](../../../src/fraud-workflow/Services/IApprovalGate.cs). On the Local Track that gate is [`InMemoryApprovalGate`](../../../src/fraud-workflow/Services/InMemoryApprovalGate.cs) — `ConcurrentDictionary<alertId, TaskCompletionSource<ApprovalDecision>>`. The dictionary entry is removed when *either* the operator decides *or* the 72-hour timeout fires (linked-token-source pattern). Notice the `RunContinuationsAsynchronously` flag — without it, the operator's HTTP thread would run the entire downstream `AggregatorExecutor → workflow output` graph inline before responding `204`.
 
-## Step 4 — Simulate the customer-side refund trigger
+## Step 4 — Trigger the customer-side refund flow
 
 Run the AppHost from the repo root:
 
@@ -219,15 +233,24 @@ dotnet run --project src/AppHost
 
 The Aspire dashboard opens. You should see `fraud-workflow` listed with its `http` endpoint at `http://localhost:5010`. Wait until the project is **Healthy**.
 
-There are two ways to fire a refund alert. Pick one:
+There are three ways to land an alert in the queue. Option A is the **real customer flow** and the one to use first; the others are diagnostic conveniences.
 
-### Option A — Use the Operations dashboard (no second tool needed)
+### Option A — Ask the agent (the actual customer flow)
 
-1. Open Blazor at `http://localhost:5008` and sign in (UPN + password from `local-dev-credentials.txt`).
+1. Open Blazor at `http://localhost:5008` and sign in as any customer (UPN + password from `local-dev-credentials.txt`).
+2. From the chat assistant, say: **"I want a refund for my order 1003 — the tent rainfly arrived torn."**
+3. The agent calls the [`create_support_ticket`](../../../src/crm-mcp/Tools/SupportTicketTools.cs) MCP tool with `category="return"` and `order_id="1003"`. The CRM API persists the ticket and — because category is `return` and the order exists — fires-and-forgets a `POST /api/v1/refunds` to `fraud-workflow` from a background task ([`SupportTicketEndpoints.TriggerRefundAlertAsync`](../../../src/crm-api/Endpoints/SupportTicketEndpoints.cs)). The customer never sees the alert; they get a confirmation message.
+4. Sign in as a second user (different browser profile) and open **Operations**. Within ~5–10 seconds (3 agents × MCP + model calls + the 5s poll) a card appears.
+
+This path is what makes the workflow *load-bearing* — it isn't a button on a Ops page, it's the side-effect of every above-threshold return ticket.
+
+### Option B — Use the synthetic alert button on Operations
+
+1. Open Blazor at `http://localhost:5008` and sign in.
 2. Click your avatar → **Operations**.
-3. Click **Simulate refund alert**. The page calls `POST /api/v1/refunds` with a $425.50 demo alert; within ~10 seconds a card appears in the pending list (the three agents need to each call MCP and the model).
+3. Click **Submit synthetic alert (demo)**. The page calls `POST /api/v1/refunds` with a $425.50 demo alert. Use this when you want to exercise the workflow without going through chat — useful for debugging just the aggregator/human-gate path.
 
-### Option B — Send a real-shaped POST from the Aspire dashboard
+### Option C — Send a real-shaped POST from the Aspire dashboard
 
 In the Aspire dashboard, expand `fraud-workflow` → **Endpoints** and use the built-in HTTP tab to send:
 
@@ -240,7 +263,7 @@ Content-Type: application/json
 
 You should get a `202 Accepted` with an `alertId` and a `Location: /api/v1/operations/{alertId}` header. The workflow is now running in the background.
 
-> **Where's the customer-facing button?** A real customer-experience surface would put a **Refund this order** button on the order detail page. That's *deliberately* still future work — wiring it would dilute Lab 3's focus (the workflow itself). The plumbing for the button already exists end-to-end (BFF endpoint, fraud-workflow endpoint, operator UI); only the button and the order-page glue are missing. Add it as a stretch exercise after the lab.
+> **Where the threshold matters.** `Refund:Threshold` (default $200) is enforced inside `fraud-workflow` itself. The CRM API always posts the alert with the order's total amount; `fraud-workflow` then either auto-approves below-threshold returns (returning `200 OK { status = "below_threshold" }`) or starts the human-gate workflow above the threshold (returning `202 Accepted { alertId }`). A customer with a $50 return won't pull anyone away from their lunch.
 
 ## Step 5 — Approve from the Operations dashboard
 

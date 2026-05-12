@@ -1,5 +1,8 @@
 {
   "DataMode": "InMemory",
+  "FraudWorkflow": {
+    "BaseUrl": "http://localhost:5010"
+  },
   "Logging": {
     "LogLevel": { "Default": "Information" }
   }

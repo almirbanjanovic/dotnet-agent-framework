@@ -39,6 +39,23 @@ builder.WebHost.ConfigureKestrel(options =>
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<CustomerContext>();
 
+// Outbound: when a customer creates a category=return ticket the API
+// fans the event out to fraud-workflow as a refund alert. Fire-and-forget
+// from the endpoint's POV — if the workflow is down, the ticket still
+// succeeds (the FraudWorkflowClient swallows + logs failures). The
+// AppHost passes the URL via Aspire service discovery (services__... env
+// vars); standalone runs fall back to the localhost port.
+var fraudWorkflowBaseUrl = builder.Configuration["FraudWorkflow:BaseUrl"]
+    ?? "http://localhost:5010";
+builder.Services.AddHttpClient<FraudWorkflowClient>(client =>
+{
+    client.BaseAddress = new Uri(fraudWorkflowBaseUrl);
+    // Don't let an unresponsive downstream stall a customer's ticket
+    // creation. The endpoint also runs the call detached on a background
+    // task; this is a belt-and-braces upper bound.
+    client.Timeout = TimeSpan.FromSeconds(5);
+});
+
 builder.Logging.ClearProviders();
 builder.Logging.AddJsonConsole(options =>
 {

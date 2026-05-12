@@ -8,13 +8,14 @@ using Contoso.BffApi.Services;
 
 namespace Contoso.BffApi.Endpoints;
 
-// /api/v1/me                            → resolved customer for the signed-in JWT
-// /api/v1/customers/{id}                → fetch a single customer
-// /api/v1/customers/{id}/orders         → fetch a customer's orders
-// /api/v1/customers/{id}/tickets        → fetch a customer's support tickets
-// /api/v1/products                      → product catalog (search/filter)
-// /api/v1/products/{id}                 → single product
-// POST /api/v1/orders                   → place an order for the signed-in customer
+// /api/v1/me                                       → resolved customer for the signed-in JWT
+// /api/v1/customers/{id}                           → fetch a single customer
+// /api/v1/customers/{id}/orders                    → fetch a customer's orders
+// /api/v1/customers/{id}/tickets                   → fetch a customer's support tickets
+// PATCH /api/v1/customers/{id}/tickets/{ticketId}  → update a ticket's status (cancel/resolve)
+// /api/v1/products                                 → product catalog (search/filter)
+// /api/v1/products/{id}                            → single product
+// POST /api/v1/orders                              → place an order for the signed-in customer
 //
 // All proxies to the CRM API. Identity propagation happens automatically via
 // CustomerHeaderHandler attached to CrmApiClient.
@@ -26,6 +27,7 @@ internal static class CustomerEndpoints
         RouteHandlerBuilder customer,
         RouteHandlerBuilder orders,
         RouteHandlerBuilder tickets,
+        RouteHandlerBuilder updateTicket,
         RouteHandlerBuilder products,
         RouteHandlerBuilder product,
         RouteHandlerBuilder placeOrder) MapCustomerEndpoints(this IEndpointRouteBuilder app)
@@ -34,10 +36,11 @@ internal static class CustomerEndpoints
         var customer = app.MapGet("/customers/{id}", GetCustomerAsync);
         var orders = app.MapGet("/customers/{id}/orders", GetOrdersAsync);
         var tickets = app.MapGet("/customers/{id}/tickets", GetTicketsAsync);
+        var updateTicket = app.MapPatch("/customers/{id}/tickets/{ticketId}", UpdateTicketAsync);
         var products = app.MapGet("/products", GetProductsAsync);
         var product = app.MapGet("/products/{id}", GetProductAsync);
         var placeOrder = app.MapPost("/orders", PlaceOrderAsync);
-        return (me, customer, orders, tickets, products, product, placeOrder);
+        return (me, customer, orders, tickets, updateTicket, products, product, placeOrder);
     }
 
     private static async Task<IResult> GetMeAsync(
@@ -162,6 +165,62 @@ internal static class CustomerEndpoints
             return Results.Problem(
                 statusCode: StatusCodes.Status502BadGateway,
                 title: "Failed to load support tickets.",
+                detail: "The CRM service returned an error. Please try again.");
+        }
+
+        return await ProxyResponseAsync(response, cancellationToken);
+    }
+
+    // PATCH /customers/{id}/tickets/{ticketId} — used by the /tickets
+    // page Cancel button. Same owner-only gate as the GET; we forward
+    // the customer id in the body so the CRM API can do its own
+    // partition-keyed read even if the X-Customer-Entra-Id header is
+    // missing for a particular environment. CRM-side ownership check
+    // still wins when the header IS present.
+    private static async Task<IResult> UpdateTicketAsync(
+        string id,
+        string ticketId,
+        UpdateTicketStatusRequest request,
+        CrmApiClient crmApiClient,
+        CustomerContext customerContext,
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
+    {
+        if (!IsAuthorizedForCustomer(id, customerContext))
+        {
+            return Results.NotFound();
+        }
+
+        if (string.IsNullOrWhiteSpace(request?.Status))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["status"] = ["status is required."]
+            });
+        }
+
+        var logger = loggerFactory.CreateLogger("Contoso.BffApi.Endpoints.TicketsUpdate");
+
+        using var response = await crmApiClient.UpdateTicketStatusAsync(
+            ticketId, id, request.Status, cancellationToken);
+
+        // Forward CRM-side validation (400) and conflict (409) verbatim
+        // — those carry actionable info ("ticket already cancelled").
+        // For 404, hide whether the ticket existed by returning 404
+        // (consistent with our cross-customer policy). For 5xx, mask
+        // upstream details and return a generic 502.
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return Results.NotFound();
+        }
+        if ((int)response.StatusCode >= 500)
+        {
+            logger.LogWarning(
+                "CRM API returned {StatusCode} for PATCH ticket {TicketId} (customer {CustomerId}).",
+                (int)response.StatusCode, ticketId, id);
+            return Results.Problem(
+                statusCode: StatusCodes.Status502BadGateway,
+                title: "Failed to update ticket.",
                 detail: "The CRM service returned an error. Please try again.");
         }
 

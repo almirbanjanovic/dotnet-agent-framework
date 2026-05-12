@@ -271,6 +271,20 @@ public sealed class CosmosService : ICosmosService
         return response.Resource;
     }
 
+    public Task<SupportTicket?> GetTicketByIdAsync(string id, string customerId, CancellationToken ct = default)
+        => PointReadAsync<SupportTicket>(_supportTickets, id, new PartitionKey(customerId), ct);
+
+    public async Task<SupportTicket> UpdateTicketAsync(SupportTicket ticket, CancellationToken ct = default)
+    {
+        // Upsert keeps the call idempotent and avoids a separate Read; the
+        // endpoint already loaded the prior record to enforce ownership.
+        var response = await _supportTickets.UpsertItemAsync(
+            ticket,
+            new PartitionKey(ticket.CustomerId),
+            cancellationToken: ct);
+        return response.Resource;
+    }
+
     // ── Health ──────────────────────────────────────────────────────────────
 
     public async Task<bool> CheckConnectivityAsync(CancellationToken ct = default)

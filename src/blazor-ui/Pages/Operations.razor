@@ -17,6 +17,20 @@
         </MudText>
     </div>
 
+    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Icon="@Icons.Material.Outlined.Info">
+        <MudText Typo="Typo.body2">
+            <strong>How alerts arrive here.</strong> When a customer files a return ticket against
+            an order via the chat assistant, the CRM API automatically posts a refund-risk alert
+            to this workflow. Alerts whose order total is above the
+            <code>Refund:Threshold</code> (default $200) pause for human review and appear below.
+            Below-threshold alerts are short-circuited by <code>fraud-workflow</code>
+            (status <code>below_threshold</code>) and do <em>not</em> appear here — the customer's
+            open ticket is the audit trail, and ops follows up out-of-band. The
+            <em>Submit synthetic alert</em> button below skips the chat path so you can exercise
+            the queue without going through a real customer flow.
+        </MudText>
+    </MudAlert>
+
     <MudPaper Class="pa-4" Elevation="0">
         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
             <MudButton StartIcon="@Icons.Material.Filled.Refresh"
@@ -29,7 +43,7 @@
                        Variant="Variant.Outlined"
                        Color="Color.Secondary"
                        OnClick="SubmitDemoRefundAsync">
-                Simulate refund alert
+                Submit synthetic alert (demo)
             </MudButton>
             <MudSpacer />
             <MudText Typo="Typo.caption" Color="Color.Secondary">

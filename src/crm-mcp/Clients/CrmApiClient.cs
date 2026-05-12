@@ -126,6 +126,17 @@ public sealed class CrmApiClient
         return await ReadAsync<SupportTicket>(response, ct);
     }
 
+    public async Task<SupportTicket> UpdateTicketStatusAsync(
+        string ticketId, string status, string? customerId, CancellationToken ct = default)
+    {
+        var body = new { status, customer_id = customerId };
+        var payload = JsonSerializer.Serialize(body, s_jsonOptions);
+        using var content = new StringContent(payload, Encoding.UTF8, "application/json");
+        using var response = await _httpClient.PatchAsync(
+            $"/api/v1/tickets/{Uri.EscapeDataString(ticketId)}", content, ct);
+        return await ReadAsync<SupportTicket>(response, ct);
+    }
+
     private static async Task<T> ReadAsync<T>(HttpResponseMessage response, CancellationToken ct)
     {
         var content = await response.Content.ReadAsStringAsync(ct);

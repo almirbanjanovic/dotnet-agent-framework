@@ -36,7 +36,8 @@ The MCP server listens on the URL bound by `ASPNETCORE_URLS` (Aspire AppHost bin
 | `get_promotions` | `GET /api/v1/promotions/` |
 | `get_eligible_promotions` | `GET /api/v1/promotions/eligible/{customerId}` |
 | `get_support_tickets` | `GET /api/v1/customers/{id}/tickets` |
-| `create_support_ticket` | `POST /api/v1/tickets` |
+| `create_support_ticket` | `POST /api/v1/tickets` (when `category="return"` + `order_id` is supplied, the CRM API also fires a refund-risk alert to `fraud-workflow` from a background task) |
+| `cancel_support_ticket` | `PATCH /api/v1/tickets/{id}` with `{ "status": "cancelled" }` (only succeeds when the current status is `open`; returns `409` otherwise) |
 
 ## Architecture role
 
