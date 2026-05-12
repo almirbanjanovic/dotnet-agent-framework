@@ -27,10 +27,12 @@ public sealed class CrmApiClient
     public Task<HttpResponseMessage> UpdateTicketStatusAsync(
         string ticketId, string customerId, string status, CancellationToken ct = default)
     {
-        // Body carries customer_id as the test/no-header fallback. The CRM
-        // API still prefers the X-Customer-Entra-Id header (forwarded by
-        // the BFF's CustomerHeaderHandler) when present, so a malicious
-        // body cannot mutate someone else's ticket.
+        // The CRM API authenticates this PATCH solely from the
+        // X-Customer-Entra-Id header forwarded by CustomerHeaderHandler;
+        // a request without the header is rejected with 401. We still
+        // include `customer_id` in the body for log/trace correlation,
+        // but it is NOT a fallback identity — a malicious caller cannot
+        // mutate someone else's ticket by spoofing the body alone.
         var content = JsonContent.Create(new
         {
             status,

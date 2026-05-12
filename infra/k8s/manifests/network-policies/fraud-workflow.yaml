@@ -1,0 +1,77 @@
+# NetworkPolicy for fraud-workflow
+# Ingress: bff-api (operations dashboard) and crm-api (refund-alert trigger)
+# Egress:  crm-api (refund-decision callback), crm-mcp + knowledge-mcp
+#          (agent tool calls), Azure PaaS (Foundry/AOAI via PE), DNS
+#
+# fraud-workflow is the only service that initiates the closed-loop
+# callback into crm-api via POST /api/v1/internal/tickets/{id}/refund-decision.
+# Without this policy the cluster's default-deny ingress wins and the
+# refund decision never reaches the customer's ticket. (Adversarial-review A3.)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-fraud-workflow
+  namespace: contoso
+  labels:
+    app.kubernetes.io/part-of: contoso-outdoors
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: fraud-workflow
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # bff-api (operations dashboard polls /api/v1/operations/*)
+    # crm-api (background refund-alert trigger from new return tickets)
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: bff-api
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: crm-api
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    # DNS resolution (kube-dns)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # crm-api (decision-callback path: /api/v1/internal/tickets/{id}/refund-decision)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: crm-api
+      ports:
+        - protocol: TCP
+          port: 8080
+    # crm-mcp + knowledge-mcp (agent tool calls)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: crm-mcp
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: knowledge-mcp
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Azure PaaS via private endpoints (Foundry / AOAI, Key Vault)
+    - to:
+        - ipBlock:
+            cidr: 10.0.3.0/24
+      ports:
+        - protocol: TCP
+          port: 443

@@ -37,4 +37,10 @@ public sealed class SupportTicket
 
     [JsonPropertyName("closed_at")]
     public string? ClosedAt { get; set; }
+
+    // Append-only audit thread written by fraud-workflow on every refund
+    // decision. Surfaced verbatim on the /tickets page so the customer
+    // can see resolution context ("approved", "needs more info", etc.).
+    [JsonPropertyName("comments")]
+    public string? Comments { get; set; }
 }

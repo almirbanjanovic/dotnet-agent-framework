@@ -84,7 +84,9 @@ public static class CsvDataLoader
             Status = GetField(fields, 6),
             Priority = GetField(fields, 7),
             OpenedAt = GetField(fields, 8),
-            ClosedAt = GetOptionalField(fields, 9)
+            ClosedAt = GetOptionalField(fields, 9),
+            // 11th column is optional — seed data may not have it.
+            Comments = fields.Count > 10 ? GetOptionalField(fields, 10) : null
         });
 
     private static List<T> LoadCsv<T>(string path, Func<IReadOnlyList<string>, T> map)

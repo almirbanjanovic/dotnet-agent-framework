@@ -33,4 +33,12 @@ public sealed class SupportTicket
 
     [JsonPropertyName("closed_at")]
     public string? ClosedAt { get; set; }
+
+    // Append-only audit thread. The fraud-workflow service writes one
+    // line here per refund decision (auto-approve, below-threshold,
+    // operator approve/reject, timeout). The customer sees the latest
+    // line on their /tickets page, so phrasing must be customer-safe.
+    // Format per line: "[YYYY-MM-DDTHH:MM:SSZ source] message".
+    [JsonPropertyName("comments")]
+    public string? Comments { get; set; }
 }

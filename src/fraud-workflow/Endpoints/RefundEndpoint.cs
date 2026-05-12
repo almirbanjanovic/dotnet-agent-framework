@@ -53,7 +53,12 @@ internal static class RefundEndpoint
             request.CustomerId.Trim(),
             request.OrderId.Trim(),
             request.Amount,
-            request.Reason.Trim());
+            request.Reason.Trim(),
+            // Optional: present when CRM API fired the alert from a real
+            // customer ticket; absent when the Operations dashboard fired
+            // a synthetic alert. Drives whether the workflow calls back
+            // to CRM API on terminal decisions.
+            string.IsNullOrWhiteSpace(request.TicketId) ? null : request.TicketId.Trim());
 
         var alertId = runner.Start(alert, lifetime.ApplicationStopping);
 
@@ -65,5 +70,13 @@ internal static class RefundEndpoint
     }
 
     // Wire DTO. Distinct from the internal RefundAlert (which tracks AlertId).
-    internal sealed record RefundRequest(string CustomerId, string OrderId, decimal Amount, string Reason);
+    internal sealed record RefundRequest(
+        string CustomerId,
+        string OrderId,
+        decimal Amount,
+        string Reason,
+        // Optional. CRM API sets this when the alert is auto-fired from a
+        // real customer ticket so the workflow can call back and close
+        // the loop on terminal decisions.
+        string? TicketId = null);
 }

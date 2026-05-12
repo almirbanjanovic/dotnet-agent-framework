@@ -1,6 +1,6 @@
 # NetworkPolicy for crm-api
-# Ingress: crm-mcp and bff-api
-# Egress:  Cosmos DB + Key Vault (port 443 via PE), DNS
+# Ingress: crm-mcp, bff-api, and fraud-workflow (refund-decision callback)
+# Egress:  Cosmos DB + Key Vault (port 443 via PE), DNS, fraud-workflow (refund-alert trigger)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -24,6 +24,10 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: bff-api
+        # fraud-workflow callback into POST /api/v1/internal/tickets/{id}/refund-decision
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: fraud-workflow
       ports:
         - protocol: TCP
           port: 8080
@@ -41,6 +45,14 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
+    # fraud-workflow (refund-alert trigger when a category=return ticket is created)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: fraud-workflow
+      ports:
+        - protocol: TCP
+          port: 8080
     # Azure PaaS via private endpoints (Cosmos DB, Key Vault)
     - to:
         - ipBlock:

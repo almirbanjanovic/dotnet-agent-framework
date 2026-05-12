@@ -65,6 +65,20 @@ builder.Services.AddSingleton<RiskAggregator>();
 builder.Services.AddSingleton<IApprovalGate, InMemoryApprovalGate>();
 builder.Services.AddSingleton<FraudWorkflowRunner>();
 
+// Outbound callback to crm-api so the customer-facing ticket reflects
+// the workflow's terminal decision (auto-approve, operator decision,
+// timeout). Service-to-service — no auth surface required because the
+// CRM API trusts cluster-network callers and the /internal/ path is
+// not reverse-proxied by the BFF.
+builder.Services.AddHttpClient<CrmApiClient>(client =>
+{
+    var baseUrl = builder.Configuration["services:crm-api:http:0"]
+        ?? builder.Configuration["CrmApi:BaseUrl"]
+        ?? "http://localhost:5001";
+    client.BaseAddress = new Uri(baseUrl);
+    client.Timeout = TimeSpan.FromSeconds(5);
+});
+
 builder.Services.AddHealthChecks()
     .AddCheck<CrmMcpHealthCheck>("crm-mcp", tags: ["ready"])
     .AddCheck<KnowledgeMcpHealthCheck>("knowledge-mcp", tags: ["ready"]);

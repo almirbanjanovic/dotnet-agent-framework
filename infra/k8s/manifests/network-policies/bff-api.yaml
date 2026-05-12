@@ -1,6 +1,6 @@
 # NetworkPolicy for bff-api
 # Ingress: AGC ingress controller (azure-alb-system namespace)
-# Egress:  orchestrator-agent (port 8080), crm-api (port 8080), Azure PaaS (port 443 via PE), DNS
+# Egress:  orchestrator-agent, crm-api, fraud-workflow (operations dashboard), Azure PaaS (port 443 via PE), DNS
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -52,6 +52,14 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: crm-api
+      ports:
+        - protocol: TCP
+          port: 8080
+    # fraud-workflow (operations dashboard polls /api/v1/operations/*)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: fraud-workflow
       ports:
         - protocol: TCP
           port: 8080

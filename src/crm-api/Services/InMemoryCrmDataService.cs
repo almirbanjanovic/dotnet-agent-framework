@@ -291,7 +291,11 @@ public sealed class InMemoryCrmDataService : ICosmosService
 
         var created = new SupportTicket
         {
-            Id = $"ST-{Guid.NewGuid():N}",
+            // Honour the caller-supplied id when present (the endpoint
+            // generates `ST-{Guid:N}` so both backends agree). Fall back
+            // to a fresh id only for legacy callers that still pass an
+            // empty Id — mirrors what Cosmos would reject server-side.
+            Id = string.IsNullOrWhiteSpace(ticket.Id) ? $"ST-{Guid.NewGuid():N}" : ticket.Id,
             CustomerId = ticket.CustomerId,
             OrderId = ticket.OrderId,
             Category = ticket.Category,
@@ -316,6 +320,17 @@ public sealed class InMemoryCrmDataService : ICosmosService
             return Task.FromResult<SupportTicket?>(ticket);
         }
         return Task.FromResult<SupportTicket?>(null);
+    }
+
+    public Task<SupportTicket?> GetTicketByIdInternalAsync(string id, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        // No owner check — this overload exists so service callbacks
+        // (fraud-workflow) can update a ticket without an end-user
+        // customer context. The endpoint that consumes it is gated at
+        // the network boundary, NOT by header validation.
+        _supportTickets.TryGetValue(id, out var ticket);
+        return Task.FromResult(ticket);
     }
 
     public Task<SupportTicket> UpdateTicketAsync(SupportTicket ticket, CancellationToken ct = default)

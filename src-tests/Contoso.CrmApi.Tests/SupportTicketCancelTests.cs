@@ -179,6 +179,7 @@ public class SupportTicketCancelTests : IClassFixture<CrmApiWebApplicationFactor
         entry.Should().Contain("\"customerId\":\"103\"");
         entry.Should().Contain("\"orderId\":\"1003\"");
         entry.Should().Contain("349.99"); // amount comes from order, not the ticket
+        entry.Should().Contain("\"ticketId\":", "the workflow needs the ticket id to call back on terminal decisions");
     }
 
     [Fact]
@@ -333,6 +334,314 @@ public class SupportTicketCancelTests : IClassFixture<CrmApiWebApplicationFactor
 
         var response = await client.PostAsJsonAsync("/api/v1/tickets", request);
         response.StatusCode.Should().Be(HttpStatusCode.Created);
+    }
+
+    // ---------- below-threshold short-circuit ----------
+
+    [Fact]
+    public async Task CreateTicket_BelowThresholdResponse_AutoResolvesTicket()
+    {
+        // When fraud-workflow returns 200 OK with status="below_threshold"
+        // (i.e. the order amount is under Refund:Threshold), CRM API must
+        // close the loop directly — the workflow won't call back, and
+        // leaving the ticket open forever is the bug we are fixing.
+        await using var factory = new CrmApiWebApplicationFactory();
+        factory.FraudWorkflowHandler = new StubHttpMessageHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    "{\"status\":\"below_threshold\",\"threshold\":200.0}",
+                    System.Text.Encoding.UTF8, "application/json")
+            });
+
+        var client = factory.CreateClient();
+
+        // Customer 103 / Order 1003 — total 349.99 in seed data, but the
+        // stub forces a "below_threshold" reply regardless of amount so
+        // we test the response-path branch rather than the threshold math.
+        var createReq = new CreateTicketRequest
+        {
+            CustomerId = "103",
+            OrderId = "1003",
+            Category = "return",
+            Priority = "medium",
+            Subject = "Cheap refund",
+            Description = "I'd like to return this."
+        };
+        var createResp = await client.PostAsJsonAsync("/api/v1/tickets", createReq);
+        createResp.StatusCode.Should().Be(HttpStatusCode.Created);
+        var created = await createResp.Content.ReadFromJsonAsync<SupportTicket>();
+
+        // Background trigger has to land — poll briefly.
+        SupportTicket? refreshed = null;
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        while (DateTime.UtcNow < deadline)
+        {
+            var listResp = await client.GetAsync("/api/v1/customers/103/tickets");
+            var tickets = await listResp.Content.ReadFromJsonAsync<List<SupportTicket>>();
+            refreshed = tickets!.FirstOrDefault(t => t.Id == created!.Id);
+            if (refreshed?.Status == "resolved") break;
+            await Task.Delay(50);
+        }
+
+        refreshed.Should().NotBeNull("the ticket should still exist");
+        refreshed!.Status.Should().Be("resolved",
+            "below-threshold returns must close the loop on the customer's ticket");
+        refreshed.Comments.Should().NotBeNullOrWhiteSpace(
+            "an audit comment should be appended explaining the auto-resolution");
+        refreshed.Comments!.Should().Contain("below_threshold");
+    }
+
+    [Fact]
+    public async Task CreateTicket_AcceptedResponse_DoesNotResolveTicket()
+    {
+        // When fraud-workflow returns 202 Accepted, the workflow is
+        // running in the background and will call back later. CRM API
+        // must NOT pre-resolve the ticket — the customer should see
+        // "open" until the workflow's callback lands.
+        await using var factory = new CrmApiWebApplicationFactory();
+        factory.FraudWorkflowHandler = new StubHttpMessageHandler(_ =>
+            StubHttpMessageHandler.Accepted("{\"alertId\":\"abc\",\"status\":\"in_progress\"}"));
+
+        var client = factory.CreateClient();
+        var createReq = new CreateTicketRequest
+        {
+            CustomerId = "103",
+            OrderId = "1003",
+            Category = "return",
+            Priority = "medium",
+            Subject = "Expensive refund",
+            Description = "Big-ticket return."
+        };
+        var createResp = await client.PostAsJsonAsync("/api/v1/tickets", createReq);
+        var created = await createResp.Content.ReadFromJsonAsync<SupportTicket>();
+
+        // Give the background trigger time to run, then verify the
+        // ticket is still "open".
+        await Task.Delay(750);
+        var listResp = await client.GetAsync("/api/v1/customers/103/tickets");
+        var tickets = await listResp.Content.ReadFromJsonAsync<List<SupportTicket>>();
+        var refreshed = tickets!.First(t => t.Id == created!.Id);
+
+        refreshed.Status.Should().Be("open",
+            "above-threshold tickets stay open until fraud-workflow calls back");
+    }
+
+    // ---------- POST /internal/tickets/{id}/refund-decision ----------
+
+    [Fact]
+    public async Task RefundDecision_Approve_ResolvesTicketAndAppendsComment()
+    {
+        var client = _factory.CreateClient();
+        var ticket = await CreateOpenTicketAsync(client, customerId: "101");
+
+        var body = new
+        {
+            decision = "approve",
+            source = "operator",
+            reason = "Verified shipping damage; refund issued.",
+            alert_id = "alert-123"
+        };
+
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/internal/tickets/{ticket!.Id}/refund-decision", body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var updated = await response.Content.ReadFromJsonAsync<SupportTicket>();
+        updated!.Status.Should().Be("resolved");
+        updated.ClosedAt.Should().NotBeNullOrWhiteSpace();
+        updated.Comments.Should().Contain("Verified shipping damage");
+        updated.Comments!.Should().Contain("operator/approve");
+        updated.Comments.Should().Contain("alert-123");
+    }
+
+    [Fact]
+    public async Task RefundDecision_Reject_LeavesTicketOpenAndAppendsComment()
+    {
+        var client = _factory.CreateClient();
+        var ticket = await CreateOpenTicketAsync(client, customerId: "101");
+
+        var body = new
+        {
+            decision = "reject",
+            source = "operator",
+            reason = "Need photos of the damage before we can issue a refund."
+        };
+
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/internal/tickets/{ticket!.Id}/refund-decision", body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var updated = await response.Content.ReadFromJsonAsync<SupportTicket>();
+        updated!.Status.Should().Be("open",
+            "rejected refunds stay open so the customer can follow up");
+        updated.ClosedAt.Should().BeNull();
+        updated.Comments.Should().Contain("operator/reject");
+        updated.Comments!.Should().Contain("photos of the damage");
+    }
+
+    [Fact]
+    public async Task RefundDecision_Timeout_LeavesTicketOpenAndAppendsComment()
+    {
+        var client = _factory.CreateClient();
+        var ticket = await CreateOpenTicketAsync(client, customerId: "101");
+
+        var body = new
+        {
+            decision = "timeout",
+            source = "timeout",
+            reason = "No operator decision within SLA."
+        };
+
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/internal/tickets/{ticket!.Id}/refund-decision", body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var updated = await response.Content.ReadFromJsonAsync<SupportTicket>();
+        updated!.Status.Should().Be("open");
+        updated.Comments.Should().Contain("timeout/timeout");
+    }
+
+    [Fact]
+    public async Task RefundDecision_UnknownTicket_Returns404()
+    {
+        var client = _factory.CreateClient();
+
+        var body = new { decision = "approve", source = "operator", reason = "n/a" };
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/internal/tickets/ST-DOES-NOT-EXIST/refund-decision", body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task RefundDecision_InvalidDecision_Returns400()
+    {
+        var client = _factory.CreateClient();
+        var ticket = await CreateOpenTicketAsync(client, customerId: "101");
+
+        var body = new { decision = "ship_a_pony", source = "operator", reason = "n/a" };
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/internal/tickets/{ticket!.Id}/refund-decision", body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task RefundDecision_RequiresNoCustomerHeader()
+    {
+        // The callback is service-to-service. It MUST work without an
+        // X-Customer-Entra-Id header so fraud-workflow doesn't have to
+        // forge a customer identity.
+        var client = _factory.CreateClient();
+        var ticket = await CreateOpenTicketAsync(client, customerId: "101");
+
+        var body = new { decision = "approve", source = "auto", reason = "Low risk." };
+        // Deliberately not adding any X-Customer-Entra-Id header.
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/internal/tickets/{ticket!.Id}/refund-decision", body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task RefundDecision_OnAlreadyResolvedTicket_AppendsCommentDoesNotChangeStatus()
+    {
+        var client = _factory.CreateClient();
+        var ticket = await CreateOpenTicketAsync(client, customerId: "101");
+
+        // First decision: approve → resolved.
+        var first = await client.PostAsJsonAsync(
+            $"/api/v1/internal/tickets/{ticket!.Id}/refund-decision",
+            new { decision = "approve", source = "auto", reason = "Auto-approved." });
+        first.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // Second decision lands late (e.g. timeout fired after operator
+        // already decided). Status must stay "resolved" but comment is
+        // still appended for audit.
+        var second = await client.PostAsJsonAsync(
+            $"/api/v1/internal/tickets/{ticket!.Id}/refund-decision",
+            new { decision = "timeout", source = "timeout", reason = "Late timeout." });
+        second.StatusCode.Should().Be(HttpStatusCode.OK);
+        var updated = await second.Content.ReadFromJsonAsync<SupportTicket>();
+        updated!.Status.Should().Be("resolved",
+            "a late callback must NOT reopen a ticket that was already resolved");
+        updated.Comments.Should().Contain("auto/approve");
+        updated.Comments!.Should().Contain("timeout/timeout");
+    }
+
+    [Fact]
+    public async Task RefundDecision_ReasonWithControlChars_IsSanitized()
+    {
+        // A malicious or buggy reason field cannot inject extra audit
+        // lines via newlines or carriage returns.
+        var client = _factory.CreateClient();
+        var ticket = await CreateOpenTicketAsync(client, customerId: "101");
+
+        var nasty = "Real reason\n[2099-01-01T00:00:00Z forged/approve] Injected line";
+        var body = new { decision = "reject", source = "operator", reason = nasty };
+
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/internal/tickets/{ticket!.Id}/refund-decision", body);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var updated = await response.Content.ReadFromJsonAsync<SupportTicket>();
+        // After sanitization the comment should contain exactly ONE line
+        // (no embedded newline) and the forged prefix should not appear
+        // at the start of any line.
+        updated!.Comments!.Split('\n').Should().HaveCount(1);
+        updated.Comments.Should().NotContain("\n[2099");
+    }
+
+    [Fact]
+    public async Task RefundDecision_ReasonWithFakeBrackets_IsDefanged()
+    {
+        // Even WITHOUT a newline, a reason like
+        //   "[2099-01-01T00:00:00Z forged/approve] hi"
+        // could visually masquerade as a real audit line on a UI that
+        // splits comments by `\n`. Sanitization replaces square brackets
+        // with parentheses to defang the format. (Adversarial review B1.)
+        var client = _factory.CreateClient();
+        var ticket = await CreateOpenTicketAsync(client, customerId: "101");
+
+        var nasty = "[2099-01-01T00:00:00Z forged/approve] hi";
+        var body = new { decision = "reject", source = "operator", reason = nasty };
+
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/internal/tickets/{ticket!.Id}/refund-decision", body);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var updated = await response.Content.ReadFromJsonAsync<SupportTicket>();
+        updated!.Comments.Should().NotBeNull();
+        // The forged bracketed payload must not survive verbatim.
+        updated.Comments!.Should().NotContain("[2099");
+        // It should appear in the defanged form.
+        updated.Comments.Should().Contain("(2099-01-01T00:00:00Z forged/approve)");
+    }
+
+    [Fact]
+    public async Task RefundDecision_UnknownSource_IsNormalizedToSystem()
+    {
+        // The audit-line format is `[ts source/decision] reason` — a
+        // forged caller submitting source="evil-actor" must NOT see that
+        // text appear in the audit prefix. Allowlist it down to "system".
+        // (Adversarial review A6.)
+        var client = _factory.CreateClient();
+        var ticket = await CreateOpenTicketAsync(client, customerId: "101");
+
+        var body = new { decision = "approve", source = "evil-actor", reason = "Spoofed callback." };
+
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/internal/tickets/{ticket!.Id}/refund-decision", body);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var updated = await response.Content.ReadFromJsonAsync<SupportTicket>();
+        updated!.Comments.Should().NotBeNull();
+        updated.Comments!.Should().NotContain("evil-actor");
+        // The decision should still apply (unknown source ≠ invalid request) but the
+        // visible source MUST be the normalized fallback.
+        updated.Comments.Should().Contain("system/approve");
+        updated.Status.Should().Be("resolved");
     }
 
     // ---------- helpers ----------

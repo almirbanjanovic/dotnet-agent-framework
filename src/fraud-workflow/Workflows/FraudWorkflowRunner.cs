@@ -26,6 +26,7 @@ internal sealed class FraudWorkflowRunner
 
     private readonly Workflow _workflow;
     private readonly ILogger<FraudWorkflowRunner> _logger;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ConcurrentDictionary<string, FinalAction> _outcomes = new();
     private readonly ConcurrentQueue<string> _outcomeOrder = new();
 
@@ -35,10 +36,12 @@ internal sealed class FraudWorkflowRunner
         LoyaltyContextAgent loyaltyAgent,
         RiskAggregator aggregator,
         IApprovalGate approvalGate,
+        IServiceScopeFactory scopeFactory,
         ILoggerFactory loggerFactory)
     {
         _workflow = RefundRiskWorkflow.Build(
             historyAgent, conditionAgent, loyaltyAgent, aggregator, approvalGate, loggerFactory);
+        _scopeFactory = scopeFactory;
         _logger = loggerFactory.CreateLogger<FraudWorkflowRunner>();
     }
 
@@ -106,7 +109,16 @@ internal sealed class FraudWorkflowRunner
                 StoreOutcome(final);
                 _logger.LogInformation(
                     "Refund-risk workflow completed for alert {AlertId}: {Decision} (source: {Source}).",
-                    alert.AlertId, final.Decision, final.Source);
+                    final.AlertId, final.Decision, final.Source);
+
+                // Close the loop back to crm-api so the customer's
+                // ticket reflects the outcome. Skipped silently when
+                // the alert had no originating ticket (synthetic
+                // alerts from the Operations dashboard).
+                if (!string.IsNullOrWhiteSpace(final.TicketId))
+                {
+                    await NotifyCrmAsync(final, ct).ConfigureAwait(false);
+                }
             }
             else
             {
@@ -126,6 +138,28 @@ internal sealed class FraudWorkflowRunner
             _logger.LogError(ex,
                 "Refund-risk workflow for alert {AlertId} threw an unhandled exception.",
                 alert.AlertId);
+        }
+    }
+
+    private async Task NotifyCrmAsync(FinalAction final, CancellationToken ct)
+    {
+        // Resolve the typed client from a fresh scope. The runner is a
+        // singleton (it owns the long-lived Workflow) but HttpClient
+        // factories want their typed clients resolved per-use to honour
+        // handler-rotation semantics.
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var crmClient = scope.ServiceProvider.GetRequiredService<CrmApiClient>();
+            await crmClient.ApplyRefundDecisionAsync(final, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // Already swallowed inside the client, but belt-and-brace so
+            // a DI resolution failure can't crash the workflow.
+            _logger.LogWarning(ex,
+                "Refund-decision callback failed for alert {AlertId} ticket {TicketId}.",
+                final.AlertId, final.TicketId);
         }
     }
 

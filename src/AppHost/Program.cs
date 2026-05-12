@@ -52,7 +52,13 @@ var orchestratorAgent = AsLocal(builder.AddProject<Projects.Contoso_Orchestrator
 var fraudWorkflow = AsLocal(builder.AddProject<Projects.Contoso_FraudWorkflow>("fraud-workflow"))
     .WithHttpEndpoint(port: 5010, name: "http")
     .WithReference(crmMcp)
-    .WithReference(knowledgeMcp);
+    .WithReference(knowledgeMcp)
+    // Callback edge: fraud-workflow → crm-api so the customer-facing
+    // ticket reflects every terminal refund decision (auto-approve,
+    // operator approve/reject, timeout). Aspire's WithReference only
+    // injects service-discovery env vars; it does NOT enforce startup
+    // order, so the cycle (crmApi ↔ fraudWorkflow) is benign.
+    .WithReference(crmApi);
 
 // Wire the new outbound dependency from CRM API → fraud-workflow.
 // When a customer creates a `category=return` ticket the CRM API fans

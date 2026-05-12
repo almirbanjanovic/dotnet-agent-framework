@@ -12,6 +12,9 @@
   "KnowledgeMcp": {
     "BaseUrl": "http://localhost:5003"
   },
+  "CrmApi": {
+    "BaseUrl": "http://localhost:5001"
+  },
   "Refund": {
     "Threshold": 200.0,
     "ApprovalTimeout": "3.00:00:00"

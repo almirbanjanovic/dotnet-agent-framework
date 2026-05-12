@@ -54,16 +54,16 @@
             @foreach (var ticket in _tickets)
             {
                 <MudItem xs="12" md="6" lg="4">
-                    <MudCard Class="card-hover" Style="height: 100%;">
+                    <MudCard Class="card-hover" Style="height: 100%; overflow: hidden;">
                         <MudCardContent>
-                            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Style="margin-bottom: 0.75rem;">
-                                <div>
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Spacing="2" Style="margin-bottom: 0.75rem; min-width: 0;">
+                                <div style="min-width: 0; flex: 1 1 auto; overflow: hidden;">
                                     <MudText Typo="Typo.caption" Color="Color.Secondary" Style="text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">
                                         Ticket
                                     </MudText>
-                                    <MudText Typo="Typo.h6" Style="line-height: 1.1;">#@ticket.Id</MudText>
+                                    <MudText Typo="Typo.h6" Style="line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">#@ticket.Id</MudText>
                                 </div>
-                                <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Class="@GetStatusChipClass(ticket.Status)">
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Class="@GetStatusChipClass(ticket.Status)" Style="flex-shrink: 0; margin: 0;">
                                     @ticket.Status
                                 </MudChip>
                             </MudStack>
@@ -107,6 +107,19 @@
                                     </MudStack>
                                 }
                             </MudStack>
+
+                            @if (!string.IsNullOrWhiteSpace(ticket.Comments))
+                            {
+                                <MudDivider Class="my-3" />
+                                <MudText Typo="Typo.caption" Color="Color.Secondary"
+                                         Style="text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">
+                                    Updates
+                                </MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary"
+                                         Style="margin-top: 0.25rem; white-space: pre-wrap; font-family: var(--mud-typography-monospace-family); font-size: 0.78rem; line-height: 1.4;">
+                                    @ticket.Comments
+                                </MudText>
+                            }
                         </MudCardContent>
                         @if (string.Equals(ticket.Status, "open", StringComparison.OrdinalIgnoreCase))
                         {

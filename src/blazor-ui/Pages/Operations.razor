@@ -21,13 +21,19 @@
         <MudText Typo="Typo.body2">
             <strong>How alerts arrive here.</strong> When a customer files a return ticket against
             an order via the chat assistant, the CRM API automatically posts a refund-risk alert
-            to this workflow. Alerts whose order total is above the
-            <code>Refund:Threshold</code> (default $200) pause for human review and appear below.
-            Below-threshold alerts are short-circuited by <code>fraud-workflow</code>
-            (status <code>below_threshold</code>) and do <em>not</em> appear here — the customer's
-            open ticket is the audit trail, and ops follows up out-of-band. The
-            <em>Submit synthetic alert</em> button below skips the chat path so you can exercise
-            the queue without going through a real customer flow.
+            to this workflow. Three risk agents score the request, then:
+            <ul style="margin: 0.4rem 0 0.4rem 1.25rem; padding: 0;">
+                <li>Below <code>Refund:Threshold</code> ($200 default) → CRM API auto-resolves the
+                    ticket directly. No queue entry — the customer sees the resolution on their
+                    <em>My tickets</em> page.</li>
+                <li>Above the threshold + low risk → workflow auto-approves and calls back to CRM API.
+                    Same outcome, audited as <code>auto/approve</code>.</li>
+                <li>Above the threshold + medium/high risk → pauses here for operator review.
+                    Your decision is posted back to the customer's ticket.</li>
+            </ul>
+            The <em>Submit synthetic alert</em> button below skips the customer flow so you can
+            exercise the queue without filing a real ticket; synthetic alerts are not tied to any
+            ticket and do not generate callbacks.
         </MudText>
     </MudAlert>
 

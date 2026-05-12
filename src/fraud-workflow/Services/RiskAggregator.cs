@@ -37,6 +37,7 @@ internal sealed class RiskAggregator
             RecommendedAction: action,
             HistoryFinding: history,
             ConditionFinding: condition,
-            LoyaltyFinding: loyalty);
+            LoyaltyFinding: loyalty,
+            TicketId: alert.TicketId);
     }
 }

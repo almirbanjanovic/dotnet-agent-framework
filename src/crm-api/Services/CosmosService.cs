@@ -274,6 +274,19 @@ public sealed class CosmosService : ICosmosService
     public Task<SupportTicket?> GetTicketByIdAsync(string id, string customerId, CancellationToken ct = default)
         => PointReadAsync<SupportTicket>(_supportTickets, id, new PartitionKey(customerId), ct);
 
+    public async Task<SupportTicket?> GetTicketByIdInternalAsync(string id, CancellationToken ct = default)
+    {
+        // No partition key — this is the cross-partition lookup used
+        // exclusively by the fraud-workflow callback. Cosmos charges
+        // extra RU for cross-partition queries; this is acceptable
+        // because callbacks are infrequent compared with reads.
+        var query = new QueryDefinition("SELECT * FROM c WHERE c.id = @id")
+            .WithParameter("@id", id);
+
+        var results = await ExecuteQueryAsync<SupportTicket>(_supportTickets, query, partitionKey: null, ct);
+        return results.Count == 0 ? null : results[0];
+    }
+
     public async Task<SupportTicket> UpdateTicketAsync(SupportTicket ticket, CancellationToken ct = default)
     {
         // Upsert keeps the call idempotent and avoids a separate Read; the

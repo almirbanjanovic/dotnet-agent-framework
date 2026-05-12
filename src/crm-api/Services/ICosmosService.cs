@@ -32,6 +32,14 @@ public interface ICosmosService
     // Support Tickets
     Task<IReadOnlyList<SupportTicket>> GetTicketsByCustomerIdAsync(string customerId, bool openOnly = false, CancellationToken ct = default);
     Task<SupportTicket?> GetTicketByIdAsync(string id, string customerId, CancellationToken ct = default);
+
+    // Internal lookup that bypasses the owner check. Reserved for
+    // service callbacks (fraud-workflow → /internal/tickets/{id}/...)
+    // where the calling service authoritatively knows the ticket id but
+    // does NOT have an end-user customer context. Do NOT call this from
+    // any endpoint that accepts customer-supplied input.
+    Task<SupportTicket?> GetTicketByIdInternalAsync(string id, CancellationToken ct = default);
+
     Task<SupportTicket> CreateTicketAsync(SupportTicket ticket, CancellationToken ct = default);
     Task<SupportTicket> UpdateTicketAsync(SupportTicket ticket, CancellationToken ct = default);
 

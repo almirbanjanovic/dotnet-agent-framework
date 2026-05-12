@@ -239,10 +239,11 @@ There are three ways to land an alert in the queue. Option A is the **real custo
 
 1. Open Blazor at `http://localhost:5008` and sign in as any customer (UPN + password from `local-dev-credentials.txt`).
 2. From the chat assistant, say: **"I want a refund for my order 1003 — the tent rainfly arrived torn."**
-3. The agent calls the [`create_support_ticket`](../../../src/crm-mcp/Tools/SupportTicketTools.cs) MCP tool with `category="return"` and `order_id="1003"`. The CRM API persists the ticket and — because category is `return` and the order exists — fires-and-forgets a `POST /api/v1/refunds` to `fraud-workflow` from a background task ([`SupportTicketEndpoints.TriggerRefundAlertAsync`](../../../src/crm-api/Endpoints/SupportTicketEndpoints.cs)). The customer never sees the alert; they get a confirmation message.
+3. The agent calls the [`create_support_ticket`](../../../src/crm-mcp/Tools/SupportTicketTools.cs) MCP tool with `category="return"` and `order_id="1003"`. The CRM API persists the ticket and — because category is `return` and the order exists — fires-and-forgets a `POST /api/v1/refunds` to `fraud-workflow` from a background task ([`SupportTicketEndpoints.TriggerRefundAlertAsync`](../../../src/crm-api/Endpoints/SupportTicketEndpoints.cs)). The customer immediately sees a confirmation message in chat.
 4. Sign in as a second user (different browser profile) and open **Operations**. Within ~5–10 seconds (3 agents × MCP + model calls + the 5s poll) a card appears.
+5. As the operator, click **Approve** (or **Reject**). `fraud-workflow` calls back to CRM API at `POST /api/v1/internal/tickets/{ticketId}/refund-decision` (see [`Services/CrmApiClient.cs`](../../../src/fraud-workflow/Services/CrmApiClient.cs)). The customer's `/tickets` page now shows the ticket as **resolved** (or still **open** with a "needs more info" comment) — the loop is closed end-to-end.
 
-This path is what makes the workflow *load-bearing* — it isn't a button on a Ops page, it's the side-effect of every above-threshold return ticket.
+This path is what makes the workflow *load-bearing* — it isn't a button on a Ops page, it's the side-effect of every above-threshold return ticket, and the operator's click is what the customer ultimately sees on their account page.
 
 ### Option B — Use the synthetic alert button on Operations
 
@@ -264,6 +265,11 @@ Content-Type: application/json
 You should get a `202 Accepted` with an `alertId` and a `Location: /api/v1/operations/{alertId}` header. The workflow is now running in the background.
 
 > **Where the threshold matters.** `Refund:Threshold` (default $200) is enforced inside `fraud-workflow` itself. The CRM API always posts the alert with the order's total amount; `fraud-workflow` then either auto-approves below-threshold returns (returning `200 OK { status = "below_threshold" }`) or starts the human-gate workflow above the threshold (returning `202 Accepted { alertId }`). A customer with a $50 return won't pull anyone away from their lunch.
+>
+> **Closing the loop.** Below-threshold responses cause CRM API to immediately resolve the customer's ticket with an audit comment ("auto-approved (under threshold)"). Above-threshold responses do nothing yet — the customer's ticket stays **open** until `fraud-workflow` calls back with the operator's decision. Auto-approve, operator-approve, and operator-reject all flow through the same `POST /api/v1/internal/tickets/{id}/refund-decision` callback ([`SupportTicketEndpoints.cs`](../../../src/crm-api/Endpoints/SupportTicketEndpoints.cs)).
+> - `approve` / `below_threshold` → ticket → **resolved** + audit comment
+> - `reject` / `timeout` → ticket stays **open** + audit comment ("Need more info: …") so the customer can follow up
+> The customer reads these on their `/tickets` page; the agent surfaces the latest comment when asked "what happened with my refund?".
 
 ## Step 5 — Approve from the Operations dashboard
 
@@ -299,11 +305,13 @@ This is by design. The lab makes the gap visible so you understand exactly why t
 ## Verification checklist
 
 - [ ] `fraud-workflow` is green in the Aspire dashboard
-- [ ] `dotnet test src-tests/Contoso.FraudWorkflow.Tests` passes (20 tests)
+- [ ] `dotnet test src-tests/Contoso.FraudWorkflow.Tests` passes (20+ tests)
 - [ ] Submitting a refund returns `202 Accepted` with an `alertId`
 - [ ] A review card appears on `/operations` within ~10 seconds
 - [ ] Each card shows three agent findings with risk scores
 - [ ] Clicking **Approve refund** clears the card and `GET /api/v1/operations/{alertId}` returns a `FinalAction` with `Source = "operator"`
+- [ ] After clicking **Approve**, the customer's `/tickets` page shows the originating ticket as **resolved** with an audit comment containing `operator/approve`
+- [ ] Clicking **Reject** instead leaves the ticket **open** with the rejection reason in the audit comment (so the customer can follow up)
 - [ ] After `Ctrl+C` + restart, the pending card is gone (the demo of Step 6)
 - [ ] `ComponentIndependenceTests` is still green (`fraud-workflow` adds zero project-to-project references)
 

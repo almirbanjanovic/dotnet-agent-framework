@@ -173,8 +173,8 @@ All CRM tools in a single MCP server — wraps CRM API endpoints for customer pr
 | `get_product_detail(product_id)` | Full product info including description, price, rating |
 | `get_promotions()` | All active promotions |
 | `get_eligible_promotions(customer_id)` | Promotions matching customer's loyalty tier |
-| `get_support_tickets(customer_id, open_only?)` | Customer's support tickets (returns ALL categories) |
-| `create_support_ticket(customer_id, order_id, category, priority, subject, description)` | Create a new support ticket. Returns are routed automatically: when `category="return"` and `order_id` is set, the CRM API also fires a refund-risk alert into the fraud-workflow human-gate pipeline. |
+| `get_support_tickets(customer_id, open_only?)` | Customer's support tickets (returns ALL categories). Each ticket carries a `comments` field — an append-only audit thread written by the refund workflow on every terminal decision. |
+| `create_support_ticket(customer_id, order_id, category, priority, subject, description)` | Create a new support ticket. Returns are routed automatically: when `category="return"` and `order_id` is set, the CRM API also fires a refund-risk alert into the fraud-workflow human-gate pipeline. Sub-threshold returns auto-resolve immediately; above-threshold returns wait for an operator decision and the ticket status is updated when the decision lands. |
 | `cancel_support_ticket(ticket_id, customer_id)` | Cancel an open ticket on the customer's behalf. No-ops on already-cancelled/resolved tickets. |
 
 ### Knowledge Base MCP Server

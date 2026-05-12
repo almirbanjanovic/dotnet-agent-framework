@@ -7,7 +7,13 @@ internal sealed record RefundAlert(
     string CustomerId,
     string OrderId,
     decimal Amount,
-    string Reason)
+    string Reason,
+    // Optional ticket the alert was filed against. When set, the workflow
+    // will call back to CRM API on every terminal decision so the
+    // customer-facing ticket reflects the outcome (auto-approve, operator
+    // approve/reject, timeout). When null — the synthetic-alert button on
+    // the Operations page — the workflow runs but no callback is fired.
+    string? TicketId = null)
 {
     // The workflow-instance id. Generated server-side so the workflow has
     // a stable handle for state, logging, and the operator review queue.
