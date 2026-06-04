@@ -40,6 +40,13 @@ The security model has **three authentication flows** that solve different probl
 
 All three flows are required. User auth controls *whose data* is returned. Service auth and agent auth control *which Azure resources* a pod can reach — the difference is that agent identities are first-class objects in Entra's Agent ID platform, enabling governance, Conditional Access, and human-in-the-loop consent that managed identities can't provide.
 
+### Build 2026 migration verification requirement
+
+During SDK and transport upgrades, release readiness requires an explicit
+end-to-end identity propagation test proving `X-Customer-Entra-Id` survives
+BFF → Orchestrator → specialist agent → MCP server → CRM API for both
+buffered and streaming chat paths.
+
 ### How the two flows work together
 
 A single customer request touches both flows:

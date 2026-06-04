@@ -1,5 +1,6 @@
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using System.IO;
 
 namespace Contoso.ProductAgent.Endpoints;
 
@@ -41,13 +42,15 @@ internal static class ChatEndpoint
         // record so any CRM tool call is meaningless and risky (prompt-
         // injection probing, hallucinated order details). Knowledge MCP
         // (catalog, return policy, FAQ) remains available.
-        var knowledgeClient = await knowledgeProvider.GetClientAsync(cancellationToken);
         var tools = new List<AITool>();
-        tools.AddRange(await knowledgeClient.ListToolsAsync(cancellationToken: cancellationToken));
+        tools.AddRange(await knowledgeProvider.ExecuteWithClientRetryAsync(
+            static (client, ct) => client.ListToolsAsync(cancellationToken: ct),
+            cancellationToken));
         if (!isGuest)
         {
-            var crmClient = await crmProvider.GetClientAsync(cancellationToken);
-            tools.AddRange(await crmClient.ListToolsAsync(cancellationToken: cancellationToken));
+            tools.AddRange(await crmProvider.ExecuteWithClientRetryAsync(
+                static (client, ct) => client.ListToolsAsync(cancellationToken: ct),
+                cancellationToken));
         }
 
         var systemPrompt = isGuest
@@ -90,13 +93,15 @@ internal static class ChatEndpoint
 
             // Anonymous guests get the Knowledge MCP tools only — see
             // HandleAsync above for the rationale.
-            var knowledgeClient = await knowledgeProvider.GetClientAsync(cancellationToken);
             var tools = new List<AITool>();
-            tools.AddRange(await knowledgeClient.ListToolsAsync(cancellationToken: cancellationToken));
+            tools.AddRange(await knowledgeProvider.ExecuteWithClientRetryAsync(
+                static (client, ct) => client.ListToolsAsync(cancellationToken: ct),
+                cancellationToken));
             if (!isGuest)
             {
-                var crmClient = await crmProvider.GetClientAsync(cancellationToken);
-                tools.AddRange(await crmClient.ListToolsAsync(cancellationToken: cancellationToken));
+                tools.AddRange(await crmProvider.ExecuteWithClientRetryAsync(
+                    static (client, ct) => client.ListToolsAsync(cancellationToken: ct),
+                    cancellationToken));
             }
 
             var systemPrompt = isGuest
@@ -170,6 +175,11 @@ internal static class ChatEndpoint
         }
         catch (Exception ex)
         {
+            if (ex is IOException || ex is HttpRequestException || ex.InnerException is IOException)
+            {
+                await crmProvider.InvalidateClientAsync();
+                await knowledgeProvider.InvalidateClientAsync();
+            }
             // Log full exception for operators — client only sees a sanitized
             // SSE error event below. ex.Message may include payload fragments,
             // MCP tool args, or other internals.

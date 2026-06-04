@@ -50,9 +50,10 @@ internal sealed class OrderHistoryAgent
 
     public async Task<AgentFinding> AnalyzeAsync(RefundAlert alert, CancellationToken cancellationToken)
     {
-        var crmClient = await _crmProvider.GetClientAsync(cancellationToken);
         var tools = new List<AITool>();
-        tools.AddRange(await crmClient.ListToolsAsync(cancellationToken: cancellationToken));
+        tools.AddRange(await _crmProvider.ExecuteWithClientRetryAsync(
+          static (client, ct) => client.ListToolsAsync(cancellationToken: ct),
+          cancellationToken));
 
         var agent = _factory.CreateAgent(AgentName, Description, Instructions, tools);
 

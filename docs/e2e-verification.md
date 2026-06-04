@@ -60,6 +60,10 @@ Tester: _______________
 [ ] Orchestrator logs show both MCPs connected
 [ ] Knowledge base index is online (Product Agent startup logs confirm)
 [ ] System ready for E2E testing
+[ ] MCP transport failure recovery test passed (client reconnect path)
+[ ] Identity propagation check passed (`X-Customer-Entra-Id` preserved end-to-end)
+[ ] Fraud workflow checkpoint/resume test passed after service restart
+[ ] Idempotency check passed for duplicate side-effect requests
 ```
 
 ---

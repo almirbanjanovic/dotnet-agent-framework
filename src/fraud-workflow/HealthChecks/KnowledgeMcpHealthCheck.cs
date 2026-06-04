@@ -11,8 +11,9 @@ internal sealed class KnowledgeMcpHealthCheck(KnowledgeMcpClientProvider knowled
     {
         try
         {
-            var client = await knowledgeProvider.GetClientAsync(cancellationToken);
-            _ = await client.PingAsync(cancellationToken: cancellationToken);
+            await knowledgeProvider.ExecuteWithClientRetryAsync(
+                static (client, ct) => client.PingAsync(cancellationToken: ct),
+                cancellationToken);
             return HealthCheckResult.Healthy("Knowledge MCP server is reachable.");
         }
         catch (Exception ex)

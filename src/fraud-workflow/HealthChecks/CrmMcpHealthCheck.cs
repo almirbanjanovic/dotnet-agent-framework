@@ -11,8 +11,9 @@ internal sealed class CrmMcpHealthCheck(CrmMcpClientProvider crmProvider) : IHea
     {
         try
         {
-            var client = await crmProvider.GetClientAsync(cancellationToken);
-            _ = await client.PingAsync(cancellationToken: cancellationToken);
+            await crmProvider.ExecuteWithClientRetryAsync(
+                static (client, ct) => client.PingAsync(cancellationToken: ct),
+                cancellationToken);
             return HealthCheckResult.Healthy("CRM MCP server is reachable.");
         }
         catch (Exception ex)

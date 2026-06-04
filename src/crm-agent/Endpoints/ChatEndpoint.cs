@@ -1,5 +1,6 @@
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using System.IO;
 
 namespace Contoso.CrmAgent.Endpoints;
 
@@ -49,12 +50,13 @@ internal static class ChatEndpoint
 
         // Discover tools from both MCP backends per request. They're cheap
         // to enumerate and the agent's tool set may evolve at runtime.
-        var crmClient = await crmProvider.GetClientAsync(cancellationToken);
-        var knowledgeClient = await knowledgeProvider.GetClientAsync(cancellationToken);
-
         var tools = new List<AITool>();
-        tools.AddRange(await crmClient.ListToolsAsync(cancellationToken: cancellationToken));
-        tools.AddRange(await knowledgeClient.ListToolsAsync(cancellationToken: cancellationToken));
+        tools.AddRange(await crmProvider.ExecuteWithClientRetryAsync(
+            static (client, ct) => client.ListToolsAsync(cancellationToken: ct),
+            cancellationToken));
+        tools.AddRange(await knowledgeProvider.ExecuteWithClientRetryAsync(
+            static (client, ct) => client.ListToolsAsync(cancellationToken: ct),
+            cancellationToken));
 
         var agent = agentFactory.CreateAgent(promptProvider.Prompt, tools);
         var messages = ChatHistoryBinder.Build(request.History, request.CustomerId, request.Message);
@@ -103,12 +105,13 @@ internal static class ChatEndpoint
 
         try
         {
-            var crmClient = await crmProvider.GetClientAsync(cancellationToken);
-            var knowledgeClient = await knowledgeProvider.GetClientAsync(cancellationToken);
-
             var tools = new List<AITool>();
-            tools.AddRange(await crmClient.ListToolsAsync(cancellationToken: cancellationToken));
-            tools.AddRange(await knowledgeClient.ListToolsAsync(cancellationToken: cancellationToken));
+            tools.AddRange(await crmProvider.ExecuteWithClientRetryAsync(
+                static (client, ct) => client.ListToolsAsync(cancellationToken: ct),
+                cancellationToken));
+            tools.AddRange(await knowledgeProvider.ExecuteWithClientRetryAsync(
+                static (client, ct) => client.ListToolsAsync(cancellationToken: ct),
+                cancellationToken));
 
             var agent = agentFactory.CreateAgent(promptProvider.Prompt, tools);
             var messages = ChatHistoryBinder.Build(request.History, request.CustomerId, request.Message);
@@ -192,6 +195,11 @@ internal static class ChatEndpoint
         }
         catch (Exception ex)
         {
+            if (ex is IOException || ex is HttpRequestException || ex.InnerException is IOException)
+            {
+                await crmProvider.InvalidateClientAsync();
+                await knowledgeProvider.InvalidateClientAsync();
+            }
             // Log full exception for operators — client only sees a sanitized
             // SSE error event below. ex.Message may include payload fragments,
             // MCP tool args, or other internals.

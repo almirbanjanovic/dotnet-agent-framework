@@ -1,0 +1,54 @@
+name: Migration Safety Gates
+
+on:
+  pull_request:
+    paths:
+      - 'Directory.Packages.props'
+      - 'src/**'
+      - 'src-tests/**'
+      - 'docs/**'
+      - '.github/workflows/migration-safety-gates.yml'
+      - 'infra/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-critical-tests:
+    name: Build and critical migration tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore dotnet-agent-framework.sln
+
+      - name: Build
+        run: dotnet build dotnet-agent-framework.sln --no-restore -c Release
+
+      - name: Component independence and template hygiene
+        run: >
+          dotnet test src-tests/Contoso.AppHost.Tests/Contoso.AppHost.Tests.csproj
+          --no-build
+          --configuration Release
+          --verbosity normal
+
+      - name: MCP service tests
+        run: |
+          dotnet test src-tests/Contoso.CrmMcp.Tests/Contoso.CrmMcp.Tests.csproj --no-build --configuration Release --verbosity normal
+          dotnet test src-tests/Contoso.KnowledgeMcp.Tests/Contoso.KnowledgeMcp.Tests.csproj --no-build --configuration Release --verbosity normal
+
+      - name: Agent and workflow safety tests
+        run: |
+          dotnet test src-tests/Contoso.AgentCommon.Tests/Contoso.AgentCommon.Tests.csproj --no-build --configuration Release --verbosity normal
+          dotnet test src-tests/Contoso.CrmAgent.Tests/Contoso.CrmAgent.Tests.csproj --no-build --configuration Release --verbosity normal
+          dotnet test src-tests/Contoso.ProductAgent.Tests/Contoso.ProductAgent.Tests.csproj --no-build --configuration Release --verbosity normal
+          dotnet test src-tests/Contoso.OrchestratorAgent.Tests/Contoso.OrchestratorAgent.Tests.csproj --no-build --configuration Release --verbosity normal
+          dotnet test src-tests/Contoso.FraudWorkflow.Tests/Contoso.FraudWorkflow.Tests.csproj --no-build --configuration Release --verbosity normal

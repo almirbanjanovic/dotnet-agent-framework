@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
+using System.IO;
 
 // Lazy, thread-safe MCP client cache. The MCP HTTP transport opens an
 // SSE-style connection on first use, so we want one client per backend
@@ -38,6 +39,62 @@ internal abstract class McpClientProvider : IAsyncDisposable
     }
 
     public string Name { get; }
+
+    public async Task<T> ExecuteWithClientRetryAsync<T>(
+        Func<McpClient, CancellationToken, Task<T>> operation,
+        CancellationToken cancellationToken)
+    {
+        var attempt = 0;
+        while (true)
+        {
+            attempt++;
+            var client = await GetClientAsync(cancellationToken);
+            try
+            {
+                return await operation(client, cancellationToken);
+            }
+            catch (Exception ex) when (attempt == 1 && IsRecoverableTransportException(ex) && !cancellationToken.IsCancellationRequested)
+            {
+                await InvalidateClientAsync(client);
+            }
+        }
+    }
+
+    public async Task ExecuteWithClientRetryAsync(
+        Func<McpClient, CancellationToken, Task> operation,
+        CancellationToken cancellationToken)
+    {
+        var wrappedOperation = new Func<McpClient, CancellationToken, Task<object?>>(async (client, ct) =>
+        {
+            await operation(client, ct);
+            return null;
+        });
+
+        _ = await ExecuteWithClientRetryAsync(
+            wrappedOperation,
+            cancellationToken);
+    }
+
+    public async Task<T> ExecuteWithClientRetryAsync<T>(
+        Func<McpClient, CancellationToken, ValueTask<T>> operation,
+        CancellationToken cancellationToken)
+    {
+        var wrappedOperation = new Func<McpClient, CancellationToken, Task<T>>(
+            (client, ct) => operation(client, ct).AsTask());
+
+        return await ExecuteWithClientRetryAsync(
+            wrappedOperation,
+            cancellationToken);
+    }
+
+    public async Task ExecuteWithClientRetryAsync(
+        Func<McpClient, CancellationToken, ValueTask> operation,
+        CancellationToken cancellationToken)
+    {
+        await ExecuteWithClientRetryAsync(
+            (client, ct) => operation(client, ct).AsTask(),
+            cancellationToken);
+    }
 
     public async Task<McpClient> GetClientAsync(CancellationToken cancellationToken)
     {
@@ -97,6 +154,42 @@ internal abstract class McpClientProvider : IAsyncDisposable
         {
             await asyncDisposable.DisposeAsync();
         }
+    }
+
+    public async ValueTask InvalidateClientAsync(McpClient? expectedClient = null)
+    {
+        await _semaphore.WaitAsync();
+        try
+        {
+            if (_client is null)
+            {
+                return;
+            }
+
+            if (expectedClient is not null && !ReferenceEquals(_client, expectedClient))
+            {
+                return;
+            }
+            // Detach the cached instance so the next caller creates a fresh
+            // client. Do not dispose here: providers are singletons, and
+            // concurrent requests may still hold references to the current
+            // client while this invalidation runs.
+            _client = null;
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
+    }
+
+    protected virtual bool IsRecoverableTransportException(Exception ex)
+    {
+        if (ex is OperationCanceledException)
+        {
+            return false;
+        }
+
+        return ex is IOException || ex is HttpRequestException || ex.InnerException is IOException;
     }
 
     public async ValueTask DisposeAsync()

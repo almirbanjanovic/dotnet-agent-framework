@@ -1,5 +1,49 @@
 # Contoso Outdoors — Component-by-Component Implementation Plan
 
+## Build 2026 Migration Execution Plan (Repo-Wide)
+
+This section is the authoritative execution order for the Build 2026 migration
+across .NET code, CI/CD, docs, Terraform, and Helm/K8s assets.
+
+### Phase M1 — Split Upgrades (No Bundling)
+
+- Upgrade MCP packages independently from Agent Framework packages.
+- Keep migration work bisectable:
+  - PR M1A: MCP SDK + MCP server/client compatibility.
+  - PR M1B: Microsoft.Agents.AI package upgrades.
+
+### Phase M2 — MCP Resiliency and Identity Safety
+
+- Harden MCP client cache invalidation + retry on transport failures.
+- Verify customer identity propagation under concurrency and streaming paths.
+- Require MCP transport conformance checks before merge.
+
+### Phase M3 — Workflow Durability and Idempotency
+
+- Prove fraud workflow checkpoint resume and pod-restart recovery.
+- Prove idempotency for side-effect operations under retries.
+- Add timeout and recovery assertions for fan-out operations.
+
+### Phase M4 — Non-.NET Assets Alignment
+
+- Update docs, CI workflows, Terraform plans, and Helm values/templates to
+  match runtime behavior and release gates.
+- Ensure operational dashboards and runbooks reflect new telemetry semantics.
+
+### Phase M5 — Canary and Rollback Readiness
+
+- Roll out by ring: infrastructure/config → MCP servers → agents → fraud workflow → BFF/UI.
+- Run rollback rehearsal in staging before production rollout.
+
+### Mandatory Merge/Release Gates
+
+- Architecture fitness workflow is required and green.
+- MCP conformance + transport-failure recovery tests are green.
+- Identity propagation isolation tests are green.
+- Fraud checkpoint resume + idempotency tests are green.
+- Terraform validate/plan and Helm template validation are green.
+- Staging canary and rollback drill pass.
+
 ## Overview
 
 This plan covers the implementation of all 8 services in dependency order, designed so Almir and team can build one component at a time and verify each before moving forward. Every component follows the same patterns established in `infra/templates/`.
