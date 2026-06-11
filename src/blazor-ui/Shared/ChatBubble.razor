@@ -174,14 +174,23 @@ else
                     <strong>Sign in</strong> for help with your orders, returns, or account.
                 </MudAlert>
             }
-            <MudTextField @bind-Value="_currentMessage"
-                          Variant="Variant.Outlined"
-                          Lines="2"
-                          Placeholder="Ask about your orders, returns, or gear..."
-                          Margin="Margin.Dense"
-                          Immediate="true"
-                          UserAttributes="@_composerUserAttributes"
-                          OnKeyDown="HandleKeyDown" />
+            @* Native <textarea> instead of MudTextField: the MudBlazor outlined
+               variant + Lines>1 + Placeholder-without-Label combo renders a
+               label-overlay that doesn't hide on input, causing the placeholder
+               to visually overlap typed text. The composer's requirements are
+               modest (bind, per-keystroke update for Send-button enable state,
+               ESC to minimize, focusable), and the native textarea's HTML5
+               placeholder hides automatically when there's content. The Enter
+               key is still intercepted by attachChatComposerEnter in
+               index.html (which targets TEXTAREA tagName). *@
+            <textarea class="chat-panel-textarea"
+                      @bind="_currentMessage"
+                      @bind:event="oninput"
+                      @onkeydown="HandleKeyDown"
+                      placeholder="Ask about your orders, returns, or gear..."
+                      rows="2"
+                      aria-label="Message"
+                      aria-keyshortcuts="Enter"></textarea>
             <div class="chat-panel-send-row">
                 <span class="chat-panel-hint">
                     <kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for newline
@@ -269,13 +278,6 @@ else
     // (Immediate="true" causes per-keystroke renders).
     private DotNetObjectReference<ChatBubble>? _selfRef;
     private bool _composerJsHooked;
-
-    // Forwarded as `aria-keyshortcuts` so screen readers announce the
-    // non-default Enter-to-send binding on the composer textarea.
-    private static readonly Dictionary<string, object?> _composerUserAttributes = new()
-    {
-        ["aria-keyshortcuts"] = "Enter"
-    };
 
     // ── Streaming-state for the in-flight assistant turn ──
     private string? _streamingText;          // null when not streaming; otherwise the token-by-token assembled text
