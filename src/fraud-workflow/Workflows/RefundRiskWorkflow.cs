@@ -6,8 +6,12 @@ using Microsoft.Extensions.Logging;
 namespace Contoso.FraudWorkflow.Workflows;
 
 // Wires the executors into the fan-out / fan-in graph. The shape is
-// declared once at startup; every refund alert is a fresh `Run` against
-// the same `Workflow` instance.
+// declared the same way for every refund alert; the runner calls Build()
+// once per RunAsync invocation because InProcessExecution.RunStreamingAsync
+// takes exclusive ownership of the returned Workflow (a single shared
+// instance throws InvalidOperationException on the second concurrent
+// alert). Build() is cheap — it just instantiates executors and wires
+// edges.
 //
 //   RouterExecutor
 //        │ (fan-out: broadcast RefundAlert)

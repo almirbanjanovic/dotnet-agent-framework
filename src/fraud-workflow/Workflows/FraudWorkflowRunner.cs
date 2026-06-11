@@ -7,11 +7,13 @@ using Microsoft.Extensions.Logging;
 
 namespace Contoso.FraudWorkflow.Workflows;
 
-// Owns the long-lived Workflow instance and starts a background Run for
-// every inbound RefundAlert. The HTTP /refunds endpoint returns
-// immediately with the alertId; the run continues in the background and
-// pauses at the human gate (potentially for hours) until an operator
-// posts a decision via /operations/decisions.
+// Singleton background runner for refund-risk workflows. The HTTP
+// /refunds endpoint returns immediately with the alertId; the run
+// continues on a background Task and pauses at the human gate
+// (potentially for hours) until an operator posts a decision via
+// /operations/decisions. A fresh Workflow instance is built per call
+// because Microsoft.Agents.AI.Workflows takes exclusive ownership of
+// each Workflow handed to RunStreamingAsync.
 //
 // Local Track only: completed-run outcomes are kept in a bounded LRU so
 // the operator UI can still show "what happened" after a decision lands
@@ -24,7 +26,21 @@ internal sealed class FraudWorkflowRunner
     // even if operators never look at the outcomes page.
     private const int MaxRetainedOutcomes = 200;
 
-    private readonly Workflow _workflow;
+    // A Microsoft.Agents.AI.Workflows.Workflow takes exclusive ownership
+    // of its definition when handed to InProcessExecution.RunStreamingAsync
+    // — so a single shared instance throws InvalidOperationException
+    // ("Cannot use a Workflow that is already owned by another runner or
+    // parent workflow") the moment a second alert arrives in parallel.
+    // The runner therefore keeps the dependencies and builds a fresh
+    // Workflow per RunAsync invocation. Build() only wires edges and
+    // wraps the (singleton) agents and gate, so the per-call cost is
+    // O(graph size) and well below one HTTP round-trip.
+    private readonly OrderHistoryAgent _historyAgent;
+    private readonly ReturnConditionAgent _conditionAgent;
+    private readonly LoyaltyContextAgent _loyaltyAgent;
+    private readonly RiskAggregator _aggregator;
+    private readonly IApprovalGate _approvalGate;
+    private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<FraudWorkflowRunner> _logger;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ConcurrentDictionary<string, FinalAction> _outcomes = new();
@@ -39,8 +55,12 @@ internal sealed class FraudWorkflowRunner
         IServiceScopeFactory scopeFactory,
         ILoggerFactory loggerFactory)
     {
-        _workflow = RefundRiskWorkflow.Build(
-            historyAgent, conditionAgent, loyaltyAgent, aggregator, approvalGate, loggerFactory);
+        _historyAgent = historyAgent;
+        _conditionAgent = conditionAgent;
+        _loyaltyAgent = loyaltyAgent;
+        _aggregator = aggregator;
+        _approvalGate = approvalGate;
+        _loggerFactory = loggerFactory;
         _scopeFactory = scopeFactory;
         _logger = loggerFactory.CreateLogger<FraudWorkflowRunner>();
     }
@@ -71,6 +91,12 @@ internal sealed class FraudWorkflowRunner
     {
         try
         {
+            // Build a fresh Workflow per run. See the field-level comment
+            // on _historyAgent for why a shared instance is unsafe.
+            var workflow = RefundRiskWorkflow.Build(
+                _historyAgent, _conditionAgent, _loyaltyAgent,
+                _aggregator, _approvalGate, _loggerFactory);
+
             // RunStreamingAsync + WatchStreamAsync drives the workflow
             // through every superstep and yields events as they arrive.
             // The plain `RunAsync` snapshots events from a single drive
@@ -79,7 +105,7 @@ internal sealed class FraudWorkflowRunner
             // that means we'd see the first superstep's events only and
             // never observe the FinalAction emitted by the gate.
             await using var run = await InProcessExecution
-                .RunStreamingAsync(_workflow, alert, cancellationToken: ct)
+                .RunStreamingAsync(workflow, alert, cancellationToken: ct)
                 .ConfigureAwait(false);
 
             FinalAction? final = null;
