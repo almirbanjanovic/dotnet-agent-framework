@@ -20,9 +20,12 @@ public sealed class ProductAgentSmokeTests
         try
         {
             var environment = new TestHostEnvironment(contentRoot);
-            var provider = new SystemPromptProvider(environment);
+            // Fixed clock so the date-stamp assertion is deterministic.
+            var time = new FixedTimeProvider(new DateTimeOffset(2026, 6, 11, 14, 0, 0, TimeSpan.Zero));
+            var provider = new SystemPromptProvider(environment, time);
 
-            provider.Prompt.Should().Be("You are the Product Agent.");
+            provider.Prompt.Should().StartWith("Today's date is 2026-06-11 (UTC).");
+            provider.Prompt.Should().EndWith("You are the Product Agent.");
         }
         finally
         {
@@ -35,7 +38,7 @@ public sealed class ProductAgentSmokeTests
     {
         var environment = new TestHostEnvironment(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N")));
 
-        var act = () => new SystemPromptProvider(environment);
+        var act = () => new SystemPromptProvider(environment, TimeProvider.System);
 
         // Either the prompts directory or the prompt file is missing.
         act.Should().Throw<IOException>(because: "the prompt file does not exist");

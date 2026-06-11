@@ -26,6 +26,10 @@ builder.Configuration.AddJsonFile(
 
 builder.AddServiceDefaults();
 
+// System clock seam. SystemPromptProvider stamps today's UTC date into the
+// agent prompt so the model doesn't hallucinate from its training cutoff.
+builder.Services.AddSingleton(TimeProvider.System);
+
 builder.Services.AddSingleton<SystemPromptProvider>();
 builder.Services.AddSingleton<IntentClassifier>();
 builder.Services.AddSingleton<AgentRouter>();
