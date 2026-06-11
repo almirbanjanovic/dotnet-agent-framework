@@ -34,6 +34,20 @@ public class LocalDevTemplateTests
         @"https?://[^""]*\.(cognitiveservices\.azure\.com|services\.ai\.azure\.com)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    private static readonly Regex PlaceholderRegex = new(
+        @"\{\{([A-Z_][A-Z0-9_]*)\}\}",
+        RegexOptions.Compiled);
+
+    private static readonly HashSet<string> AllowedPlaceholders =
+    [
+        "FOUNDRY_PROJECT_ENDPOINT",
+        "CHAT_DEPLOYMENT_NAME",
+        "EMBEDDING_DEPLOYMENT_NAME",
+        "TENANT_ID",
+        "BFF_CLIENT_ID",
+        "CUSTOMER_MAP_JSON",
+    ];
+
     [Fact]
     public void EveryComponent_HasLocalTemplate()
     {
@@ -181,6 +195,33 @@ public class LocalDevTemplateTests
             "src/bff-api/appsettings.Local.json.template must use the {{CUSTOMER_MAP_JSON}} placeholder.");
     }
 
+    [Fact]
+    public void Templates_Use_Only_Known_SetupLocal_Placeholders()
+    {
+        var violations = new List<string>();
+
+        foreach (var path in EnumerateTemplates())
+        {
+            var relative = Path.GetRelativePath(RepoRoot, path);
+            var content = File.ReadAllText(path);
+            var unknown = PlaceholderRegex.Matches(content)
+                .Select(m => m.Groups[1].Value)
+                .Where(name => !AllowedPlaceholders.Contains(name))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+
+            if (unknown.Length > 0)
+            {
+                violations.Add($"{relative}: unknown placeholders [{string.Join(", ", unknown)}]");
+            }
+        }
+
+        violations.Should().BeEmpty(
+            "all placeholders in *.Local.json.template must be from the setup-local substitution set. " +
+            "Unknown placeholders are left unreplaced and break local startup. Violations:" + Environment.NewLine +
+            string.Join(Environment.NewLine, violations));
+    }
+
     private static IEnumerable<string> EnumerateTemplates()
     {
         var srcDir = Path.Combine(RepoRoot, "src");
@@ -225,14 +266,42 @@ public class LocalDevTemplateTests
     /// </summary>
     private static bool? ExtractAzureAdEnabled(string content)
     {
-        // Only consider Enabled inside an AzureAd block — case-sensitive on the
+        // Only consider Enabled inside the AzureAd block — case-sensitive on the
         // section name to avoid false positives from unrelated sections.
-        if (!content.Contains("\"AzureAd\""))
+        var azureAdStart = content.IndexOf("\"AzureAd\"", StringComparison.Ordinal);
+        if (azureAdStart < 0)
         {
             return null;
         }
 
-        var match = Regex.Match(content, @"""Enabled""\s*:\s*(true|false)", RegexOptions.IgnoreCase);
+        var blockStart = content.IndexOf('{', azureAdStart);
+        if (blockStart < 0)
+        {
+            return null;
+        }
+
+        var depth = 0;
+        var blockEnd = -1;
+        for (var i = blockStart; i < content.Length; i++)
+        {
+            if (content[i] == '{') depth++;
+            else if (content[i] == '}') depth--;
+
+            if (depth == 0)
+            {
+                blockEnd = i;
+                break;
+            }
+        }
+
+        if (blockEnd < 0)
+        {
+            return null;
+        }
+
+        var azureAdBlock = content.Substring(blockStart, blockEnd - blockStart + 1);
+
+        var match = Regex.Match(azureAdBlock, @"""Enabled""\s*:\s*(true|false)", RegexOptions.IgnoreCase);
         if (!match.Success)
         {
             return null;

@@ -30,6 +30,7 @@ data** (no Cosmos DB Emulator, no Azurite, no databases to install).
 - **[.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)** — for running all components
 - **[Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli)** — for `az login`
 - **[Terraform >= 1.14.7](https://developer.hashicorp.com/terraform/install)** — to provision Azure AI Foundry
+- **[Python 3.9+](https://www.python.org/downloads/)** — required by `infra/setup-local.sh` for JSON/template processing (PowerShell path does not require Python)
 
 ### Accounts
 
@@ -79,6 +80,17 @@ From the repository root:
 
 **No API keys are written.** Everything authenticates via your Azure CLI token.
 
+### Optional Foundry Toolbox tools
+
+`crm-agent` and `product-agent` can opt in to a Foundry-hosted MCP Toolbox by
+setting `Foundry:ToolboxName` in their generated `appsettings.Local.json` files.
+The local templates leave this value empty, so the default local stack uses only
+the repo's MCP servers.
+
+Product Agent guest requests deliberately suppress the hosted toolbox even when
+`Foundry:ToolboxName` is configured. Guests receive Knowledge MCP tools only,
+preserving the anonymous guardrail that blocks customer-specific CRM access.
+
 **Cost:** ~$1–5/day (pay-per-token only, no infrastructure beyond the Foundry account).
 
 **Region:** Defaults to `centralus`. Override with `TF_VAR_location=<region>` (the region must support `gpt-4.1` and `text-embedding-3-small` with at least 120K TPM embedding capacity).
@@ -98,6 +110,8 @@ When you're finished with the labs, tear down the local Foundry environment:
 ```
 
 This destroys the Foundry resources, **the Entra SPA app registration, and the 8 test users**, and removes the generated `appsettings.Local.json` files.
+
+Foundry account cleanup is configured as a hard delete in Terraform provider features (`purge_soft_delete_on_destroy = true`), so treat `-Cleanup` as non-recoverable for that local account.
 
 **The working RG is intentionally preserved:**
 

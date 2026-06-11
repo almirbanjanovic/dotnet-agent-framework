@@ -355,8 +355,13 @@ Write-Ok "Tenant default domain: $tenantDomain"
 # tell "managed by TF" (skip) from "true orphan" (delete). This is a single
 # remote-state read; subsequent UPN lookups are local string matches.
 $tfStateLines = terraform -chdir="$TerraformDir" state list 2>$null
+if ($LASTEXITCODE -ne 0) {
+    Write-Fail "terraform state list failed; refusing orphan-user cleanup to avoid accidental password rotation"
+    exit 1
+}
+
 $managedUserKeys = @{}
-if ($LASTEXITCODE -eq 0 -and $tfStateLines) {
+if ($tfStateLines) {
     foreach ($line in $tfStateLines) {
         if ($line -match 'azuread_user\.test\["([^"]+)"\]') {
             $managedUserKeys[$matches[1]] = $true
@@ -383,10 +388,20 @@ $TestUserNicknames = [ordered]@{
 
 $deletedCount = 0
 $skippedCount = 0
+$existingEntraUsers = @()
 foreach ($key in $TestUserNicknames.Keys) {
     $upn = "$($TestUserNicknames[$key])@$tenantDomain"
     $oid = az ad user show --id $upn --query id -o tsv 2>$null
     if ([string]::IsNullOrWhiteSpace($oid)) { continue }
+
+    $existingEntraUsers += $upn
+
+    if ($managedUserKeys.Count -eq 0 -and $existingEntraUsers.Count -eq 1) {
+        Write-Warn "Terraform state contains no tracked test users, but matching Entra users exist."
+        Write-Warn "Continuing will delete and recreate these users, which rotates all local test passwords."
+        Write-Warn "Press Ctrl+C within 10 seconds to abort if this is unexpected."
+        Start-Sleep -Seconds 10
+    }
 
     if ($managedUserKeys.ContainsKey($key)) {
         # Already in TF state — leave it alone. terraform apply will be a no-op.
@@ -411,6 +426,25 @@ if ($deletedCount -eq 0) {
 }
 
 # ── Terraform Apply ─────────────────────────────────────────────────────────
+
+Write-Step "Resolving Foundry project role"
+$projectRoleCandidates = @("Azure AI User", "Foundry User")
+$resolvedProjectRole = $null
+foreach ($candidate in $projectRoleCandidates) {
+    $exists = az role definition list --name $candidate --query "[0].roleName" -o tsv 2>$null
+    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($exists)) {
+        $resolvedProjectRole = $candidate
+        break
+    }
+}
+
+if ([string]::IsNullOrWhiteSpace($resolvedProjectRole)) {
+    Write-Fail "Could not resolve a project role for Foundry. Expected one of: Azure AI User, Foundry User"
+    exit 1
+}
+
+$env:TF_VAR_project_ai_role_definition_name = $resolvedProjectRole
+Write-Ok "Using project role: $resolvedProjectRole"
 
 Write-Step "Applying Terraform (this may take a few minutes)"
 terraform -chdir="$TerraformDir" apply -auto-approve -input=false

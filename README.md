@@ -40,6 +40,12 @@ All six Cosmos DB containers (Customers, Orders, OrderItems, Products, Promotion
 
 Each [MCP Server](https://modelcontextprotocol.io/docs/concepts/tools) translates between the MCP protocol and its backend. The CRM MCP wraps CRM API endpoints as tools. The Knowledge MCP calls Azure AI Search directly — no wrapper API needed for a single SDK call. Agents discover tools dynamically at runtime via the [ModelContextProtocol C# SDK](https://github.com/modelcontextprotocol/csharp-sdk).
 
+CRM Agent and Product Agent also support an optional Foundry-hosted MCP Toolbox
+through `Foundry:ToolboxName`. The setting is empty by default; when configured,
+the toolbox marker is appended after discovered MCP tools. Product Agent disables
+the hosted toolbox for anonymous guest traffic so guest sessions cannot bypass
+the CRM guardrails enforced at the endpoint.
+
 | MCP Server | Tools | Backend |
 | --- | --- | --- |
 | **CRM MCP** | `get_customer_detail`, `get_customer_orders`, `get_order_detail`, `get_order_items`, `get_products`, `get_product_detail`, `get_promotions`, `get_eligible_promotions`, `get_support_tickets`, `create_support_ticket`, `cancel_support_ticket` | CRM API (HTTP) |

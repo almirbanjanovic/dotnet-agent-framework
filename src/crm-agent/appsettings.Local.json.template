@@ -1,7 +1,8 @@
 {
   "Foundry": {
     "ProjectEndpoint": "{{FOUNDRY_PROJECT_ENDPOINT}}",
-    "DeploymentName": "{{CHAT_DEPLOYMENT_NAME}}"
+    "DeploymentName": "{{CHAT_DEPLOYMENT_NAME}}",
+    "ToolboxName": ""
   },
   "AzureAd": {
     "TenantId": "{{TENANT_ID}}"

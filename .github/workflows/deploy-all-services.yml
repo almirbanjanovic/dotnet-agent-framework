@@ -136,7 +136,7 @@ jobs:
         run: dotnet build src/${{ matrix.service }}/${{ matrix.csproj }}.csproj --no-restore -c Release
 
       - name: Test
-        run: dotnet test src-tests/${{ matrix.tests }}/${{ matrix.tests }}.csproj --no-restore --verbosity normal
+        run: dotnet test src-tests/${{ matrix.tests }}/${{ matrix.tests }}.csproj --verbosity normal
 
   # ── Build & push container images for all 8 services in parallel ───────
   docker-build-push:
@@ -185,13 +185,14 @@ jobs:
       - name: Render Blazor production wwwroot/appsettings.json
         if: matrix.service == 'blazor-ui'
         run: |
-          KV_NAME=$(az keyvault list \
+          mapfile -t KV_NAMES < <(az keyvault list \
             --resource-group "${{ vars.RESOURCE_GROUP }}" \
-            --query "[0].name" -o tsv)
-          if [ -z "$KV_NAME" ]; then
-            echo "::error::No Key Vault found in resource group ${{ vars.RESOURCE_GROUP }}"
+            --query "[].name" -o tsv)
+          if [ "${#KV_NAMES[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly 1 Key Vault in resource group ${{ vars.RESOURCE_GROUP }}, found ${#KV_NAMES[@]}"
             exit 1
           fi
+          KV_NAME="${KV_NAMES[0]}"
           BFF_HOSTNAME=$(az keyvault secret show --vault-name "$KV_NAME" \
             --name "Bff--Hostname" --query value -o tsv)
           BFF_CLIENT_ID=$(az keyvault secret show --vault-name "$KV_NAME" \
@@ -224,6 +225,7 @@ jobs:
   deploy-tier-1:
     name: Deploy ${{ matrix.service }} (tier 1 — backends)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: docker-build-push
     environment: ${{ inputs.environment }}
     strategy:
@@ -251,6 +253,14 @@ jobs:
             --name aks-${{ vars.BASE_NAME }}-${{ vars.ENVIRONMENT }}-${{ vars.LOCATION }} \
             --overwrite-existing
 
+      - name: Ensure probe image in ACR
+        run: |
+          az acr import \
+            --name ${{ vars.ACR_NAME }} \
+            --source docker.io/curlimages/curl:8.8.0 \
+            --image curl:8.8.0 \
+            --force
+
       - name: Helm upgrade
         run: |
           helm upgrade --install ${{ matrix.service }} src/${{ matrix.service }}/chart/ \
@@ -265,7 +275,10 @@ jobs:
   deploy-tier-2:
     name: Deploy ${{ matrix.service }} (tier 2 — MCP wrappers)
     runs-on: ubuntu-latest
-    needs: deploy-tier-1
+    timeout-minutes: 15
+    needs:
+      - deploy-tier-1
+      - docker-build-push
     environment: ${{ inputs.environment }}
     strategy:
       fail-fast: true
@@ -301,11 +314,148 @@ jobs:
             --wait \
             --timeout 5m
 
+  # Stage 3 gate: explicit connectivity probe (crm-mcp -> crm-api)
+  stage-3-connectivity:
+    name: Stage 3 connectivity probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: deploy-tier-2
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+        env:
+          AZURE_IDENTITY_DISABLE_CP1: "true"
+
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ vars.RESOURCE_GROUP }} \
+            --name aks-${{ vars.BASE_NAME }}-${{ vars.ENVIRONMENT }}-${{ vars.LOCATION }} \
+            --overwrite-existing
+
+      - name: Probe crm-api connectivity from cluster
+        run: |
+          set -euo pipefail
+          kubectl -n "${{ env.NAMESPACE }}" delete pod stage3-probe --ignore-not-found=true
+          kubectl -n "${{ env.NAMESPACE }}" run stage3-probe --rm --restart=Never \
+            --image=${{ vars.ACR_NAME }}.azurecr.io/curl:8.8.0 --command -- \
+            sh -c "curl --max-time 10 -fsS http://crm-api/ready >/dev/null"
+
+  # Stage 4: toolbox contract gate between MCP and specialist agents
+  stage-4-toolbox:
+    name: Stage 4 toolbox gate
+    runs-on: ubuntu-latest
+    needs: stage-3-connectivity
+    environment: ${{ inputs.environment }}
+    outputs:
+      toolbox-name: ${{ steps.toolbox.outputs.toolbox_name }}
+      toolbox-version: ${{ steps.toolbox.outputs.toolbox_version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+        env:
+          AZURE_IDENTITY_DISABLE_CP1: "true"
+
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ vars.RESOURCE_GROUP }} \
+            --name aks-${{ vars.BASE_NAME }}-${{ vars.ENVIRONMENT }}-${{ vars.LOCATION }} \
+            --overwrite-existing
+
+      - name: Resolve toolbox metadata
+        id: toolbox
+        run: |
+          set -euo pipefail
+
+          mapfile -t KV_NAMES < <(az keyvault list \
+            --resource-group "${{ vars.RESOURCE_GROUP }}" \
+            --query "[].name" -o tsv)
+          if [ "${#KV_NAMES[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly 1 Key Vault in resource group ${{ vars.RESOURCE_GROUP }}, found ${#KV_NAMES[@]}"
+            exit 1
+          fi
+          KV_NAME="${KV_NAMES[0]}"
+
+          TOOLBOX_NAME=$(az keyvault secret show --vault-name "$KV_NAME" \
+            --name "Foundry--ToolboxName" --query value -o tsv)
+          if [ -z "$TOOLBOX_NAME" ] || [ "$TOOLBOX_NAME" = "null" ]; then
+            echo "::error::Key Vault secret Foundry--ToolboxName is empty or missing"
+            exit 1
+          fi
+
+          TOOLBOX_VERSION=$(az keyvault secret show --vault-name "$KV_NAME" \
+            --name "Foundry--ToolboxVersion" --query value -o tsv)
+          if [ -z "$TOOLBOX_VERSION" ] || [ "$TOOLBOX_VERSION" = "null" ]; then
+            echo "::error::Key Vault secret Foundry--ToolboxVersion is empty or missing"
+            exit 1
+          fi
+
+          K8S_TOOLBOX_B64=$(kubectl -n "${{ env.NAMESPACE }}" get secret keyvault-secrets \
+            -o go-template='{{ index .data "Foundry--ToolboxName" }}' 2>/dev/null || true)
+          if [ -z "$K8S_TOOLBOX_B64" ] || [ "$K8S_TOOLBOX_B64" = "<no value>" ]; then
+            echo "::error::Kubernetes secret keyvault-secrets is missing Foundry--ToolboxName"
+            exit 1
+          fi
+
+          K8S_TOOLBOX_NAME=$(echo "$K8S_TOOLBOX_B64" | base64 --decode 2>/dev/null || true)
+          if [ -z "$K8S_TOOLBOX_NAME" ] || [ "$K8S_TOOLBOX_NAME" != "$TOOLBOX_NAME" ]; then
+            echo "::error::Kubernetes secret keyvault-secrets Foundry--ToolboxName does not match Key Vault"
+            exit 1
+          fi
+
+          K8S_TOOLBOX_VERSION_B64=$(kubectl -n "${{ env.NAMESPACE }}" get secret keyvault-secrets \
+            -o go-template='{{ index .data "Foundry--ToolboxVersion" }}' 2>/dev/null || true)
+          if [ -z "$K8S_TOOLBOX_VERSION_B64" ] || [ "$K8S_TOOLBOX_VERSION_B64" = "<no value>" ]; then
+            echo "::error::Kubernetes secret keyvault-secrets is missing Foundry--ToolboxVersion"
+            exit 1
+          fi
+
+          K8S_TOOLBOX_VERSION=$(echo "$K8S_TOOLBOX_VERSION_B64" | base64 --decode 2>/dev/null || true)
+          if [ -z "$K8S_TOOLBOX_VERSION" ] || [ "$K8S_TOOLBOX_VERSION" != "$TOOLBOX_VERSION" ]; then
+            echo "::error::Kubernetes secret keyvault-secrets Foundry--ToolboxVersion does not match Key Vault"
+            exit 1
+          fi
+
+          echo "toolbox_name=$TOOLBOX_NAME" >> "$GITHUB_OUTPUT"
+          echo "toolbox_version=$TOOLBOX_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Write Stage 4 metadata artifact
+        run: |
+          mkdir -p verification
+          printf '{"runId":"%s","environment":"%s","toolboxName":"%s","toolboxVersion":"%s"}' \
+            "${{ github.run_id }}" "${{ inputs.environment }}" \
+            "${{ steps.toolbox.outputs.toolbox_name }}" \
+            "${{ steps.toolbox.outputs.toolbox_version }}" \
+            > verification/stage4-toolbox-metadata.json
+
+      - name: Upload Stage 4 metadata artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage4-toolbox-${{ github.run_id }}
+          path: verification/stage4-toolbox-metadata.json
+
   # Tier 3: specialist agents that depend on MCP servers
   deploy-tier-3:
     name: Deploy ${{ matrix.service }} (tier 3 — specialist agents)
     runs-on: ubuntu-latest
-    needs: deploy-tier-2
+    timeout-minutes: 15
+    needs:
+      - docker-build-push
+      - deploy-tier-2
+      - stage-4-toolbox
     environment: ${{ inputs.environment }}
     strategy:
       fail-fast: true
@@ -332,6 +482,36 @@ jobs:
             --name aks-${{ vars.BASE_NAME }}-${{ vars.ENVIRONMENT }}-${{ vars.LOCATION }} \
             --overwrite-existing
 
+      - name: Validate Stage 4 outputs
+        run: |
+          if [ -z "${{ needs.stage-4-toolbox.outputs.toolbox-name }}" ]; then
+            echo "::error::Stage 4 output toolbox-name is missing"
+            exit 1
+          fi
+          if [ -z "${{ needs.stage-4-toolbox.outputs.toolbox-version }}" ]; then
+            echo "::error::Stage 4 output toolbox-version is missing"
+            exit 1
+          fi
+
+      - name: Verify Stage 4 toolbox contract in cluster
+        run: |
+          set -euo pipefail
+          K8S_TOOLBOX_B64=$(kubectl -n "${{ env.NAMESPACE }}" get secret keyvault-secrets \
+            -o go-template='{{ index .data "Foundry--ToolboxName" }}')
+          K8S_TOOLBOX_NAME=$(echo "$K8S_TOOLBOX_B64" | base64 --decode)
+          if [ "$K8S_TOOLBOX_NAME" != "${{ needs.stage-4-toolbox.outputs.toolbox-name }}" ]; then
+            echo "::error::Stage 4 toolbox output does not match cluster secret"
+            exit 1
+          fi
+
+          K8S_TOOLBOX_VERSION_B64=$(kubectl -n "${{ env.NAMESPACE }}" get secret keyvault-secrets \
+            -o go-template='{{ index .data "Foundry--ToolboxVersion" }}')
+          K8S_TOOLBOX_VERSION=$(echo "$K8S_TOOLBOX_VERSION_B64" | base64 --decode)
+          if [ "$K8S_TOOLBOX_VERSION" != "${{ needs.stage-4-toolbox.outputs.toolbox-version }}" ]; then
+            echo "::error::Stage 4 toolbox-version output does not match cluster secret"
+            exit 1
+          fi
+
       - name: Helm upgrade
         run: |
           helm upgrade --install ${{ matrix.service }} src/${{ matrix.service }}/chart/ \
@@ -346,7 +526,10 @@ jobs:
   deploy-tier-4:
     name: Deploy ${{ matrix.service }} (tier 4 — orchestrator)
     runs-on: ubuntu-latest
-    needs: deploy-tier-3
+    timeout-minutes: 15
+    needs:
+      - docker-build-push
+      - deploy-tier-3
     environment: ${{ inputs.environment }}
     strategy:
       fail-fast: true
@@ -386,7 +569,10 @@ jobs:
   deploy-tier-5:
     name: Deploy ${{ matrix.service }} (tier 5 — edge)
     runs-on: ubuntu-latest
-    needs: deploy-tier-4
+    timeout-minutes: 15
+    needs:
+      - docker-build-push
+      - deploy-tier-4
     environment: ${{ inputs.environment }}
     strategy:
       fail-fast: true
@@ -421,13 +607,14 @@ jobs:
         id: kv
         if: matrix.service == 'bff-api'
         run: |
-          KV_NAME=$(az keyvault list \
+          mapfile -t KV_NAMES < <(az keyvault list \
             --resource-group "${{ vars.RESOURCE_GROUP }}" \
-            --query "[0].name" -o tsv)
-          if [ -z "$KV_NAME" ]; then
-            echo "::error::No Key Vault found in resource group ${{ vars.RESOURCE_GROUP }}"
+            --query "[].name" -o tsv)
+          if [ "${#KV_NAMES[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly 1 Key Vault in resource group ${{ vars.RESOURCE_GROUP }}, found ${#KV_NAMES[@]}"
             exit 1
           fi
+          KV_NAME="${KV_NAMES[0]}"
           BFF_HOSTNAME=$(az keyvault secret show --vault-name "$KV_NAME" \
             --name "Bff--Hostname" --query value -o tsv)
           if [ -z "$BFF_HOSTNAME" ]; then
@@ -450,3 +637,85 @@ jobs:
             $EXTRA_SET \
             --wait \
             --timeout 5m
+
+  # Stage 7: blocking post-deploy verification gate
+  stage-7-verify:
+    name: Stage 7 post-deploy verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs:
+      - deploy-tier-5
+      - stage-4-toolbox
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+        env:
+          AZURE_IDENTITY_DISABLE_CP1: "true"
+
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ vars.RESOURCE_GROUP }} \
+            --name aks-${{ vars.BASE_NAME }}-${{ vars.ENVIRONMENT }}-${{ vars.LOCATION }} \
+            --overwrite-existing
+
+      - name: Run verification suite and emit report
+        run: |
+          set -u
+          mkdir -p verification
+          REPORT="verification/stage7-verification-report.json"
+          CHECKS=""
+          FAILURES=0
+
+          run_check() {
+            local id="$1"
+            local cmd="$2"
+            local status="pass"
+            local message="ok"
+            if ! bash -c "$cmd" >/tmp/stage7-${id}.log 2>&1; then
+              status="fail"
+              message=$(tail -n 5 /tmp/stage7-${id}.log | tr '"' '\'' | tr '\n' ' ')
+              FAILURES=$((FAILURES + 1))
+            fi
+            if [ -n "$CHECKS" ]; then
+              CHECKS+=" ,"
+            fi
+            CHECKS+="{\"id\":\"$id\",\"status\":\"$status\",\"message\":\"$message\"}"
+          }
+
+          SERVICES="crm-api knowledge-mcp crm-mcp crm-agent product-agent orchestrator-agent bff-api blazor-ui"
+          for svc in $SERVICES; do
+            run_check "rollout-$svc" "kubectl -n '${{ env.NAMESPACE }}' rollout status deployment/$svc --timeout=300s"
+          done
+
+          for svc in $SERVICES; do
+            run_check "endpoints-$svc" "IPS=\$(kubectl -n '${{ env.NAMESPACE }}' get endpoints $svc -o jsonpath='{.subsets[*].addresses[*].ip}'); test -n \"\$IPS\""
+          done
+
+          run_check "bff-orchestrator-ready" "kubectl -n '${{ env.NAMESPACE }}' delete pod verify-curl --ignore-not-found=true && kubectl -n '${{ env.NAMESPACE }}' run verify-curl --rm --restart=Never --image=${{ vars.ACR_NAME }}.azurecr.io/curl:8.8.0 --command -- sh -c 'curl --max-time 10 -fsS http://bff-api/ready >/dev/null && curl --max-time 10 -fsS http://orchestrator-agent/ready >/dev/null'"
+          run_check "bff-chat-smoke" "kubectl -n '${{ env.NAMESPACE }}' delete pod smoke-chat --ignore-not-found=true && kubectl -n '${{ env.NAMESPACE }}' run smoke-chat --rm --restart=Never --image=${{ vars.ACR_NAME }}.azurecr.io/curl:8.8.0 --command -- sh -c 'SID=\$(date +%s)\$$; curl --max-time 20 -fsS -X POST http://bff-api/api/v1/chat -H \"Content-Type: application/json\" -H \"X-Guest-Session-Id: stage7smoke-\$SID\" -d \"{\\\"message\\\":\\\"hello\\\",\\\"conversationId\\\":null}\" | grep -qE \"\\\"conversationId\\\"[[:space:]]*:[[:space:]]*\\\"[^\\\"]+\"\"'"
+          run_check "toolbox-name-contract" "V=\$(kubectl -n '${{ env.NAMESPACE }}' get secret keyvault-secrets -o go-template='{{ index .data \"Foundry--ToolboxName\" }}' | base64 --decode); test -n \"\$V\" && [ \"\$V\" = \"${{ needs.stage-4-toolbox.outputs.toolbox-name }}\" ]"
+          run_check "toolbox-version-contract" "V=\$(kubectl -n '${{ env.NAMESPACE }}' get secret keyvault-secrets -o go-template='{{ index .data \"Foundry--ToolboxVersion\" }}' | base64 --decode); test -n \"\$V\" && [ \"\$V\" != \"default\" ] && [ \"\$V\" = \"${{ needs.stage-4-toolbox.outputs.toolbox-version }}\" ]"
+
+          printf '{"runId":"%s","environment":"%s","failures":%s,"checks":[%s]}' \
+            "${{ github.run_id }}" "${{ inputs.environment }}" "$FAILURES" "$CHECKS" > "$REPORT"
+
+          if [ "$FAILURES" -gt 0 ]; then
+            echo "::error::$FAILURES verification checks failed"
+            cat "$REPORT"
+            exit 1
+          fi
+
+      - name: Upload verification report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage7-verification-${{ github.run_id }}
+          path: verification/stage7-verification-report.json

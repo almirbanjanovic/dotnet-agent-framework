@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.14"
+  required_version = ">= 1.14.7"
 
   # Remote state in Azure Blob Storage, co-located with the rest of the
   # stack inside the working RG `rg-dotnetagent-localdev`. The state

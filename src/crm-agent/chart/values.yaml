@@ -107,6 +107,8 @@ secretRefs:
         envVar: Foundry__ProjectEndpoint
       - key: Foundry--DeploymentName
         envVar: Foundry__DeploymentName
+      - key: Foundry--ToolboxName
+        envVar: Foundry__ToolboxName
 
 nodeSelector: {}
 

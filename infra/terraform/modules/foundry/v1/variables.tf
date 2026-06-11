@@ -107,6 +107,17 @@ variable "public_network_access_enabled" {
   default     = false
 }
 
+variable "network_default_action" {
+  description = "Default firewall action for Cognitive account network ACLs (Allow or Deny)."
+  type        = string
+  default     = "Deny"
+
+  validation {
+    condition     = contains(["Allow", "Deny"], var.network_default_action)
+    error_message = "network_default_action must be either Allow or Deny."
+  }
+}
+
 variable "local_auth_enabled" {
   description = "Enable local (API key) authentication. Set true for local dev, false for production."
   type        = bool

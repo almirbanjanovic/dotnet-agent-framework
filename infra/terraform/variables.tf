@@ -136,6 +136,18 @@ variable "embedding_capacity" {
   type        = number
 }
 
+variable "foundry_toolbox_name" {
+  description = "Foundry-hosted MCP Toolbox name for CRM/Product agents. Required for full Azure deploy-all-services stage gates; may be empty only for local/toolbox-disabled flows."
+  type        = string
+  default     = ""
+}
+
+variable "foundry_toolbox_version" {
+  description = "Toolbox version contract used by deployment gates and rollback evidence. Required for full Azure deploy-all-services stage gates."
+  type        = string
+  default     = ""
+}
+
 # ---------------------------------------------------------------
 # Cosmos DB (agents session state)
 # ---------------------------------------------------------------

@@ -44,6 +44,230 @@ across .NET code, CI/CD, docs, Terraform, and Helm/K8s assets.
 - Terraform validate/plan and Helm template validation are green.
 - Staging canary and rollback drill pass.
 
+## Deployment Implementation Plan (Validated, Repo-Mapped)
+
+This section is the authoritative deployment implementation plan for the
+toolbox-enabled Full Azure path. Local dev remains toolbox-free by default and
+is intentionally unchanged.
+
+### Scope and Modes
+
+- Local dev mode:
+  - Uses `infra/setup-local.ps1` or `infra/setup-local.sh`.
+  - Does not require Foundry Toolbox for the inner loop.
+- Full Azure mode:
+  - Uses `infra/deploy.ps1` or `infra/deploy.sh` for infrastructure bootstrap.
+  - Uses `.github/workflows/deploy-all-services.yml` for tiered service rollout.
+  - Adds a toolbox module stage between MCP deployment and specialist agents.
+
+### Implementation Status (Important)
+
+- Implemented today:
+  - Stage 1 (infra scripts)
+  - Stage 2, 3, 4, 6 (tiered service deployment + workflow gates in
+    `deploy-all-services.yml`)
+- Partially implemented:
+  - Stage 5 (toolbox contract is gated and versioned, but some functional
+    canary checks remain manual)
+  - Stage 7 (blocking verification job now emits machine-readable artifacts and
+    includes a BFF chat smoke for guest traffic; guest-behavior suppression is
+    still feature-dependent)
+
+This plan now maps to executable CI/CD stages, with explicit manual checks
+called out where automation is intentionally deferred.
+
+### Stage Order (Full Azure)
+
+The production/DR deployment order is:
+
+1. Infrastructure
+2. Backend services needed by MCP
+3. MCP services
+4. Toolbox module
+5. Toolbox-consuming agents
+6. Orchestrator/front door/UI
+7. Verification
+
+### Stage-to-Automation Mapping
+
+Stage numbers map to workflow tiers as follows:
+- Stage 2 = Tier 1
+- Stage 3 = Tier 2 + `stage-3-connectivity` workflow gate
+- Stage 4 = stage-4-toolbox workflow gate between Tier 2 and Tier 3
+- Stage 5 = Tier 3
+- Stage 6 = Tier 4 + Tier 5
+- Stage 7 = stage-7-verify post-deploy workflow gate
+
+#### Stage 1: Infrastructure
+
+- Automation anchor:
+  - `infra/deploy.ps1`
+  - `infra/deploy.sh`
+- Current script phases (must complete successfully):
+  - Phase 0: Agent identity SP setup
+  - Phase 1: Open deployer firewall access
+  - Phase 2: Terraform init
+  - Phase 3: Terraform validate
+  - Phase 4: Terraform plan
+  - Phase 5: Terraform apply
+  - Phase 6: Seed CRM data
+  - Phase 7: Link Entra users to customers
+- Required gate before Stage 2:
+  - Phase 6 and Phase 7 complete with success.
+  - Key Vault secrets required by services are present (implicit validation via
+    Phase 6 and Phase 7 reading from Key Vault; there is no dedicated
+    preflight KV validation phase in the current infra script).
+  - Manual preflight check is required before Stage 2:
+    - Verify all service-critical secrets for Stage 2 through Stage 6 are
+      present in Key Vault.
+  - AKS and ACR are reachable.
+
+#### Stage 2: Independent Services (No Inbound Inter-Service Dependencies)
+
+- Note:
+  - `knowledge-mcp` is an MCP server, but deploys in Stage 2 because it has no
+    inbound inter-service dependency in this workflow.
+
+- Automation anchor:
+  - Tier 1 jobs in `.github/workflows/deploy-all-services.yml`
+- Services:
+  - `crm-api`
+  - `knowledge-mcp`
+- Required gate before Stage 3:
+  - `crm-api` health and readiness are green.
+  - `knowledge-mcp` health and readiness are green.
+
+#### Stage 3: MCP Services
+
+- Automation anchor:
+  - Tier 2 jobs in `.github/workflows/deploy-all-services.yml`
+- Service:
+  - `crm-mcp`
+- Required gate before Stage 4:
+  - `crm-mcp` health and readiness are green.
+  - Explicit connectivity probe from cluster to `crm-api` readiness succeeds
+    via `stage-3-connectivity` workflow gate before Stage 4.
+
+#### Stage 4: Toolbox Module (New Stage)
+
+- Objective:
+  - Introduce a dedicated toolbox deployment/configuration unit between MCP and
+    agent deployment.
+- Automation anchor:
+  - `stage-4-toolbox` workflow job between Tier 2 and Tier 3.
+- Responsibilities:
+  - Create/update toolbox configuration for the environment.
+  - Set non-empty toolbox name and version contract values for full Azure.
+  - Publish toolbox outputs (name/version/endpoint metadata) for agent stages.
+- Definition of done:
+  - Stage has a dedicated CI/CD job with explicit `needs: deploy-tier-2`.
+  - Job emits toolbox name + version outputs consumed by Stage 5 gate checks.
+  - Job writes deployment metadata required for rollback and DR replay.
+- Required gate before Stage 5:
+  - Toolbox update succeeded.
+  - Toolbox tools are discoverable.
+  - Toolbox outputs are published as downstream-consumable pipeline outputs.
+
+#### Stage 5: Toolbox-Consuming Agents
+
+- Current state:
+  - Tier 3 deploys `crm-agent` and `product-agent` today.
+  - Stage 4 outputs are enforced as Tier 3 prerequisites.
+- Target state:
+  - Tier 3 remains the deployment tier for:
+    - `crm-agent`
+    - `product-agent`
+  - Tier 3 jobs must require successful Stage 4 completion and consume Stage 4
+    outputs.
+- Definition of done:
+  - Tier 3 jobs fail fast if expected toolbox outputs are missing.
+  - Runtime config confirms expected toolbox name/version.
+  - Canary tool invocations from both agents succeed.
+- Required gate before Stage 6:
+  - Both agents pass health/readiness probes.
+  - `knowledge-mcp` and `crm-mcp` are healthy and reachable (both are in
+    specialist-agent readiness dependency paths).
+  - Toolbox config is visible in runtime configuration.
+  - Canary calls to both specialist agents succeed.
+  - Example manual canary check:
+    - Invoke deterministic requests against each agent (for example,
+      `get_customer_detail` on CRM Agent and a catalog query on Product Agent)
+      and confirm non-error response plus expected tool call behavior.
+  - STATUS: none of these gates are automated in the current workflow; perform
+    them manually before advancing to Stage 6.
+
+#### Stage 6: Orchestrator/Front Door/UI
+
+- Automation anchor:
+  - Tier 4 and Tier 5 jobs in `.github/workflows/deploy-all-services.yml`
+- Services:
+  - `orchestrator-agent`
+  - `bff-api`
+  - `blazor-ui`
+- Sequencing requirement:
+  - Tier 4 (`orchestrator-agent`) must complete before Tier 5 (`bff-api`,
+    `blazor-ui`). This ordering is enforced in workflow `needs` and must be
+    preserved in DR/manual execution.
+- Definition of done:
+  - `orchestrator-agent` is healthy before any Tier 5 deployment starts.
+  - `bff-api` and `blazor-ui` deploy successfully and pass readiness.
+  - End-to-end UI -> BFF -> orchestrator routing is confirmed.
+- Required gate before Stage 7:
+  - Orchestrator, BFF, and UI pass health checks.
+  - BFF-to-orchestrator path succeeds.
+  - STATUS: end-to-end routing confirmation is not yet automated; treat as a
+    manual gate.
+
+#### Stage 7: Verification (New Stage)
+
+- Objective:
+  - Convert post-deploy validation from ad-hoc/manual checks to a required
+    release gate.
+- Automation anchor:
+  - `stage-7-verify` workflow job after Tier 5.
+- Required checks:
+  - Full service health sweep.
+  - End-to-end chat smoke through BFF (guest-safe automated request).
+  - Toolbox discovery and canary tool usage checks.
+  - Guest behavior check (Product Agent toolbox suppression) only when that
+    feature is implemented and documented for the deployed version.
+- Definition of done:
+  - Verification is a blocking workflow job (release fails if checks fail).
+  - Job publishes machine-readable artifacts (pass/fail per check).
+  - Job output is retained as DR evidence for the deployed version.
+
+### Rollback and Recovery Strategy
+
+- Stage 1 failure:
+  - Stop deployment.
+  - Inspect Terraform state and partial resource creation before rerun.
+  - Re-run infra script only after state/partials are reconciled.
+- Stage 2-3 failure:
+  - Stop before toolbox/agent stages.
+  - Roll back failing Helm release(s) and re-run affected tier.
+- Stage 4 failure:
+  - Do not deploy Tier 3 agents.
+  - Roll back toolbox default version to last known-good if changed.
+- Stage 5-6 failure:
+  - Roll back affected tier releases.
+  - Keep previously verified lower tiers unchanged.
+- Stage 7 failure:
+  - Mark release failed.
+  - Execute rollback for changed tiers and toolbox version if required.
+
+### DR Reproducibility Requirements
+
+- No portal-only manual steps in normal operation.
+- Same stage order for script path and CI/CD path (target state once Stage 4
+  and Stage 7 are implemented).
+- Idempotent re-run behavior per stage.
+- Versioned toolbox lifecycle and rollback path documented with persistent
+  deployment metadata (not only ephemeral workflow logs).
+
+### Out of Scope Notes
+
+- Local mode intentionally remains toolbox-free for fastest developer loop.
+
 ## Overview
 
 This plan covers the implementation of all 8 services in dependency order, designed so Almir and team can build one component at a time and verify each before moving forward. Every component follows the same patterns established in `infra/templates/`.

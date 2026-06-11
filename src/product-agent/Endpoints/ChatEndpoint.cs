@@ -9,8 +9,8 @@ namespace Contoso.ProductAgent.Endpoints;
 // branching.
 //
 // Two flavors:
-//   POST /api/v1/chat        — buffered JSON response (legacy / tests)
-//   POST /api/v1/chat/stream — Server-Sent Events: token deltas + tool
+//   POST /api/v1/chat        - buffered JSON response (legacy / tests)
+//   POST /api/v1/chat/stream - Server-Sent Events: token deltas + tool
 //                              calls as they happen.
 
 internal static class ChatEndpoint
@@ -38,7 +38,7 @@ internal static class ChatEndpoint
         var isGuest = GuestId.IsGuest(request.CustomerId);
 
         // Discover tools from the MCP backends per request. For guests we
-        // deliberately skip the CRM MCP entirely — they have no customer
+        // deliberately skip the CRM MCP entirely - they have no customer
         // record so any CRM tool call is meaningless and risky (prompt-
         // injection probing, hallucinated order details). Knowledge MCP
         // (catalog, return policy, FAQ) remains available.
@@ -56,12 +56,13 @@ internal static class ChatEndpoint
         var systemPrompt = isGuest
             ? promptProvider.Prompt + GuestId.AnonymousGuardrail
             : promptProvider.Prompt;
-        var agent = agentFactory.CreateAgent(systemPrompt, tools);
+
+        // Guests must not receive Foundry-hosted toolbox tools.
+        var agent = agentFactory.CreateAgent(systemPrompt, tools, includeToolbox: ShouldIncludeToolbox(request.CustomerId));
         var messages = ChatHistoryBinder.Build(request.History, request.CustomerId, request.Message);
         var response = await agent.RunAsync(messages, cancellationToken: cancellationToken);
 
         var toolCalls = ToolCallExtractor.Extract(response);
-
         return Results.Ok(new ChatResponse(response.ToString(), toolCalls));
     }
 
@@ -91,7 +92,7 @@ internal static class ChatEndpoint
         {
             var isGuest = GuestId.IsGuest(request.CustomerId);
 
-            // Anonymous guests get the Knowledge MCP tools only — see
+            // Anonymous guests get the Knowledge MCP tools only - see
             // HandleAsync above for the rationale.
             var tools = new List<AITool>();
             tools.AddRange(await knowledgeProvider.ExecuteWithClientRetryAsync(
@@ -107,16 +108,13 @@ internal static class ChatEndpoint
             var systemPrompt = isGuest
                 ? promptProvider.Prompt + GuestId.AnonymousGuardrail
                 : promptProvider.Prompt;
-            var agent = agentFactory.CreateAgent(systemPrompt, tools);
+
+            var agent = agentFactory.CreateAgent(systemPrompt, tools, includeToolbox: ShouldIncludeToolbox(request.CustomerId));
             var messages = ChatHistoryBinder.Build(request.History, request.CustomerId, request.Message);
 
             var emittedToolCalls = new HashSet<string>(StringComparer.Ordinal);
             var emittedToolCallNames = new Dictionary<string, string>(StringComparer.Ordinal);
             var emittedToolResults = new HashSet<string>(StringComparer.Ordinal);
-            // pendingCallKeys queues call-keys whose results have not yet
-            // arrived, so a result with a null CallId pairs back to the
-            // most recent unmatched call (instead of generating an
-            // un-pairable random GUID and orphaning the result row).
             var pendingCallKeys = new Queue<string>();
 
             await foreach (var update in agent.RunStreamingAsync(messages, cancellationToken: cancellationToken))
@@ -171,7 +169,7 @@ internal static class ChatEndpoint
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // Client disconnected — nothing to do.
+            // Client disconnected - nothing to do.
         }
         catch (Exception ex)
         {
@@ -180,9 +178,7 @@ internal static class ChatEndpoint
                 await crmProvider.InvalidateClientAsync();
                 await knowledgeProvider.InvalidateClientAsync();
             }
-            // Log full exception for operators — client only sees a sanitized
-            // SSE error event below. ex.Message may include payload fragments,
-            // MCP tool args, or other internals.
+
             logger.LogError(ex, "Product agent stream failed for customer {CustomerId}", request.CustomerId);
             await SseWriter.WriteAsync(
                 response,
@@ -191,4 +187,6 @@ internal static class ChatEndpoint
                 CancellationToken.None);
         }
     }
+
+    internal static bool ShouldIncludeToolbox(string? customerId) => !GuestId.IsGuest(customerId);
 }

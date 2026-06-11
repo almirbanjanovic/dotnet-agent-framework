@@ -25,13 +25,19 @@ locals {
     "AzureAd--TenantId",
     "AzureAd--BffClientId",
     "CosmosDb--AgentsEndpoint",
+    "CosmosDb--AgentsDatabase",
     "CosmosDb--CrmEndpoint",
+    "CosmosDb--CrmDatabase",
     "Storage--ImagesEndpoint",
+    "Storage--ImagesAccountName",
     "Storage--ImagesContainer",
     "Foundry--ProjectEndpoint",
     "Foundry--DeploymentName",
     "Foundry--EmbeddingDeploymentName",
+    "Foundry--ToolboxName",
+    "Foundry--ToolboxVersion",
     "Search--Endpoint",
+    "Search--IndexName",
   ]
 }
 

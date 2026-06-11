@@ -44,6 +44,7 @@ module "foundry" {
   embedding_capacity            = 250
   local_auth_enabled            = false
   public_network_access_enabled = true
+  network_default_action        = "Allow"
   allowed_ips                   = [local.deployer_ip]
 
   tags = {
@@ -67,7 +68,7 @@ resource "azurerm_role_assignment" "deployer_openai_user" {
 # the Foundry agent service plane requires this project-scoped role.
 resource "azurerm_role_assignment" "deployer_ai_user" {
   scope                = module.foundry.project_id
-  role_definition_name = "Azure AI User"
+  role_definition_name = var.project_ai_role_definition_name
   principal_id         = data.azurerm_client_config.current.object_id
 }
 

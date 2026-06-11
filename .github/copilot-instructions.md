@@ -63,7 +63,7 @@ debate.
   otherwise the project loads `appsettings.Development.json` (which
   contains Azure endpoints written by CI/CD).
 - **`appsettings.Local.json.template` files MUST use placeholders** —
-  `{{FOUNDRY_ENDPOINT}}`, `{{CHAT_DEPLOYMENT_NAME}}`,
+  `{{FOUNDRY_PROJECT_ENDPOINT}}`, `{{CHAT_DEPLOYMENT_NAME}}`,
   `{{EMBEDDING_DEPLOYMENT_NAME}}`, `{{TENANT_ID}}` — never literal values.
   Hardcoding pins every developer to one Foundry account and leaks tenant
   IDs into source control. Enforced by

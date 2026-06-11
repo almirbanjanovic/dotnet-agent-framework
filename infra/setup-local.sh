@@ -338,11 +338,13 @@ ok "Tenant default domain: $tenant_domain"
 # tell "managed by TF" (skip) from "true orphan" (delete). Single remote-
 # state read; subsequent UPN lookups are local string matches.
 managed_user_keys=""
-if tf_state_lines=$(terraform -chdir="$TERRAFORM_DIR" state list 2>/dev/null); then
-    # Extract the bracketed key from lines like:
-    #   module.entra.azuread_user.test["anna"]
-    managed_user_keys=$(echo "$tf_state_lines" | grep -oE 'azuread_user\.test\["[^"]+"\]' | sed -E 's/.*\["([^"]+)"\].*/\1/' || true)
+if ! tf_state_lines=$(terraform -chdir="$TERRAFORM_DIR" state list 2>/dev/null); then
+    fail "terraform state list failed; refusing orphan-user cleanup to avoid accidental password rotation"
+    exit 1
 fi
+# Extract the bracketed key from lines like:
+#   module.entra.azuread_user.test["anna"]
+managed_user_keys=$(echo "$tf_state_lines" | grep -oE 'azuread_user\.test\["[^"]+"\]' | sed -E 's/.*\["([^"]+)"\].*/\1/' || true)
 
 # Mirror of `var.test_users` defaults in
 # infra/terraform/modules/entra/v1/variables.tf — keep in sync.
@@ -358,6 +360,7 @@ TEST_USER_NICKS=(emma.wilson-local james.chen-local sarah.miller-local david.par
 # Build JSON map of {key: oid} for users that exist.
 deleted_count=0
 skipped_count=0
+existing_entra_users_count=0
 for i in "${!TEST_USER_KEYS[@]}"; do
     key="${TEST_USER_KEYS[$i]}"
     upn="${TEST_USER_NICKS[$i]}@${tenant_domain}"
@@ -365,6 +368,15 @@ for i in "${!TEST_USER_KEYS[@]}"; do
     if [[ -z "$oid" ]]; then
         continue
     fi
+
+    existing_entra_users_count=$((existing_entra_users_count + 1))
+    if [[ -z "$managed_user_keys" && $existing_entra_users_count -eq 1 ]]; then
+        warn "Terraform state contains no tracked test users, but matching Entra users exist."
+        warn "Continuing will delete and recreate these users, which rotates all local test passwords."
+        warn "Press Ctrl+C within 10 seconds to abort if this is unexpected."
+        sleep 10
+    fi
+
     if echo "$managed_user_keys" | grep -qx "$key"; then
         # Already in TF state — leave it alone. terraform apply will be a no-op.
         skipped_count=$((skipped_count + 1))
@@ -386,6 +398,25 @@ if [[ $deleted_count -eq 0 ]]; then
 fi
 
 # ── Terraform Apply ─────────────────────────────────────────────────────────
+
+step "Resolving Foundry project role"
+PROJECT_ROLE_CANDIDATES=("Azure AI User" "Foundry User")
+resolved_project_role=""
+for candidate in "${PROJECT_ROLE_CANDIDATES[@]}"; do
+    role_name=$(az role definition list --name "$candidate" --query "[0].roleName" -o tsv 2>/dev/null || true)
+    if [[ -n "$role_name" ]]; then
+        resolved_project_role="$candidate"
+        break
+    fi
+done
+
+if [[ -z "$resolved_project_role" ]]; then
+    fail "Could not resolve a project role for Foundry. Expected one of: Azure AI User, Foundry User"
+    exit 1
+fi
+
+export TF_VAR_project_ai_role_definition_name="$resolved_project_role"
+ok "Using project role: $resolved_project_role"
 
 step "Applying Terraform (this may take a few minutes)"
 terraform -chdir="$TERRAFORM_DIR" apply -auto-approve -input=false

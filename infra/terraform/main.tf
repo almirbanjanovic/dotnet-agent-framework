@@ -602,6 +602,8 @@ module "keyvault_secrets" {
     # Foundry__EmbeddingDeploymentName which the .NET code reads as
     # Foundry:EmbeddingDeploymentName.
     "Foundry--EmbeddingDeploymentName" = module.foundry.embedding_deployment_name
+    "Foundry--ToolboxName"             = var.foundry_toolbox_name
+    "Foundry--ToolboxVersion"          = var.foundry_toolbox_version
     "CosmosDb--AgentsEndpoint"         = module.cosmosdb_agents.endpoint
     "CosmosDb--AgentsDatabase"         = module.cosmosdb_agents.database_name
     "CosmosDb--CrmEndpoint"            = module.cosmosdb_crm.endpoint

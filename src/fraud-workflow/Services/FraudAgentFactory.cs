@@ -36,8 +36,9 @@ internal sealed class FraudAgentFactory
         _projectClient = new AIProjectClient(new Uri(endpoint), credential);
     }
 
-    public AIAgent CreateAgent(string name, string description, string instructions, IList<AITool> tools) =>
-        _projectClient.AsAIAgent(
+    public AIAgent CreateAgent(string name, string description, string instructions, IList<AITool> tools)
+    {
+        return _projectClient.AsAIAgent(
             model: _deploymentName,
             instructions: instructions,
             name: name,
@@ -45,4 +46,5 @@ internal sealed class FraudAgentFactory
             tools: tools,
             loggerFactory: _loggerFactory,
             services: _services);
+    }
 }

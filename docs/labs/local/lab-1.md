@@ -120,7 +120,7 @@ If you see an error, see the [Foundry troubleshooting section](../../local-devel
 
 ## How `simple-agent` works (your first Microsoft Agent Framework call)
 
-If you're new to the Microsoft Agent Framework, [src/simple-agent/Program.cs](../../../src/simple-agent/Program.cs) is the smallest possible "hello world". The whole file is ~25 lines of code; here are the three calls that matter:
+If you're new to the Microsoft Agent Framework, [src/simple-agent/Program.cs](../../../src/simple-agent/Program.cs) is the smallest possible "hello world". The whole file is intentionally tiny; here are the three calls that matter:
 
 ```csharp
 // 1. DefaultAzureCredential — the only auth path in this repo. Walks

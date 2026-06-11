@@ -46,3 +46,9 @@ variable "embedding_model_version" {
   default     = "1"
 }
 
+variable "project_ai_role_definition_name" {
+  description = "Project-scoped role name for Foundry project endpoint access (for example: Azure AI User or Foundry User)."
+  type        = string
+  default     = "Azure AI User"
+}
+

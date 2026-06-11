@@ -16,10 +16,10 @@ All 4 tests validate core configuration without requiring Azure credentials or a
 
 | # | Test | What it verifies |
 |---|------|------------------|
-| 1 | `terraform validate` passes | HCL syntax is valid |
-| 2 | Module variables have sensible defaults | No required vars without defaults |
-| 3 | Outputs are defined | `foundry_endpoint`, `chat_deployment_name`, `embedding_deployment_name`, `tenant_id`, `bff_client_id` exist |
-| 4 | Variables validation | All expected variables are properly defined |
+| 1 | `terraform init -backend=false` passes | Module/provider wiring initializes cleanly |
+| 2 | `terraform validate` passes | HCL syntax and references are valid |
+| 3 | Outputs are defined | `foundry_project_endpoint`, `chat_deployment_name`, `embedding_deployment_name`, `tenant_id`, `bff_client_id`, `customer_map_json` exist |
+| 4 | Variables have sensible defaults | All expected local-dev variables include defaults |
 
 ## Running Tests
 
@@ -80,7 +80,7 @@ All variables have sensible defaults and can be used without customization for l
 
 | Output | Type | Sensitive | Usage |
 |--------|------|-----------|-------|
-| `foundry_endpoint` | string | ❌ | Azure OpenAI endpoint URL |
+| `foundry_project_endpoint` | string | ❌ | Foundry project endpoint URL |
 | `chat_deployment_name` | string | ❌ | Chat model deployment name |
 | `embedding_deployment_name` | string | ❌ | Embedding model deployment name |
 | `tenant_id` | string | ❌ | Azure tenant ID for `DefaultAzureCredential` |

@@ -65,16 +65,17 @@ terraform validate
 
 ### Test 3: Outputs Check
 ```bash
-grep -q "output \"foundry_endpoint\"" outputs.tf
+grep -q "output \"foundry_project_endpoint\"" outputs.tf
 ```
-- **Validates:** All 4 required outputs are declared
+- **Validates:** All required outputs are declared
 - **Why:** Downstream code expects these outputs
 - **Outputs:**
-  - `foundry_endpoint` — Used by .NET app to connect to Azure OpenAI
+   - `foundry_project_endpoint` — Used by .NET app to connect to Foundry project endpoint
   - `chat_deployment_name` — Model selection
   - `embedding_deployment_name` — Search capability
   - `tenant_id` — Substituted into appsettings.Local.json `AzureAd:TenantId`
   - `bff_client_id` — Substituted into appsettings.Local.json `AzureAd:BffClientId`
+   - `customer_map_json` — Substituted into bff-api local settings `AzureAd:CustomerMap`
 
   Auth uses `DefaultAzureCredential` (no API key output) — see `NoApiKeyTests`.
 

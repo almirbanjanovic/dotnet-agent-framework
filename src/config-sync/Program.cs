@@ -117,6 +117,7 @@ var componentManifest = new Dictionary<string, (string KvSecret, string ConfigKe
     [
         ("Foundry--ProjectEndpoint", "Foundry:ProjectEndpoint"),
         ("Foundry--DeploymentName", "Foundry:DeploymentName"),
+        ("Foundry--ToolboxName", "Foundry:ToolboxName"),
         ("CrmMcp--BaseUrl",             "CrmMcp:BaseUrl"),
         ("KnowledgeMcp--BaseUrl",       "KnowledgeMcp:BaseUrl"),
         ("AzureAd--TenantId",           "AzureAd:TenantId"),
@@ -125,6 +126,7 @@ var componentManifest = new Dictionary<string, (string KvSecret, string ConfigKe
     [
         ("Foundry--ProjectEndpoint", "Foundry:ProjectEndpoint"),
         ("Foundry--DeploymentName", "Foundry:DeploymentName"),
+        ("Foundry--ToolboxName", "Foundry:ToolboxName"),
         ("KnowledgeMcp--BaseUrl",       "KnowledgeMcp:BaseUrl"),
         ("CrmMcp--BaseUrl",             "CrmMcp:BaseUrl"),
         ("AzureAd--TenantId",           "AzureAd:TenantId"),

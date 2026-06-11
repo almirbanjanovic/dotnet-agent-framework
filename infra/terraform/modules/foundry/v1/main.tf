@@ -35,7 +35,7 @@ resource "azurerm_cognitive_account" "this" {
   }
 
   network_acls {
-    default_action = "Deny"
+    default_action = var.network_default_action
     bypass         = "AzureServices"
     ip_rules       = var.allowed_ips
   }

@@ -15,6 +15,12 @@ Required config keys (populated by config-sync from Key Vault):
 | `CrmMcp:BaseUrl` | CRM MCP server base URL |
 | `AzureAd:TenantId` | Entra tenant ID for DefaultAzureCredential |
 
+Optional:
+
+| Key | Description |
+|-----|-------------|
+| `Foundry:ToolboxName` | Optional Foundry-hosted MCP Toolbox name. Empty by default; guest requests suppress the hosted toolbox even when configured. |
+
 Run config-sync to populate: `cd src/config-sync && dotnet run -- <key-vault-uri> [environment]`
 
 ## How to run locally

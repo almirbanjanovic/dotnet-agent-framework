@@ -32,7 +32,7 @@ try {
     # Note: foundry_api_key was intentionally removed when the local-dev module
     # switched to RBAC-only auth (DefaultAzureCredential). See setup-local + the
     # NoApiKeyTests fitness function.
-    $expectedOutputs = @("foundry_endpoint", "chat_deployment_name", "embedding_deployment_name", "tenant_id", "bff_client_id")
+    $expectedOutputs = @("foundry_project_endpoint", "chat_deployment_name", "embedding_deployment_name", "tenant_id", "bff_client_id", "customer_map_json")
     $outputsFile = Get-Content outputs.tf -Raw
     
     foreach ($output in $expectedOutputs) {
@@ -50,13 +50,22 @@ try {
                       "embedding_model_name", "embedding_model_version", "resource_group_name")
     
     foreach ($var in $requiredVars) {
-        if ($variablesFile -notmatch "variable `"$var`"" -or $variablesFile -notmatch "default\s*=") {
-            # For this simplified test, just check that variable is defined
-            # The actual default check is done by terraform validate
-            if ($variablesFile -notmatch "variable `"$var`"") {
-                Write-Host "  FAIL: variable $var not defined" -ForegroundColor Red
-                exit 1
-            }
+        $pattern = "variable `"$var`""
+        if ($variablesFile -notmatch $pattern) {
+            Write-Host "  FAIL: variable $var not defined" -ForegroundColor Red
+            exit 1
+        }
+
+        $segmentPattern = "(?s)variable\s+`"$var`"\s*\{.*?\}"
+        $segmentMatch = [regex]::Match($variablesFile, $segmentPattern)
+        if (-not $segmentMatch.Success) {
+            Write-Host "  FAIL: could not parse variable block for $var" -ForegroundColor Red
+            exit 1
+        }
+
+        if ($segmentMatch.Value -notmatch "default\s*=") {
+            Write-Host "  FAIL: variable $var missing default" -ForegroundColor Red
+            exit 1
         }
     }
     Write-Host "  PASS" -ForegroundColor Green

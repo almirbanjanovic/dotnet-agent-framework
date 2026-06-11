@@ -17,6 +17,7 @@ Lab 0 on the Local Track is a sanity check. There is no remote Terraform-state b
   - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli)
   - [Terraform >= 1.14.7](https://developer.hashicorp.com/terraform/install)
   - [.NET SDK 9.0+](https://dotnet.microsoft.com/download)
+  - [Python 3.9+](https://www.python.org/downloads/) (required for `infra/setup-local.sh`; PowerShell path does not require Python)
 
 ## Run
 
